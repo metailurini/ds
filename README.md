@@ -100,6 +100,7 @@ Important files:
 - `docs/product-principles.md`
 - `docs/roadmap.md`
 - `docs/architecture.md`
+- `docs/runtime.md`
 - `docs/version-workflow.md`
 - `docs/milestones/v0.1.0-spec.md`
 - `docs/test-plans/v0.1.0-test-plan.md`

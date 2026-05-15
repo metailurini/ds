@@ -12,8 +12,11 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Product principles for avoiding language drift.
 - Roadmap and version workflow.
 - Architecture plan for the C implementation, frontend, HIR, bytecode VM, and Bash emitter.
+- Runtime plan for core C primitives used by the frontend, VM, Bash emitter, diagnostics, and tools.
 - Milestone spec and test plan for `v0.1.0`.
 - Milestone spec and test plan for `v0.2.0`.
+- Roadmap update so `v0.3.0` is **Minimal C Runtime and Bytecode VM**.
+- Hashmap support library included under `libs/hashmap/` and documented as wrapped by `src/core/ds_map.*`.
 
 ## v0.1.0 — Planned
 

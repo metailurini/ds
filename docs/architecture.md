@@ -46,6 +46,34 @@ Both execution backends consume HIR:
 
 If a feature cannot be represented in HIR and implemented by both backends, the feature is not ready.
 
+## Core runtime substrate
+
+`ds` is implemented in C, so the project needs a small reusable runtime substrate before the VM can become serious.
+
+The runtime substrate is not a user-facing language layer. It is the internal foundation used by the frontend, semantic checker, bytecode generator, VM, Bash emitter, diagnostics, and tools.
+
+Expected runtime primitives include:
+
+- `DsStr` for borrowed string views;
+- `DsString` for owned dynamic strings and output buffers;
+- `DsArray` for growable vectors;
+- `DsMap` for symbol tables, module caches, runtime maps, and registries;
+- `DsArena` for phase-owned temporary allocation;
+- `DsValue` for VM values;
+- `DsProcessResult` and process helpers for command execution;
+- `DsDiag`, `DsSourceLoc`, and `DsSourceSpan` for diagnostics;
+- `DsRegex` later, only after a VM/Bash parity strategy exists.
+
+The runtime should be boring and heavily tested. It should avoid clever abstractions that make C debugging harder.
+
+Runtime-backed features must still obey the Bash emission rule:
+
+> A feature may use C runtime helpers in VM mode, but emitted Bash must remain standalone and must not require `ds` or the C runtime at execution time.
+
+For example, `file.exists("x")` may call `stat` in VM mode, but emitted Bash should use Bash syntax such as `[[ -e "x" ]]` or an embedded Bash helper.
+
+See `docs/runtime.md` for the detailed runtime plan, including strings, arrays, maps, process execution, regex concerns, and the hashmap reuse strategy.
+
 ## CLI commands
 
 The `ds` tool should eventually support:
@@ -357,6 +385,17 @@ The VM should own runtime concerns:
 
 Command execution should be carefully separated behind a process API so it can be tested.
 
+The VM depends on the runtime substrate. At minimum, serious VM work requires:
+
+- `DsValue` for tagged values;
+- dynamic strings for runtime strings and command capture;
+- arrays/vectors for stack/register data and argv lists;
+- maps for globals, scopes, and builtin registries;
+- process helpers for shell command execution;
+- diagnostics helpers for runtime errors.
+
+Because of this, `v0.3.0` should include the minimal runtime foundation needed by the first bytecode VM instead of treating the VM as bytecode only.
+
 ## Bash emitter
 
 The Bash emitter converts HIR into standalone Bash.
@@ -550,9 +589,14 @@ src/
     arena.c
     string.c
     array.c
-    hashmap.c
+    ds_map.c
     diag.c
     source.c
+
+  runtime/
+    value.c
+    process.c
+    regex.c
 
   frontend/
     lexer.c
@@ -576,9 +620,7 @@ src/
 
   vm/
     vm.c
-    value.c
     builtins.c
-    process.c
 
   emit/
     emit_bash.c
@@ -588,6 +630,12 @@ src/
     fmt.c
     test_runner.c
     repl.c
+
+libs/
+  hashmap/
+    hashmap.c
+    hashmap.h
+    LICENSE
 ```
 
 This layout is only a starting point. The actual implementation may evolve.

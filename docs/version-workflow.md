@@ -41,13 +41,25 @@ Example:
 ```txt
 0.1.0  lexer/parser frontend
 0.2.0  Bash emitter
-0.3.0  VM
+0.3.0  minimal C runtime and VM
 0.4.0  cleanup architecture
 ```
 
 Cleanup versions should be treated as real planned versions. They are not optional.
 
 ## Required docs per planned version
+
+Project-level docs define long-term direction and should be updated when the direction changes:
+
+- `README.md`
+- `CHANGELOG.md`
+- `docs/product-principles.md`
+- `docs/roadmap.md`
+- `docs/architecture.md`
+- `docs/runtime.md`
+- `docs/version-workflow.md`
+
+These are not rewritten for every version, but they should stay consistent with the roadmap and milestone specs.
 
 Every `0.x.0` planned version requires:
 

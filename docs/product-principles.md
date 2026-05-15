@@ -236,6 +236,23 @@ New standard-library builtins should define:
 
 If a builtin cannot be emitted to Bash cleanly, it should not enter the stable language surface.
 
+### 12. Keep the C runtime boring and explicit
+
+Because `ds` is implemented in C, the project needs internal runtime primitives such as strings, arrays, maps, values, diagnostics, process helpers, and eventually regex support.
+
+These primitives should be:
+
+- small;
+- explicit;
+- heavily tested;
+- easy to debug in C;
+- wrapped behind `ds` APIs;
+- designed with clear ownership rules.
+
+Supporting C projects may be included when useful, but their APIs should not leak through the whole codebase. The hashmap project is owned alongside `ds`; it should still be wrapped by `DsMap` before the rest of `ds` depends on it, so `ds` keeps one consistent internal map API.
+
+Runtime-backed features must not become VM-only shortcuts. If a feature uses the C runtime in VM mode, it still needs standalone Bash emission behavior before it becomes part of the supported language.
+
 ## Non-goals
 
 `ds` is not trying to be:
@@ -257,6 +274,7 @@ Before adding any feature, answer:
 - Can the VM execute it simply?
 - Can the Bash emitter emit it cleanly?
 - Can generated Bash remain standalone?
+- Does it avoid creating VM-only runtime behavior?
 - Can users understand it without reading a long manual?
 - Can it be tested thoroughly?
 - Does it fit the current milestone spec?

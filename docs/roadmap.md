@@ -93,16 +93,19 @@ Primary CLI command:
 ds emit bash file.ds -o file.sh
 ```
 
-### v0.3.0 — Minimal Bytecode VM
+### v0.3.0 — Minimal C Runtime and Bytecode VM
 
 Add direct script execution through an internal register bytecode VM.
 
 Expected capabilities:
 
+- minimal C runtime foundation;
+- `DsStr`, `DsString`, `DsArray`, and `DsMap` basics;
+- `DsValue` for VM values;
+- process execution wrapper for command statements;
 - HIR lowering;
 - bytecode format;
 - bytecode dump command;
-- VM value model for basic values;
 - VM execution for `let`, expressions, `if`, and command statements;
 - VM/Bash parity tests for supported behavior.
 
@@ -121,6 +124,8 @@ Repay early technical debt before adding larger features.
 Expected work:
 
 - clean AST/HIR boundaries;
+- clean runtime ownership boundaries;
+- review `DsMap`/hashmap wrapping decisions;
 - standardize diagnostics;
 - standardize source locations;
 - standardize golden test format;
