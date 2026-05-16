@@ -70,7 +70,7 @@ Every `0.x.0` planned version requires:
 
 ```txt
 docs/milestones/v0.x.0-spec.md
-docs/test-plans/v0.x.0-test-plan.md
+docs/milestones/v0.x.0-test-plan.md
 ```
 
 These documents are written before implementation.
@@ -81,9 +81,9 @@ At project start, that means:
 
 ```txt
 docs/milestones/v0.1.0-spec.md
-docs/test-plans/v0.1.0-test-plan.md
+docs/milestones/v0.1.0-test-plan.md
 docs/milestones/v0.2.0-spec.md
-docs/test-plans/v0.2.0-test-plan.md
+docs/milestones/v0.2.0-test-plan.md
 ```
 
 ## Milestone spec contents

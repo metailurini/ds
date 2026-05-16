@@ -104,9 +104,9 @@ Important files:
 - `docs/runtime.md`
 - `docs/version-workflow.md`
 - `docs/milestones/v0.1.0-spec.md`
-- `docs/test-plans/v0.1.0-test-plan.md`
+- `docs/milestones/v0.1.0-test-plan.md`
 - `docs/milestones/v0.2.0-spec.md`
-- `docs/test-plans/v0.2.0-test-plan.md`
+- `docs/milestones/v0.2.0-test-plan.md`
 
 ## Project status
 
