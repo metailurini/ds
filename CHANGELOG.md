@@ -18,10 +18,15 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `docs/language.ds` syntax catalog for tracking the full planned language surface.
 - Roadmap update so `v0.3.0` is **Minimal C Runtime and Bytecode VM**.
 - Hashmap support code included under temporary `libs/hashmap/` staging and documented as eventually absorbed into `src/core` behind `DsMap`.
+- Initial `v0.1.0` frontend implementation without tests yet.
+- `Makefile` for building the early `ds` CLI.
+- Source loading, diagnostics, lexer, parser, AST model, and AST printer.
+- `ds tokens <file.ds>`, `ds ast <file.ds>`, and `ds check <file.ds>`.
+- Manual example scripts under `examples/`.
 
-## v0.1.0 — Planned
+## v0.1.0 — In progress
 
-### Planned scope
+### Implemented so far
 
 - Source loading.
 - Lexer.
@@ -32,6 +37,9 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `ds ast <file.ds>`.
 - `ds check <file.ds>`.
 - `docs/language.ds` syntax catalog.
+
+### Still pending
+
 - Golden tests for lexer, parser, AST, and diagnostics.
 
 ## v0.2.0 — Planned

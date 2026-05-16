@@ -1,0 +1,69 @@
+#include "ds.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static void usage(FILE *out) {
+    fputs("ds v0.1.0 frontend\n\n", out);
+    fputs("Usage:\n", out);
+    fputs("  ds tokens <file.ds>\n", out);
+    fputs("  ds ast <file.ds>\n", out);
+    fputs("  ds check <file.ds>\n", out);
+}
+
+static int load_and_lex(const char *path, DsSource *source, DsTokenVec *tokens, DsDiag *diag) {
+    ds_diag_init(diag, source);
+    if (!ds_source_read(path, source, diag)) return 1;
+    ds_diag_init(diag, source);
+    if (!ds_lex(source, tokens, diag)) return 1;
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+        usage(argc < 2 ? stderr : stdout);
+        return argc < 2 ? 1 : 0;
+    }
+
+    if (argc != 3) {
+        usage(stderr);
+        return 1;
+    }
+
+    const char *cmd = argv[1];
+    const char *path = argv[2];
+    DsSource source = {0};
+    DsTokenVec tokens = {0};
+    DsDiag diag;
+
+    if (load_and_lex(path, &source, &tokens, &diag) != 0) {
+        ds_tokens_free(&tokens);
+        ds_source_free(&source);
+        return 1;
+    }
+
+    if (strcmp(cmd, "tokens") == 0) {
+        ds_tokens_print(&tokens, stdout);
+        ds_tokens_free(&tokens);
+        ds_source_free(&source);
+        return 0;
+    }
+
+    if (strcmp(cmd, "ast") == 0 || strcmp(cmd, "check") == 0) {
+        DsAst *ast = ds_parse(&tokens, &diag);
+        int rc = diag.has_error ? 1 : 0;
+        if (strcmp(cmd, "ast") == 0 && rc == 0) {
+            ds_ast_print(ast, stdout);
+        }
+        ds_ast_free(ast);
+        ds_tokens_free(&tokens);
+        ds_source_free(&source);
+        return rc;
+    }
+
+    fprintf(stderr, "error: unknown command `%s`\n\n", cmd);
+    usage(stderr);
+    ds_tokens_free(&tokens);
+    ds_source_free(&source);
+    return 1;
+}

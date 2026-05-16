@@ -1,0 +1,149 @@
+#include "ds.h"
+
+#include <stdlib.h>
+
+static void indent(FILE *out, int level) {
+    for (int i = 0; i < level; i++) fputs("  ", out);
+}
+
+static void print_expr(const DsExpr *expr, FILE *out, int level) {
+    if (!expr) {
+        indent(out, level);
+        fputs("<missing expr>\n", out);
+        return;
+    }
+
+    indent(out, level);
+    switch (expr->kind) {
+        case DS_EXPR_IDENT:
+            fprintf(out, "IdentExpr %.*s\n", (int)expr->as.text.len, expr->as.text.data);
+            break;
+        case DS_EXPR_STRING:
+            fprintf(out, "StringExpr %.*s\n", (int)expr->as.text.len, expr->as.text.data);
+            break;
+        case DS_EXPR_INT:
+            fprintf(out, "IntExpr %.*s\n", (int)expr->as.text.len, expr->as.text.data);
+            break;
+        case DS_EXPR_BOOL:
+            fprintf(out, "BoolExpr %s\n", expr->as.boolean ? "true" : "false");
+            break;
+        case DS_EXPR_UNARY:
+            fprintf(out, "UnaryExpr %.*s\n", (int)expr->as.unary.op.len, expr->as.unary.op.data);
+            print_expr(expr->as.unary.right, out, level + 1);
+            break;
+        case DS_EXPR_BINARY:
+            fprintf(out, "BinaryExpr %.*s\n", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+            print_expr(expr->as.binary.left, out, level + 1);
+            print_expr(expr->as.binary.right, out, level + 1);
+            break;
+        case DS_EXPR_ERROR:
+            fputs("ErrorExpr\n", out);
+            break;
+    }
+}
+
+static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
+    indent(out, level);
+    switch (stmt->kind) {
+        case DS_STMT_LET:
+            fprintf(out, "LetStmt %.*s\n", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
+            print_expr(stmt->as.let_stmt.value, out, level + 1);
+            break;
+        case DS_STMT_IF:
+            fputs("IfStmt\n", out);
+            indent(out, level + 1);
+            fputs("Condition\n", out);
+            print_expr(stmt->as.if_stmt.condition, out, level + 2);
+            indent(out, level + 1);
+            fputs("Then\n", out);
+            print_stmt(stmt->as.if_stmt.then_branch, out, level + 2);
+            if (stmt->as.if_stmt.else_branch) {
+                indent(out, level + 1);
+                fputs("Else\n", out);
+                print_stmt(stmt->as.if_stmt.else_branch, out, level + 2);
+            }
+            break;
+        case DS_STMT_BLOCK:
+            fputs("BlockStmt\n", out);
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
+                print_stmt(stmt->as.block_stmt.statements.items[i], out, level + 1);
+            }
+            break;
+        case DS_STMT_CMD:
+            fputs("CmdStmt\n", out);
+            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
+                indent(out, level + 1);
+                fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.words.items[i].len,
+                        stmt->as.cmd_stmt.words.items[i].data);
+            }
+            break;
+    }
+}
+
+void ds_ast_print(const DsAst *ast, FILE *out) {
+    fputs("Script\n", out);
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        print_stmt(ast->statements.items[i], out, 1);
+    }
+}
+
+static void free_expr(DsExpr *expr) {
+    if (!expr) return;
+    switch (expr->kind) {
+        case DS_EXPR_IDENT:
+        case DS_EXPR_STRING:
+        case DS_EXPR_INT:
+            free(expr->as.text.data);
+            break;
+        case DS_EXPR_UNARY:
+            free(expr->as.unary.op.data);
+            free_expr(expr->as.unary.right);
+            break;
+        case DS_EXPR_BINARY:
+            free_expr(expr->as.binary.left);
+            free(expr->as.binary.op.data);
+            free_expr(expr->as.binary.right);
+            break;
+        case DS_EXPR_BOOL:
+        case DS_EXPR_ERROR:
+            break;
+    }
+    free(expr);
+}
+
+static void free_stmt(DsStmt *stmt) {
+    if (!stmt) return;
+    switch (stmt->kind) {
+        case DS_STMT_LET:
+            free(stmt->as.let_stmt.name.data);
+            free_expr(stmt->as.let_stmt.value);
+            break;
+        case DS_STMT_IF:
+            free_expr(stmt->as.if_stmt.condition);
+            free_stmt(stmt->as.if_stmt.then_branch);
+            free_stmt(stmt->as.if_stmt.else_branch);
+            break;
+        case DS_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
+                free_stmt(stmt->as.block_stmt.statements.items[i]);
+            }
+            free(stmt->as.block_stmt.statements.items);
+            break;
+        case DS_STMT_CMD:
+            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
+                free(stmt->as.cmd_stmt.words.items[i].data);
+            }
+            free(stmt->as.cmd_stmt.words.items);
+            break;
+    }
+    free(stmt);
+}
+
+void ds_ast_free(DsAst *ast) {
+    if (!ast) return;
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        free_stmt(ast->statements.items[i]);
+    }
+    free(ast->statements.items);
+    free(ast);
+}

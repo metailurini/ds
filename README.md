@@ -91,9 +91,18 @@ For the initial project, the first two planned versions are:
 - `v0.1.0` — Lexer, parser, AST, diagnostics, and frontend debug commands.
 - `v0.2.0` — Basic standalone Bash emitter for the `v0.1.0` language subset.
 
-## Initial documentation
+## Project layout
 
-The project starts with documentation only. The initial docs define the purpose, architecture, workflow, and first two milestones.
+The project started with documentation only, then `v0.1.0` added the first frontend implementation.
+
+Current implementation directories:
+
+- `include/` — public internal C declarations for the early implementation;
+- `src/` — source loading, diagnostics, lexer, parser, AST printer, and CLI entrypoint;
+- `examples/` — small scripts used for manual frontend smoke checks;
+- `libs/hashmap/` — temporary staging location for the owned hashmap code that should later be absorbed into `src/core` behind `DsMap`.
+
+Important planning files:
 
 Important files:
 
@@ -110,9 +119,18 @@ Important files:
 
 ## Project status
 
-Current status: planning initialized.
+Current status: `v0.1.0` implementation is in progress.
 
-No implementation code exists yet. The project intentionally begins with docs and a syntax catalog so the implementation can follow a clear path without drifting away from the original purpose.
+The current implementation is frontend-only. It supports:
+
+```sh
+make
+./ds tokens examples/basic.ds
+./ds ast examples/basic.ds
+./ds check examples/basic.ds
+```
+
+It does not execute scripts and does not emit Bash yet. Bash emission begins in `v0.2.0`; the bytecode VM begins in `v0.3.0`.
 
 ## Syntax catalog
 
