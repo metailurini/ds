@@ -139,14 +139,30 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             i++;
             col++;
             bool terminated = false;
+            bool invalid_escape = false;
             while (i < source->len) {
                 char ch = source->data[i];
                 if (ch == '\\') {
+                    DsLoc escape_loc = {i, line, col};
                     if (i + 1 < source->len && source->data[i + 1] != '\n') {
+                        char escaped = source->data[i + 1];
+                        if (!(escaped == 'n' || escaped == 't' || escaped == '"' || escaped == '\\')) {
+                            DsLoc escape_end = {i + 2, line, col + 2};
+                            ds_diag_error(diag, (DsSpan){escape_loc, escape_end},
+                                          "invalid escape sequence `\\%c`; supported escapes are `\\n`, `\\t`, `\\\"`, and `\\\\`",
+                                          escaped);
+                            invalid_escape = true;
+                        }
                         i += 2;
                         col += 2;
                         continue;
                     }
+                    DsLoc escape_end = {i + 1, line, col + 1};
+                    ds_diag_error(diag, (DsSpan){escape_loc, escape_end}, "invalid trailing escape in string literal");
+                    invalid_escape = true;
+                    i++;
+                    col++;
+                    continue;
                 }
                 if (ch == '"') {
                     i++;
@@ -168,6 +184,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
                 }
                 continue;
             }
+            if (invalid_escape) continue;
             add_token(out, DS_TOK_STRING, source->data + start, i - start, start_loc, end);
             continue;
         }

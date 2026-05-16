@@ -149,6 +149,18 @@ printf 'let x = "unterminated' >"$TMP/unterminated.ds"
 run_fail lexer_unterminated "$DS" tokens "$TMP/unterminated.ds"
 assert_contains "$TMP/lexer_unterminated.err" "$TMP/unterminated.ds:1:9 error: unterminated string literal" "lexer unterminated string diagnostic location"
 
+cat >"$TMP/invalid_escape.ds" <<'EOF_BAD_ESCAPE'
+let bad = "hello \q"
+EOF_BAD_ESCAPE
+run_fail lexer_invalid_escape "$DS" tokens "$TMP/invalid_escape.ds"
+assert_contains "$TMP/lexer_invalid_escape.err" 'invalid escape sequence `\q`' "lexer invalid escape diagnostic"
+
+cat >"$TMP/trailing_escape.ds" <<'EOF_BAD_TRAIL'
+let bad = "hello \
+EOF_BAD_TRAIL
+run_fail lexer_trailing_escape "$DS" tokens "$TMP/trailing_escape.ds"
+assert_contains "$TMP/lexer_trailing_escape.err" "invalid trailing escape in string literal" "lexer trailing escape diagnostic"
+
 # Parser and AST golden tests.
 run_ok ast_mixed "$DS" ast "$FIX/ast_mixed.ds"
 assert_same "$GOLD/ast_mixed.ast" "$TMP/ast_mixed.out" "AST golden: mixed statements"

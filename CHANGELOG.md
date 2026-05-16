@@ -26,6 +26,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `v0.1.0` executable test runner, fixtures, and golden outputs.
 - Stable escaped token debug output for golden tests.
 - Missing-file diagnostics now include the requested path.
+- Invalid and trailing string escapes now produce lexer diagnostics.
 
 ## v0.1.0 — Complete
 
@@ -43,7 +44,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 
 ### Tests
 
-- Lexer coverage for keywords, identifiers, literals, comments, operators, strings, locations, and unterminated strings.
+- Lexer coverage for keywords, identifiers, literals, comments, operators, strings, locations, unterminated strings, invalid escapes, and trailing escapes.
 - Parser coverage for `let`, `if/else`, nested blocks, expressions, and command statements.
 - AST golden tests for empty, comments-only, and mixed fixtures.
 - Diagnostics tests for invalid syntax and missing files.
