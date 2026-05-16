@@ -18,15 +18,18 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `docs/language.ds` syntax catalog for tracking the full planned language surface.
 - Roadmap update so `v0.3.0` is **Minimal C Runtime and Bytecode VM**.
 - Hashmap support code included under temporary `libs/hashmap/` staging and documented as eventually absorbed into `src/core` behind `DsMap`.
-- Initial `v0.1.0` frontend implementation without tests yet.
+- Initial `v0.1.0` frontend implementation.
 - `Makefile` for building the early `ds` CLI.
 - Source loading, diagnostics, lexer, parser, AST model, and AST printer.
 - `ds tokens <file.ds>`, `ds ast <file.ds>`, and `ds check <file.ds>`.
 - Manual example scripts under `examples/`.
+- `v0.1.0` executable test runner, fixtures, and golden outputs.
+- Stable escaped token debug output for golden tests.
+- Missing-file diagnostics now include the requested path.
 
-## v0.1.0 — In progress
+## v0.1.0 — Complete
 
-### Implemented so far
+### Implemented
 
 - Source loading.
 - Lexer.
@@ -38,9 +41,14 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `ds check <file.ds>`.
 - `docs/language.ds` syntax catalog.
 
-### Still pending
+### Tests
 
-- Golden tests for lexer, parser, AST, and diagnostics.
+- Lexer coverage for keywords, identifiers, literals, comments, operators, strings, locations, and unterminated strings.
+- Parser coverage for `let`, `if/else`, nested blocks, expressions, and command statements.
+- AST golden tests for empty, comments-only, and mixed fixtures.
+- Diagnostics tests for invalid syntax and missing files.
+- CLI smoke tests for `tokens`, `ast`, `check`, and `--help`.
+- Syntax catalog checks for `docs/language.ds`.
 
 ## v0.2.0 — Planned
 

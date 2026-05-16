@@ -6,7 +6,7 @@ SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
 
-.PHONY: all clean check smoke
+.PHONY: all clean check smoke test
 
 all: $(BIN)
 
@@ -22,6 +22,9 @@ build:
 check: $(BIN)
 	./$(BIN) check examples/basic.ds
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
+
+test: $(BIN)
+	./tests/run_v0_1.sh
 
 smoke: $(BIN)
 	./$(BIN) tokens examples/basic.ds

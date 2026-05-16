@@ -237,7 +237,17 @@ void ds_tokens_free(DsTokenVec *tokens) {
 void ds_tokens_print(const DsTokenVec *tokens, FILE *out) {
     for (size_t i = 0; i < tokens->len; i++) {
         const DsToken *t = &tokens->items[i];
-        fprintf(out, "%d:%d  %-14s \"%.*s\"\n", t->span.start.line, t->span.start.column,
-                ds_token_kind_name(t->kind), (int)t->text.len, t->text.data);
+        fprintf(out, "%d:%d  %-14s \"", t->span.start.line, t->span.start.column,
+                ds_token_kind_name(t->kind));
+        for (size_t j = 0; j < t->text.len; j++) {
+            unsigned char ch = (unsigned char)t->text.data[j];
+            if (ch == '\\') fputs("\\\\", out);
+            else if (ch == '"') fputs("\\\"", out);
+            else if (ch == '\n') fputs("\\n", out);
+            else if (ch == '\r') fputs("\\r", out);
+            else if (ch == '\t') fputs("\\t", out);
+            else fputc(ch, out);
+        }
+        fputs("\"\n", out);
     }
 }

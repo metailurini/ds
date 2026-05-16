@@ -1,0 +1,9 @@
+# leading comment
+let name = "Danh" # trailing comment
+let count = 3
+let ok = true
+if name == "Danh" {
+  echo "Hello # not comment"
+} else {
+  echo $name
+}

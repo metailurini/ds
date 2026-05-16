@@ -1,0 +1,11 @@
+let name = "Danh"
+let count = 3
+let ok = !false
+if name == "Danh" {
+  git status
+  if count >= 3 {
+    echo "nested"
+  }
+} else {
+  echo "no"
+}

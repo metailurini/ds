@@ -1,0 +1,33 @@
+Script
+  LetStmt name
+    StringExpr "Danh"
+  LetStmt count
+    IntExpr 3
+  LetStmt ok
+    UnaryExpr !
+      BoolExpr false
+  IfStmt
+    Condition
+      BinaryExpr ==
+        IdentExpr name
+        StringExpr "Danh"
+    Then
+      BlockStmt
+        CmdStmt
+          Word git
+          Word status
+        IfStmt
+          Condition
+            BinaryExpr >=
+              IdentExpr count
+              IntExpr 3
+          Then
+            BlockStmt
+              CmdStmt
+                Word echo
+                Word "nested"
+    Else
+      BlockStmt
+        CmdStmt
+          Word echo
+          Word "no"

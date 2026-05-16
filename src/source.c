@@ -34,6 +34,7 @@ void *ds_xrealloc(void *ptr, size_t size) {
 }
 
 bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
+    out->path = path;
     FILE *fp = fopen(path, "rb");
     if (!fp) {
         DsSpan span = {{0, 1, 1}, {0, 1, 1}};
