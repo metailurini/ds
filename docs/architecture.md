@@ -638,6 +638,8 @@ libs/
     LICENSE
 ```
 
+`libs/hashmap/` is a temporary staging location for the owned hashmap code. It is okay at the beginning, but the long-term architecture should absorb the useful implementation into `src/core/` behind the `DsMap` API so maps feel like a native part of the `ds` runtime, not a separate library subtree.
+
 This layout is only a starting point. The actual implementation may evolve.
 
 ## Architecture risks

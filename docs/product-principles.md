@@ -249,7 +249,7 @@ These primitives should be:
 - wrapped behind `ds` APIs;
 - designed with clear ownership rules.
 
-Supporting C projects may be included when useful, but their APIs should not leak through the whole codebase. The hashmap project is owned alongside `ds`; it should still be wrapped by `DsMap` before the rest of `ds` depends on it, so `ds` keeps one consistent internal map API.
+Supporting C projects may be included when useful, but their APIs should not leak through the whole codebase. The hashmap project is owned alongside `ds`; keeping it under `libs/hashmap/` is acceptable as a temporary staging step, but the long-term goal is to absorb the useful implementation into `src/core` behind `DsMap` so it becomes a normal part of the `ds` runtime.
 
 Runtime-backed features must not become VM-only shortcuts. If a feature uses the C runtime in VM mode, it still needs standalone Bash emission behavior before it becomes part of the supported language.
 

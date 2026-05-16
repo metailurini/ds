@@ -16,7 +16,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Milestone spec and test plan for `v0.1.0`.
 - Milestone spec and test plan for `v0.2.0`.
 - Roadmap update so `v0.3.0` is **Minimal C Runtime and Bytecode VM**.
-- Hashmap support library included under `libs/hashmap/` and documented as wrapped by `src/core/ds_map.*`.
+- Hashmap support code included under temporary `libs/hashmap/` staging and documented as eventually absorbed into `src/core` behind `DsMap`.
 
 ## v0.1.0 — Planned
 

@@ -183,7 +183,9 @@ Use it for:
 - generated symbol mapping;
 - runtime map values later.
 
-The project includes the owned hashmap support library under `libs/hashmap/`, but internal code should depend on `DsMap`, not directly on the hashmap library API.
+The project currently keeps the owned hashmap support code under `libs/hashmap/` as a temporary staging location. That is acceptable while `ds` is still docs-first and architecture-first, but it must not stay as a separate-feeling library forever.
+
+Internal code should depend on `DsMap`, not directly on the hashmap API. Later, once the runtime shape is clearer, the hashmap implementation should be absorbed into `src/core/` as normal `ds` runtime code.
 
 Suggested shape:
 
@@ -207,9 +209,11 @@ Questions every map API should answer:
 - Is iteration order stable or intentionally unspecified?
 - Which allocator owns internal memory?
 
-## Hashmap reuse plan
+## Hashmap absorption plan
 
-The hashmap support library from the owned `hashmap` project is included in this repository under `libs/hashmap/`.
+The hashmap support code from the owned `hashmap` project is included in this repository under `libs/hashmap/` for now.
+
+This directory is a temporary integration stage, not the long-term architecture.
 
 Observed useful properties:
 
@@ -226,7 +230,7 @@ Observed useful properties:
 - MIT license;
 - blackbox tests passed during review.
 
-Included library shape:
+Current temporary shape:
 
 ```txt
 libs/hashmap/
@@ -239,17 +243,54 @@ src/core/
   ds_map.h
 ```
 
-`ds` should wrap `libs/hashmap` with `DsMap` so the rest of the codebase is protected from hashmap library API changes.
+Long-term absorbed shape:
+
+```txt
+src/core/
+  map.c
+  map.h
+  map_internal.h      # only if needed
+```
+
+The exact filenames may change, but the long-term result should feel like `ds` owns the map implementation directly, not like the runtime depends on a separate library subtree.
+
+The transition should happen in stages:
+
+- keep `libs/hashmap/` while the project is being bootstrapped;
+- create `src/core/ds_map.*` as the only API used by the rest of `ds`;
+- add tests around `DsMap` behavior, ownership, iteration, deletion, and error cases;
+- migrate useful hashmap implementation pieces into `src/core/`;
+- rename symbols and files to match `ds` runtime naming;
+- remove direct references to `libs/hashmap/` from normal runtime code;
+- keep license/attribution notes if required by the original files;
+- delete `libs/hashmap/` once the absorbed `DsMap` implementation is complete.
+
+During the temporary stage, the intended layering is:
+
+```txt
+ds frontend / semantic / VM / emitter
+  -> src/core/ds_map.*
+    -> libs/hashmap/*
+```
+
+After absorption, the intended layering is:
+
+```txt
+ds frontend / semantic / VM / emitter
+  -> src/core/map.*
+```
+
+`ds` should wrap the current `libs/hashmap` code with `DsMap` so the rest of the codebase is protected during the transition.
 
 Reasons to wrap it:
 
 - consistent `ds` ownership rules;
-- easier replacement later;
+- easier absorption into the `ds` runtime later;
 - simpler API for `ds` internals;
 - integration with `DsStr`, `DsArena`, and diagnostics;
 - avoiding hashmap-library naming leakage throughout the project.
 
-The hashmap library is already included under `libs/hashmap/`. Keep its license and original project files intact when moving or editing it.
+The hashmap code is already included under `libs/hashmap/`. Keep its license and original project files intact while it is staged there. When absorbing it into `src/core/`, do the move intentionally in a cleanup version so tests can prove that behavior did not change.
 
 ## `DsArena`
 
