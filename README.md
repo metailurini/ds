@@ -98,7 +98,7 @@ The project started with documentation only, then `v0.1.0` added the first front
 Current implementation directories:
 
 - `include/` — public internal C declarations for the early implementation;
-- `src/` — source loading, diagnostics, lexer, parser, AST printer, and CLI entrypoint;
+- `src/` — source loading, diagnostics, lexer, parser, AST printer, Bash emitter, and CLI entrypoint;
 - `examples/` — small scripts used for manual frontend smoke checks;
 - `libs/hashmap/` — temporary staging location for the owned hashmap code that should later be absorbed into `src/core` behind `DsMap`.
 
@@ -119,18 +119,21 @@ Important files:
 
 ## Project status
 
-Current status: `v0.1.0` implementation is in progress.
+Current status: `v0.2.0` implementation is in progress.
 
-The current implementation is frontend-only. It supports:
+The current implementation supports the `v0.1.0` frontend plus the first `v0.2.0` Bash emission path:
 
 ```sh
 make
 ./ds tokens examples/basic.ds
 ./ds ast examples/basic.ds
 ./ds check examples/basic.ds
+./ds emit bash examples/basic.ds -o /tmp/basic.sh
+bash -n /tmp/basic.sh
+bash /tmp/basic.sh
 ```
 
-It does not execute scripts and does not emit Bash yet. Bash emission begins in `v0.2.0`; the bytecode VM begins in `v0.3.0`.
+It does not execute scripts through the VM yet. Direct VM execution begins in `v0.3.0`.
 
 ## Syntax catalog
 

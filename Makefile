@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -g
 CPPFLAGS ?= -Iinclude
 
-SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c
+SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
 

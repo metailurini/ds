@@ -27,6 +27,9 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Stable escaped token debug output for golden tests.
 - Missing-file diagnostics now include the requested path.
 - Invalid and trailing string escapes now produce lexer diagnostics.
+- Initial `v0.2.0` Bash emitter implementation.
+- `ds emit bash <file.ds> -o <file.sh>` for the `v0.1.0` source subset.
+- Standalone generated Bash with shebang, strict mode, prefixed variables, source comments, command emission, simple string interpolation, and `if`/`else` emission.
 
 ## v0.1.0 — Complete
 
@@ -51,12 +54,15 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - CLI smoke tests for `tokens`, `ast`, `check`, and `--help`.
 - Syntax catalog checks for `docs/language.ds`.
 
-## v0.2.0 — Planned
+## v0.2.0 — In progress
 
-### Planned scope
+### Implemented so far
 
 - Basic Bash emission backend.
 - `ds emit bash <file.ds> -o <file.sh>`.
 - Standalone Bash output for the `v0.1.0` language subset.
+
+### Planned tests
+
 - Bash emission golden tests.
 - Basic generated Bash validity and behavior tests.

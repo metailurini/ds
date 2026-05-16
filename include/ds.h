@@ -151,6 +151,8 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag);
 void ds_ast_print(const DsAst *ast, FILE *out);
 void ds_ast_free(DsAst *ast);
 
+bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);
+
 char *ds_str_dup_range(const char *data, size_t len);
 void *ds_xcalloc(size_t count, size_t size);
 void *ds_xrealloc(void *ptr, size_t size);
