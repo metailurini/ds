@@ -109,15 +109,6 @@ static void emit_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
-static void emit_bash_single_quoted(EmitBuf *out, const char *data, size_t len) {
-    buf_append(out, "'");
-    for (size_t i = 0; i < len; i++) {
-        if (data[i] == '\'') buf_append(out, "'\\''");
-        else buf_append_len(out, data + i, 1);
-    }
-    buf_append(out, "'");
-}
-
 static bool decode_string_literal(DsDiag *diag, const DsExpr *expr, char **out_data, size_t *out_len) {
     DsStr text = expr->as.text;
     if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') {
@@ -187,14 +178,8 @@ static bool emit_interpolated_string(BashEmitter *e, const DsExpr *expr, EmitBuf
 
 static bool emit_value_expr(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
-        case DS_EXPR_STRING: {
-            char *decoded = NULL;
-            size_t len = 0;
-            if (!decode_string_literal(e->diag, expr, &decoded, &len)) return false;
-            emit_bash_single_quoted(out, decoded, len);
-            free(decoded);
-            return true;
-        }
+        case DS_EXPR_STRING:
+            return emit_interpolated_string(e, expr, out);
         case DS_EXPR_INT:
             buf_append_len(out, expr->as.text.data, expr->as.text.len);
             return true;

@@ -54,13 +54,15 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - CLI smoke tests for `tokens`, `ast`, `check`, and `--help`.
 - Syntax catalog checks for `docs/language.ds`.
 
-## v0.2.0 — In progress
+## v0.2.0 — Implementation complete; tests pending
 
-### Implemented so far
+### Implemented
 
 - Basic Bash emission backend.
 - `ds emit bash <file.ds> -o <file.sh>`.
 - Standalone Bash output for the `v0.1.0` language subset.
+- String interpolation in both command strings and `let` string values.
+- Documented conservative Bash comparison semantics before type-aware runtime/VM behavior exists.
 
 ### Planned tests
 
