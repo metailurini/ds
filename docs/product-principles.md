@@ -222,7 +222,17 @@ A feature is not complete until it has tests for:
 
 Strict test-first development is not required, but each version must have a test plan before implementation.
 
-### 11. Keep extension points explicit
+### 11. The syntax catalog must stay current
+
+The `docs/language.ds` file is the project-wide syntax catalog.
+
+It should contain the overall intended syntax of the language, including syntax that is planned, stable, candidate, deferred, or rejected.
+
+`docs/language.ds` is not a replacement for milestone specs. Milestone specs define what a version must implement. The syntax catalog keeps the whole language shape visible so individual versions do not drift into inconsistent syntax.
+
+When adding, changing, deferring, or rejecting syntax, update `docs/language.ds` in the same change as the relevant docs.
+
+### 12. Keep extension points explicit
 
 The implementation should be easy to extend, but not magical.
 
@@ -236,7 +246,7 @@ New standard-library builtins should define:
 
 If a builtin cannot be emitted to Bash cleanly, it should not enter the stable language surface.
 
-### 12. Keep the C runtime boring and explicit
+### 13. Keep the C runtime boring and explicit
 
 Because `ds` is implemented in C, the project needs internal runtime primitives such as strings, arrays, maps, values, diagnostics, process helpers, and eventually regex support.
 

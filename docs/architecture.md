@@ -4,6 +4,8 @@ This document describes the intended architecture for `ds`.
 
 `ds` is a C implementation of a shell-native scripting language. It is interpreted by default and should eventually use a register bytecode VM for direct execution. It must also be able to emit every supported feature to standalone Bash.
 
+The `docs/language.ds` file is the project-wide syntax catalog. It is intentionally not a runnable script. Milestone specs are the immediate implementation contract for each version, while `docs/language.ds` keeps the broader syntax direction visible and consistent.
+
 ## High-level pipeline
 
 ```txt
@@ -636,6 +638,8 @@ libs/
     hashmap.c
     hashmap.h
     LICENSE
+
+docs/language.ds
 ```
 
 `libs/hashmap/` is a temporary staging location for the owned hashmap code. It is okay at the beginning, but the long-term architecture should absorb the useful implementation into `src/core/` behind the `DsMap` API so maps feel like a native part of the `ds` runtime, not a separate library subtree.

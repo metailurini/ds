@@ -52,6 +52,7 @@ Cleanup versions should be treated as real planned versions. They are not option
 Project-level docs define long-term direction and should be updated when the direction changes:
 
 - `README.md`
+- `docs/language.ds`
 - `CHANGELOG.md`
 - `docs/product-principles.md`
 - `docs/roadmap.md`
@@ -60,6 +61,10 @@ Project-level docs define long-term direction and should be updated when the dir
 - `docs/version-workflow.md`
 
 These are not rewritten for every version, but they should stay consistent with the roadmap and milestone specs.
+
+`docs/language.ds` is the syntax catalog. It is not a runnable script and does not replace milestone specs. It records the overall syntax direction, including planned, candidate, deferred, and rejected syntax.
+
+When a version adds, removes, renames, defers, or rejects syntax, update `docs/language.ds` in the same change.
 
 Every `0.x.0` planned version requires:
 
@@ -136,8 +141,9 @@ For a normal feature version:
 9. Implement tests from the test plan.
 10. Fix bugs exposed by tests.
 11. Update docs if implementation changed the design.
-12. Complete the version review.
-13. Record deferred items and technical debt.
+12. Update `docs/language.ds` if syntax changed or if a syntax decision was made.
+13. Complete the version review.
+14. Record deferred items and technical debt.
 
 Strict test-first development is not required. The important rule is that the test plan exists before implementation and is followed before the version is closed.
 

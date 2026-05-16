@@ -1,0 +1,493 @@
+# ds language syntax catalog
+#
+# This file is the project-wide syntax inventory for ds.
+# It is intentionally a catalog, not a runnable script.
+#
+# Purpose:
+# - keep the whole language shape visible in one place;
+# - prevent syntax drift across milestone specs;
+# - make it clear which syntax is planned, supported, deferred, or rejected;
+# - give parser, formatter, documentation, and test fixtures a shared reference.
+#
+# Status markers:
+# - [v0.x.0] means the syntax is planned for that version.
+# - [stable] means the syntax is expected to survive into 1.0.0.
+# - [candidate] means the syntax is likely but still open to change.
+# - [deferred] means the idea is intentionally not in the current roadmap.
+# - [rejected] means do not add this syntax unless the product principles change.
+#
+# Rule:
+# Every real ds syntax must eventually define:
+# - parser behavior;
+# - semantic behavior;
+# - VM behavior;
+# - standalone Bash emission behavior;
+# - tests;
+# - documentation.
+
+# -----------------------------------------------------------------------------
+# 1. Comments [v0.1.0] [stable]
+# -----------------------------------------------------------------------------
+
+# A line comment starts with # and continues to the end of the line.
+
+
+# -----------------------------------------------------------------------------
+# 2. Variables [v0.1.0] [stable]
+# -----------------------------------------------------------------------------
+
+let name = "Danh"
+let count = 3
+let ok = true
+let missing = null
+
+# Type annotations are optional for normal variables.
+let retry: int = 3
+let target: string = "staging"
+let force: bool = false
+
+# Reassignment is allowed when the variable already exists.
+count = count + 1
+count += 1
+count -= 1
+
+# Environment variables use an explicit env namespace.
+env.NODE_ENV = "production"
+env.PATH += "./node_modules/.bin"
+
+
+# -----------------------------------------------------------------------------
+# 3. Literals [v0.1.0+] [stable]
+# -----------------------------------------------------------------------------
+
+let s = "hello"
+let n = 123
+let yes = true
+let no = false
+let none = null
+
+# Raw strings are planned for regex-heavy and shell-heavy text.
+let pattern_text = raw"\d+\s+\w+"
+
+
+# -----------------------------------------------------------------------------
+# 4. String interpolation [v0.2.0] [stable]
+# -----------------------------------------------------------------------------
+
+let app = "api"
+echo "Deploying {app}"
+echo "Deploying {app} to {target}"
+
+# In normal strings, {name} interpolates a ds expression or variable.
+# In command mode, $name passes a variable as a command argument.
+
+
+# -----------------------------------------------------------------------------
+# 5. Expressions [v0.1.0+] [stable]
+# -----------------------------------------------------------------------------
+
+let a = 1 + 2 * 3
+let b = (1 + 2) * 3
+let same = name == "Danh"
+let different = name != "Danh"
+let bigger = count > 3
+let smaller = count < 10
+let enough = count >= 3
+let below = count <= 10
+let not_ok = !ok
+let both = ok && force
+let either = ok || force
+
+# Membership and regex are planned later.
+let known = app in ["api", "web", "worker"]
+let has_error = "ERROR: failed" matches /error|failed/i
+
+
+# -----------------------------------------------------------------------------
+# 6. Command statements [v0.1.0] [stable]
+# -----------------------------------------------------------------------------
+
+git status
+npm install
+docker compose up
+
+# Variables passed to commands use $.
+git checkout $target
+./deploy.sh $app $target
+
+# Normal expressions do not use $.
+let message = "target=" + target
+
+
+# -----------------------------------------------------------------------------
+# 7. If / else [v0.1.0] [stable]
+# -----------------------------------------------------------------------------
+
+if target == "production" {
+  npm test
+}
+
+if force {
+  echo "force enabled"
+} else {
+  echo "normal mode"
+}
+
+if file.exists("package.json") {
+  npm install
+} else {
+  fail "package.json not found"
+}
+
+
+# -----------------------------------------------------------------------------
+# 8. Blocks and scope [v0.1.0+] [candidate]
+# -----------------------------------------------------------------------------
+
+{
+  let local_name = "inside block"
+  echo "{local_name}"
+}
+
+# Variables declared inside a block should not leak outside the block unless the
+# specific construct says otherwise.
+
+
+# -----------------------------------------------------------------------------
+# 9. Script arguments block [v0.5.0] [stable]
+# -----------------------------------------------------------------------------
+
+script {
+  arg app: string
+  option target: string = "staging"
+  option retries: int = 3
+  flag force: bool = false
+}
+
+# Expected CLI:
+# ds deploy.ds api --target production --retries 5 --force
+#
+# Expected generated help:
+# deploy.ds <app> [options]
+#   --target string    default: staging
+#   --retries int      default: 3
+#   --force            boolean flag
+
+# End option parsing with --.
+# ds deploy.ds api -- --not-an-option
+
+
+# -----------------------------------------------------------------------------
+# 10. Imports / includes [v0.6.0] [stable]
+# -----------------------------------------------------------------------------
+
+import "./lib.ds"
+
+# Named imports are deferred until simple imports are proven.
+from "./deploy.ds" import deploy, rollback
+
+# Rules:
+# - imports are resolved relative to the importing file;
+# - each imported file is loaded once;
+# - import cycles are errors;
+# - emitted Bash bundles imported ds files into one standalone script.
+
+
+# -----------------------------------------------------------------------------
+# 11. Command result capture [v0.7.0] [stable]
+# -----------------------------------------------------------------------------
+
+let result = run npm test
+
+if result.failed {
+  echo result.stderr
+  exit result.code
+}
+
+if result.ok {
+  echo result.stdout
+}
+
+let branch = run git branch --show-current
+
+if branch.failed {
+  fail "not a git repository"
+}
+
+echo "Current branch: {branch.stdout.trim()}"
+
+
+# -----------------------------------------------------------------------------
+# 12. Redirection [v0.7.0] [stable]
+# -----------------------------------------------------------------------------
+
+npm run build |> "build.out"
+npm run build |>> "build.out"
+npm run build !> "build.err"
+npm run build !>> "build.err"
+npm run build &> "build.log"
+npm run build &>> "build.log"
+
+# Meaning:
+# |>   stdout overwrite
+# |>>  stdout append
+# !>   stderr overwrite
+# !>>  stderr append
+# &>   stdout and stderr overwrite
+# &>>  stdout and stderr append
+
+
+# -----------------------------------------------------------------------------
+# 13. Pipes [v0.7.0] [stable]
+# -----------------------------------------------------------------------------
+
+cat access.log | grep "ERROR" | sort | uniq
+
+let errors = run cat access.log | grep "ERROR"
+
+
+# -----------------------------------------------------------------------------
+# 14. Functions [v0.9.0] [stable]
+# -----------------------------------------------------------------------------
+
+fn deploy(target) {
+  echo "Deploying {target}"
+  ./deploy.sh $target
+}
+
+deploy("production")
+
+fn deploy_default(target = "staging") {
+  echo "Deploying {target}"
+}
+
+fn restart(service: string) {
+  docker compose restart $service
+}
+
+# Non-goals for early functions:
+# - no closures;
+# - no anonymous functions;
+# - no higher-order functions;
+# - no complex generics.
+
+
+# -----------------------------------------------------------------------------
+# 15. Arrays [v0.10.0] [stable]
+# -----------------------------------------------------------------------------
+
+let services = ["api", "web", "worker"]
+let first_service = services[0]
+services.push("cron")
+
+for service in services {
+  docker compose restart $service
+}
+
+
+# -----------------------------------------------------------------------------
+# 16. Maps / objects [v0.10.0] [candidate]
+# -----------------------------------------------------------------------------
+
+let ports = {
+  api: 3000,
+  web: 5173,
+  worker: 9000
+}
+
+let api_port = ports.api
+let web_port = ports["web"]
+
+for name, port in ports {
+  echo "{name} runs on {port}"
+}
+
+# Bash emission may require Bash 4+ associative arrays.
+
+
+# -----------------------------------------------------------------------------
+# 17. Loops [v0.10.0] [stable]
+# -----------------------------------------------------------------------------
+
+let i = 0
+
+while i < 5 {
+  echo "{i}"
+  i += 1
+}
+
+for service in services {
+  echo "{service}"
+}
+
+for n in 1..10 {
+  echo "{n}"
+}
+
+for line in lines("README.md") {
+  echo $line
+}
+
+
+# -----------------------------------------------------------------------------
+# 18. Standard library: file / dir / path [v0.11.0] [stable]
+# -----------------------------------------------------------------------------
+
+if file.exists("package.json") {
+  echo "package exists"
+}
+
+if file.is_file("README.md") {
+  echo "README is a file"
+}
+
+if dir.exists("src") {
+  echo "src exists"
+}
+
+let text = file.read("README.md")
+file.write("out.txt", text)
+file.append("out.txt", "\n")
+
+let cwd = path.cwd()
+let joined = path.join("src", "main.ds")
+let base = path.basename(joined)
+let parent = path.dirname(joined)
+let ext = path.ext(joined)
+
+
+# -----------------------------------------------------------------------------
+# 19. Standard library: command helpers [v0.11.0] [stable]
+# -----------------------------------------------------------------------------
+
+if cmd.exists("git") {
+  echo "git found"
+}
+
+cmd.require("git")
+cmd.require("npm")
+
+
+# -----------------------------------------------------------------------------
+# 20. Globbing and line iteration [v0.11.0] [stable]
+# -----------------------------------------------------------------------------
+
+for file in glob("*.txt") {
+  echo $file
+}
+
+for file in glob("src/**/*.c") {
+  echo $file
+}
+
+# glob! means the pattern must match at least one file.
+for file in glob!("*.ds") {
+  echo $file
+}
+
+for line in lines("input.txt") {
+  echo $line
+}
+
+
+# -----------------------------------------------------------------------------
+# 21. Failure, exit, and strict mode [v0.3.0+] [stable]
+# -----------------------------------------------------------------------------
+
+strict
+
+fail "something went wrong"
+exit 1
+
+# By default, direct command statements fail the script if the command exits
+# non-zero. Captured `run` commands do not auto-fail because the result is being
+# handled explicitly.
+
+
+# -----------------------------------------------------------------------------
+# 22. Defer / cleanup [v0.11.0+] [candidate]
+# -----------------------------------------------------------------------------
+
+let tmp = temp.dir()
+
+defer {
+  remove tmp, recursive: true
+}
+
+echo "working in {tmp}"
+
+# Defer replaces Bash trap usage for common cleanup cases.
+
+
+# -----------------------------------------------------------------------------
+# 23. Safer deletion [deferred] [candidate]
+# -----------------------------------------------------------------------------
+
+trash "old-output"
+remove "build", recursive: true
+delete_forever "dangerous-path"
+
+# This area should remain conservative and explicit.
+
+
+# -----------------------------------------------------------------------------
+# 24. Regex [deferred] [candidate]
+# -----------------------------------------------------------------------------
+
+if "deploy failed" matches /failed/ {
+  echo "bad"
+}
+
+let match = regex.match("v1.2.3", /v(\d+)\.(\d+)\.(\d+)/)
+
+# Regex must be carefully specified because VM regex and Bash regex can differ.
+# ds should restrict supported regex syntax if needed to preserve parity.
+
+
+# -----------------------------------------------------------------------------
+# 25. Tests [v0.14.0] [candidate]
+# -----------------------------------------------------------------------------
+
+test "string interpolation" {
+  let name = "Danh"
+  assert "Hello {name}" == "Hello Danh"
+}
+
+test "array length" {
+  let xs = ["a", "b"]
+  assert xs.len() == 2
+}
+
+
+# -----------------------------------------------------------------------------
+# 26. Formatter and checker expectations [v0.15.0] [candidate]
+# -----------------------------------------------------------------------------
+
+# Formatter style:
+# - two-space indentation;
+# - opening brace on the same line;
+# - one blank line between top-level declarations;
+# - spaces around binary operators;
+# - no trailing whitespace.
+
+
+# -----------------------------------------------------------------------------
+# 27. Rejected or not-now syntax [rejected]
+# -----------------------------------------------------------------------------
+
+# Do not add classes before 1.0.0.
+# class Service {}
+
+# Do not add async/await before 1.0.0.
+# async fn deploy() {}
+# await deploy()
+
+# Do not add macro systems before the core language is stable.
+# macro something {}
+
+# Do not copy Bash's confusing test syntax.
+# if [ "$x" = "y" ]; then
+# fi
+
+# Do not copy Bash's fd redirection syntax into ds source.
+# cmd > out.txt 2>&1

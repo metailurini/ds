@@ -97,6 +97,7 @@ The project starts with documentation only. The initial docs define the purpose,
 
 Important files:
 
+- `docs/language.ds`
 - `docs/product-principles.md`
 - `docs/roadmap.md`
 - `docs/architecture.md`
@@ -111,4 +112,12 @@ Important files:
 
 Current status: planning initialized.
 
-No implementation code exists yet. The project intentionally begins with docs so the implementation can follow a clear path without drifting away from the original purpose.
+No implementation code exists yet. The project intentionally begins with docs and a syntax catalog so the implementation can follow a clear path without drifting away from the original purpose.
+
+## Syntax catalog
+
+`docs/language.ds` is the project-wide syntax inventory.
+
+It is intentionally not a runnable script. It exists to keep the full planned language surface visible in one place and to make syntax drift obvious. Milestone specs define what is actually implemented in each version; `docs/language.ds` shows the broader direction and marks syntax by planned version/status.
+
+When syntax changes, update `docs/language.ds` together with the relevant milestone spec, test plan, roadmap entry, and examples.

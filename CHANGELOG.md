@@ -15,6 +15,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Runtime plan for core C primitives used by the frontend, VM, Bash emitter, diagnostics, and tools.
 - Milestone spec and test plan for `v0.1.0`.
 - Milestone spec and test plan for `v0.2.0`.
+- `docs/language.ds` syntax catalog for tracking the full planned language surface.
 - Roadmap update so `v0.3.0` is **Minimal C Runtime and Bytecode VM**.
 - Hashmap support code included under temporary `libs/hashmap/` staging and documented as eventually absorbed into `src/core` behind `DsMap`.
 
@@ -30,6 +31,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `ds tokens <file.ds>`.
 - `ds ast <file.ds>`.
 - `ds check <file.ds>`.
+- `docs/language.ds` syntax catalog.
 - Golden tests for lexer, parser, AST, and diagnostics.
 
 ## v0.2.0 — Planned

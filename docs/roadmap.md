@@ -4,6 +4,8 @@ This roadmap defines the intended path from project initialization to `1.0.0`.
 
 The roadmap is allowed to change, but changes should be deliberate. The purpose of this document is to prevent drifting away from the original goal: a shell-native scripting language that is easier than Bash, interpreted by `ds`, and able to emit every supported feature to standalone Bash.
 
+The `docs/language.ds` file is the companion syntax catalog for this roadmap. The roadmap explains when features are expected to arrive; `docs/language.ds` keeps the complete intended syntax visible in one place.
+
 ## Version format
 
 Versions use:
@@ -67,6 +69,7 @@ Each version below includes:
 - Implement source loading for `.ds` files, including filename tracking and line/column lookup.
 - Implement the lexer for comments, identifiers, keywords, strings, integers, booleans, braces, parentheses, operators, newlines, and command words.
 - Implement a parser for the initial source subset: `let`, `if`, `else`, expression statements where needed, and command statements.
+- Add the `docs/language.ds` syntax catalog and keep it clearly marked as non-runnable project documentation.
 - Implement an AST model that preserves enough structure and source locations for debug output and future lowering.
 - Implement diagnostics with filename, line, column, message, and useful source highlighting.
 - Add debug commands that print tokens and AST output in a stable human-readable format.
@@ -92,6 +95,7 @@ ds check file.ds
 
 - Lexer/parser golden fixtures for valid and invalid input.
 - Example scripts showing the tiny v0.1.0 syntax subset.
+- `docs/language.ds` checked in as the initial syntax inventory for current and planned syntax.
 - Diagnostics documented well enough that future versions reuse the same style.
 
 ---
@@ -135,6 +139,7 @@ bash file.sh
 - Bash emission golden tests using `input.ds` and `expected.sh` fixtures.
 - Smoke tests proving generated Bash is standalone.
 - Documentation explaining that every future feature must define Bash emission behavior.
+- `docs/language.ds` updated if Bash emission changes the planned syntax shape.
 
 ---
 
