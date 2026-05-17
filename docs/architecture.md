@@ -337,6 +337,14 @@ instructions. This keeps runtime variable storage aligned with lowering: values
 declared inside a block are available to statements in that block and are
 discarded when execution leaves it.
 
+In `v0.4.0`, behavior-sensitive CLI paths were cleaned up so they share the
+same source -> lexer -> parser -> lowering helper before reaching a backend.
+`ds check`, `ds emit bash`, `ds run`, direct `ds <file.ds>`, and `ds bytecode`
+all lower once through the same entrypoint plumbing. Backend-specific functions
+now accept an already-lowered program where practical, so Bash emission,
+bytecode dumping, and VM execution no longer each need to own parse/lower setup.
+`ds tokens` and `ds ast` intentionally remain frontend/debug commands.
+
 ## Bytecode backend
 
 `ds` is an interpreter, but it can compile internally to bytecode.

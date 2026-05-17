@@ -41,10 +41,28 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `v0.3.0` runtime, lowering, bytecode, VM execution, diagnostics, command execution, sanitizer, and VM/Bash parity tests.
 - Expanded `v0.3.0` strict-plan coverage for direct lowered-tree assertions, source locations after blank lines/comments, empty-block jumps, explicit command exit status, and long command output.
 - `make asan` and `make ubsan` sanitizer test targets for runtime/VM ownership checks where the local compiler supports them.
+- `v0.4.0` cleanup implementation for shared CLI parse/lower plumbing and backend entrypoints that consume lowered programs directly.
+- Runtime container clear APIs for reuse-friendly ownership boundaries: `ds_array_clear()` and `ds_map_clear()`.
 
 ### Fixed
 
 - `ds run` and `ds bytecode` without an input file now report usage instead of treating the subcommand name as an implicit script path.
+- `ds check`, `ds emit bash`, `ds run`, direct script execution, and `ds bytecode` now share one CLI parse/lower path instead of each lowering or parsing separately.
+
+## v0.4.0 — Implementation complete, tests pending
+
+### Implemented
+
+- Centralized CLI source-loading, parsing, and lowering helpers in the entrypoint.
+- Added lowered-program backend entrypoints for Bash emission, bytecode dumping, and VM execution.
+- Kept AST-only debug commands (`tokens`, `ast`) frontend-oriented while moving behavior-sensitive commands through shared lowering.
+- Added explicit container clear APIs and documented runtime ownership behavior.
+- Recorded that `libs/hashmap` remains staged and unused by production code; callers continue to depend only on `DsMap`.
+
+### Tests
+
+- No new `v0.4.0` tests have been added yet.
+- Existing `v0.1.0`, `v0.2.0`, and `v0.3.0` regression tests continue to pass.
 
 ## v0.3.0 — Complete
 

@@ -301,12 +301,9 @@ static void print_escaped(FILE *out, const char *data, size_t len) {
     }
 }
 
-bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag) {
-    DsLowerProgram *lowered = ds_lower_program(ast, diag);
-    if (!lowered) return false;
+bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowered, FILE *out, DsDiag *diag) {
     Program p;
     if (!compile_program(lowered, &p, diag)) {
-        ds_lower_program_free(lowered);
         return false;
     }
 
@@ -357,8 +354,15 @@ bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDia
         fprintf(out, "    # %s:%d:%d\n", source && source->path ? source->path : "<source>", ins->span.start.line, ins->span.start.column);
     }
     program_free(&p);
-    ds_lower_program_free(lowered);
     return true;
+}
+
+bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag) {
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return false;
+    bool ok = ds_bytecode_dump_program(source, lowered, out, diag);
+    ds_lower_program_free(lowered);
+    return ok;
 }
 
 typedef struct VmScope VmScope;
@@ -539,13 +543,10 @@ static void set_reg(Vm *vm, int reg, DsValue value) {
     vm->regs[reg] = value;
 }
 
-int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
+int ds_vm_run_program(const DsSource *source, const DsLowerProgram *lowered, DsDiag *diag) {
     (void)source;
-    DsLowerProgram *lowered = ds_lower_program(ast, diag);
-    if (!lowered) return 1;
     Program p;
     if (!compile_program(lowered, &p, diag)) {
-        ds_lower_program_free(lowered);
         return 1;
     }
     Vm vm;
@@ -640,6 +641,13 @@ done:
     free(vm.regs);
     scope_free_chain(vm.scope);
     program_free(&p);
+    return rc;
+}
+
+int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return 1;
+    int rc = ds_vm_run_program(source, lowered, diag);
     ds_lower_program_free(lowered);
     return rc;
 }

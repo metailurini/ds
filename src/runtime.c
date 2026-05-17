@@ -169,6 +169,10 @@ bool ds_array_push(DsArray *array, void *item) {
     return true;
 }
 
+void ds_array_clear(DsArray *array) {
+    array->len = 0;
+}
+
 void ds_array_free(DsArray *array) {
     free(array->items);
     ds_array_init(array);
@@ -211,11 +215,16 @@ bool ds_map_set(DsMap *map, DsStr key, DsValue value) {
     return true;
 }
 
-void ds_map_free(DsMap *map) {
+void ds_map_clear(DsMap *map) {
     for (size_t i = 0; i < map->len; i++) {
         free(map->keys[i]);
         ds_value_free(&map->values[i]);
     }
+    map->len = 0;
+}
+
+void ds_map_free(DsMap *map) {
+    ds_map_clear(map);
     free(map->keys);
     free(map->values);
     ds_map_init(map);

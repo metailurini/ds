@@ -130,9 +130,9 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.3.0` implementation and tests are complete for the scoped `v0.1.0` / `v0.2.0` language subset. The next planned work is `v0.4.0` cleanup of frontend, runtime, and backend boundaries.
+Current status: `v0.4.0` implementation is complete for the scoped cleanup/refactor pass. Tests for `v0.4.0` have not been added yet; existing `v0.1.0` through `v0.3.0` regression suites continue to pass.
 
-The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, and the first `v0.3.0` direct VM execution path:
+The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, and the `v0.4.0` internal cleanup pass:
 
 ```sh
 make
@@ -148,7 +148,7 @@ bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 ```
 
-The VM and Bash emitter now consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The VM also maintains runtime block scopes for lowered blocks. The v0.3 test suite covers runtime primitives, direct lowering shape checks, bytecode dumps, source-map/jump edges, VM execution, command failures, diagnostics, and VM/Bash parity.
+The CLI now centralizes source loading, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same parse/lower path. The VM and Bash emitter consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The VM also maintains runtime block scopes for lowered blocks. The v0.3 test suite covers runtime primitives, direct lowering shape checks, bytecode dumps, source-map/jump edges, VM execution, command failures, diagnostics, and VM/Bash parity.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

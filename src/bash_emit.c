@@ -347,10 +347,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     return true;
 }
 
-bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag) {
-    DsLowerProgram *lowered = ds_lower_program(ast, diag);
-    if (!lowered) return false;
-
+bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered, const char *output_path, DsDiag *diag) {
     BashEmitter e;
     memset(&e, 0, sizeof(e));
     e.source = source;
@@ -363,31 +360,35 @@ bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_p
         if (!emit_stmt(&e, lowered->statements.items[i], 0)) {
             free_symbols(&e.symbols);
             free(e.out.data);
-            ds_lower_program_free(lowered);
             return false;
         }
     }
 
     FILE *fp = fopen(output_path, "wb");
     if (!fp) {
-        DsSpan span = ast->span;
+        DsSpan span = lowered->span;
         ds_diag_error(diag, span, "failed to open output file `%s`: %s", output_path, strerror(errno));
         free_symbols(&e.symbols);
         free(e.out.data);
-        ds_lower_program_free(lowered);
         return false;
     }
     size_t written = fwrite(e.out.data ? e.out.data : "", 1, e.out.len, fp);
     if (written != e.out.len || fclose(fp) != 0) {
-        ds_diag_error(diag, ast->span, "failed to write output file `%s`: %s", output_path, strerror(errno));
+        ds_diag_error(diag, lowered->span, "failed to write output file `%s`: %s", output_path, strerror(errno));
         free_symbols(&e.symbols);
         free(e.out.data);
-        ds_lower_program_free(lowered);
         return false;
     }
 
     free_symbols(&e.symbols);
     free(e.out.data);
-    ds_lower_program_free(lowered);
     return true;
+}
+
+bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag) {
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return false;
+    bool ok = ds_emit_bash_program(source, lowered, output_path, diag);
+    ds_lower_program_free(lowered);
+    return ok;
 }

@@ -230,12 +230,14 @@ typedef enum {
     DS_BYTECODE_MODE_RUN
 } DsBytecodeMode;
 
+/* Source loading and diagnostics. */
 bool ds_source_read(const char *path, DsSource *out, DsDiag *diag);
 void ds_source_free(DsSource *source);
 
 void ds_diag_init(DsDiag *diag, const DsSource *source);
 void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...);
 
+/* Frontend: lexer, parser, and syntax debug output. */
 const char *ds_token_kind_name(DsTokenKind kind);
 bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag);
 void ds_tokens_free(DsTokenVec *tokens);
@@ -245,11 +247,16 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag);
 void ds_ast_print(const DsAst *ast, FILE *out);
 void ds_ast_free(DsAst *ast);
 
+/* Shared lowered representation consumed by both direct VM and Bash emission. */
 DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag);
 bool ds_lower_validate(const DsAst *ast, DsDiag *diag);
 void ds_lower_program_free(DsLowerProgram *program);
-bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);
 
+/* Standalone Bash backend. */
+bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);
+bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *program, const char *output_path, DsDiag *diag);
+
+/* Runtime primitives and ownership helpers. */
 void ds_string_init(DsString *s);
 bool ds_string_from_cstr(DsString *s, const char *text);
 bool ds_string_from_range(DsString *s, const char *data, size_t len);
@@ -270,16 +277,22 @@ int ds_value_compare(const DsValue *left, const DsValue *right);
 
 void ds_array_init(DsArray *array);
 bool ds_array_push(DsArray *array, void *item);
+void ds_array_clear(DsArray *array);
 void ds_array_free(DsArray *array);
 
 void ds_map_init(DsMap *map);
 bool ds_map_set(DsMap *map, DsStr key, DsValue value);
 DsValue *ds_map_get(DsMap *map, DsStr key);
+void ds_map_clear(DsMap *map);
 void ds_map_free(DsMap *map);
 
+/* Bytecode and VM backend. */
 bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag);
+bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *program, FILE *out, DsDiag *diag);
 int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag);
+int ds_vm_run_program(const DsSource *source, const DsLowerProgram *program, DsDiag *diag);
 
+/* Utility allocation helpers. These abort on allocation failure. */
 char *ds_str_dup_range(const char *data, size_t len);
 void *ds_xcalloc(size_t count, size_t size);
 void *ds_xrealloc(void *ptr, size_t size);

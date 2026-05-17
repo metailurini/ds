@@ -240,6 +240,35 @@ and non-empty strings are truthy. Comparisons render values to deterministic
 strings before comparing, matching the current Bash-emission limitation. A
 future semantic pass may replace this with type-aware numeric dispatch.
 
+## Implemented v0.4.0 ownership cleanup
+
+`v0.4.0` keeps the runtime behavior intentionally small, but makes the current
+ownership rules explicit enough for future features to reuse safely:
+
+- `DsString` owns its `data` buffer. `len` is the byte length excluding the
+  trailing NUL byte, and `cap` is the allocated capacity. `ds_string_free()` is
+  the only destructor for a live string buffer.
+- `ds_value_string_take()` transfers ownership of a `DsString` buffer into a
+  `DsValue` and reinitializes the source `DsString`, so there is exactly one
+  owner after the call.
+- `ds_value_copy()` deep-copies string values and trivially copies `null`,
+  `bool`, and `int` values. `ds_value_free()` is the single destructor for owned
+  value contents.
+- `DsArray` is a borrowed pointer vector. `ds_array_clear()` resets the logical
+  length without freeing pointed-to items, and `ds_array_free()` releases the
+  vector storage. Typed owning vectors should be introduced before storing owned
+  values in it.
+- `DsMap` copies keys and owns stored `DsValue` contents. Setting an existing
+  key frees the previous value before storing the replacement. `ds_map_clear()`
+  frees all keys and values while keeping capacity for reuse; `ds_map_free()`
+  clears and releases storage.
+
+The staged `libs/hashmap` code remains **still staged and unused** in production
+code for this milestone. The current `DsMap` API is intentionally simple and is
+the only map boundary used by the VM/runtime. Hashmap absorption is deferred
+until the wrapper API needs behavior such as deletion, iteration, or stronger
+collision-performance guarantees.
+
 ## Hashmap absorption plan
 
 The hashmap support code from the owned `hashmap` project is included in this repository under `libs/hashmap/` for now.
