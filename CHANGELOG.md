@@ -49,6 +49,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
   lives under `tests/v0_*/`, with shared helpers under `tests/lib/`.
 - `v0.4.0` cleanup regression suite covering pipeline boundaries, diagnostic consistency, source locations, runtime ownership, `DsMap` wrapper behavior, static backend/staged-library boundaries, generated Bash standalone behavior, command exit parity, cleanup-only future-syntax rejection, CLI usage consistency, shared golden-helper failure quality, and docs/help-command alignment.
 - Milestone spec and comprehensive test plan for `v0.5.0` first-class CLI args, including VM/Bash parity, help output, shell-safety, and argument diagnostic coverage.
+- Milestone spec and comprehensive test plan for `v0.6.0` imports/includes, including relative import resolution, load-once behavior, cycle diagnostics, multi-file source locations, standalone Bash bundling, and VM/Bash parity.
 
 ### Fixed
 
