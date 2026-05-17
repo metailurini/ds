@@ -112,10 +112,17 @@ Important files:
 - `docs/architecture.md`
 - `docs/runtime.md`
 - `docs/version-workflow.md`
+- `docs/editor.md`
 - `docs/milestones/v0.1.0-spec.md`
 - `docs/milestones/v0.1.0-test-plan.md`
 - `docs/milestones/v0.2.0-spec.md`
 - `docs/milestones/v0.2.0-test-plan.md`
+
+## Editor / LSP setup
+
+`compile_flags.txt` is checked in so `clangd` can resolve project headers and use
+the same baseline flags as the Makefile build when the workspace is opened in an
+IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
