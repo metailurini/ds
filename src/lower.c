@@ -576,7 +576,11 @@ static void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLower
             out.has_default = true;
             out.default_value = lower_expr(lower, param->default_value, &default_kind);
         } else {
-            if (seen_default) ds_diag_error(lower->diag, param->span, "required parameter cannot follow a defaulted parameter");
+            if (seen_default) {
+                ds_diag_error(lower->diag, param->span,
+                              "required parameter `%.*s` cannot follow a default parameter",
+                              (int)param->name.len, param->name.data);
+            }
             fn.required_count++;
         }
         lower_fn_param_vec_push(&fn.params, out);

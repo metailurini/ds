@@ -227,7 +227,6 @@ pass "staged hashmap API does not leak into production src/include"
 # Future syntax from docs/language.ds must remain rejected during cleanup-only v0.4.
 declare -A future_syntax
 future_syntax[import_block]='import "other.ds" { }'
-future_syntax[function]='fn greet() { echo "hi" }'
 future_syntax[loop]='for item in items { echo $item }'
 future_syntax[array]='let xs = [1, 2]'
 future_syntax[map]='let m = { name: "Danh" }'

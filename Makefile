@@ -6,7 +6,7 @@ SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
 
-.PHONY: all clean check smoke test test-v0-4 test-v0-5 test-v0-6 test-v0-7 test-v0-8 asan ubsan
+.PHONY: all clean check smoke test test-v0-4 test-v0-5 test-v0-6 test-v0-7 test-v0-8 test-v0-9 asan ubsan
 
 all: $(BIN)
 
@@ -32,6 +32,7 @@ test: $(BIN)
 	DS_SKIP_BUILD=1 ./tests/v0_6/run.sh
 	DS_SKIP_BUILD=1 ./tests/v0_7/run.sh
 	DS_SKIP_BUILD=1 ./tests/v0_8/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_9/run.sh
 
 test-v0-4: $(BIN)
 	DS_SKIP_BUILD=1 ./tests/v0_4/run.sh
@@ -47,6 +48,9 @@ test-v0-7: $(BIN)
 
 test-v0-8: $(BIN)
 	DS_SKIP_BUILD=1 ./tests/v0_8/run.sh
+
+test-v0-9: $(BIN)
+	DS_SKIP_BUILD=1 ./tests/v0_9/run.sh
 
 asan:
 	$(MAKE) clean

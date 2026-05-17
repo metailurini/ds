@@ -394,6 +394,20 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
     }
 }
 
+static bool emit_call_arg_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    if (expr->kind == DS_LOWER_EXPR_IDENT) {
+        if (!symbol_exists(&e->symbols, expr->as.text)) {
+            ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
+            return false;
+        }
+        buf_append(out, "\"$");
+        emit_var_name(out, expr->as.text);
+        buf_append(out, "\"");
+        return true;
+    }
+    return emit_value_expr(e, expr, out);
+}
+
 static bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
@@ -624,7 +638,7 @@ static bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent
 static bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
     for (size_t i = 0; i < args->len; i++) {
         buf_append(out, " ");
-        if (!emit_value_expr(e, args->items[i], out)) return false;
+        if (!emit_call_arg_expr(e, args->items[i], out)) return false;
     }
     return true;
 }

@@ -560,7 +560,9 @@ static DsStmt *parse_fn(Parser *p, bool top_level) {
                     if (param.default_value) param.span.end = param.default_value->span.end;
                 }
             } else if (seen_default) {
-                ds_diag_error(p->diag, param.span, "required parameter cannot follow a defaulted parameter");
+                ds_diag_error(p->diag, param.span,
+                              "required parameter `%.*s` cannot follow a default parameter",
+                              (int)param.name.len, param.name.data);
             }
             fn_param_vec_push(&stmt->as.fn_stmt.params, param);
             if (!advance_if(p, DS_TOK_COMMA)) break;
