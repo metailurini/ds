@@ -27,6 +27,17 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
         case DS_EXPR_BOOL:
             fprintf(out, "BoolExpr %s\n", expr->as.boolean ? "true" : "false");
             break;
+        case DS_EXPR_RUN:
+            fputs("RunExpr\n", out);
+            for (size_t i = 0; i < expr->as.run.words.len; i++) {
+                indent(out, level + 1);
+                fprintf(out, "Word %.*s\n", (int)expr->as.run.words.items[i].len, expr->as.run.words.items[i].data);
+            }
+            break;
+        case DS_EXPR_FIELD:
+            fprintf(out, "FieldExpr %.*s\n", (int)expr->as.field.field.len, expr->as.field.field.data);
+            print_expr(expr->as.field.object, out, level + 1);
+            break;
         case DS_EXPR_UNARY:
             fprintf(out, "UnaryExpr %.*s\n", (int)expr->as.unary.op.len, expr->as.unary.op.data);
             print_expr(expr->as.unary.right, out, level + 1);
@@ -79,6 +90,12 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
                 fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.words.items[i].len,
                         stmt->as.cmd_stmt.words.items[i].data);
             }
+            if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
+                static const char *names[] = {"none", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
+                indent(out, level + 1);
+                fprintf(out, "Redirect %s %.*s\n", names[stmt->as.cmd_stmt.redirect.kind],
+                        (int)stmt->as.cmd_stmt.redirect.target.len, stmt->as.cmd_stmt.redirect.target.data);
+            }
             break;
     }
 }
@@ -130,6 +147,14 @@ static void free_expr(DsExpr *expr) {
         case DS_EXPR_INT:
             free(expr->as.text.data);
             break;
+        case DS_EXPR_RUN:
+            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].data);
+            free(expr->as.run.words.items);
+            break;
+        case DS_EXPR_FIELD:
+            free_expr(expr->as.field.object);
+            free(expr->as.field.field.data);
+            break;
         case DS_EXPR_UNARY:
             free(expr->as.unary.op.data);
             free_expr(expr->as.unary.right);
@@ -172,6 +197,7 @@ static void free_stmt(DsStmt *stmt) {
                 free(stmt->as.cmd_stmt.words.items[i].data);
             }
             free(stmt->as.cmd_stmt.words.items);
+            free(stmt->as.cmd_stmt.redirect.target.data);
             break;
     }
     free(stmt);

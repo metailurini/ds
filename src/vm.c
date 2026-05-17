@@ -1,6 +1,9 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "ds.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,6 +19,8 @@ typedef enum {
     OP_NOT,
     OP_COMPARE,
     OP_INTERPOLATE,
+    OP_RUN_CAPTURE,
+    OP_GET_FIELD,
     OP_JUMP,
     OP_JUMP_IF_FALSE,
     OP_PUSH_SCOPE,
@@ -34,8 +39,10 @@ typedef struct {
     int target;
     char *name;
     char *cmp;
+    char *field;
     DsStr *words;
     size_t word_count;
+    DsRedirect redirect;
 } Instr;
 
 typedef struct {
@@ -53,8 +60,20 @@ static void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
 static void instr_free(Instr *ins) {
     free(ins->name);
     free(ins->cmp);
+    free(ins->field);
     for (size_t i = 0; i < ins->word_count; i++) free(ins->words[i].data);
     free(ins->words);
+    free(ins->redirect.target.data);
+}
+
+static void copy_words_to_instr(Instr *ins, const DsWordVec *words) {
+    ins->word_count = words->len;
+    ins->words = (DsStr *)ds_xcalloc(ins->word_count ? ins->word_count : 1, sizeof(DsStr));
+    for (size_t i = 0; i < ins->word_count; i++) {
+        DsStr w = words->items[i];
+        ins->words[i].data = ds_str_dup_range(w.data, w.len);
+        ins->words[i].len = w.len;
+    }
 }
 
 static void program_free(Program *p) {
@@ -157,6 +176,28 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
+        case DS_LOWER_EXPR_RUN: {
+            int r = new_reg(p);
+            Instr ins = {0};
+            ins.op = OP_RUN_CAPTURE;
+            ins.span = expr->span;
+            ins.dst = r;
+            copy_words_to_instr(&ins, &expr->as.run.words);
+            emit_instr(p, ins);
+            return r;
+        }
+        case DS_LOWER_EXPR_FIELD: {
+            int obj = compile_expr(p, expr->as.field.object);
+            int r = new_reg(p);
+            Instr ins = {0};
+            ins.op = OP_GET_FIELD;
+            ins.span = expr->span;
+            ins.dst = r;
+            ins.a = obj;
+            ins.field = ds_str_dup_range(expr->as.field.field.data, expr->as.field.field.len);
+            emit_instr(p, ins);
+            return r;
+        }
         case DS_LOWER_EXPR_UNARY: {
             int right = compile_expr(p, expr->as.unary.right);
             int r = new_reg(p);
@@ -222,12 +263,13 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             Instr ins = {0};
             ins.op = OP_RUN_CMD;
             ins.span = stmt->span;
-            ins.word_count = stmt->as.cmd_stmt.words.len;
-            ins.words = (DsStr *)ds_xcalloc(ins.word_count ? ins.word_count : 1, sizeof(DsStr));
-            for (size_t i = 0; i < ins.word_count; i++) {
-                DsStr w = stmt->as.cmd_stmt.words.items[i];
-                ins.words[i].data = ds_str_dup_range(w.data, w.len);
-                ins.words[i].len = w.len;
+            copy_words_to_instr(&ins, &stmt->as.cmd_stmt.words);
+            ins.redirect.kind = stmt->as.cmd_stmt.redirect.kind;
+            ins.redirect.op_span = stmt->as.cmd_stmt.redirect.op_span;
+            ins.redirect.target_span = stmt->as.cmd_stmt.redirect.target_span;
+            if (stmt->as.cmd_stmt.redirect.target.len > 0) {
+                ins.redirect.target.data = ds_str_dup_range(stmt->as.cmd_stmt.redirect.target.data, stmt->as.cmd_stmt.redirect.target.len);
+                ins.redirect.target.len = stmt->as.cmd_stmt.redirect.target.len;
             }
             emit_instr(p, ins);
             break;
@@ -279,6 +321,8 @@ static const char *op_name(OpCode op) {
         case OP_NOT: return "NOT";
         case OP_COMPARE: return "COMPARE";
         case OP_INTERPOLATE: return "INTERPOLATE";
+        case OP_RUN_CAPTURE: return "RUN_CAPTURE";
+        case OP_GET_FIELD: return "GET_FIELD";
         case OP_JUMP: return "JUMP";
         case OP_JUMP_IF_FALSE: return "JUMP_IF_FALSE";
         case OP_PUSH_SCOPE: return "PUSH_SCOPE";
@@ -344,6 +388,9 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 print_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
                 fputc('"', out);
                 break;
+            case DS_VALUE_COMMAND_RESULT:
+                fputs("command_result", out);
+                break;
         }
         fputc('\n', out);
     }
@@ -358,6 +405,17 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_NOT: fprintf(out, " r%d, r%d", ins->dst, ins->a); break;
             case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
+            case OP_RUN_CAPTURE:
+                fprintf(out, " r%d, [", ins->dst);
+                for (size_t j = 0; j < ins->word_count; j++) {
+                    if (j) fputs(", ", out);
+                    fputc('"', out);
+                    print_escaped(out, ins->words[j].data, ins->words[j].len);
+                    fputc('"', out);
+                }
+                fputc(']', out);
+                break;
+            case OP_GET_FIELD: fprintf(out, " r%d, r%d.%s", ins->dst, ins->a, ins->field); break;
             case OP_JUMP: fprintf(out, " %d", ins->target); break;
             case OP_JUMP_IF_FALSE: fprintf(out, " r%d, %d", ins->a, ins->target); break;
             case OP_PUSH_SCOPE: break;
@@ -371,6 +429,12 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                     fputc('"', out);
                 }
                 fputc(']', out);
+                if (ins->redirect.kind != DS_REDIRECT_NONE) {
+                    static const char *names[] = {"", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
+                    fprintf(out, " %s \"", names[ins->redirect.kind]);
+                    print_escaped(out, ins->redirect.target.data, ins->redirect.target.len);
+                    fputc('"', out);
+                }
                 break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
@@ -719,7 +783,49 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         free(name);
         return true;
     }
+    for (size_t i = 1; i + 1 < word.len; i++) {
+        if (word.data[i] == '.') {
+            char *name = ds_str_dup_range(word.data, i);
+            char *field = ds_str_dup_range(word.data + i + 1, word.len - i - 1);
+            DsValue value;
+            if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
+            if (value.kind != DS_VALUE_COMMAND_RESULT) {
+                ds_diag_error(vm->diag, span, "field access is only supported on command results in v0.7.0");
+                ds_value_free(&value); free(name); free(field); return false;
+            }
+            DsValue field_value = ds_value_null();
+            if (strcmp(field, "stdout") == 0) ds_string_from_range(&field_value.as.string, value.as.command_result.stdout_text.data ? value.as.command_result.stdout_text.data : "", value.as.command_result.stdout_text.len), field_value.kind = DS_VALUE_STRING;
+            else if (strcmp(field, "stderr") == 0) ds_string_from_range(&field_value.as.string, value.as.command_result.stderr_text.data ? value.as.command_result.stderr_text.data : "", value.as.command_result.stderr_text.len), field_value.kind = DS_VALUE_STRING;
+            else if (strcmp(field, "code") == 0) field_value = ds_value_int(value.as.command_result.code);
+            else if (strcmp(field, "ok") == 0) field_value = ds_value_bool(value.as.command_result.code == 0);
+            else if (strcmp(field, "failed") == 0) field_value = ds_value_bool(value.as.command_result.code != 0);
+            else ds_diag_error(vm->diag, span, "unknown command result field `%s`", field);
+            DsString rendered;
+            ds_value_to_string(&field_value, &rendered);
+            *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+            ds_string_free(&rendered);
+            ds_value_free(&field_value);
+            ds_value_free(&value);
+            free(name); free(field);
+            return !vm->diag->has_error;
+        }
+    }
     *out = ds_str_dup_range(word.data, word.len);
+    return true;
+}
+
+static bool render_redirect_target(Vm *vm, DsRedirect *redirect, char **out) {
+    DsString decoded;
+    if (!decode_string_text(redirect->target, &decoded)) {
+        ds_diag_error(vm->diag, redirect->target_span, "invalid redirection target");
+        return false;
+    }
+    DsString rendered;
+    bool ok = interpolate_string(vm, &decoded, &rendered, redirect->target_span);
+    ds_string_free(&decoded);
+    if (!ok) return false;
+    *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+    ds_string_free(&rendered);
     return true;
 }
 
@@ -741,6 +847,23 @@ static int run_command(Vm *vm, Instr *ins) {
         return 1;
     }
     if (pid == 0) {
+        if (ins->redirect.kind != DS_REDIRECT_NONE) {
+            char *path = NULL;
+            if (!render_redirect_target(vm, &ins->redirect, &path)) _exit(1);
+            int flags = O_CREAT | O_WRONLY;
+            if (ins->redirect.kind == DS_REDIRECT_OUT_APPEND || ins->redirect.kind == DS_REDIRECT_ERR_APPEND || ins->redirect.kind == DS_REDIRECT_ALL_APPEND) flags |= O_APPEND;
+            else flags |= O_TRUNC;
+            int fd = open(path, flags, 0666);
+            if (fd < 0) {
+                fprintf(stderr, "ds: failed to open redirection target `%s`: %s\n", path, strerror(errno));
+                _exit(1);
+            }
+            if (ins->redirect.kind == DS_REDIRECT_OUT || ins->redirect.kind == DS_REDIRECT_OUT_APPEND) dup2(fd, STDOUT_FILENO);
+            else if (ins->redirect.kind == DS_REDIRECT_ERR || ins->redirect.kind == DS_REDIRECT_ERR_APPEND) dup2(fd, STDERR_FILENO);
+            else { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); }
+            close(fd);
+            free(path);
+        }
         execvp(argv[0], argv);
         fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv[0], strerror(errno));
         _exit(127);
@@ -758,6 +881,85 @@ static int run_command(Vm *vm, Instr *ins) {
     if (WIFEXITED(status)) return WEXITSTATUS(status);
     if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
     return 1;
+}
+
+static bool read_file_into_string(FILE *fp, DsString *out) {
+    ds_string_init(out);
+    fflush(fp);
+    if (fseek(fp, 0, SEEK_SET) != 0) return false;
+    char buf[4096];
+    size_t n = 0;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) ds_string_append_range(out, buf, n);
+    return ferror(fp) == 0;
+}
+
+static int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
+    *out_value = ds_value_null();
+    if (ins->word_count == 0) return 1;
+    char **argv = (char **)ds_xcalloc(ins->word_count + 1, sizeof(char *));
+    for (size_t i = 0; i < ins->word_count; i++) {
+        if (!word_to_arg(vm, ins->words[i], ins->span, &argv[i])) {
+            for (size_t j = 0; j < i; j++) free(argv[j]);
+            free(argv);
+            return 1;
+        }
+    }
+    FILE *out_fp = tmpfile();
+    FILE *err_fp = tmpfile();
+    if (!out_fp || !err_fp) {
+        ds_diag_error(vm->diag, ins->span, "failed to create command capture temporary files: %s", strerror(errno));
+        if (out_fp) fclose(out_fp);
+        if (err_fp) fclose(err_fp);
+        for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
+        free(argv);
+        return 1;
+    }
+    pid_t pid = fork();
+    if (pid < 0) {
+        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv[0], strerror(errno));
+        fclose(out_fp); fclose(err_fp);
+        for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
+        free(argv);
+        return 1;
+    }
+    if (pid == 0) {
+        dup2(fileno(out_fp), STDOUT_FILENO);
+        dup2(fileno(err_fp), STDERR_FILENO);
+        execvp(argv[0], argv);
+        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv[0], strerror(errno));
+        _exit(127);
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) { status = 1; break; }
+    }
+    int code = 1;
+    if (WIFEXITED(status)) code = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status)) code = 128 + WTERMSIG(status);
+    DsString stdout_text, stderr_text;
+    if (!read_file_into_string(out_fp, &stdout_text) || !read_file_into_string(err_fp, &stderr_text)) {
+        ds_diag_error(vm->diag, ins->span, "failed to read command capture output");
+        code = 1;
+    }
+    fclose(out_fp); fclose(err_fp);
+    for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
+    free(argv);
+    *out_value = ds_value_command_result_take(&stdout_text, &stderr_text, code);
+    return 0;
+}
+
+static bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out) {
+    if (value->kind != DS_VALUE_COMMAND_RESULT) {
+        ds_diag_error(vm->diag, span, "field access is only supported on command results in v0.7.0");
+        return false;
+    }
+    if (strcmp(field, "stdout") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len); out->kind = DS_VALUE_STRING; return true; }
+    if (strcmp(field, "stderr") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len); out->kind = DS_VALUE_STRING; return true; }
+    if (strcmp(field, "code") == 0) { *out = ds_value_int(value->as.command_result.code); return true; }
+    if (strcmp(field, "ok") == 0) { *out = ds_value_bool(value->as.command_result.code == 0); return true; }
+    if (strcmp(field, "failed") == 0) { *out = ds_value_bool(value->as.command_result.code != 0); return true; }
+    ds_diag_error(vm->diag, span, "unknown command result field `%s`", field);
+    return false;
 }
 
 static bool ensure_regs(Vm *vm) {
@@ -835,6 +1037,20 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
                 DsString rendered;
                 if (!interpolate_string(&vm, &p.consts[ins->a].as.string, &rendered, ins->span)) { rc = 1; goto done; }
                 set_reg(&vm, ins->dst, ds_value_string_take(&rendered));
+                ip++;
+                break;
+            }
+            case OP_RUN_CAPTURE: {
+                DsValue value;
+                if (run_capture(&vm, ins, &value) != 0) { rc = 1; goto done; }
+                set_reg(&vm, ins->dst, value);
+                ip++;
+                break;
+            }
+            case OP_GET_FIELD: {
+                DsValue field = ds_value_null();
+                if (!command_result_field(&vm, &vm.regs[ins->a], ins->field, ins->span, &field)) { rc = 1; goto done; }
+                set_reg(&vm, ins->dst, field);
                 ip++;
                 break;
             }

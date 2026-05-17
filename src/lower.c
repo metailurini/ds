@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum { SYM_BOOL, SYM_INT, SYM_STRING, SYM_UNKNOWN } SymKind;
+typedef enum { SYM_BOOL, SYM_INT, SYM_STRING, SYM_COMMAND_RESULT, SYM_UNKNOWN } SymKind;
 
 typedef struct {
     char *name;
@@ -112,12 +112,27 @@ static bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
 }
 
 static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
+static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span);
 
 static DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
     DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(DsLowerExpr));
     expr->kind = kind;
     expr->span = span;
     return expr;
+}
+
+static bool is_result_field(DsStr field, SymKind *kind_out) {
+    if (str_eq(field, "stdout") || str_eq(field, "stderr")) { *kind_out = SYM_STRING; return true; }
+    if (str_eq(field, "code")) { *kind_out = SYM_INT; return true; }
+    if (str_eq(field, "ok") || str_eq(field, "failed")) { *kind_out = SYM_BOOL; return true; }
+    return false;
+}
+
+static void clone_words(DsWordVec *dst, const DsWordVec *src) {
+    dst->len = src->len;
+    dst->cap = src->len;
+    dst->items = (DsStr *)ds_xcalloc(dst->len ? dst->len : 1, sizeof(DsStr));
+    for (size_t i = 0; i < src->len; i++) dst->items[i] = str_clone(src->items[i]);
 }
 
 static DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
@@ -173,6 +188,31 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
             out->as.boolean = expr->as.boolean;
             return out;
         }
+        case DS_EXPR_RUN: {
+            if (expr->as.run.words.len == 0) {
+                ds_diag_error(lower->diag, expr->span, "expected command after `run`");
+            }
+            for (size_t i = 0; i < expr->as.run.words.len; i++) validate_cmd_word(lower, expr->as.run.words.items[i], expr->span);
+            *kind_out = SYM_COMMAND_RESULT;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_RUN, expr->span);
+            clone_words(&out->as.run.words, &expr->as.run.words);
+            return out;
+        }
+        case DS_EXPR_FIELD: {
+            SymKind object_kind = SYM_UNKNOWN;
+            DsLowerExpr *object = lower_expr(lower, expr->as.field.object, &object_kind);
+            SymKind field_kind = SYM_UNKNOWN;
+            if (object_kind != SYM_COMMAND_RESULT) {
+                ds_diag_error(lower->diag, expr->span, "field access is only supported on command results in v0.7.0");
+            } else if (!is_result_field(expr->as.field.field, &field_kind)) {
+                ds_diag_error(lower->diag, expr->span, "unknown command result field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
+            }
+            *kind_out = field_kind;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_FIELD, expr->span);
+            out->as.field.object = object;
+            out->as.field.field = str_clone(expr->as.field.field);
+            return out;
+        }
         case DS_EXPR_UNARY: {
             SymKind right_kind = SYM_UNKNOWN;
             DsLowerExpr *right = lower_expr(lower, expr->as.unary.right, &right_kind);
@@ -204,6 +244,22 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
         }
     }
     if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') return validate_interpolation(lower, word, span);
+    for (size_t i = 1; i + 1 < word.len; i++) {
+        if (word.data[i] == '.') {
+            DsStr name = {word.data, i};
+            DsStr field = {word.data + i + 1, word.len - i - 1};
+            SymKind field_kind = SYM_UNKNOWN;
+            Symbol *sym = scope_find(lower->scope, name);
+            if (!sym) {
+                ds_diag_error(lower->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+                return false;
+            }
+            if (sym->kind != SYM_COMMAND_RESULT || !is_result_field(field, &field_kind)) {
+                ds_diag_error(lower->diag, span, "unsupported command result field `%.*s`", (int)field.len, field.data);
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -374,6 +430,17 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 validate_cmd_word(lower, stmt->as.cmd_stmt.words.items[i], stmt->span);
                 out->as.cmd_stmt.words.items[i] = str_clone(stmt->as.cmd_stmt.words.items[i]);
             }
+            out->as.cmd_stmt.redirect.kind = stmt->as.cmd_stmt.redirect.kind;
+            out->as.cmd_stmt.redirect.op_span = stmt->as.cmd_stmt.redirect.op_span;
+            out->as.cmd_stmt.redirect.target_span = stmt->as.cmd_stmt.redirect.target_span;
+            if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
+                if (stmt->as.cmd_stmt.redirect.target.len == 0) {
+                    ds_diag_error(lower->diag, stmt->as.cmd_stmt.redirect.op_span, "expected redirection target");
+                } else {
+                    out->as.cmd_stmt.redirect.target = str_clone(stmt->as.cmd_stmt.redirect.target);
+                    validate_interpolation(lower, stmt->as.cmd_stmt.redirect.target, stmt->as.cmd_stmt.redirect.target_span);
+                }
+            }
             return out;
         }
         case DS_STMT_IF: {
@@ -400,6 +467,14 @@ static void lower_expr_free(DsLowerExpr *expr) {
         case DS_LOWER_EXPR_STRING:
         case DS_LOWER_EXPR_INT:
             free(expr->as.text.data);
+            break;
+        case DS_LOWER_EXPR_RUN:
+            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].data);
+            free(expr->as.run.words.items);
+            break;
+        case DS_LOWER_EXPR_FIELD:
+            lower_expr_free(expr->as.field.object);
+            free(expr->as.field.field.data);
             break;
         case DS_LOWER_EXPR_UNARY:
             free(expr->as.unary.op.data);
@@ -436,6 +511,7 @@ static void lower_stmt_free(DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CMD:
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) free(stmt->as.cmd_stmt.words.items[i].data);
             free(stmt->as.cmd_stmt.words.items);
+            free(stmt->as.cmd_stmt.redirect.target.data);
             break;
     }
     free(stmt);

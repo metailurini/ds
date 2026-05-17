@@ -136,9 +136,9 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.6.0` implementation and tests are complete for the scoped local imports/includes pass. Existing `v0.1.0` through `v0.6.0` regression suites continue to pass.
+Current status: `v0.7.0` implementation is in place for the scoped command-result capture and readable redirection pass. The dedicated `v0.7.0` tests have not been added yet in this implementation-only step.
 
-The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, and the first `v0.5.0` script argument contract and the initial `v0.6.0` local import composition path:
+The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, and the initial `v0.7.0` command-result/redirection path:
 
 Local imports use simple quoted paths resolved relative to the importing file:
 
@@ -158,17 +158,23 @@ make
 ./ds examples/args.ds api --target production --retries 5 --force
 ./ds examples/args.ds --help
 ./ds examples/import-main.ds
+./ds examples/command-result.ds
+./ds examples/redirection.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
 ./ds emit bash examples/args.ds -o /tmp/args.sh
 ./ds emit bash examples/import-main.ds -o /tmp/import-main.sh
+./ds emit bash examples/command-result.ds -o /tmp/command-result.sh
+./ds emit bash examples/redirection.ds -o /tmp/redirection.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 bash /tmp/args.sh api --target production --retries 5 --force
 bash /tmp/args.sh --help
 bash /tmp/import-main.sh
+bash /tmp/command-result.sh
+bash /tmp/redirection.sh
 ```
 
-The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The VM also maintains runtime block scopes for lowered blocks. The v0.5 test suite covers lexer/parser/AST output, direct lowering shape checks, VM argv parsing, emitted Bash parser behavior, help output, bytecode arg contracts, diagnostics, shell-sensitive values, CLI integration, and older-version regressions. The v0.6 test suite covers local `import "./file.ds"` composition, nested imports, duplicate load-once behavior, imported-source diagnostics, VM/Bash parity, and standalone Bash bundling.
+The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, and plain command redirections. The VM also maintains runtime block scopes for lowered blocks. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

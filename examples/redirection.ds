@@ -1,0 +1,2 @@
+sh -c "printf build-output; printf build-error >&2" &> "build.log"
+echo "build output written to build.log"

@@ -93,7 +93,25 @@ static bool expect(Parser *p, DsTokenKind kind, const char *message) {
 static bool is_identifier_like(DsTokenKind kind) {
     return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_IMPORT || kind == DS_TOK_ARG ||
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
-           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL;
+           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN;
+}
+
+static bool is_redirect_token(DsTokenKind kind) {
+    return kind == DS_TOK_REDIRECT_OUT || kind == DS_TOK_REDIRECT_OUT_APPEND ||
+           kind == DS_TOK_REDIRECT_ERR || kind == DS_TOK_REDIRECT_ERR_APPEND ||
+           kind == DS_TOK_REDIRECT_ALL || kind == DS_TOK_REDIRECT_ALL_APPEND;
+}
+
+static DsRedirectKind redirect_kind_from_token(DsTokenKind kind) {
+    switch (kind) {
+        case DS_TOK_REDIRECT_OUT: return DS_REDIRECT_OUT;
+        case DS_TOK_REDIRECT_OUT_APPEND: return DS_REDIRECT_OUT_APPEND;
+        case DS_TOK_REDIRECT_ERR: return DS_REDIRECT_ERR;
+        case DS_TOK_REDIRECT_ERR_APPEND: return DS_REDIRECT_ERR_APPEND;
+        case DS_TOK_REDIRECT_ALL: return DS_REDIRECT_ALL;
+        case DS_TOK_REDIRECT_ALL_APPEND: return DS_REDIRECT_ALL_APPEND;
+        default: return DS_REDIRECT_NONE;
+    }
 }
 
 static bool expect_identifier_like(Parser *p, const char *message) {
@@ -123,8 +141,61 @@ static int precedence(DsTokenKind kind) {
 
 static DsExpr *parse_expr_prec(Parser *p, int min_prec);
 
+static void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *span, bool reject_redirection) {
+    DsStr current = {0};
+    size_t current_cap = 0;
+    size_t prev_end = 0;
+    bool have_current = false;
+    while (!is_stmt_end(p)) {
+        if (is_redirect_token(peek(p)->kind)) {
+            if (reject_redirection) {
+                ds_diag_error(p->diag, peek(p)->span, "captured `run` commands do not support redirection in v0.7.0");
+                while (!is_stmt_end(p)) advance(p);
+            }
+            break;
+        }
+        DsToken *tok = advance(p);
+        bool adjacent = have_current && tok->span.start.offset == prev_end;
+        if (!adjacent && have_current) {
+            word_vec_push(words, current);
+            current.data = NULL;
+            current.len = 0;
+            current_cap = 0;
+            have_current = false;
+        }
+        if (!have_current) {
+            current_cap = tok->text.len + 1;
+            current.data = (char *)ds_xcalloc(current_cap, 1);
+            current.len = 0;
+            have_current = true;
+        } else if (current.len + tok->text.len + 1 > current_cap) {
+            current_cap = (current.len + tok->text.len + 1) * 2;
+            current.data = (char *)ds_xrealloc(current.data, current_cap);
+        }
+        memcpy(current.data + current.len, tok->text.data, tok->text.len);
+        current.len += tok->text.len;
+        current.data[current.len] = '\0';
+        prev_end = tok->span.end.offset;
+        if (span) span->end = tok->span.end;
+    }
+    if (have_current) word_vec_push(words, current);
+}
+
+static DsExpr *parse_run_expr(Parser *p) {
+    DsToken *run = previous(p);
+    DsExpr *expr = new_expr(DS_EXPR_RUN, run->span);
+    parse_command_words_until_end(p, &expr->as.run.words, &expr->span, true);
+    if (expr->as.run.words.len == 0) {
+        ds_diag_error(p->diag, run->span, "expected command after `run`");
+    }
+    return expr;
+}
+
 static DsExpr *parse_primary(Parser *p) {
     DsToken *tok = peek(p);
+    if (advance_if(p, DS_TOK_RUN)) {
+        return parse_run_expr(p);
+    }
     if (advance_if(p, DS_TOK_IDENT)) {
         DsExpr *expr = new_expr(DS_EXPR_IDENT, tok->span);
         expr->as.text = copy_token_text(tok);
@@ -168,6 +239,22 @@ static DsExpr *parse_primary(Parser *p) {
     return new_expr(DS_EXPR_ERROR, tok->span);
 }
 
+static DsExpr *parse_postfix(Parser *p) {
+    DsExpr *expr = parse_primary(p);
+    while (advance_if(p, DS_TOK_DOT)) {
+        DsToken *dot = previous(p);
+        if (!expect_identifier_like(p, "expected field name after `.`")) {
+            break;
+        }
+        DsToken *field = previous(p);
+        DsExpr *field_expr = new_expr(DS_EXPR_FIELD, (DsSpan){expr ? expr->span.start : dot->span.start, field->span.end, dot->span.source});
+        field_expr->as.field.object = expr;
+        field_expr->as.field.field = copy_token_text(field);
+        expr = field_expr;
+    }
+    return expr;
+}
+
 static DsExpr *parse_unary(Parser *p) {
     if (advance_if(p, DS_TOK_BANG)) {
         DsToken *op = previous(p);
@@ -177,7 +264,7 @@ static DsExpr *parse_unary(Parser *p) {
         expr->as.unary.right = right;
         return expr;
     }
-    return parse_primary(p);
+    return parse_postfix(p);
 }
 
 static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
@@ -378,6 +465,40 @@ static DsStmt *parse_cmd(Parser *p) {
     bool have_current = false;
 
     while (!is_stmt_end(p)) {
+        if (is_redirect_token(peek(p)->kind)) {
+            if (have_current) {
+                word_vec_push(&stmt->as.cmd_stmt.words, current);
+                current.data = NULL;
+                current.len = 0;
+                current_cap = 0;
+                have_current = false;
+            }
+            DsToken *op = advance(p);
+            if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
+                ds_diag_error(p->diag, op->span, "duplicate redirection suffix");
+            }
+            stmt->as.cmd_stmt.redirect.kind = redirect_kind_from_token(op->kind);
+            stmt->as.cmd_stmt.redirect.op_span = op->span;
+            if (is_stmt_end(p)) {
+                ds_diag_error(p->diag, op->span, "expected string redirection target after `%.*s`", (int)op->text.len, op->text.data);
+                break;
+            }
+            if (!advance_if(p, DS_TOK_STRING)) {
+                ds_diag_error(p->diag, peek(p)->span, "redirection target must be a string literal in v0.7.0");
+                while (!is_stmt_end(p)) advance(p);
+                break;
+            }
+            DsToken *target = previous(p);
+            stmt->as.cmd_stmt.redirect.target = copy_token_text(target);
+            stmt->as.cmd_stmt.redirect.target_span = target->span;
+            stmt->span.end = target->span.end;
+            if (!is_stmt_end(p)) {
+                if (is_redirect_token(peek(p)->kind)) ds_diag_error(p->diag, peek(p)->span, "duplicate redirection suffix");
+                else ds_diag_error(p->diag, peek(p)->span, "expected end of redirected command");
+                while (!is_stmt_end(p)) advance(p);
+            }
+            break;
+        }
         DsToken *tok = advance(p);
         bool adjacent = have_current && tok->span.start.offset == prev_end;
         if (!adjacent && have_current) {

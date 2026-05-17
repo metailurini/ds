@@ -223,7 +223,10 @@ if branch.failed {
   fail "not a git repository"
 }
 
-echo "Current branch: {branch.stdout.trim()}"
+echo "Current branch: {branch.stdout}"
+
+# String methods such as `.trim()` are deferred until the language has a
+# standard string helper model.
 
 
 # -----------------------------------------------------------------------------

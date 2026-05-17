@@ -29,6 +29,7 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 3 && strncmp(text, "arg", 3) == 0) return DS_TOK_ARG;
     if (len == 6 && strncmp(text, "option", 6) == 0) return DS_TOK_OPTION;
     if (len == 4 && strncmp(text, "flag", 4) == 0) return DS_TOK_FLAG;
+    if (len == 3 && strncmp(text, "run", 3) == 0) return DS_TOK_RUN;
     if (len == 6 && strncmp(text, "string", 6) == 0) return DS_TOK_TYPE_STRING;
     if (len == 3 && strncmp(text, "int", 3) == 0) return DS_TOK_TYPE_INT;
     if (len == 4 && strncmp(text, "bool", 4) == 0) return DS_TOK_TYPE_BOOL;
@@ -64,6 +65,7 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_ARG: return "ARG";
         case DS_TOK_OPTION: return "OPTION";
         case DS_TOK_FLAG: return "FLAG";
+        case DS_TOK_RUN: return "RUN";
         case DS_TOK_TYPE_STRING: return "TYPE_STRING";
         case DS_TOK_TYPE_INT: return "TYPE_INT";
         case DS_TOK_TYPE_BOOL: return "TYPE_BOOL";
@@ -82,6 +84,13 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_MINUS: return "MINUS";
         case DS_TOK_STAR: return "STAR";
         case DS_TOK_SLASH: return "SLASH";
+        case DS_TOK_DOT: return "DOT";
+        case DS_TOK_REDIRECT_OUT: return "REDIRECT_OUT";
+        case DS_TOK_REDIRECT_OUT_APPEND: return "REDIRECT_OUT_APPEND";
+        case DS_TOK_REDIRECT_ERR: return "REDIRECT_ERR";
+        case DS_TOK_REDIRECT_ERR_APPEND: return "REDIRECT_ERR_APPEND";
+        case DS_TOK_REDIRECT_ALL: return "REDIRECT_ALL";
+        case DS_TOK_REDIRECT_ALL_APPEND: return "REDIRECT_ALL_APPEND";
         case DS_TOK_LBRACE: return "LBRACE";
         case DS_TOK_RBRACE: return "RBRACE";
         case DS_TOK_LPAREN: return "LPAREN";
@@ -224,7 +233,10 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
 
         DsTokenKind kind = DS_TOK_UNKNOWN;
         size_t len = 1;
-        if (c == '=' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_EQUAL_EQUAL; len = 2; }
+        if (c == '|' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_OUT; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_OUT_APPEND; len = 3; } }
+        else if (c == '!' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_ERR; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_ERR_APPEND; len = 3; } }
+        else if (c == '&' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_ALL; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_ALL_APPEND; len = 3; } }
+        else if (c == '=' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_EQUAL_EQUAL; len = 2; }
         else if (c == '!' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_BANG_EQUAL; len = 2; }
         else if (c == '>' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_GREATER_EQUAL; len = 2; }
         else if (c == '<' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_LESS_EQUAL; len = 2; }
@@ -237,6 +249,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         else if (c == '-') kind = DS_TOK_MINUS;
         else if (c == '*') kind = DS_TOK_STAR;
         else if (c == '/') kind = DS_TOK_SLASH;
+        else if (c == '.') kind = DS_TOK_DOT;
         else if (c == '{') kind = DS_TOK_LBRACE;
         else if (c == '}') kind = DS_TOK_RBRACE;
         else if (c == '(') kind = DS_TOK_LPAREN;

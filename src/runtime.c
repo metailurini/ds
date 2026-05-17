@@ -80,12 +80,32 @@ DsValue ds_value_string_take(DsString *string) {
     return v;
 }
 
+DsValue ds_value_command_result_take(DsString *stdout_text, DsString *stderr_text, int64_t code) {
+    DsValue v = ds_value_null();
+    v.kind = DS_VALUE_COMMAND_RESULT;
+    v.as.command_result.stdout_text = *stdout_text;
+    v.as.command_result.stderr_text = *stderr_text;
+    v.as.command_result.code = code;
+    ds_string_init(stdout_text);
+    ds_string_init(stderr_text);
+    return v;
+}
+
 DsValue ds_value_copy(const DsValue *value) {
     DsValue out = ds_value_null();
     out.kind = value->kind;
     switch (value->kind) {
         case DS_VALUE_STRING:
             ds_string_from_range(&out.as.string, value->as.string.data ? value->as.string.data : "", value->as.string.len);
+            break;
+        case DS_VALUE_COMMAND_RESULT:
+            ds_string_from_range(&out.as.command_result.stdout_text,
+                                 value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "",
+                                 value->as.command_result.stdout_text.len);
+            ds_string_from_range(&out.as.command_result.stderr_text,
+                                 value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "",
+                                 value->as.command_result.stderr_text.len);
+            out.as.command_result.code = value->as.command_result.code;
             break;
         case DS_VALUE_BOOL:
             out.as.boolean = value->as.boolean;
@@ -101,6 +121,10 @@ DsValue ds_value_copy(const DsValue *value) {
 
 void ds_value_free(DsValue *value) {
     if (value->kind == DS_VALUE_STRING) ds_string_free(&value->as.string);
+    if (value->kind == DS_VALUE_COMMAND_RESULT) {
+        ds_string_free(&value->as.command_result.stdout_text);
+        ds_string_free(&value->as.command_result.stderr_text);
+    }
     *value = ds_value_null();
 }
 
@@ -117,6 +141,9 @@ bool ds_value_truthy(const DsValue *value, bool *out) {
             return true;
         case DS_VALUE_NULL:
             *out = false;
+            return true;
+        case DS_VALUE_COMMAND_RESULT:
+            *out = value->as.command_result.code == 0;
             return true;
     }
     return false;
@@ -135,6 +162,8 @@ bool ds_value_to_string(const DsValue *value, DsString *out) {
             return ds_string_append_cstr(out, buf);
         case DS_VALUE_STRING:
             return ds_string_append_range(out, value->as.string.data ? value->as.string.data : "", value->as.string.len);
+        case DS_VALUE_COMMAND_RESULT:
+            return ds_string_append_cstr(out, "[command result]");
     }
     return false;
 }

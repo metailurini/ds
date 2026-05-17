@@ -709,3 +709,9 @@ Mitigation:
 ## v0.6.0 import composition
 
 Behavior-sensitive CLI commands now share a source/import loader before lowering. Local `import "./file.ds"` statements are resolved relative to the importing file, loaded once per root program, composed before the importing file's executable statements, and then lowered into the same backend-facing program used by the VM and Bash emitter. `tokens` and `ast` remain root-file debug views.
+
+## v0.7.0 command results and redirection
+
+The parser now represents captured command execution as a `run` expression and plain command redirection as command-statement metadata. Lowering is the shared semantic boundary for VM execution and Bash emission: it validates command-result fields, command variables, and conservative string-literal redirection targets before either backend runs.
+
+The VM lowers captured commands to bytecode that executes through the process boundary, captures stdout/stderr separately, stores the exit code, and exposes derived `ok`/`failed` fields. The Bash emitter consumes the same lowered shape and emits standalone `__ds_` helpers only when a program uses captured command results. Plain command statements keep their existing fail-fast behavior, with optional redirection metadata emitted as normal Bash redirection syntax.

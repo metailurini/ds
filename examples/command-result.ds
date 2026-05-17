@@ -1,0 +1,9 @@
+let result = run sh -c "printf stdout; printf stderr >&2; exit 2"
+
+if result.failed {
+  echo "command failed"
+  echo result.stderr
+  echo result.code
+}
+
+echo result.stdout

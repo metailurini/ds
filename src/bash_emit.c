@@ -345,6 +345,17 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
             return true;
+        case DS_LOWER_EXPR_FIELD:
+            if (expr->as.field.object->kind != DS_LOWER_EXPR_IDENT) {
+                ds_diag_error(e->diag, expr->span, "unsupported command result field receiver for Bash emission");
+                return false;
+            }
+            buf_append(out, "\"$");
+            emit_var_name(out, expr->as.field.object->as.text);
+            buf_append(out, "_");
+            buf_append_len(out, expr->as.field.field.data, expr->as.field.field.len);
+            buf_append(out, "\"");
+            return true;
         default:
             ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");
             return false;
@@ -370,6 +381,8 @@ static bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, Emit
         case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
             return true;
+        case DS_LOWER_EXPR_FIELD:
+            return emit_value_expr(e, expr, out);
         default:
             ds_diag_error(e->diag, expr->span, "unsupported condition operand for Bash emission");
             return false;
@@ -385,6 +398,18 @@ static bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out
         buf_append(out, "[[ \"$");
         emit_var_name(out, expr->as.text);
         buf_append(out, "\" == true ]]");
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_FIELD) {
+        if (str_eq(expr->as.field.field, "ok") || str_eq(expr->as.field.field, "failed")) {
+            buf_append(out, "[[ ");
+            emit_value_expr(e, expr, out);
+            buf_append(out, " == true ]]");
+            return true;
+        }
+        buf_append(out, "[[ -n ");
+        emit_value_expr(e, expr, out);
+        buf_append(out, " ]]");
         return true;
     }
     if (expr->kind == DS_LOWER_EXPR_BOOL) {
@@ -442,8 +467,112 @@ static bool emit_command_word(BashEmitter *e, DsStr word, EmitBuf *out, DsSpan s
         buf_append(out, "\"");
         return true;
     }
+    for (size_t i = 1; i + 1 < word.len; i++) {
+        if (word.data[i] == '.') {
+            DsStr name = {word.data, i};
+            DsStr field = {word.data + i + 1, word.len - i - 1};
+            if (!symbol_exists(&e->symbols, name)) {
+                ds_diag_error(e->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+                return false;
+            }
+            buf_append(out, "\"$");
+            emit_var_name(out, name);
+            buf_append(out, "_");
+            buf_append_len(out, field.data, field.len);
+            buf_append(out, "\"");
+            return true;
+        }
+    }
     buf_append_len(out, word.data, word.len);
     return true;
+}
+
+static bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span) {
+    if (redirect->kind == DS_REDIRECT_NONE) return true;
+    DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = redirect->target_span};
+    fake.as.text = redirect->target;
+    switch (redirect->kind) {
+        case DS_REDIRECT_OUT: buf_append(out, " > "); break;
+        case DS_REDIRECT_OUT_APPEND: buf_append(out, " >> "); break;
+        case DS_REDIRECT_ERR: buf_append(out, " 2> "); break;
+        case DS_REDIRECT_ERR_APPEND: buf_append(out, " 2>> "); break;
+        case DS_REDIRECT_ALL: buf_append(out, " > "); break;
+        case DS_REDIRECT_ALL_APPEND: buf_append(out, " >> "); break;
+        case DS_REDIRECT_NONE: break;
+    }
+    if (!emit_interpolated_string(e, &fake, out)) return false;
+    if (redirect->kind == DS_REDIRECT_ALL || redirect->kind == DS_REDIRECT_ALL_APPEND) buf_append(out, " 2>&1");
+    (void)span;
+    return true;
+}
+
+static bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span) {
+    for (size_t i = 0; i < words->len; i++) {
+        buf_append(out, " ");
+        if (!emit_command_word(e, words->items[i], out, span)) return false;
+    }
+    return true;
+}
+
+static void emit_command_result_helpers(BashEmitter *e) {
+    buf_append(&e->out,
+        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
+        "__ds_capture() {\n"
+        "  local __ds_prefix=$1\n"
+        "  shift\n"
+        "  local __ds_tmpdir\n"
+        "  __ds_tmpdir=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n"
+        "  local __ds_stdout=\"$__ds_tmpdir/stdout\"\n"
+        "  local __ds_stderr=\"$__ds_tmpdir/stderr\"\n"
+        "  set +e\n"
+        "  \"$@\" >\"$__ds_stdout\" 2>\"$__ds_stderr\"\n"
+        "  local __ds_code=$?\n"
+        "  set -e\n"
+        "  local __ds_data\n"
+        "  __ds_data=$(cat \"$__ds_stdout\"; printf x)\n"
+        "  printf -v \"${__ds_prefix}_stdout\" '%s' \"${__ds_data%x}\"\n"
+        "  __ds_data=$(cat \"$__ds_stderr\"; printf x)\n"
+        "  printf -v \"${__ds_prefix}_stderr\" '%s' \"${__ds_data%x}\"\n"
+        "  printf -v \"${__ds_prefix}_code\" '%s' \"$__ds_code\"\n"
+        "  if [[ $__ds_code -eq 0 ]]; then\n"
+        "    printf -v \"${__ds_prefix}_ok\" '%s' true\n"
+        "    printf -v \"${__ds_prefix}_failed\" '%s' false\n"
+        "  else\n"
+        "    printf -v \"${__ds_prefix}_ok\" '%s' false\n"
+        "    printf -v \"${__ds_prefix}_failed\" '%s' true\n"
+        "  fi\n"
+        "  rm -rf \"$__ds_tmpdir\"\n"
+        "}\n\n");
+}
+
+static bool expr_uses_run(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_RUN: return true;
+        case DS_LOWER_EXPR_FIELD: return expr_uses_run(expr->as.field.object);
+        case DS_LOWER_EXPR_UNARY: return expr_uses_run(expr->as.unary.right);
+        case DS_LOWER_EXPR_BINARY: return expr_uses_run(expr->as.binary.left) || expr_uses_run(expr->as.binary.right);
+        default: return false;
+    }
+}
+
+static bool stmt_uses_run(const DsLowerStmt *stmt) {
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET: return expr_uses_run(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_IF:
+            return expr_uses_run(stmt->as.if_stmt.condition) || stmt_uses_run(stmt->as.if_stmt.then_branch) ||
+                   (stmt->as.if_stmt.else_branch && stmt_uses_run(stmt->as.if_stmt.else_branch));
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_run(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_CMD: return false;
+    }
+    return false;
+}
+
+static bool program_uses_run(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_run(program->statements.items[i])) return true;
+    return false;
 }
 
 static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent);
@@ -467,9 +596,15 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 return false;
             }
             emit_indent(&e->out, indent);
-            emit_var_name(&e->out, stmt->as.let_stmt.name);
-            buf_append(&e->out, "=");
-            if (!emit_value_expr(e, stmt->as.let_stmt.value, &e->out)) return false;
+            if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN) {
+                buf_append(&e->out, "__ds_capture ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                if (!emit_capture_words(e, &stmt->as.let_stmt.value->as.run.words, &e->out, stmt->span)) return false;
+            } else {
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "=");
+                if (!emit_value_expr(e, stmt->as.let_stmt.value, &e->out)) return false;
+            }
             buf_append(&e->out, "\n\n");
             if (!symbol_exists(&e->symbols, stmt->as.let_stmt.name)) {
                 DsStr copy = {ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len), stmt->as.let_stmt.name.len};
@@ -483,6 +618,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (i > 0) buf_append(&e->out, " ");
                 if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out, stmt->span)) return false;
             }
+            if (!emit_redirect(e, &stmt->as.cmd_stmt.redirect, &e->out, stmt->span)) return false;
             buf_append(&e->out, "\n\n");
             return true;
 
@@ -522,6 +658,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     }
 
     emit_script_args(&e, lowered);
+    if (program_uses_run(lowered)) emit_command_result_helpers(&e);
 
     for (size_t i = 0; i < lowered->statements.len; i++) {
         if (!emit_stmt(&e, lowered->statements.items[i], 0)) {

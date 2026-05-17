@@ -49,6 +49,7 @@ typedef enum {
     DS_TOK_ARG,
     DS_TOK_OPTION,
     DS_TOK_FLAG,
+    DS_TOK_RUN,
     DS_TOK_TYPE_STRING,
     DS_TOK_TYPE_INT,
     DS_TOK_TYPE_BOOL,
@@ -67,6 +68,13 @@ typedef enum {
     DS_TOK_MINUS,
     DS_TOK_STAR,
     DS_TOK_SLASH,
+    DS_TOK_DOT,
+    DS_TOK_REDIRECT_OUT,
+    DS_TOK_REDIRECT_OUT_APPEND,
+    DS_TOK_REDIRECT_ERR,
+    DS_TOK_REDIRECT_ERR_APPEND,
+    DS_TOK_REDIRECT_ALL,
+    DS_TOK_REDIRECT_ALL_APPEND,
     DS_TOK_LBRACE,
     DS_TOK_RBRACE,
     DS_TOK_LPAREN,
@@ -91,6 +99,8 @@ typedef enum {
     DS_EXPR_STRING,
     DS_EXPR_INT,
     DS_EXPR_BOOL,
+    DS_EXPR_RUN,
+    DS_EXPR_FIELD,
     DS_EXPR_UNARY,
     DS_EXPR_BINARY,
     DS_EXPR_ERROR
@@ -98,12 +108,20 @@ typedef enum {
 
 typedef struct DsExpr DsExpr;
 
+typedef struct {
+    DsStr *items;
+    size_t len;
+    size_t cap;
+} DsWordVec;
+
 struct DsExpr {
     DsExprKind kind;
     DsSpan span;
     union {
         DsStr text;
         bool boolean;
+        struct { DsWordVec words; } run;
+        struct { DsExpr *object; DsStr field; } field;
         struct { DsStr op; DsExpr *right; } unary;
         struct { DsExpr *left; DsStr op; DsExpr *right; } binary;
     } as;
@@ -156,11 +174,22 @@ typedef struct {
     size_t cap;
 } DsStmtVec;
 
+typedef enum {
+    DS_REDIRECT_NONE,
+    DS_REDIRECT_OUT,
+    DS_REDIRECT_OUT_APPEND,
+    DS_REDIRECT_ERR,
+    DS_REDIRECT_ERR_APPEND,
+    DS_REDIRECT_ALL,
+    DS_REDIRECT_ALL_APPEND
+} DsRedirectKind;
+
 typedef struct {
-    DsStr *items;
-    size_t len;
-    size_t cap;
-} DsWordVec;
+    DsRedirectKind kind;
+    DsStr target;
+    DsSpan op_span;
+    DsSpan target_span;
+} DsRedirect;
 
 struct DsStmt {
     DsStmtKind kind;
@@ -169,7 +198,7 @@ struct DsStmt {
         struct { DsStr name; DsExpr *value; } let_stmt;
         struct { DsExpr *condition; DsStmt *then_branch; DsStmt *else_branch; } if_stmt;
         struct { DsStmtVec statements; } block_stmt;
-        struct { DsWordVec words; } cmd_stmt;
+        struct { DsWordVec words; DsRedirect redirect; } cmd_stmt;
         struct { DsStr path; } import_stmt;
     } as;
 };
@@ -203,6 +232,8 @@ typedef enum {
     DS_LOWER_EXPR_STRING,
     DS_LOWER_EXPR_INT,
     DS_LOWER_EXPR_BOOL,
+    DS_LOWER_EXPR_RUN,
+    DS_LOWER_EXPR_FIELD,
     DS_LOWER_EXPR_UNARY,
     DS_LOWER_EXPR_BINARY,
     DS_LOWER_EXPR_ERROR
@@ -216,6 +247,8 @@ struct DsLowerExpr {
     union {
         DsStr text;
         bool boolean;
+        struct { DsWordVec words; } run;
+        struct { DsLowerExpr *object; DsStr field; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
     } as;
@@ -243,7 +276,7 @@ struct DsLowerStmt {
         struct { DsStr name; DsLowerExpr *value; } let_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; } block_stmt;
-        struct { DsWordVec words; } cmd_stmt;
+        struct { DsWordVec words; DsRedirect redirect; } cmd_stmt;
     } as;
 };
 
@@ -258,7 +291,8 @@ typedef enum {
     DS_VALUE_NULL,
     DS_VALUE_BOOL,
     DS_VALUE_INT,
-    DS_VALUE_STRING
+    DS_VALUE_STRING,
+    DS_VALUE_COMMAND_RESULT
 } DsValueKind;
 
 typedef struct {
@@ -268,11 +302,18 @@ typedef struct {
 } DsString;
 
 typedef struct {
+    DsString stdout_text;
+    DsString stderr_text;
+    int64_t code;
+} DsCommandResult;
+
+typedef struct {
     DsValueKind kind;
     union {
         bool boolean;
         int64_t integer;
         DsString string;
+        DsCommandResult command_result;
     } as;
 } DsValue;
 
@@ -334,6 +375,7 @@ DsValue ds_value_null(void);
 DsValue ds_value_bool(bool value);
 DsValue ds_value_int(int64_t value);
 DsValue ds_value_string_take(DsString *string);
+DsValue ds_value_command_result_take(DsString *stdout_text, DsString *stderr_text, int64_t code);
 DsValue ds_value_copy(const DsValue *value);
 void ds_value_free(DsValue *value);
 bool ds_value_truthy(const DsValue *value, bool *out);

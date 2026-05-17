@@ -618,3 +618,9 @@ Do not overbuild the full runtime before it is needed. Build runtime pieces just
 ## Import execution model
 
 As of v0.6.0, imports are deterministic local inclusion rather than modules. Imported statements execute once in composed order before the importing file's dependent statements. Root `script { ... }` argument parsing still happens once; imported files cannot declare their own script blocks in this first import milestone. Emitted Bash bundles imported statements and does not call `ds`.
+
+## Command-result ownership
+
+As of v0.7.0, the runtime has a command-result value used by the VM for `let result = run ...`. It owns separate stdout and stderr strings plus an integer exit code. Copies deep-copy both captured buffers, and value cleanup frees them exactly once through the normal `DsValue` ownership path.
+
+Captured VM commands do not treat non-zero exit status as fatal. The process result is bound to the destination variable so scripts can inspect `stdout`, `stderr`, `code`, `ok`, and `failed`. Plain command statements still stream normally and preserve fail-fast exit behavior; redirection opens the target file in the child process before `execvp`.

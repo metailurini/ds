@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0 - Command Results and Redirection
+
+- Implemented `run` expressions for captured command execution in both VM mode and emitted standalone Bash.
+- Added command-result fields: `stdout`, `stderr`, `code`, `ok`, and `failed`.
+- Captured command failures are now inspectable without aborting the script, while plain command statements remain fail-fast.
+- Added readable redirection suffixes for plain command statements: `|>`, `|>>`, `!>`, `!>>`, `&>`, and `&>>`.
+- Added stable token, AST, and bytecode shapes for captured commands, field access, and redirected commands.
+- Added portable examples under `examples/command-result.ds` and `examples/redirection.ds`.
+- Tests for this version are intentionally not added in this implementation-only step.
+
 ## v0.6.0 - Imports / Includes
 
 - Implemented initial local `import "./file.ds"` parsing and composition for `check`, `bytecode`, `run`, direct execution, and `emit bash`.
