@@ -91,7 +91,7 @@ static bool expect(Parser *p, DsTokenKind kind, const char *message) {
 }
 
 static bool is_identifier_like(DsTokenKind kind) {
-    return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_ARG ||
+    return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_IMPORT || kind == DS_TOK_ARG ||
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
            kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL;
 }
@@ -132,7 +132,7 @@ static DsExpr *parse_primary(Parser *p) {
     }
     if (advance_if(p, DS_TOK_TYPE_STRING) || advance_if(p, DS_TOK_TYPE_INT) ||
         advance_if(p, DS_TOK_TYPE_BOOL) || advance_if(p, DS_TOK_SCRIPT) ||
-        advance_if(p, DS_TOK_ARG) || advance_if(p, DS_TOK_OPTION) || advance_if(p, DS_TOK_FLAG)) {
+        advance_if(p, DS_TOK_IMPORT) || advance_if(p, DS_TOK_ARG) || advance_if(p, DS_TOK_OPTION) || advance_if(p, DS_TOK_FLAG)) {
         DsToken *used = previous(p);
         DsExpr *expr = new_expr(DS_EXPR_IDENT, used->span);
         expr->as.text = copy_token_text(used);
@@ -172,7 +172,7 @@ static DsExpr *parse_unary(Parser *p) {
     if (advance_if(p, DS_TOK_BANG)) {
         DsToken *op = previous(p);
         DsExpr *right = parse_unary(p);
-        DsExpr *expr = new_expr(DS_EXPR_UNARY, (DsSpan){op->span.start, right ? right->span.end : op->span.end});
+        DsExpr *expr = new_expr(DS_EXPR_UNARY, (DsSpan){op->span.start, right ? right->span.end : op->span.end, op->span.source});
         expr->as.unary.op = copy_token_text(op);
         expr->as.unary.right = right;
         return expr;
@@ -190,7 +190,7 @@ static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
 
         DsToken *op = advance(p);
         DsExpr *right = parse_expr_prec(p, prec + 1);
-        DsSpan span = {left ? left->span.start : op->span.start, right ? right->span.end : op->span.end};
+        DsSpan span = {left ? left->span.start : op->span.start, right ? right->span.end : op->span.end, left ? left->span.source : op->span.source};
         DsExpr *binary = new_expr(DS_EXPR_BINARY, span);
         binary->as.binary.left = left;
         binary->as.binary.op = copy_token_text(op);
@@ -206,6 +206,26 @@ static DsExpr *parse_expr(Parser *p) {
 }
 
 static DsStmt *parse_stmt(Parser *p);
+
+static DsStmt *parse_import_stmt(Parser *p, bool top_level, bool after_executable) {
+    DsToken *start = previous(p);
+    if (!top_level) {
+        ds_diag_error(p->diag, start->span, "`import` is only allowed at top level");
+    }
+    if (after_executable) {
+        ds_diag_error(p->diag, start->span, "`import` must appear before executable statements");
+    }
+    if (!expect(p, DS_TOK_STRING, "expected string literal import path")) return NULL;
+    DsToken *path = previous(p);
+    DsStmt *stmt = new_stmt(DS_STMT_IMPORT, (DsSpan){start->span.start, path->span.end, start->span.source});
+    stmt->as.import_stmt.path = copy_token_text(path);
+    if (!is_stmt_end(p)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected end of import statement");
+        while (!is_stmt_end(p)) advance(p);
+    }
+    consume_statement_end(p);
+    return stmt;
+}
 
 static bool parse_type(Parser *p, DsScriptType *out) {
     if (advance_if(p, DS_TOK_TYPE_STRING)) { *out = DS_SCRIPT_TYPE_STRING; return true; }
@@ -254,7 +274,7 @@ static bool parse_script_decl(Parser *p, DsScriptBlock *script) {
         decl.default_value = parse_expr(p);
     }
 
-    decl.span = (DsSpan){start->span.start, (decl.default_value ? decl.default_value->span.end : previous(p)->span.end)};
+    decl.span = (DsSpan){start->span.start, (decl.default_value ? decl.default_value->span.end : previous(p)->span.end), start->span.source};
     if (!is_stmt_end(p)) {
         ds_diag_error(p->diag, peek(p)->span, "expected end of declaration");
         while (!is_stmt_end(p)) advance(p);
@@ -281,7 +301,7 @@ static bool parse_script_block(Parser *p, DsAst *ast) {
         skip_newlines(p);
     }
     if (!expect(p, DS_TOK_RBRACE, "expected `}` to close script block")) return false;
-    ast->script.span = (DsSpan){start->span.start, previous(p)->span.end};
+    ast->script.span = (DsSpan){start->span.start, previous(p)->span.end, start->span.source};
     consume_statement_end(p);
     return true;
 }
@@ -314,7 +334,7 @@ static DsStmt *parse_let(Parser *p) {
         return NULL;
     }
     DsExpr *value = parse_expr(p);
-    DsStmt *stmt = new_stmt(DS_STMT_LET, (DsSpan){start->span.start, value ? value->span.end : start->span.end});
+    DsStmt *stmt = new_stmt(DS_STMT_LET, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
     stmt->as.let_stmt.name = copy_token_text(name);
     stmt->as.let_stmt.value = value;
     if (!is_stmt_end(p)) {
@@ -341,7 +361,7 @@ static DsStmt *parse_if(Parser *p) {
         else_branch = parse_block(p);
     }
 
-    DsSpan span = {start->span.start, else_branch ? else_branch->span.end : then_branch->span.end};
+    DsSpan span = {start->span.start, else_branch ? else_branch->span.end : then_branch->span.end, start->span.source};
     DsStmt *stmt = new_stmt(DS_STMT_IF, span);
     stmt->as.if_stmt.condition = condition;
     stmt->as.if_stmt.then_branch = then_branch;
@@ -393,6 +413,7 @@ static DsStmt *parse_cmd(Parser *p) {
 }
 
 static DsStmt *parse_stmt(Parser *p) {
+    if (advance_if(p, DS_TOK_IMPORT)) return parse_import_stmt(p, false, false);
     if (at(p, DS_TOK_SCRIPT)) {
         ds_diag_error(p->diag, peek(p)->span, "`script` block is only allowed at top level before executable statements");
         advance(p);
@@ -421,6 +442,12 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
     while (!at_end(&p)) {
         if (advance_if(&p, DS_TOK_SCRIPT)) {
             parse_script_block(&p, ast);
+            skip_newlines(&p);
+            continue;
+        }
+        if (advance_if(&p, DS_TOK_IMPORT)) {
+            DsStmt *stmt = parse_import_stmt(&p, true, ast->statements.len > 0);
+            if (stmt) stmt_vec_push(&ast->statements, stmt);
             skip_newlines(&p);
             continue;
         }

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.0 - Imports / Includes
+
+- Implemented initial local `import "./file.ds"` parsing and composition for `check`, `bytecode`, `run`, direct execution, and `emit bash`.
+- Added deterministic load-once import resolution relative to the importing file, cycle diagnostics, missing-import diagnostics, and standalone Bash bundling of imported statements.
+- Added import examples under `examples/import-main.ds` and `examples/import-lib.ds`.
+
 ## v0.5.0 — Complete
 
 - Implemented first-class `script { ... }` argument contracts for `arg`, `option`, and `flag` declarations.

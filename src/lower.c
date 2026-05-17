@@ -386,6 +386,9 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         }
         case DS_STMT_BLOCK:
             return lower_block(lower, stmt, true);
+        case DS_STMT_IMPORT:
+            ds_diag_error(lower->diag, stmt->span, "unresolved import `%.*s`", (int)stmt->as.import_stmt.path.len, stmt->as.import_stmt.path.data);
+            return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
     }
     return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
 }

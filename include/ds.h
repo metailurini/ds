@@ -26,6 +26,7 @@ typedef struct {
 typedef struct {
     DsLoc start;
     DsLoc end;
+    const DsSource *source;
 } DsSpan;
 
 typedef struct {
@@ -44,6 +45,7 @@ typedef enum {
     DS_TOK_IF,
     DS_TOK_ELSE,
     DS_TOK_SCRIPT,
+    DS_TOK_IMPORT,
     DS_TOK_ARG,
     DS_TOK_OPTION,
     DS_TOK_FLAG,
@@ -111,7 +113,8 @@ typedef enum {
     DS_STMT_LET,
     DS_STMT_IF,
     DS_STMT_BLOCK,
-    DS_STMT_CMD
+    DS_STMT_CMD,
+    DS_STMT_IMPORT
 } DsStmtKind;
 
 typedef struct DsStmt DsStmt;
@@ -167,6 +170,7 @@ struct DsStmt {
         struct { DsExpr *condition; DsStmt *then_branch; DsStmt *else_branch; } if_stmt;
         struct { DsStmtVec statements; } block_stmt;
         struct { DsWordVec words; } cmd_stmt;
+        struct { DsStr path; } import_stmt;
     } as;
 };
 

@@ -69,6 +69,9 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
                 print_stmt(stmt->as.block_stmt.statements.items[i], out, level + 1);
             }
             break;
+        case DS_STMT_IMPORT:
+            fprintf(out, "ImportStmt %.*s\n", (int)stmt->as.import_stmt.path.len, stmt->as.import_stmt.path.data);
+            break;
         case DS_STMT_CMD:
             fputs("CmdStmt\n", out);
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
@@ -160,6 +163,9 @@ static void free_stmt(DsStmt *stmt) {
                 free_stmt(stmt->as.block_stmt.statements.items[i]);
             }
             free(stmt->as.block_stmt.statements.items);
+            break;
+        case DS_STMT_IMPORT:
+            free(stmt->as.import_stmt.path.data);
             break;
         case DS_STMT_CMD:
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {

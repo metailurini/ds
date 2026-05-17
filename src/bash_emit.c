@@ -457,7 +457,8 @@ static bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent
 
 static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "# ds: %s:%d\n", e->source->path ? e->source->path : "<source>", stmt->span.start.line);
+    const DsSource *stmt_source = stmt->span.source ? stmt->span.source : e->source;
+    buf_appendf(&e->out, "# ds: %s:%d\n", stmt_source && stmt_source->path ? stmt_source->path : "<source>", stmt->span.start.line);
 
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET:

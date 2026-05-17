@@ -37,7 +37,7 @@ bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
     out->path = path;
     FILE *fp = fopen(path, "rb");
     if (!fp) {
-        DsSpan span = {{0, 1, 1}, {0, 1, 1}};
+        DsSpan span = {{0, 1, 1}, {0, 1, 1}, out};
         ds_diag_error(diag, span, "failed to open source file `%s`: %s", path, strerror(errno));
         return false;
     }

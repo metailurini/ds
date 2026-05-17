@@ -9,6 +9,7 @@ void ds_diag_init(DsDiag *diag, const DsSource *source) {
 }
 
 void ds_diag_format_location(const DsSource *source, DsSpan span, char *buf, size_t buf_len) {
+    if (span.source) source = span.source;
     const char *path = source && source->path ? source->path : "<source>";
     if (!buf || buf_len == 0) return;
     snprintf(buf, buf_len, "%s:%d:%d", path, span.start.line, span.start.column);
@@ -46,5 +47,5 @@ void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...) {
     vfprintf(stderr, fmt, args);
     va_end(args);
     fputc('\n', stderr);
-    print_source_line(diag->source, span.start.line, span.start.column);
+    print_source_line(span.source ? span.source : diag->source, span.start.line, span.start.column);
 }

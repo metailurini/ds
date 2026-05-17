@@ -283,7 +283,6 @@ bash /tmp/args.sh api --target production --force
 - Detect import cycles and report a readable import stack.
 - Make imported definitions available to the importing script according to the simple v0.6 module rules.
 - Bundle imported files into one standalone Bash file during Bash emission.
-- Add an import graph/debug command if helpful.
 
 **Expected syntax:**
 
@@ -307,8 +306,8 @@ ds emit bash examples/import-main.ds -o /tmp/import-main.sh
 bash /tmp/import-main.sh
 ```
 
-- Tests for relative paths, duplicate imports, missing imports, and cycles.
-- Docs explaining import resolution and Bash bundling.
+- Implementation now covers relative local import composition, duplicate load-once behavior, missing-import diagnostics, cycles, VM execution, bytecode source mapping, and standalone Bash bundling.
+- Dedicated v0.6 tests remain for the test-plan pass.
 
 ---
 

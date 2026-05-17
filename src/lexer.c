@@ -25,6 +25,7 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 2 && strncmp(text, "if", 2) == 0) return DS_TOK_IF;
     if (len == 4 && strncmp(text, "else", 4) == 0) return DS_TOK_ELSE;
     if (len == 6 && strncmp(text, "script", 6) == 0) return DS_TOK_SCRIPT;
+    if (len == 6 && strncmp(text, "import", 6) == 0) return DS_TOK_IMPORT;
     if (len == 3 && strncmp(text, "arg", 3) == 0) return DS_TOK_ARG;
     if (len == 6 && strncmp(text, "option", 6) == 0) return DS_TOK_OPTION;
     if (len == 4 && strncmp(text, "flag", 4) == 0) return DS_TOK_FLAG;
@@ -36,13 +37,14 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     return DS_TOK_IDENT;
 }
 
-static void add_token(DsTokenVec *out, DsTokenKind kind, const char *start, size_t len, DsLoc loc, DsLoc end) {
+static void add_token(DsTokenVec *out, const DsSource *source, DsTokenKind kind, const char *start, size_t len, DsLoc loc, DsLoc end) {
     DsToken token;
     token.kind = kind;
     token.text.data = ds_str_dup_range(start, len);
     token.text.len = len;
     token.span.start = loc;
     token.span.end = end;
+    token.span.source = source;
     token_vec_push(out, token);
 }
 
@@ -58,6 +60,7 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_IF: return "IF";
         case DS_TOK_ELSE: return "ELSE";
         case DS_TOK_SCRIPT: return "SCRIPT";
+        case DS_TOK_IMPORT: return "IMPORT";
         case DS_TOK_ARG: return "ARG";
         case DS_TOK_OPTION: return "OPTION";
         case DS_TOK_FLAG: return "FLAG";
@@ -114,7 +117,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
 
         if (c == '\n') {
             DsLoc end = {i + 1, line + 1, 1};
-            add_token(out, DS_TOK_NEWLINE, source->data + i, 1, loc, end);
+            add_token(out, source, DS_TOK_NEWLINE, source->data + i, 1, loc, end);
             i++;
             line++;
             col = 1;
@@ -131,7 +134,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             DsLoc start_loc = {start, line, start_col};
             DsLoc end = {i, line, col};
             DsTokenKind kind = keyword_kind(source->data + start, i - start);
-            add_token(out, kind, source->data + start, i - start, start_loc, end);
+            add_token(out, source, kind, source->data + start, i - start, start_loc, end);
             continue;
         }
 
@@ -144,7 +147,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             }
             DsLoc start_loc = {start, line, start_col};
             DsLoc end = {i, line, col};
-            add_token(out, DS_TOK_INT, source->data + start, i - start, start_loc, end);
+            add_token(out, source, DS_TOK_INT, source->data + start, i - start, start_loc, end);
             continue;
         }
 
@@ -163,7 +166,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
                         char escaped = source->data[i + 1];
                         if (!(escaped == 'n' || escaped == 't' || escaped == '"' || escaped == '\\')) {
                             DsLoc escape_end = {i + 2, line, col + 2};
-                            ds_diag_error(diag, (DsSpan){escape_loc, escape_end},
+                            ds_diag_error(diag, (DsSpan){escape_loc, escape_end, source},
                                           "invalid escape sequence `\\%c`; supported escapes are `\\n`, `\\t`, `\\\"`, and `\\\\`",
                                           escaped);
                             invalid_escape = true;
@@ -173,7 +176,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
                         continue;
                     }
                     DsLoc escape_end = {i + 1, line, col + 1};
-                    ds_diag_error(diag, (DsSpan){escape_loc, escape_end}, "invalid trailing escape in string literal");
+                    ds_diag_error(diag, (DsSpan){escape_loc, escape_end, source}, "invalid trailing escape in string literal");
                     invalid_escape = true;
                     i++;
                     col++;
@@ -192,7 +195,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             DsLoc start_loc = {start, line, start_col};
             DsLoc end = {i, line, col};
             if (!terminated) {
-                ds_diag_error(diag, (DsSpan){start_loc, end}, "unterminated string literal");
+                ds_diag_error(diag, (DsSpan){start_loc, end, source}, "unterminated string literal");
                 while (i < source->len && source->data[i] != '\n') {
                     i++;
                     col++;
@@ -200,7 +203,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
                 continue;
             }
             if (invalid_escape) continue;
-            add_token(out, DS_TOK_STRING, source->data + start, i - start, start_loc, end);
+            add_token(out, source, DS_TOK_STRING, source->data + start, i - start, start_loc, end);
             continue;
         }
 
@@ -215,7 +218,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             }
             DsLoc start_loc = {start, line, start_col};
             DsLoc end = {i, line, col};
-            add_token(out, DS_TOK_DOLLAR_IDENT, source->data + start, i - start, start_loc, end);
+            add_token(out, source, DS_TOK_DOLLAR_IDENT, source->data + start, i - start, start_loc, end);
             continue;
         }
 
@@ -240,7 +243,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         else if (c == ')') kind = DS_TOK_RPAREN;
 
         DsLoc end = {i + len, line, col + (int)len};
-        add_token(out, kind, source->data + i, len, loc, end);
+        add_token(out, source, kind, source->data + i, len, loc, end);
         /*
          * Keep otherwise unknown printable characters as tokens instead of
          * failing in the lexer. Command statements are intentionally shell-like
@@ -253,7 +256,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
     }
 
     DsLoc loc = {source->len, line, col};
-    add_token(out, DS_TOK_EOF, "", 0, loc, loc);
+    add_token(out, source, DS_TOK_EOF, "", 0, loc, loc);
     return !diag->has_error;
 }
 

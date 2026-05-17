@@ -185,7 +185,7 @@ script {
 
 
 # -----------------------------------------------------------------------------
-# 10. Imports / includes [v0.6.0] [stable]
+# 10. Imports / includes [v0.6.0] [implemented]
 # -----------------------------------------------------------------------------
 
 import "./lib.ds"
@@ -197,7 +197,9 @@ from "./deploy.ds" import deploy, rollback
 # - imports are resolved relative to the importing file;
 # - each imported file is loaded once;
 # - import cycles are errors;
-# - emitted Bash bundles imported ds files into one standalone script.
+# - emitted Bash bundles imported ds files into one standalone script;
+# - imported files cannot declare their own script blocks in v0.6.0;
+# - tokens/ast debug commands remain root-file views.
 
 
 # -----------------------------------------------------------------------------

@@ -704,3 +704,8 @@ Mitigation:
 - expose `tokens`, `ast`, and `check` in `v0.1.0`;
 - add `bytecode` early with the VM;
 - preserve source locations everywhere.
+
+
+## v0.6.0 import composition
+
+Behavior-sensitive CLI commands now share a source/import loader before lowering. Local `import "./file.ds"` statements are resolved relative to the importing file, loaded once per root program, composed before the importing file's executable statements, and then lowered into the same backend-facing program used by the VM and Bash emitter. `tokens` and `ast` remain root-file debug views.

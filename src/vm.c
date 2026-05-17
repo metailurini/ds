@@ -327,7 +327,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                     fprintf(out, " = %s", decl->default_bool ? "true" : "false");
                 }
             }
-            fprintf(out, "    # %s:%d:%d\n", source && source->path ? source->path : "<source>", decl->span.start.line, decl->span.start.column);
+            { const DsSource *span_source = decl->span.source ? decl->span.source : source; fprintf(out, "    # %s:%d:%d\n", span_source && span_source->path ? span_source->path : "<source>", decl->span.start.line, decl->span.start.column); }
         }
     }
 
@@ -375,7 +375,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
         }
-        fprintf(out, "    # %s:%d:%d\n", source && source->path ? source->path : "<source>", ins->span.start.line, ins->span.start.column);
+        { const DsSource *span_source = ins->span.source ? ins->span.source : source; fprintf(out, "    # %s:%d:%d\n", span_source && span_source->path ? span_source->path : "<source>", ins->span.start.line, ins->span.start.column); }
     }
     program_free(&p);
     return true;

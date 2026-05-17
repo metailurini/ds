@@ -613,3 +613,8 @@ The runtime should influence the roadmap as follows:
 - `v0.3.0` should become **Minimal C Runtime + Bytecode VM**, because the VM requires values, strings, process execution, and basic runtime ownership rules.
 
 Do not overbuild the full runtime before it is needed. Build runtime pieces just ahead of the language features that require them.
+
+
+## Import execution model
+
+As of v0.6.0, imports are deterministic local inclusion rather than modules. Imported statements execute once in composed order before the importing file's dependent statements. Root `script { ... }` argument parsing still happens once; imported files cannot declare their own script blocks in this first import milestone. Emitted Bash bundles imported statements and does not call `ds`.

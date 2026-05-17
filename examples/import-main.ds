@@ -1,0 +1,3 @@
+import "./import-lib.ds"
+
+echo "Deploying {service} to {environment}"
