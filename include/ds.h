@@ -349,7 +349,7 @@ struct DsLowerExpr {
         struct { DsStr name; DsLowerExprVec args; } call;
         struct { DsLowerExprVec elements; } array;
         struct { DsLowerMapEntryVec entries; } map;
-        struct { DsLowerExpr *object; DsLowerExpr *index; bool map_key_literal; DsStr map_key; } index;
+        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; } index;
     } as;
 };
 

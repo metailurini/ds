@@ -395,24 +395,30 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
                 ds_diag_error(e->diag, expr->span, "Bash emission only supports indexing named collections in v0.10.0");
                 return false;
             }
-            buf_append(out, "\"${");
+            if (!expr->as.index.object_is_array && !expr->as.index.object_is_map) {
+                ds_diag_error(e->diag, expr->span, "Bash emission needs a known collection kind for indexing in v0.10.0");
+                return false;
+            }
+            buf_append(out, "\"$(");
+            buf_append(out, expr->as.index.object_is_map ? "__ds_map_get " : "__ds_array_get ");
             emit_var_name(out, expr->as.index.object->as.text);
-            buf_append(out, "[");
+            buf_append(out, " ");
             if (expr->as.index.index->kind == DS_LOWER_EXPR_INT) {
                 buf_append_len(out, expr->as.index.index->as.text.data, expr->as.index.index->as.text.len);
             } else if (expr->as.index.index->kind == DS_LOWER_EXPR_STRING) {
                 char *decoded = NULL; size_t len = 0;
                 if (!decode_string_literal(e->diag, expr->as.index.index, &decoded, &len)) return false;
-                buf_append_len(out, decoded, len);
+                bash_single_quote(out, decoded, len);
                 free(decoded);
             } else if (expr->as.index.index->kind == DS_LOWER_EXPR_IDENT) {
-                buf_append(out, "$");
+                buf_append(out, "\"$");
                 emit_var_name(out, expr->as.index.index->as.text);
+                buf_append(out, "\"");
             } else {
                 ds_diag_error(e->diag, expr->span, "unsupported Bash collection index expression in v0.10.0");
                 return false;
             }
-            buf_append(out, "]}\"");
+            buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_CALL:
             ds_diag_error(e->diag, expr->span, "function calls do not produce values in v0.9.0");
@@ -650,6 +656,25 @@ static void emit_command_result_helpers(BashEmitter *e) {
         "}\n\n");
 }
 
+static void emit_collection_helpers(BashEmitter *e) {
+    buf_append(&e->out,
+        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
+        "__ds_array_get() {\n"
+        "  local __ds_name=$1 __ds_index=$2 __ds_len\n"
+        "  [[ \"$__ds_index\" =~ ^[0-9]+$ ]] || __ds_error \"array index $__ds_index is not an int\"\n"
+        "  eval \"__ds_len=\\${#${__ds_name}[@]}\"\n"
+        "  if (( __ds_index < 0 || __ds_index >= __ds_len )); then\n"
+        "    __ds_error \"array index $__ds_index out of range\"\n"
+        "  fi\n"
+        "  eval \"printf '%s' \\\"\\${${__ds_name}[${__ds_index}]}\\\"\"\n"
+        "}\n"
+        "__ds_map_get() {\n"
+        "  local __ds_name=$1 __ds_key=$2\n"
+        "  eval \"[[ \\${${__ds_name}[\\$__ds_key]+__ds_set} == __ds_set ]]\" || __ds_error \"missing map key '$__ds_key'\"\n"
+        "  eval \"printf '%s' \\\"\\${${__ds_name}[\\$__ds_key]}\\\"\"\n"
+        "}\n\n");
+}
+
 static bool expr_uses_run(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
@@ -664,6 +689,38 @@ static bool expr_uses_run(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_run(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_run(expr->as.binary.left) || expr_uses_run(expr->as.binary.right);
+        default: return false;
+    }
+}
+
+static bool expr_uses_collection_index(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_INDEX: return true;
+        case DS_LOWER_EXPR_FIELD: return expr_uses_collection_index(expr->as.field.object);
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_collection_index(expr->as.array.elements.items[i])) return true;
+            return false;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_collection_index(expr->as.map.entries.items[i].value)) return true;
+            return false;
+        case DS_LOWER_EXPR_UNARY: return expr_uses_collection_index(expr->as.unary.right);
+        case DS_LOWER_EXPR_BINARY: return expr_uses_collection_index(expr->as.binary.left) || expr_uses_collection_index(expr->as.binary.right);
+        default: return false;
+    }
+}
+
+static bool expr_uses_map_literal(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_MAP: return true;
+        case DS_LOWER_EXPR_INDEX: return expr_uses_map_literal(expr->as.index.object) || expr_uses_map_literal(expr->as.index.index);
+        case DS_LOWER_EXPR_FIELD: return expr_uses_map_literal(expr->as.field.object);
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_map_literal(expr->as.array.elements.items[i])) return true;
+            return false;
+        case DS_LOWER_EXPR_UNARY: return expr_uses_map_literal(expr->as.unary.right);
+        case DS_LOWER_EXPR_BINARY: return expr_uses_map_literal(expr->as.binary.left) || expr_uses_map_literal(expr->as.binary.right);
         default: return false;
     }
 }
@@ -685,9 +742,57 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
     return false;
 }
 
+static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET: return expr_uses_collection_index(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_IF:
+            return expr_uses_collection_index(stmt->as.if_stmt.condition) || stmt_uses_collection_index(stmt->as.if_stmt.then_branch) ||
+                   (stmt->as.if_stmt.else_branch && stmt_uses_collection_index(stmt->as.if_stmt.else_branch));
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_collection_index(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_collection_index(stmt->as.for_stmt.iterable) || stmt_uses_collection_index(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_PUSH: return expr_uses_collection_index(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CALL:
+            return false;
+    }
+    return false;
+}
+
+static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET: return expr_uses_map_literal(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_IF:
+            return expr_uses_map_literal(stmt->as.if_stmt.condition) || stmt_uses_map_literal(stmt->as.if_stmt.then_branch) ||
+                   (stmt->as.if_stmt.else_branch && stmt_uses_map_literal(stmt->as.if_stmt.else_branch));
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_map_literal(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_map_literal(stmt->as.for_stmt.iterable) || stmt_uses_map_literal(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_PUSH: return expr_uses_map_literal(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CALL:
+            return false;
+    }
+    return false;
+}
+
 static bool program_uses_run(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_run(program->functions.items[i].body)) return true;
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_run(program->statements.items[i])) return true;
+    return false;
+}
+
+static bool program_uses_collection_index(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_collection_index(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_collection_index(program->statements.items[i])) return true;
+    return false;
+}
+
+static bool program_uses_map_literal(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_map_literal(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_map_literal(program->statements.items[i])) return true;
     return false;
 }
 
@@ -882,6 +987,15 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");
 
+    bool needs_map_guard = program_uses_map_literal(lowered);
+    bool needs_collection_helpers = program_uses_collection_index(lowered);
+    if (needs_map_guard) {
+        buf_append(&e.out, "if (( BASH_VERSINFO[0] < 4 )); then\n");
+        buf_append(&e.out, "  echo \"${0##*/}: error: v0.10.0 maps require Bash 4 or newer\" >&2\n");
+        buf_append(&e.out, "  exit 1\n");
+        buf_append(&e.out, "fi\n\n");
+    }
+
     for (size_t i = 0; i < lowered->script_decls.len; i++) {
         DsStr copy = {ds_str_dup_range(lowered->script_decls.items[i].name.data, lowered->script_decls.items[i].name.len), lowered->script_decls.items[i].name.len};
         symbol_vec_push(&e.symbols, copy);
@@ -895,6 +1009,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
 
     emit_script_args(&e, lowered);
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
+    if (needs_collection_helpers) emit_collection_helpers(&e);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {
         if (!emit_function(&e, &lowered->functions.items[i])) {
