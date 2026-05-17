@@ -77,6 +77,7 @@ assert_same_text 'before' "$TMP/plain_fail_fast.out" "plain failure streams befo
 assert_not_contains "$TMP/plain_fail_fast.out" "after" "plain failure does not run following statements"
 capture_status plain_command_not_found "$DS" run "$FIX/process/plain_command_not_found.ds"
 assert_status plain_command_not_found 127
+assert_contains "$TMP/plain_command_not_found.err" "$FIX/process/plain_command_not_found.ds:1:1: error:" "plain command-not-found diagnostic is source-located"
 assert_contains "$TMP/plain_command_not_found.err" "failed to launch command" "plain command-not-found diagnostic"
 run_ok capture_command_not_found "$DS" run "$FIX/process/capture_command_not_found.ds"
 assert_contains "$TMP/capture_command_not_found.out" "127" "captured command-not-found records status"

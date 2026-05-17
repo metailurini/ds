@@ -177,8 +177,8 @@ assert_vm_bash_parity() {
 
   local rel
   for rel in $output_files; do
-    if [ -f "$work_vm/$rel" ] || [ -f "$work_bash/$rel" ]; then
-      assert_same "$work_vm/$rel" "$work_bash/$rel" "VM/Bash $rel parity: $name"
-    fi
+    [ -f "$work_vm/$rel" ] || fail "VM/Bash $rel parity: $name: VM did not create expected output file"
+    [ -f "$work_bash/$rel" ] || fail "VM/Bash $rel parity: $name: Bash did not create expected output file"
+    assert_same "$work_vm/$rel" "$work_bash/$rel" "VM/Bash $rel parity: $name"
   done
 }

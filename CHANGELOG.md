@@ -4,7 +4,9 @@
 
 - Added shared command model regression tests under `tests/v0_8/`, including ownership/clone/free unit coverage for `DsCommand` and direct checks for the shared command-result field descriptor table.
 - Added cleanup-focused VM/Bash parity coverage for captured commands, command-result field interpolation, redirection files, imports, script args with metacharacters, and plain-command fail-fast behavior.
+- Tightened the shared VM/Bash parity helper so declared output files must be created by both backends before contents are compared.
 - Added process-wrapper regression coverage for command-not-found handling, empty and large capture output, repeated captures, executable paths with spaces, and generated Bash helper behavior.
+- Fixed plain command launch failures to report through normal source-located diagnostics while preserving exit code `127`; captured launch failures remain inspectable through the command result.
 - Added diagnostic and unsupported-syntax coverage to ensure cleanup does not accidentally unlock pipelines, background jobs, stdin redirection, shell boolean operators, or future functions/loops.
 - Added `make test-v0-8` and wired `tests/v0_8/run.sh` into `make test`.
 - Fixed command parsing so bare `&`, `&&`, and `||` command operators are rejected instead of being treated as ordinary command words.

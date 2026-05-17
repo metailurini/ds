@@ -179,12 +179,12 @@ mkdir -p "$TMP/bash_combined_work"
 run_ok bash_combined bash -c "cd '$TMP/bash_combined_work' && bash '$TMP/bash_combined_redirect.sh'"
 assert_same_text 'outerr' "$TMP/bash_combined_work/all.txt" "combined Bash redirect writes both streams"
 
-assert_vm_bash_parity parity_capture_success "$FIX/parity/capture_success.ds" 0 "out.txt err.txt all.txt"
-assert_vm_bash_parity parity_capture_failure "$FIX/parity/capture_failure.ds" 0 "out.txt err.txt all.txt"
+assert_vm_bash_parity parity_capture_success "$FIX/parity/capture_success.ds" 0 ""
+assert_vm_bash_parity parity_capture_failure "$FIX/parity/capture_failure.ds" 0 ""
 assert_vm_bash_parity parity_redirect_success "$FIX/parity/redirect_success.ds" 0 "out.txt err.txt all.txt"
-assert_vm_bash_parity parity_capture_stderr "$FIX/capture/stderr.ds" 0 "out.txt err.txt all.txt"
-assert_vm_bash_parity parity_capture_args "$FIX/capture/command_args.ds" 0 "out.txt err.txt all.txt"
-assert_vm_bash_parity parity_import_capture "$FIX/parity/import_capture_main.ds" 0 "out.txt err.txt all.txt"
+assert_vm_bash_parity parity_capture_stderr "$FIX/capture/stderr.ds" 0 ""
+assert_vm_bash_parity parity_capture_args "$FIX/capture/command_args.ds" 0 ""
+assert_vm_bash_parity parity_import_capture "$FIX/parity/import_capture_main.ds" 0 ""
 
 # Script args interaction with captured commands.
 capture_status args_capture_vm "$DS" run "$FIX/parity/args_capture.ds" "hello world"

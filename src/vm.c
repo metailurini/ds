@@ -872,6 +872,7 @@ typedef struct {
     DsRedirect redirect;
     DsSpan span;
     bool capture;
+    int exec_error_fd;
 } VmProcessSpec;
 
 static void argv_free(VmArgv *argv) {
@@ -957,6 +958,30 @@ static void process_spec_free(VmProcessSpec *spec) {
     argv_free(&spec->argv);
 }
 
+static bool fd_set_cloexec(int fd) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags < 0) return false;
+    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+}
+
+static bool process_exec_error_pipe(Vm *vm, const VmProcessSpec *spec, int pipe_fds[2]) {
+    pipe_fds[0] = -1;
+    pipe_fds[1] = -1;
+    if (pipe(pipe_fds) != 0) {
+        ds_diag_error(vm->diag, spec->span, "failed to prepare command `%s`: %s", spec->argv.items[0], strerror(errno));
+        return false;
+    }
+    if (!fd_set_cloexec(pipe_fds[1])) {
+        ds_diag_error(vm->diag, spec->span, "failed to prepare command `%s`: %s", spec->argv.items[0], strerror(errno));
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        pipe_fds[0] = -1;
+        pipe_fds[1] = -1;
+        return false;
+    }
+    return true;
+}
+
 static void process_child_exec(const VmProcessSpec *spec, int redirect_fd, FILE *out_fp, FILE *err_fp) {
     if (spec->capture) {
         dup2(fileno(out_fp), STDOUT_FILENO);
@@ -968,7 +993,13 @@ static void process_child_exec(const VmProcessSpec *spec, int redirect_fd, FILE 
     }
     if (redirect_fd >= 0) close(redirect_fd);
     execvp(spec->argv.items[0], spec->argv.items);
-    fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(errno));
+    int exec_errno = errno;
+    if (spec->exec_error_fd >= 0) {
+        ssize_t ignored = write(spec->exec_error_fd, &exec_errno, sizeof(exec_errno));
+        (void)ignored;
+        close(spec->exec_error_fd);
+    }
+    if (spec->capture) fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(exec_errno));
     _exit(127);
 }
 
@@ -977,6 +1008,8 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     int redirect_fd = -1;
     FILE *out_fp = NULL;
     FILE *err_fp = NULL;
+    int exec_error_pipe[2] = {-1, -1};
+    spec->exec_error_fd = -1;
 
     if (!spec->capture && spec->redirect.kind != DS_REDIRECT_NONE) {
         if (!open_redirect_target(vm, &spec->redirect, &redirect_fd)) return false;
@@ -993,20 +1026,37 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
         }
     }
 
+    if (!process_exec_error_pipe(vm, spec, exec_error_pipe)) {
+        if (redirect_fd >= 0) close(redirect_fd);
+        if (out_fp) fclose(out_fp);
+        if (err_fp) fclose(err_fp);
+        return false;
+    }
+    spec->exec_error_fd = exec_error_pipe[1];
+
     pid_t pid = fork();
     if (pid < 0) {
         ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(errno));
         if (redirect_fd >= 0) close(redirect_fd);
         if (out_fp) fclose(out_fp);
         if (err_fp) fclose(err_fp);
+        close(exec_error_pipe[0]);
+        close(exec_error_pipe[1]);
+        spec->exec_error_fd = -1;
         return false;
     }
 
     if (pid == 0) {
+        close(exec_error_pipe[0]);
         process_child_exec(spec, redirect_fd, out_fp, err_fp);
     }
 
+    close(exec_error_pipe[1]);
+    spec->exec_error_fd = -1;
     if (redirect_fd >= 0) close(redirect_fd);
+    int exec_errno = 0;
+    ssize_t exec_error_len = read(exec_error_pipe[0], &exec_errno, sizeof(exec_errno));
+    close(exec_error_pipe[0]);
     int status = 0;
     while (waitpid(pid, &status, 0) < 0) {
         if (errno != EINTR) {
@@ -1017,6 +1067,11 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
         }
     }
     result->code = process_status_code(status);
+
+    if (!spec->capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
+        ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(exec_errno));
+        return true;
+    }
 
     if (spec->capture) {
         if (!read_file_into_string(out_fp, &result->stdout_text) || !read_file_into_string(err_fp, &result->stderr_text)) {
