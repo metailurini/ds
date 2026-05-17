@@ -1,0 +1,222 @@
+#include "ds.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+void ds_string_init(DsString *s) {
+    s->data = NULL;
+    s->len = 0;
+    s->cap = 0;
+}
+
+static bool ds_string_reserve(DsString *s, size_t need) {
+    if (need <= s->cap) return true;
+    size_t cap = s->cap ? s->cap : 16;
+    while (cap < need) cap *= 2;
+    s->data = (char *)ds_xrealloc(s->data, cap);
+    s->cap = cap;
+    return true;
+}
+
+bool ds_string_append_range(DsString *s, const char *data, size_t len) {
+    if (!ds_string_reserve(s, s->len + len + 1)) return false;
+    if (len > 0) memcpy(s->data + s->len, data, len);
+    s->len += len;
+    s->data[s->len] = '\0';
+    return true;
+}
+
+bool ds_string_append_cstr(DsString *s, const char *text) {
+    return ds_string_append_range(s, text, strlen(text));
+}
+
+bool ds_string_append_char(DsString *s, char c) {
+    return ds_string_append_range(s, &c, 1);
+}
+
+bool ds_string_from_range(DsString *s, const char *data, size_t len) {
+    ds_string_init(s);
+    return ds_string_append_range(s, data, len);
+}
+
+bool ds_string_from_cstr(DsString *s, const char *text) {
+    return ds_string_from_range(s, text, strlen(text));
+}
+
+void ds_string_free(DsString *s) {
+    free(s->data);
+    s->data = NULL;
+    s->len = 0;
+    s->cap = 0;
+}
+
+DsValue ds_value_null(void) {
+    DsValue v;
+    memset(&v, 0, sizeof(v));
+    v.kind = DS_VALUE_NULL;
+    return v;
+}
+
+DsValue ds_value_bool(bool value) {
+    DsValue v = ds_value_null();
+    v.kind = DS_VALUE_BOOL;
+    v.as.boolean = value;
+    return v;
+}
+
+DsValue ds_value_int(int64_t value) {
+    DsValue v = ds_value_null();
+    v.kind = DS_VALUE_INT;
+    v.as.integer = value;
+    return v;
+}
+
+DsValue ds_value_string_take(DsString *string) {
+    DsValue v = ds_value_null();
+    v.kind = DS_VALUE_STRING;
+    v.as.string = *string;
+    ds_string_init(string);
+    return v;
+}
+
+DsValue ds_value_copy(const DsValue *value) {
+    DsValue out = ds_value_null();
+    out.kind = value->kind;
+    switch (value->kind) {
+        case DS_VALUE_STRING:
+            ds_string_from_range(&out.as.string, value->as.string.data ? value->as.string.data : "", value->as.string.len);
+            break;
+        case DS_VALUE_BOOL:
+            out.as.boolean = value->as.boolean;
+            break;
+        case DS_VALUE_INT:
+            out.as.integer = value->as.integer;
+            break;
+        case DS_VALUE_NULL:
+            break;
+    }
+    return out;
+}
+
+void ds_value_free(DsValue *value) {
+    if (value->kind == DS_VALUE_STRING) ds_string_free(&value->as.string);
+    *value = ds_value_null();
+}
+
+bool ds_value_truthy(const DsValue *value, bool *out) {
+    switch (value->kind) {
+        case DS_VALUE_BOOL:
+            *out = value->as.boolean;
+            return true;
+        case DS_VALUE_INT:
+            *out = value->as.integer != 0;
+            return true;
+        case DS_VALUE_STRING:
+            *out = value->as.string.len != 0;
+            return true;
+        case DS_VALUE_NULL:
+            *out = false;
+            return true;
+    }
+    return false;
+}
+
+bool ds_value_to_string(const DsValue *value, DsString *out) {
+    char buf[64];
+    ds_string_init(out);
+    switch (value->kind) {
+        case DS_VALUE_NULL:
+            return ds_string_append_cstr(out, "null");
+        case DS_VALUE_BOOL:
+            return ds_string_append_cstr(out, value->as.boolean ? "true" : "false");
+        case DS_VALUE_INT:
+            snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
+            return ds_string_append_cstr(out, buf);
+        case DS_VALUE_STRING:
+            return ds_string_append_range(out, value->as.string.data ? value->as.string.data : "", value->as.string.len);
+    }
+    return false;
+}
+
+int ds_value_compare(const DsValue *left, const DsValue *right) {
+    DsString a, b;
+    ds_value_to_string(left, &a);
+    ds_value_to_string(right, &b);
+    size_t min = a.len < b.len ? a.len : b.len;
+    int cmp = memcmp(a.data ? a.data : "", b.data ? b.data : "", min);
+    if (cmp == 0) {
+        if (a.len < b.len) cmp = -1;
+        else if (a.len > b.len) cmp = 1;
+    }
+    ds_string_free(&a);
+    ds_string_free(&b);
+    return cmp;
+}
+
+void ds_array_init(DsArray *array) {
+    array->items = NULL;
+    array->len = 0;
+    array->cap = 0;
+}
+
+bool ds_array_push(DsArray *array, void *item) {
+    if (array->len == array->cap) {
+        array->cap = array->cap ? array->cap * 2 : 8;
+        array->items = (void **)ds_xrealloc(array->items, array->cap * sizeof(void *));
+    }
+    array->items[array->len++] = item;
+    return true;
+}
+
+void ds_array_free(DsArray *array) {
+    free(array->items);
+    ds_array_init(array);
+}
+
+void ds_map_init(DsMap *map) {
+    map->keys = NULL;
+    map->values = NULL;
+    map->len = 0;
+    map->cap = 0;
+}
+
+static bool ds_str_eq_cstr(DsStr a, const char *b) {
+    size_t len = strlen(b);
+    return a.len == len && memcmp(a.data, b, len) == 0;
+}
+
+DsValue *ds_map_get(DsMap *map, DsStr key) {
+    for (size_t i = 0; i < map->len; i++) {
+        if (ds_str_eq_cstr(key, map->keys[i])) return &map->values[i];
+    }
+    return NULL;
+}
+
+bool ds_map_set(DsMap *map, DsStr key, DsValue value) {
+    DsValue *existing = ds_map_get(map, key);
+    if (existing) {
+        ds_value_free(existing);
+        *existing = value;
+        return true;
+    }
+    if (map->len == map->cap) {
+        map->cap = map->cap ? map->cap * 2 : 16;
+        map->keys = (char **)ds_xrealloc(map->keys, map->cap * sizeof(char *));
+        map->values = (DsValue *)ds_xrealloc(map->values, map->cap * sizeof(DsValue));
+    }
+    map->keys[map->len] = ds_str_dup_range(key.data, key.len);
+    map->values[map->len] = value;
+    map->len++;
+    return true;
+}
+
+void ds_map_free(DsMap *map) {
+    for (size_t i = 0; i < map->len; i++) {
+        free(map->keys[i]);
+        ds_value_free(&map->values[i]);
+    }
+    free(map->keys);
+    free(map->values);
+    ds_map_init(map);
+}

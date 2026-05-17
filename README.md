@@ -130,23 +130,26 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.2.0` implementation and tests are complete.
+Current status: `v0.3.0` implementation is in progress; scoped code changes are implemented, and tests are intentionally deferred until the `v0.3.0` test-plan pass.
 
-The current implementation supports the `v0.1.0` frontend plus the first `v0.2.0` Bash emission path:
+The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, and the first `v0.3.0` direct VM execution path:
 
 ```sh
 make
 ./ds tokens examples/basic.ds
 ./ds ast examples/basic.ds
 ./ds check examples/basic.ds
+./ds bytecode examples/basic.ds
+./ds run examples/basic.ds
+./ds examples/basic.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 ```
 
-It does not execute scripts through the VM yet. Direct VM execution begins in `v0.3.0`.
+The VM currently targets the same conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. Runtime/VM tests are not added yet in this implementation pass.
 
-Known `v0.2.0` Bash-emission limitation: comparison operators are emitted with Bash `[[ ... ]]` string-style condition semantics and do not perform type-aware numeric dispatch yet. Numeric comparison semantics are intentionally deferred until the runtime/VM work can define typed behavior consistently.
+Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 
 ## Syntax catalog
 

@@ -136,6 +136,46 @@ typedef struct {
     DsSpan span;
 } DsAst;
 
+typedef enum {
+    DS_VALUE_NULL,
+    DS_VALUE_BOOL,
+    DS_VALUE_INT,
+    DS_VALUE_STRING
+} DsValueKind;
+
+typedef struct {
+    char *data;
+    size_t len;
+    size_t cap;
+} DsString;
+
+typedef struct {
+    DsValueKind kind;
+    union {
+        bool boolean;
+        int64_t integer;
+        DsString string;
+    } as;
+} DsValue;
+
+typedef struct {
+    void **items;
+    size_t len;
+    size_t cap;
+} DsArray;
+
+typedef struct {
+    char **keys;
+    DsValue *values;
+    size_t len;
+    size_t cap;
+} DsMap;
+
+typedef enum {
+    DS_BYTECODE_MODE_DUMP,
+    DS_BYTECODE_MODE_RUN
+} DsBytecodeMode;
+
 bool ds_source_read(const char *path, DsSource *out, DsDiag *diag);
 void ds_source_free(DsSource *source);
 
@@ -151,7 +191,38 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag);
 void ds_ast_print(const DsAst *ast, FILE *out);
 void ds_ast_free(DsAst *ast);
 
+bool ds_lower_validate(const DsAst *ast, DsDiag *diag);
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);
+
+void ds_string_init(DsString *s);
+bool ds_string_from_cstr(DsString *s, const char *text);
+bool ds_string_from_range(DsString *s, const char *data, size_t len);
+bool ds_string_append_range(DsString *s, const char *data, size_t len);
+bool ds_string_append_cstr(DsString *s, const char *text);
+bool ds_string_append_char(DsString *s, char c);
+void ds_string_free(DsString *s);
+
+DsValue ds_value_null(void);
+DsValue ds_value_bool(bool value);
+DsValue ds_value_int(int64_t value);
+DsValue ds_value_string_take(DsString *string);
+DsValue ds_value_copy(const DsValue *value);
+void ds_value_free(DsValue *value);
+bool ds_value_truthy(const DsValue *value, bool *out);
+bool ds_value_to_string(const DsValue *value, DsString *out);
+int ds_value_compare(const DsValue *left, const DsValue *right);
+
+void ds_array_init(DsArray *array);
+bool ds_array_push(DsArray *array, void *item);
+void ds_array_free(DsArray *array);
+
+void ds_map_init(DsMap *map);
+bool ds_map_set(DsMap *map, DsStr key, DsValue value);
+DsValue *ds_map_get(DsMap *map, DsStr key);
+void ds_map_free(DsMap *map);
+
+bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag);
+int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag);
 
 char *ds_str_dup_range(const char *data, size_t len);
 void *ds_xcalloc(size_t count, size_t size);

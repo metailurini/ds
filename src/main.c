@@ -4,11 +4,14 @@
 #include <string.h>
 
 static void usage(FILE *out) {
-    fputs("ds v0.2.0\n\n", out);
+    fputs("ds v0.3.0\n\n", out);
     fputs("Usage:\n", out);
+    fputs("  ds <file.ds>\n", out);
+    fputs("  ds run <file.ds>\n", out);
     fputs("  ds tokens <file.ds>\n", out);
     fputs("  ds ast <file.ds>\n", out);
     fputs("  ds check <file.ds>\n", out);
+    fputs("  ds bytecode <file.ds>\n", out);
     fputs("  ds emit bash <file.ds> -o <file.sh>\n", out);
 }
 
@@ -55,6 +58,26 @@ int main(int argc, char **argv) {
         return rc;
     }
 
+    if (argc == 2) {
+        const char *path = argv[1];
+        DsSource source = {0};
+        DsTokenVec tokens = {0};
+        DsDiag diag;
+
+        if (load_and_lex(path, &source, &tokens, &diag) != 0) {
+            ds_tokens_free(&tokens);
+            ds_source_free(&source);
+            return 1;
+        }
+
+        DsAst *ast = ds_parse(&tokens, &diag);
+        int rc = diag.has_error ? 1 : ds_vm_run(&source, ast, &diag);
+        ds_ast_free(ast);
+        ds_tokens_free(&tokens);
+        ds_source_free(&source);
+        return rc;
+    }
+
     if (argc != 3) {
         usage(stderr);
         return 1;
@@ -79,11 +102,20 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    if (strcmp(cmd, "ast") == 0 || strcmp(cmd, "check") == 0) {
+    if (strcmp(cmd, "ast") == 0 || strcmp(cmd, "check") == 0 || strcmp(cmd, "bytecode") == 0 || strcmp(cmd, "run") == 0) {
         DsAst *ast = ds_parse(&tokens, &diag);
         int rc = diag.has_error ? 1 : 0;
         if (strcmp(cmd, "ast") == 0 && rc == 0) {
             ds_ast_print(ast, stdout);
+        }
+        if (strcmp(cmd, "check") == 0 && rc == 0 && !ds_lower_validate(ast, &diag)) {
+            rc = 1;
+        }
+        if (strcmp(cmd, "bytecode") == 0 && rc == 0 && !ds_bytecode_dump(&source, ast, stdout, &diag)) {
+            rc = 1;
+        }
+        if (strcmp(cmd, "run") == 0 && rc == 0) {
+            rc = ds_vm_run(&source, ast, &diag);
         }
         ds_ast_free(ast);
         ds_tokens_free(&tokens);

@@ -348,6 +348,8 @@ static bool emit_stmt(BashEmitter *e, const DsStmt *stmt, int indent) {
 }
 
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag) {
+    if (!ds_lower_validate(ast, diag)) return false;
+
     BashEmitter e;
     memset(&e, 0, sizeof(e));
     e.source = source;

@@ -33,6 +33,10 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `v0.2.0` Bash emitter test suite with golden output, `bash -n` validation, runtime behavior checks, quoting/safety coverage, diagnostics, and CLI edge cases.
 - Expanded `v0.2.0` edge-case coverage for no-input CLI usage, invalid source failures before emission, no trailing newline, deeper nested conditionals, long strings, many variables, interpolation next to punctuation, and future syntax rejection.
 - Milestone spec and comprehensive regression-focused test plan for `v0.4.0` cleanup of frontend, runtime, and backend boundaries.
+- Initial `v0.3.0` VM implementation with `ds <file.ds>`, `ds run <file.ds>`, and `ds bytecode <file.ds>`.
+- Minimal runtime primitives for owned strings, tagged values, internal arrays, and `DsMap` symbol/value storage.
+- Shared lowering validation for known variables, interpolation names, supported expressions, duplicate declarations, and block-local scope boundaries.
+- Deterministic bytecode dump output and a small direct execution VM for the supported `v0.1.0` / `v0.2.0` subset.
 
 ## v0.1.0 — Complete
 
