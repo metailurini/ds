@@ -48,6 +48,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Consistent version-owned test layout: each milestone runner and unit source now
   lives under `tests/v0_*/`, with shared helpers under `tests/lib/`.
 - `v0.4.0` cleanup regression suite covering pipeline boundaries, diagnostic consistency, source locations, runtime ownership, `DsMap` wrapper behavior, static backend/staged-library boundaries, generated Bash standalone behavior, command exit parity, cleanup-only future-syntax rejection, CLI usage consistency, shared golden-helper failure quality, and docs/help-command alignment.
+- Milestone spec and comprehensive test plan for `v0.5.0` first-class CLI args, including VM/Bash parity, help output, shell-safety, and argument diagnostic coverage.
 
 ### Fixed
 
