@@ -138,9 +138,9 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.7.0` implementation and tests are complete for the scoped command-result capture and readable redirection pass; `v0.8.0` implementation and tests are complete for the scoped command-model/process-wrapper cleanup and have not added new user-facing syntax.
+Current status: `v0.9.0` implementation is complete for the scoped user-defined functions pass; tests have not been added yet.
 
-The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, and the `v0.8.0` command-model/process-wrapper cleanup:
+The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, the `v0.8.0` command-model/process-wrapper cleanup, and the scoped `v0.9.0` user-defined functions pass:
 
 Local imports use simple quoted paths resolved relative to the importing file:
 
@@ -166,6 +166,17 @@ Plain command statements also support readable redirection syntax:
 npm run build &> "build.log"
 ```
 
+Functions are top-level reusable procedures with positional parameters, trailing literal defaults, local function scopes, and statement-style calls:
+
+```ds
+fn greet(name = "world") {
+  echo "hello {name}"
+}
+
+greet()
+greet("ds")
+```
+
 ```sh
 make
 ./ds tokens examples/basic.ds
@@ -180,11 +191,13 @@ make
 ./ds examples/import-main.ds
 ./ds examples/command-result.ds
 ./ds examples/redirection.ds
+./ds examples/functions.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
 ./ds emit bash examples/args.ds -o /tmp/args.sh
 ./ds emit bash examples/import-main.ds -o /tmp/import-main.sh
 ./ds emit bash examples/command-result.ds -o /tmp/command-result.sh
 ./ds emit bash examples/redirection.ds -o /tmp/redirection.sh
+./ds emit bash examples/functions.ds -o /tmp/functions.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 bash /tmp/args.sh api --target production --retries 5 --force
@@ -192,9 +205,10 @@ bash /tmp/args.sh --help
 bash /tmp/import-main.sh
 bash /tmp/command-result.sh
 bash /tmp/redirection.sh
+bash /tmp/functions.sh
 ```
 
-The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, and plain command redirections. The VM also maintains runtime block scopes for lowered blocks. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast. The v0.8.0 cleanup centralizes lowered command ownership and command-result field metadata without changing that language surface.
+The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, plain command redirections, and top-level function declarations/calls. The VM also maintains runtime block scopes for lowered blocks and function invocations. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast. The v0.8.0 cleanup centralizes lowered command ownership and command-result field metadata without changing that language surface. The v0.9.0 implementation supports untyped function parameters, trailing literal defaults, calls before declaration, imported function declarations through the existing composition path, and local function variables; typed parameters and return values remain deferred.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

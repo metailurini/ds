@@ -47,6 +47,10 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             print_expr(expr->as.binary.left, out, level + 1);
             print_expr(expr->as.binary.right, out, level + 1);
             break;
+        case DS_EXPR_CALL:
+            fprintf(out, "CallExpr %.*s\n", (int)expr->as.call.name.len, expr->as.call.name.data);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) print_expr(expr->as.call.args.items[i], out, level + 1);
+            break;
         case DS_EXPR_ERROR:
             fputs("ErrorExpr\n", out);
             break;
@@ -96,6 +100,20 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
                 fprintf(out, "Redirect %s %.*s\n", names[stmt->as.cmd_stmt.redirect.kind],
                         (int)stmt->as.cmd_stmt.redirect.target.len, stmt->as.cmd_stmt.redirect.target.data);
             }
+            break;
+        case DS_STMT_FN:
+            fprintf(out, "FnStmt %.*s\n", (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
+            for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
+                const DsFnParam *param = &stmt->as.fn_stmt.params.items[i];
+                indent(out, level + 1);
+                fprintf(out, "Param %.*s%s\n", (int)param->name.len, param->name.data, param->default_value ? " =" : "");
+                if (param->default_value) print_expr(param->default_value, out, level + 2);
+            }
+            print_stmt(stmt->as.fn_stmt.body, out, level + 1);
+            break;
+        case DS_STMT_CALL:
+            fprintf(out, "CallStmt %.*s\n", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) print_expr(stmt->as.call_stmt.args.items[i], out, level + 1);
             break;
     }
 }
@@ -164,6 +182,11 @@ static void free_expr(DsExpr *expr) {
             free(expr->as.binary.op.data);
             free_expr(expr->as.binary.right);
             break;
+        case DS_EXPR_CALL:
+            free(expr->as.call.name.data);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) free_expr(expr->as.call.args.items[i]);
+            free(expr->as.call.args.items);
+            break;
         case DS_EXPR_BOOL:
         case DS_EXPR_ERROR:
             break;
@@ -198,6 +221,20 @@ static void free_stmt(DsStmt *stmt) {
             }
             free(stmt->as.cmd_stmt.words.items);
             free(stmt->as.cmd_stmt.redirect.target.data);
+            break;
+        case DS_STMT_FN:
+            free(stmt->as.fn_stmt.name.data);
+            for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
+                free(stmt->as.fn_stmt.params.items[i].name.data);
+                free_expr(stmt->as.fn_stmt.params.items[i].default_value);
+            }
+            free(stmt->as.fn_stmt.params.items);
+            free_stmt(stmt->as.fn_stmt.body);
+            break;
+        case DS_STMT_CALL:
+            free(stmt->as.call_stmt.name.data);
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) free_expr(stmt->as.call_stmt.args.items[i]);
+            free(stmt->as.call_stmt.args.items);
             break;
     }
     free(stmt);

@@ -1,0 +1,16 @@
+fn greet(name = "world") {
+  echo "hello {name}"
+}
+
+fn show_status(command) {
+  let result = run sh -c $command
+  if result.ok {
+    echo "ok: {result.stdout}"
+  } else {
+    echo "failed: {result.code}"
+  }
+}
+
+greet()
+greet("ds")
+show_status("printf ready")

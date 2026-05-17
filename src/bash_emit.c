@@ -24,6 +24,7 @@ typedef struct {
     DsDiag *diag;
     SymbolVec symbols;
     EmitBuf out;
+    int function_depth;
 } BashEmitter;
 
 static void buf_reserve(EmitBuf *buf, size_t need) {
@@ -94,6 +95,10 @@ static void free_symbols(SymbolVec *symbols) {
     free(symbols->items);
 }
 
+static void symbols_truncate(SymbolVec *symbols, size_t len) {
+    while (symbols->len > len) free(symbols->items[--symbols->len].data);
+}
+
 static void emit_indent(EmitBuf *out, int indent) {
     for (int i = 0; i < indent; i++) buf_append(out, "  ");
 }
@@ -111,6 +116,11 @@ static bool is_safe_identifier(DsStr name) {
 
 static void emit_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_");
+    buf_append_len(out, name.data, name.len);
+}
+
+static void emit_fn_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_fn_");
     buf_append_len(out, name.data, name.len);
 }
 
@@ -375,6 +385,9 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             buf_append_len(out, expr->as.field.field.data, expr->as.field.field.len);
             buf_append(out, "\"");
             return true;
+        case DS_LOWER_EXPR_CALL:
+            ds_diag_error(e->diag, expr->span, "function calls do not produce values in v0.9.0");
+            return false;
         default:
             ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");
             return false;
@@ -588,11 +601,13 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_run(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
         case DS_LOWER_STMT_CMD: return false;
+        case DS_LOWER_STMT_CALL: return false;
     }
     return false;
 }
 
 static bool program_uses_run(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_run(program->functions.items[i].body)) return true;
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_run(program->statements.items[i])) return true;
     return false;
 }
@@ -604,6 +619,56 @@ static bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent
         if (!emit_stmt(e, block->as.block_stmt.statements.items[i], indent)) return false;
     }
     return true;
+}
+
+static bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
+    for (size_t i = 0; i < args->len; i++) {
+        buf_append(out, " ");
+        if (!emit_value_expr(e, args->items[i], out)) return false;
+    }
+    return true;
+}
+
+static bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    return emit_value_expr(e, expr, out);
+}
+
+static bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
+    if (!is_safe_identifier(fn->name)) {
+        ds_diag_error(e->diag, fn->span, "cannot emit unsafe Bash function name `%.*s`", (int)fn->name.len, fn->name.data);
+        return false;
+    }
+    emit_fn_name(&e->out, fn->name);
+    buf_append(&e->out, "() {\n");
+    size_t symbol_mark = e->symbols.len;
+    for (size_t i = 0; i < fn->params.len; i++) {
+        const DsLowerFnParam *param = &fn->params.items[i];
+        DsStr copy = {ds_str_dup_range(param->name.data, param->name.len), param->name.len};
+        symbol_vec_push(&e->symbols, copy);
+        emit_indent(&e->out, 1);
+        buf_append(&e->out, "local ");
+        emit_var_name(&e->out, param->name);
+        buf_append(&e->out, "\n");
+        emit_indent(&e->out, 1);
+        buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i);
+        emit_var_name(&e->out, param->name);
+        buf_appendf(&e->out, "=\"${%zu}\"; else ", i + 1);
+        emit_var_name(&e->out, param->name);
+        buf_append(&e->out, "=");
+        if (param->has_default) {
+            if (!emit_function_default(e, param->default_value, &e->out)) { symbols_truncate(&e->symbols, symbol_mark); return false; }
+        } else {
+            buf_append(&e->out, "\"\"");
+        }
+        buf_append(&e->out, "; fi\n");
+    }
+    int saved_depth = e->function_depth;
+    e->function_depth++;
+    bool ok = emit_block_body(e, fn->body, 1);
+    e->function_depth = saved_depth;
+    symbols_truncate(&e->symbols, symbol_mark);
+    buf_append(&e->out, "}\n\n");
+    return ok;
 }
 
 static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
@@ -619,10 +684,25 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             emit_indent(&e->out, indent);
             if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN) {
+                if (e->function_depth > 0) {
+                    buf_append(&e->out, "local ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    buf_append(&e->out, "_stdout ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    buf_append(&e->out, "_stderr ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    buf_append(&e->out, "_code ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    buf_append(&e->out, "_ok ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    buf_append(&e->out, "_failed\n");
+                    emit_indent(&e->out, indent);
+                }
                 buf_append(&e->out, "__ds_capture ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 if (!emit_capture_words(e, &stmt->as.let_stmt.value->as.run.words, &e->out, stmt->span)) return false;
             } else {
+                if (e->function_depth > 0) buf_append(&e->out, "local ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=");
                 if (!emit_value_expr(e, stmt->as.let_stmt.value, &e->out)) return false;
@@ -641,6 +721,13 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
             }
             if (!emit_redirect(e, &stmt->as.cmd_stmt.redirect, &e->out, stmt->span)) return false;
+            buf_append(&e->out, "\n\n");
+            return true;
+
+        case DS_LOWER_STMT_CALL:
+            emit_indent(&e->out, indent);
+            emit_fn_name(&e->out, stmt->as.call_stmt.name);
+            if (!emit_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
             buf_append(&e->out, "\n\n");
             return true;
 
@@ -678,9 +765,23 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
         DsStr copy = {ds_str_dup_range(lowered->script_decls.items[i].name.data, lowered->script_decls.items[i].name.len), lowered->script_decls.items[i].name.len};
         symbol_vec_push(&e.symbols, copy);
     }
+    for (size_t i = 0; i < lowered->statements.len; i++) {
+        if (lowered->statements.items[i]->kind == DS_LOWER_STMT_LET && !symbol_exists(&e.symbols, lowered->statements.items[i]->as.let_stmt.name)) {
+            DsStr copy = {ds_str_dup_range(lowered->statements.items[i]->as.let_stmt.name.data, lowered->statements.items[i]->as.let_stmt.name.len), lowered->statements.items[i]->as.let_stmt.name.len};
+            symbol_vec_push(&e.symbols, copy);
+        }
+    }
 
     emit_script_args(&e, lowered);
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
+
+    for (size_t i = 0; i < lowered->functions.len; i++) {
+        if (!emit_function(&e, &lowered->functions.items[i])) {
+            free_symbols(&e.symbols);
+            free(e.out.data);
+            return false;
+        }
+    }
 
     for (size_t i = 0; i < lowered->statements.len; i++) {
         if (!emit_stmt(&e, lowered->statements.items[i], 0)) {

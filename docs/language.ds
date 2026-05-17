@@ -277,15 +277,20 @@ fn deploy_default(target = "staging") {
   echo "Deploying {target}"
 }
 
-fn restart(service: string) {
-  docker compose restart $service
-}
+# Typed parameters remain planned syntax. v0.9.0 deliberately rejects typed
+# function parameters until call-boundary validation exists in both the VM and
+# emitted standalone Bash.
+#
+# fn restart(service: string) {
+#   docker compose restart $service
+# }
 
 # Non-goals for early functions:
 # - no closures;
 # - no anonymous functions;
 # - no higher-order functions;
-# - no complex generics.
+# - no complex generics;
+# - no return values.
 
 
 # -----------------------------------------------------------------------------

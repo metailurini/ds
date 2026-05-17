@@ -26,9 +26,25 @@ typedef enum {
     OP_PUSH_SCOPE,
     OP_POP_SCOPE,
     OP_RUN_CMD,
+    OP_CALL,
+    OP_RETURN_FUNC,
     OP_RETURN,
     OP_NOP
 } OpCode;
+
+typedef struct {
+    char *name;
+    DsValue default_value;
+    bool has_default;
+} FnParamMeta;
+
+typedef struct {
+    char *name;
+    FnParamMeta *params;
+    size_t param_count;
+    size_t required_count;
+    size_t target;
+} FnMeta;
 
 typedef struct {
     OpCode op;
@@ -40,6 +56,8 @@ typedef struct {
     char *name;
     char *cmp;
     char *field;
+    int *args;
+    size_t arg_count;
     DsStr *words;
     size_t word_count;
     DsRedirect redirect;
@@ -53,6 +71,9 @@ typedef struct {
     size_t instr_len;
     size_t instr_cap;
     int next_reg;
+    FnMeta *functions;
+    size_t function_len;
+    size_t function_cap;
 } Program;
 
 static void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
@@ -61,6 +82,7 @@ static void instr_free(Instr *ins) {
     free(ins->name);
     free(ins->cmp);
     free(ins->field);
+    free(ins->args);
     for (size_t i = 0; i < ins->word_count; i++) free(ins->words[i].data);
     free(ins->words);
     free(ins->redirect.target.data);
@@ -79,8 +101,17 @@ static void copy_words_to_instr(Instr *ins, const DsWordVec *words) {
 static void program_free(Program *p) {
     for (size_t i = 0; i < p->const_len; i++) ds_value_free(&p->consts[i]);
     for (size_t i = 0; i < p->instr_len; i++) instr_free(&p->instrs[i]);
+    for (size_t i = 0; i < p->function_len; i++) {
+        free(p->functions[i].name);
+        for (size_t j = 0; j < p->functions[i].param_count; j++) {
+            free(p->functions[i].params[j].name);
+            ds_value_free(&p->functions[i].params[j].default_value);
+        }
+        free(p->functions[i].params);
+    }
     free(p->consts);
     free(p->instrs);
+    free(p->functions);
 }
 
 static int new_reg(Program *p) { return p->next_reg++; }
@@ -92,6 +123,55 @@ static int add_const(Program *p, DsValue value) {
     }
     p->consts[p->const_len] = value;
     return (int)p->const_len++;
+}
+
+static bool decode_string_text(DsStr text, DsString *out);
+
+static DsValue literal_default_value(const DsLowerExpr *expr) {
+    if (!expr) return ds_value_null();
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING: {
+            DsString decoded;
+            decode_string_text(expr->as.text, &decoded);
+            return ds_value_string_take(&decoded);
+        }
+        case DS_LOWER_EXPR_INT: {
+            char *tmp = ds_str_dup_range(expr->as.text.data, expr->as.text.len);
+            int64_t value = strtoll(tmp, NULL, 10);
+            free(tmp);
+            return ds_value_int(value);
+        }
+        case DS_LOWER_EXPR_BOOL:
+            return ds_value_bool(expr->as.boolean);
+        default:
+            return ds_value_null();
+    }
+}
+
+static int add_function_meta(Program *p, const DsLowerFn *fn) {
+    if (p->function_len == p->function_cap) {
+        p->function_cap = p->function_cap ? p->function_cap * 2 : 8;
+        p->functions = (FnMeta *)ds_xrealloc(p->functions, p->function_cap * sizeof(FnMeta));
+    }
+    FnMeta *meta = &p->functions[p->function_len];
+    memset(meta, 0, sizeof(*meta));
+    meta->name = ds_str_dup_range(fn->name.data, fn->name.len);
+    meta->param_count = fn->params.len;
+    meta->required_count = fn->required_count;
+    meta->params = (FnParamMeta *)ds_xcalloc(meta->param_count ? meta->param_count : 1, sizeof(FnParamMeta));
+    for (size_t i = 0; i < fn->params.len; i++) {
+        meta->params[i].name = ds_str_dup_range(fn->params.items[i].name.data, fn->params.items[i].name.len);
+        meta->params[i].has_default = fn->params.items[i].has_default;
+        meta->params[i].default_value = fn->params.items[i].has_default ? literal_default_value(fn->params.items[i].default_value) : ds_value_null();
+    }
+    return (int)p->function_len++;
+}
+
+static int find_function_meta(Program *p, DsStr name) {
+    for (size_t i = 0; i < p->function_len; i++) {
+        if (strlen(p->functions[i].name) == name.len && memcmp(p->functions[i].name, name.data, name.len) == 0) return (int)i;
+    }
+    return -1;
 }
 
 static size_t emit_instr(Program *p, Instr ins) {
@@ -223,6 +303,8 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
+        case DS_LOWER_EXPR_CALL:
+            return new_reg(p);
         case DS_LOWER_EXPR_ERROR:
             return new_reg(p);
     }
@@ -274,6 +356,17 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             emit_instr(p, ins);
             break;
         }
+        case DS_LOWER_STMT_CALL: {
+            Instr ins = {0};
+            ins.op = OP_CALL;
+            ins.span = stmt->span;
+            ins.target = find_function_meta(p, stmt->as.call_stmt.name);
+            ins.arg_count = stmt->as.call_stmt.args.len;
+            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) ins.args[i] = compile_expr(p, stmt->as.call_stmt.args.items[i]);
+            emit_instr(p, ins);
+            break;
+        }
         case DS_LOWER_STMT_IF: {
             int cond = compile_expr(p, stmt->as.if_stmt.condition);
             Instr jif = {0};
@@ -304,6 +397,23 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
 static bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag) {
     (void)diag;
     program_init(p);
+    for (size_t i = 0; i < lowered->functions.len; i++) add_function_meta(p, &lowered->functions.items[i]);
+    size_t jump_main_pos = 0;
+    if (lowered->functions.len > 0) {
+        Instr jump_main = {0};
+        jump_main.op = OP_JUMP;
+        jump_main.span = lowered->span;
+        jump_main_pos = emit_instr(p, jump_main);
+        for (size_t i = 0; i < lowered->functions.len; i++) {
+            p->functions[i].target = p->instr_len;
+            compile_scoped_block(p, lowered->functions.items[i].body);
+            Instr ret_fn = {0};
+            ret_fn.op = OP_RETURN_FUNC;
+            ret_fn.span = lowered->functions.items[i].span;
+            emit_instr(p, ret_fn);
+        }
+        p->instrs[jump_main_pos].target = (int)p->instr_len;
+    }
     for (size_t i = 0; i < lowered->statements.len; i++) compile_stmt(p, lowered->statements.items[i]);
     Instr ret = {0};
     ret.op = OP_RETURN;
@@ -328,6 +438,8 @@ static const char *op_name(OpCode op) {
         case OP_PUSH_SCOPE: return "PUSH_SCOPE";
         case OP_POP_SCOPE: return "POP_SCOPE";
         case OP_RUN_CMD: return "RUN_CMD";
+        case OP_CALL: return "CALL";
+        case OP_RETURN_FUNC: return "RETURN_FUNC";
         case OP_RETURN: return "RETURN";
         case OP_NOP: return "NOP";
     }
@@ -436,6 +548,15 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                     fputc('"', out);
                 }
                 break;
+            case OP_CALL:
+                fprintf(out, " fn%d(", ins->target);
+                for (size_t j = 0; j < ins->arg_count; j++) {
+                    if (j) fputs(", ", out);
+                    fprintf(out, "r%d", ins->args[j]);
+                }
+                fputc(')', out);
+                break;
+            case OP_RETURN_FUNC: break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
         }
@@ -465,6 +586,9 @@ typedef struct {
     VmScope *scope;
     DsDiag *diag;
     const DsSource *source;
+    size_t *return_ips;
+    size_t return_len;
+    size_t return_cap;
 } Vm;
 
 static bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
@@ -704,6 +828,45 @@ static void vm_pop_scope(Vm *vm) {
     vm->scope = old->parent;
     old->parent = NULL;
     scope_free_one(old);
+}
+
+static void vm_push_return(Vm *vm, size_t ip) {
+    if (vm->return_len == vm->return_cap) {
+        vm->return_cap = vm->return_cap ? vm->return_cap * 2 : 8;
+        vm->return_ips = (size_t *)ds_xrealloc(vm->return_ips, vm->return_cap * sizeof(size_t));
+    }
+    vm->return_ips[vm->return_len++] = ip;
+}
+
+static bool vm_pop_return(Vm *vm, size_t *out) {
+    if (vm->return_len == 0) return false;
+    *out = vm->return_ips[--vm->return_len];
+    return true;
+}
+
+static bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
+    if (ins->target < 0 || (size_t)ins->target >= vm->program->function_len) {
+        ds_diag_error(vm->diag, ins->span, "unknown function call target");
+        return false;
+    }
+    FnMeta *fn = &vm->program->functions[ins->target];
+    VmScope *scope = scope_new(vm->scope);
+    for (size_t i = 0; i < fn->param_count; i++) {
+        DsValue value = ds_value_null();
+        if (i < ins->arg_count) value = ds_value_copy(&vm->regs[ins->args[i]]);
+        else if (fn->params[i].has_default) value = ds_value_copy(&fn->params[i].default_value);
+        else {
+            scope_free_one(scope);
+            ds_diag_error(vm->diag, ins->span, "function `%s` missing argument `%s`", fn->name, fn->params[i].name);
+            return false;
+        }
+        DsStr key = {fn->params[i].name, strlen(fn->params[i].name)};
+        ds_map_set(&scope->vars, key, value);
+    }
+    vm->scope = scope;
+    vm_push_return(vm, next_ip);
+    *target_ip = fn->target;
+    return true;
 }
 
 static bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span) {
@@ -1244,6 +1407,19 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
                 if (rc != 0) goto done;
                 ip++;
                 break;
+            case OP_CALL: {
+                size_t target_ip = 0;
+                if (!call_function(&vm, ins, ip + 1, &target_ip)) { rc = 1; goto done; }
+                ip = target_ip;
+                break;
+            }
+            case OP_RETURN_FUNC: {
+                size_t return_ip = 0;
+                vm_pop_scope(&vm);
+                if (!vm_pop_return(&vm, &return_ip)) { rc = 1; goto done; }
+                ip = return_ip;
+                break;
+            }
             case OP_RETURN:
                 rc = ins->target;
                 goto done;
@@ -1256,6 +1432,7 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
 done:
     for (int i = 0; i < p.next_reg; i++) ds_value_free(&vm.regs[i]);
     free(vm.regs);
+    free(vm.return_ips);
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;

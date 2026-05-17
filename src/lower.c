@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum { SYM_BOOL, SYM_INT, SYM_STRING, SYM_COMMAND_RESULT, SYM_UNKNOWN } SymKind;
+typedef enum { SYM_BOOL, SYM_INT, SYM_STRING, SYM_COMMAND_RESULT, SYM_FUNCTION, SYM_TOPLEVEL_PREDECLARED, SYM_UNKNOWN } SymKind;
 
 typedef struct {
     char *name;
@@ -23,6 +23,7 @@ struct Scope {
 typedef struct {
     DsDiag *diag;
     Scope *scope;
+    DsLowerProgram *program;
 } Lower;
 
 static bool is_result_field(DsStr field, SymKind *kind_out);
@@ -70,6 +71,11 @@ static Symbol *scope_find(Scope *scope, DsStr name) {
 }
 
 static void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span) {
+    Symbol *current = scope_find_current(scope, name);
+    if (current && current->kind == SYM_TOPLEVEL_PREDECLARED) {
+        current->kind = kind;
+        return;
+    }
     if (scope_find(scope, name)) {
         ds_diag_error(lower->diag, span, "duplicate variable `%.*s` in this scope", (int)name.len, name.data);
         return;
@@ -137,6 +143,15 @@ static bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
 
 static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span);
+static void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr);
+
+static DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {
+    for (size_t i = 0; i < program->functions.len; i++) {
+        DsLowerFn *fn = &program->functions.items[i];
+        if (fn->name.len == name.len && memcmp(fn->name.data, name.data, name.len) == 0) return fn;
+    }
+    return NULL;
+}
 
 static DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
     DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(DsLowerExpr));
@@ -254,6 +269,16 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         }
         case DS_EXPR_BINARY:
             return lower_binary_expr(lower, expr, kind_out);
+        case DS_EXPR_CALL: {
+            ds_diag_error(lower->diag, expr->span, "function calls do not produce values in v0.9.0");
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
+            out->as.call.name = str_clone(expr->as.call.name);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) {
+                SymKind arg_kind = SYM_UNKNOWN;
+                lower_expr_vec_push(&out->as.call.args, lower_expr(lower, expr->as.call.args.items[i], &arg_kind));
+            }
+            return out;
+        }
         case DS_EXPR_ERROR:
             return expr_new(DS_LOWER_EXPR_ERROR, expr->span);
     }
@@ -310,6 +335,30 @@ static void lower_stmt_vec_push(DsLowerStmtVec *vec, DsLowerStmt *stmt) {
         vec->items = (DsLowerStmt **)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerStmt *));
     }
     vec->items[vec->len++] = stmt;
+}
+
+static void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsLowerExpr **)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerExpr *));
+    }
+    vec->items[vec->len++] = expr;
+}
+
+static void lower_fn_param_vec_push(DsLowerFnParamVec *vec, DsLowerFnParam param) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsLowerFnParam *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerFnParam));
+    }
+    vec->items[vec->len++] = param;
+}
+
+static void lower_fn_vec_push(DsLowerFnVec *vec, DsLowerFn fn) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsLowerFn *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerFn));
+    }
+    vec->items[vec->len++] = fn;
 }
 
 static void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl) {
@@ -432,6 +481,32 @@ static DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
 
 static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt);
 
+static bool expr_is_literal_default(const DsExpr *expr) {
+    return expr && (expr->kind == DS_EXPR_STRING || expr->kind == DS_EXPR_INT || expr->kind == DS_EXPR_BOOL);
+}
+
+static DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
+    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CALL, stmt->span);
+    out->as.call_stmt.name = str_clone(stmt->as.call_stmt.name);
+    DsLowerFn *fn = find_function(lower->program, stmt->as.call_stmt.name);
+    if (!fn) {
+        ds_diag_error(lower->diag, stmt->span, "unknown function `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+    } else if (stmt->as.call_stmt.args.len < fn->required_count || stmt->as.call_stmt.args.len > fn->params.len) {
+        if (fn->required_count == fn->params.len) {
+            ds_diag_error(lower->diag, stmt->span, "function `%.*s` expects %zu arguments but got %zu",
+                          (int)fn->name.len, fn->name.data, fn->params.len, stmt->as.call_stmt.args.len);
+        } else {
+            ds_diag_error(lower->diag, stmt->span, "function `%.*s` expects %zu to %zu arguments but got %zu",
+                          (int)fn->name.len, fn->name.data, fn->required_count, fn->params.len, stmt->as.call_stmt.args.len);
+        }
+    }
+    for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
+        SymKind arg_kind = SYM_UNKNOWN;
+        lower_expr_vec_push(&out->as.call_stmt.args, lower_expr(lower, stmt->as.call_stmt.args.items[i], &arg_kind));
+    }
+    return out;
+}
+
 static DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope) {
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_BLOCK, block->span);
     Scope *saved = lower->scope;
@@ -450,6 +525,78 @@ static DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_sc
         free(local);
     }
     return out;
+}
+
+static void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
+    if (stmt->kind != DS_STMT_FN) return;
+    if (find_function(program, stmt->as.fn_stmt.name)) {
+        ds_diag_error(lower->diag, stmt->span, "duplicate function `%.*s`", (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
+        return;
+    }
+    scope_define(lower, lower->scope, stmt->as.fn_stmt.name, SYM_FUNCTION, stmt->span);
+    DsLowerFn fn;
+    memset(&fn, 0, sizeof(fn));
+    fn.name = str_clone(stmt->as.fn_stmt.name);
+    fn.span = stmt->span;
+    bool seen_default = false;
+    Scope param_names;
+    scope_init(&param_names, NULL);
+    for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
+        const DsFnParam *param = &stmt->as.fn_stmt.params.items[i];
+        if (scope_find_current(&param_names, param->name)) {
+            ds_diag_error(lower->diag, param->span, "duplicate parameter `%.*s`", (int)param->name.len, param->name.data);
+        }
+        Symbol dummy = {0};
+        (void)dummy;
+        Scope *saved = lower->scope;
+        lower->scope = &param_names;
+        scope_define(lower, &param_names, param->name, SYM_UNKNOWN, param->span);
+        lower->scope = saved;
+        if (param->has_type) {
+            ds_diag_error(lower->diag, param->span, "typed function parameters are deferred in v0.9.0; omit the type annotation");
+        }
+        DsLowerFnParam out;
+        memset(&out, 0, sizeof(out));
+        out.name = str_clone(param->name);
+        out.span = param->span;
+        if (param->default_value) {
+            seen_default = true;
+            if (!expr_is_literal_default(param->default_value)) {
+                ds_diag_error(lower->diag, param->default_value->span, "function parameter defaults must be string, int, or bool literals in v0.9.0");
+            }
+            SymKind default_kind = SYM_UNKNOWN;
+            out.has_default = true;
+            out.default_value = lower_expr(lower, param->default_value, &default_kind);
+        } else {
+            if (seen_default) ds_diag_error(lower->diag, param->span, "required parameter cannot follow a defaulted parameter");
+            fn.required_count++;
+        }
+        lower_fn_param_vec_push(&fn.params, out);
+    }
+    scope_free(&param_names);
+    lower_fn_vec_push(&program->functions, fn);
+}
+
+static void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {
+    if (stmt->kind != DS_STMT_LET) return;
+    if (scope_find_current(lower->scope, stmt->as.let_stmt.name)) {
+        ds_diag_error(lower->diag, stmt->span, "duplicate variable `%.*s` in this scope", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
+        return;
+    }
+    scope_define(lower, lower->scope, stmt->as.let_stmt.name, SYM_TOPLEVEL_PREDECLARED, stmt->span);
+}
+
+static void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
+    Scope local;
+    scope_init(&local, lower->scope);
+    Scope *saved = lower->scope;
+    lower->scope = &local;
+    for (size_t i = 0; i < fn->params.len; i++) {
+        scope_define(lower, &local, fn->params.items[i].name, SYM_UNKNOWN, fn->params.items[i].span);
+    }
+    fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);
+    lower->scope = saved;
+    scope_free(&local);
 }
 
 static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
@@ -479,6 +626,8 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             return out;
         }
+        case DS_STMT_CALL:
+            return lower_call_stmt(lower, stmt);
         case DS_STMT_IF: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_IF, stmt->span);
             SymKind cond_kind = SYM_UNKNOWN;
@@ -491,6 +640,8 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             return lower_block(lower, stmt, true);
         case DS_STMT_IMPORT:
             ds_diag_error(lower->diag, stmt->span, "unresolved import `%.*s`", (int)stmt->as.import_stmt.path.len, stmt->as.import_stmt.path.data);
+            return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
+        case DS_STMT_FN:
             return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
     }
     return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
@@ -520,6 +671,11 @@ static void lower_expr_free(DsLowerExpr *expr) {
             free(expr->as.binary.op.data);
             lower_expr_free(expr->as.binary.right);
             break;
+        case DS_LOWER_EXPR_CALL:
+            free(expr->as.call.name.data);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) lower_expr_free(expr->as.call.args.items[i]);
+            free(expr->as.call.args.items);
+            break;
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_ERROR:
             break;
@@ -546,6 +702,11 @@ static void lower_stmt_free(DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CMD:
             ds_command_free(&stmt->as.cmd_stmt);
             break;
+        case DS_LOWER_STMT_CALL:
+            free(stmt->as.call_stmt.name.data);
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) lower_expr_free(stmt->as.call_stmt.args.items[i]);
+            free(stmt->as.call_stmt.args.items);
+            break;
     }
     free(stmt);
 }
@@ -553,14 +714,24 @@ static void lower_stmt_free(DsLowerStmt *stmt) {
 DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     Scope root;
     scope_init(&root, NULL);
-    Lower lower = {diag, &root};
     DsLowerProgram *program = (DsLowerProgram *)ds_xcalloc(1, sizeof(DsLowerProgram));
+    Lower lower = {diag, &root, program};
     program->span = ast->span;
     program->has_script = ast->has_script;
     if (ast->has_script) {
         for (size_t i = 0; i < ast->script.declarations.len; i++) lower_script_decl(&lower, &ast->script.declarations.items[i], program);
     }
-    for (size_t i = 0; i < ast->statements.len; i++) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
+    for (size_t i = 0; i < ast->statements.len; i++) collect_function_signature(&lower, ast->statements.items[i], program);
+    for (size_t i = 0; i < ast->statements.len; i++) collect_top_level_let_signature(&lower, ast->statements.items[i]);
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        if (ast->statements.items[i]->kind == DS_STMT_FN) {
+            DsLowerFn *fn = find_function(program, ast->statements.items[i]->as.fn_stmt.name);
+            if (fn) lower_function_body(&lower, fn, ast->statements.items[i]);
+        }
+    }
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        if (ast->statements.items[i]->kind != DS_STMT_FN) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
+    }
     scope_free(&root);
     if (diag->has_error) {
         ds_lower_program_free(program);
@@ -583,6 +754,16 @@ void ds_lower_program_free(DsLowerProgram *program) {
         free(program->script_decls.items[i].default_text.data);
     }
     free(program->script_decls.items);
+    for (size_t i = 0; i < program->functions.len; i++) {
+        free(program->functions.items[i].name.data);
+        for (size_t j = 0; j < program->functions.items[i].params.len; j++) {
+            free(program->functions.items[i].params.items[j].name.data);
+            lower_expr_free(program->functions.items[i].params.items[j].default_value);
+        }
+        free(program->functions.items[i].params.items);
+        lower_stmt_free(program->functions.items[i].body);
+    }
+    free(program->functions.items);
     for (size_t i = 0; i < program->statements.len; i++) lower_stmt_free(program->statements.items[i]);
     free(program->statements.items);
     free(program);

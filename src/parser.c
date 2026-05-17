@@ -12,6 +12,7 @@ typedef struct {
 static DsToken *peek(Parser *p) { return &p->tokens->items[p->pos]; }
 static DsToken *previous(Parser *p) { return &p->tokens->items[p->pos - 1]; }
 static bool at(Parser *p, DsTokenKind kind) { return peek(p)->kind == kind; }
+static bool next_at(Parser *p, DsTokenKind kind) { return p->pos + 1 < p->tokens->len && p->tokens->items[p->pos + 1].kind == kind; }
 static bool at_end(Parser *p) { return at(p, DS_TOK_EOF); }
 
 static bool advance_if(Parser *p, DsTokenKind kind) {
@@ -46,6 +47,22 @@ static void word_vec_push(DsWordVec *vec, DsWord word) {
         vec->items = (DsWord *)ds_xrealloc(vec->items, vec->cap * sizeof(DsWord));
     }
     vec->items[vec->len++] = word;
+}
+
+static void expr_vec_push(DsExprVec *vec, DsExpr *expr) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsExpr **)ds_xrealloc(vec->items, vec->cap * sizeof(DsExpr *));
+    }
+    vec->items[vec->len++] = expr;
+}
+
+static void fn_param_vec_push(DsFnParamVec *vec, DsFnParam param) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsFnParam *)ds_xrealloc(vec->items, vec->cap * sizeof(DsFnParam));
+    }
+    vec->items[vec->len++] = param;
 }
 
 static void script_decl_vec_push(DsScriptDeclVec *vec, DsScriptDecl decl) {
@@ -93,7 +110,7 @@ static bool expect(Parser *p, DsTokenKind kind, const char *message) {
 static bool is_identifier_like(DsTokenKind kind) {
     return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_IMPORT || kind == DS_TOK_ARG ||
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
-           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN;
+           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN || kind == DS_TOK_FN;
 }
 
 static bool is_redirect_token(DsTokenKind kind) {
@@ -154,6 +171,7 @@ static int precedence(DsTokenKind kind) {
 }
 
 static DsExpr *parse_expr_prec(Parser *p, int min_prec);
+static void parse_call_args(Parser *p, DsExprVec *args);
 
 static void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *span, bool reject_redirection) {
     DsWord current = {0};
@@ -262,6 +280,15 @@ static DsExpr *parse_primary(Parser *p) {
 
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
+    while (expr && expr->kind == DS_EXPR_IDENT && advance_if(p, DS_TOK_LPAREN)) {
+        DsToken *open = previous(p);
+        DsExpr *call = new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, open->span.end, expr->span.source});
+        call->as.call.name = copy_token_text(&(DsToken){.text = expr->as.text, .span = expr->span});
+        parse_call_args(p, &call->as.call.args);
+        if (!expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) break;
+        call->span.end = previous(p)->span.end;
+        expr = call;
+    }
     while (advance_if(p, DS_TOK_DOT)) {
         DsToken *dot = previous(p);
         if (!expect_identifier_like(p, "expected field name after `.`")) {
@@ -291,7 +318,7 @@ static DsExpr *parse_unary(Parser *p) {
 static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
     DsExpr *left = parse_unary(p);
 
-    while (!is_stmt_end(p) && !at(p, DS_TOK_LBRACE) && !at(p, DS_TOK_RPAREN)) {
+    while (!is_stmt_end(p) && !at(p, DS_TOK_LBRACE) && !at(p, DS_TOK_RPAREN) && !at(p, DS_TOK_COMMA)) {
         DsTokenKind op_kind = peek(p)->kind;
         int prec = precedence(op_kind);
         if (prec < min_prec || prec == 0) break;
@@ -311,6 +338,14 @@ static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
 
 static DsExpr *parse_expr(Parser *p) {
     return parse_expr_prec(p, 1);
+}
+
+static void parse_call_args(Parser *p, DsExprVec *args) {
+    if (at(p, DS_TOK_RPAREN)) return;
+    while (!at_end(p) && !at(p, DS_TOK_RPAREN)) {
+        expr_vec_push(args, parse_expr(p));
+        if (!advance_if(p, DS_TOK_COMMA)) break;
+    }
 }
 
 static DsStmt *parse_stmt(Parser *p);
@@ -477,6 +512,68 @@ static DsStmt *parse_if(Parser *p) {
     return stmt;
 }
 
+static DsStmt *parse_call_stmt(Parser *p) {
+    DsToken *name = advance(p);
+    DsToken *open = NULL;
+    if (!expect(p, DS_TOK_LPAREN, "expected `(` after function name")) return NULL;
+    open = previous(p);
+    DsStmt *stmt = new_stmt(DS_STMT_CALL, (DsSpan){name->span.start, open->span.end, name->span.source});
+    stmt->as.call_stmt.name = copy_token_text(name);
+    parse_call_args(p, &stmt->as.call_stmt.args);
+    if (!expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) return stmt;
+    stmt->span.end = previous(p)->span.end;
+    if (!is_stmt_end(p)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected end of function call statement");
+        while (!is_stmt_end(p)) advance(p);
+    }
+    consume_statement_end(p);
+    return stmt;
+}
+
+static DsStmt *parse_fn(Parser *p, bool top_level) {
+    DsToken *start = previous(p);
+    if (!top_level) ds_diag_error(p->diag, start->span, "function declarations are only allowed at top level in v0.9.0");
+    if (!expect_identifier_like(p, "expected function name after `fn`")) return NULL;
+    DsToken *name = previous(p);
+    DsStmt *stmt = new_stmt(DS_STMT_FN, start->span);
+    stmt->as.fn_stmt.name = copy_token_text(name);
+    if (!expect(p, DS_TOK_LPAREN, "expected `(` after function name")) return stmt;
+    bool seen_default = false;
+    if (!at(p, DS_TOK_RPAREN)) {
+        while (!at_end(p) && !at(p, DS_TOK_RPAREN)) {
+            DsFnParam param;
+            memset(&param, 0, sizeof(param));
+            if (!expect_identifier_like(p, "expected parameter name")) break;
+            DsToken *param_name = previous(p);
+            param.name = copy_token_text(param_name);
+            param.span = param_name->span;
+            if (advance_if(p, DS_TOK_COLON)) {
+                param.has_type = true;
+                parse_type(p, &param.type);
+            }
+            if (advance_if(p, DS_TOK_EQUAL)) {
+                seen_default = true;
+                if (is_stmt_end(p) || at(p, DS_TOK_COMMA) || at(p, DS_TOK_RPAREN)) {
+                    ds_diag_error(p->diag, previous(p)->span, "expected literal default value after `=`");
+                } else {
+                    param.default_value = parse_expr(p);
+                    if (param.default_value) param.span.end = param.default_value->span.end;
+                }
+            } else if (seen_default) {
+                ds_diag_error(p->diag, param.span, "required parameter cannot follow a defaulted parameter");
+            }
+            fn_param_vec_push(&stmt->as.fn_stmt.params, param);
+            if (!advance_if(p, DS_TOK_COMMA)) break;
+        }
+    }
+    if (!expect(p, DS_TOK_RPAREN, "expected `)` after function parameters")) return stmt;
+    if (!expect(p, DS_TOK_LBRACE, "expected `{` after function declaration")) return stmt;
+    stmt->as.fn_stmt.body = parse_block(p);
+    stmt->span = (DsSpan){start->span.start, stmt->as.fn_stmt.body ? stmt->as.fn_stmt.body->span.end : previous(p)->span.end, start->span.source};
+    consume_statement_end(p);
+    return stmt;
+}
+
 static DsStmt *parse_cmd(Parser *p) {
     DsToken *start = peek(p);
     DsStmt *stmt = new_stmt(DS_STMT_CMD, start->span);
@@ -570,6 +667,7 @@ static DsStmt *parse_cmd(Parser *p) {
 
 static DsStmt *parse_stmt(Parser *p) {
     if (advance_if(p, DS_TOK_IMPORT)) return parse_import_stmt(p, false, false);
+    if (advance_if(p, DS_TOK_FN)) return parse_fn(p, false);
     if (at(p, DS_TOK_SCRIPT)) {
         ds_diag_error(p->diag, peek(p)->span, "`script` block is only allowed at top level before executable statements");
         advance(p);
@@ -577,6 +675,7 @@ static DsStmt *parse_stmt(Parser *p) {
     }
     if (advance_if(p, DS_TOK_LET)) return parse_let(p);
     if (advance_if(p, DS_TOK_IF)) return parse_if(p);
+    if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_LPAREN)) return parse_call_stmt(p);
     if (at(p, DS_TOK_ELSE)) {
         ds_diag_error(p->diag, peek(p)->span, "unexpected `else` without matching `if`");
         advance(p);
@@ -604,6 +703,12 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
         }
         if (advance_if(&p, DS_TOK_IMPORT)) {
             DsStmt *stmt = parse_import_stmt(&p, true, after_executable);
+            if (stmt) stmt_vec_push(&ast->statements, stmt);
+            skip_newlines(&p);
+            continue;
+        }
+        if (advance_if(&p, DS_TOK_FN)) {
+            DsStmt *stmt = parse_fn(&p, true);
             if (stmt) stmt_vec_push(&ast->statements, stmt);
             skip_newlines(&p);
             continue;

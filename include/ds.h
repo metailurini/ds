@@ -55,7 +55,9 @@ typedef enum {
     DS_TOK_TYPE_BOOL,
     DS_TOK_TRUE,
     DS_TOK_FALSE,
+    DS_TOK_FN,
     DS_TOK_COLON,
+    DS_TOK_COMMA,
     DS_TOK_EQUAL,
     DS_TOK_EQUAL_EQUAL,
     DS_TOK_BANG,
@@ -103,6 +105,7 @@ typedef enum {
     DS_EXPR_FIELD,
     DS_EXPR_UNARY,
     DS_EXPR_BINARY,
+    DS_EXPR_CALL,
     DS_EXPR_ERROR
 } DsExprKind;
 
@@ -119,6 +122,12 @@ typedef struct {
     size_t cap;
 } DsWordVec;
 
+typedef struct {
+    DsExpr **items;
+    size_t len;
+    size_t cap;
+} DsExprVec;
+
 struct DsExpr {
     DsExprKind kind;
     DsSpan span;
@@ -129,6 +138,7 @@ struct DsExpr {
         struct { DsExpr *object; DsStr field; } field;
         struct { DsStr op; DsExpr *right; } unary;
         struct { DsExpr *left; DsStr op; DsExpr *right; } binary;
+        struct { DsStr name; DsExprVec args; } call;
     } as;
 };
 
@@ -137,7 +147,9 @@ typedef enum {
     DS_STMT_IF,
     DS_STMT_BLOCK,
     DS_STMT_CMD,
-    DS_STMT_IMPORT
+    DS_STMT_IMPORT,
+    DS_STMT_FN,
+    DS_STMT_CALL
 } DsStmtKind;
 
 typedef struct DsStmt DsStmt;
@@ -179,6 +191,20 @@ typedef struct {
     size_t cap;
 } DsStmtVec;
 
+typedef struct {
+    DsStr name;
+    bool has_type;
+    DsScriptType type;
+    DsExpr *default_value;
+    DsSpan span;
+} DsFnParam;
+
+typedef struct {
+    DsFnParam *items;
+    size_t len;
+    size_t cap;
+} DsFnParamVec;
+
 typedef enum {
     DS_REDIRECT_NONE,
     DS_REDIRECT_OUT,
@@ -217,6 +243,8 @@ struct DsStmt {
         struct { DsStmtVec statements; } block_stmt;
         struct { DsWordVec words; DsRedirect redirect; } cmd_stmt;
         struct { DsStr path; } import_stmt;
+        struct { DsStr name; DsFnParamVec params; DsStmt *body; } fn_stmt;
+        struct { DsStr name; DsExprVec args; } call_stmt;
     } as;
 };
 
@@ -253,10 +281,17 @@ typedef enum {
     DS_LOWER_EXPR_FIELD,
     DS_LOWER_EXPR_UNARY,
     DS_LOWER_EXPR_BINARY,
+    DS_LOWER_EXPR_CALL,
     DS_LOWER_EXPR_ERROR
 } DsLowerExprKind;
 
 typedef struct DsLowerExpr DsLowerExpr;
+
+typedef struct {
+    DsLowerExpr **items;
+    size_t len;
+    size_t cap;
+} DsLowerExprVec;
 
 struct DsLowerExpr {
     DsLowerExprKind kind;
@@ -268,6 +303,7 @@ struct DsLowerExpr {
         struct { DsLowerExpr *object; DsStr field; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
+        struct { DsStr name; DsLowerExprVec args; } call;
     } as;
 };
 
@@ -275,7 +311,8 @@ typedef enum {
     DS_LOWER_STMT_LET,
     DS_LOWER_STMT_IF,
     DS_LOWER_STMT_BLOCK,
-    DS_LOWER_STMT_CMD
+    DS_LOWER_STMT_CMD,
+    DS_LOWER_STMT_CALL
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
@@ -286,6 +323,33 @@ typedef struct {
     size_t cap;
 } DsLowerStmtVec;
 
+typedef struct {
+    DsStr name;
+    bool has_default;
+    DsLowerExpr *default_value;
+    DsSpan span;
+} DsLowerFnParam;
+
+typedef struct {
+    DsLowerFnParam *items;
+    size_t len;
+    size_t cap;
+} DsLowerFnParamVec;
+
+typedef struct {
+    DsStr name;
+    DsLowerFnParamVec params;
+    DsLowerStmt *body;
+    size_t required_count;
+    DsSpan span;
+} DsLowerFn;
+
+typedef struct {
+    DsLowerFn *items;
+    size_t len;
+    size_t cap;
+} DsLowerFnVec;
+
 struct DsLowerStmt {
     DsLowerStmtKind kind;
     DsSpan span;
@@ -293,6 +357,7 @@ struct DsLowerStmt {
         struct { DsStr name; DsLowerExpr *value; } let_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; } block_stmt;
+        struct { DsStr name; DsLowerExprVec args; } call_stmt;
         DsCommand cmd_stmt;
     } as;
 };
@@ -300,6 +365,7 @@ struct DsLowerStmt {
 typedef struct {
     bool has_script;
     DsLowerScriptDeclVec script_decls;
+    DsLowerFnVec functions;
     DsLowerStmtVec statements;
     DsSpan span;
 } DsLowerProgram;

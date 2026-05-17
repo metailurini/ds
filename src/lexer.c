@@ -35,6 +35,7 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 4 && strncmp(text, "bool", 4) == 0) return DS_TOK_TYPE_BOOL;
     if (len == 4 && strncmp(text, "true", 4) == 0) return DS_TOK_TRUE;
     if (len == 5 && strncmp(text, "false", 5) == 0) return DS_TOK_FALSE;
+    if (len == 2 && strncmp(text, "fn", 2) == 0) return DS_TOK_FN;
     return DS_TOK_IDENT;
 }
 
@@ -71,7 +72,9 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_TYPE_BOOL: return "TYPE_BOOL";
         case DS_TOK_TRUE: return "TRUE";
         case DS_TOK_FALSE: return "FALSE";
+        case DS_TOK_FN: return "FN";
         case DS_TOK_COLON: return "COLON";
+        case DS_TOK_COMMA: return "COMMA";
         case DS_TOK_EQUAL: return "EQUAL";
         case DS_TOK_EQUAL_EQUAL: return "EQUAL_EQUAL";
         case DS_TOK_BANG: return "BANG";
@@ -242,6 +245,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         else if (c == '<' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_LESS_EQUAL; len = 2; }
         else if (c == '=') kind = DS_TOK_EQUAL;
         else if (c == ':') kind = DS_TOK_COLON;
+        else if (c == ',') kind = DS_TOK_COMMA;
         else if (c == '!') kind = DS_TOK_BANG;
         else if (c == '>') kind = DS_TOK_GREATER;
         else if (c == '<') kind = DS_TOK_LESS;
