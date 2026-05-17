@@ -715,3 +715,11 @@ Behavior-sensitive CLI commands now share a source/import loader before lowering
 The parser now represents captured command execution as a `run` expression and plain command redirection as command-statement metadata. Lowering is the shared command-result HIR boundary for VM execution and Bash emission: it validates command-result fields, command variables, and conservative string-literal redirection targets before either backend runs.
 
 The VM lowers captured commands to bytecode that executes through the process boundary, captures stdout/stderr separately, stores the exit code, and exposes derived `ok`/`failed` fields. The Bash emitter consumes the same lowered shape and emits standalone `__ds_` helpers only when a program uses captured command results. Plain command statements keep their existing fail-fast behavior, with optional redirection metadata emitted as normal Bash redirection syntax.
+
+## v0.8.0 command cleanup
+
+The first `v0.8.0` cleanup pass makes simple command data explicit in the lowered representation. Parsed AST nodes may still preserve syntax-oriented command fields, but lowering now uses a shared `DsCommand` shape for both plain command statements and captured `run` commands. That shape owns ordered words, per-word spans, optional redirection metadata, command kind, and the source span of the command as a whole.
+
+Command-result field knowledge is centralized behind one descriptor table for `stdout`, `stderr`, `code`, `ok`, and `failed`. Lowering, VM field reads, VM string interpolation, VM command-word expansion, and Bash condition emission now consult that shared model instead of each backend maintaining an independent list of known fields.
+
+The VM command process path also has a small internal cleanup boundary for argv construction, status normalization, and captured process results. Plain commands still stream and fail fast; captured commands still collect stdout/stderr and return inspectable status. Generated Bash remains standalone and keeps using `__ds_` helper names instead of depending on the C runtime.

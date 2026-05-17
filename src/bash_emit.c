@@ -76,6 +76,11 @@ static bool str_eq(DsStr a, const char *b) {
     return a.len == len && memcmp(a.data, b, len) == 0;
 }
 
+static bool result_field_is_bool(DsStr field) {
+    const DsCommandResultField *desc = ds_command_result_field_lookup(field);
+    return desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL;
+}
+
 static bool symbol_exists(const SymbolVec *symbols, DsStr name) {
     for (size_t i = 0; i < symbols->len; i++) {
         DsStr existing = symbols->items[i];
@@ -415,7 +420,7 @@ static bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out
         return true;
     }
     if (expr->kind == DS_LOWER_EXPR_FIELD) {
-        if (str_eq(expr->as.field.field, "ok") || str_eq(expr->as.field.field, "failed")) {
+        if (result_field_is_bool(expr->as.field.field)) {
             buf_append(out, "[[ ");
             emit_value_expr(e, expr, out);
             buf_append(out, " == true ]]");

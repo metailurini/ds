@@ -196,6 +196,18 @@ typedef struct {
     DsSpan target_span;
 } DsRedirect;
 
+typedef enum {
+    DS_COMMAND_PLAIN,
+    DS_COMMAND_CAPTURE
+} DsCommandKind;
+
+typedef struct {
+    DsCommandKind kind;
+    DsWordVec words;
+    DsRedirect redirect;
+    DsSpan span;
+} DsCommand;
+
 struct DsStmt {
     DsStmtKind kind;
     DsSpan span;
@@ -252,7 +264,7 @@ struct DsLowerExpr {
     union {
         DsStr text;
         bool boolean;
-        struct { DsWordVec words; } run;
+        DsCommand run;
         struct { DsLowerExpr *object; DsStr field; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
@@ -281,7 +293,7 @@ struct DsLowerStmt {
         struct { DsStr name; DsLowerExpr *value; } let_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; } block_stmt;
-        struct { DsWordVec words; DsRedirect redirect; } cmd_stmt;
+        DsCommand cmd_stmt;
     } as;
 };
 
@@ -340,6 +352,17 @@ typedef enum {
     DS_BYTECODE_MODE_RUN
 } DsBytecodeMode;
 
+typedef enum {
+    DS_COMMAND_RESULT_FIELD_STRING,
+    DS_COMMAND_RESULT_FIELD_INT,
+    DS_COMMAND_RESULT_FIELD_BOOL
+} DsCommandResultFieldKind;
+
+typedef struct {
+    const char *name;
+    DsCommandResultFieldKind kind;
+} DsCommandResultField;
+
 /* Source loading and diagnostics. */
 bool ds_source_read(const char *path, DsSource *out, DsDiag *diag);
 void ds_source_free(DsSource *source);
@@ -362,6 +385,19 @@ void ds_ast_free(DsAst *ast);
 DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag);
 bool ds_lower_validate(const DsAst *ast, DsDiag *diag);
 void ds_lower_program_free(DsLowerProgram *program);
+
+/* Shared command helpers. */
+void ds_word_vec_init(DsWordVec *vec);
+bool ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src);
+void ds_word_vec_free(DsWordVec *vec);
+void ds_redirect_init(DsRedirect *redirect);
+bool ds_redirect_clone(DsRedirect *dst, const DsRedirect *src);
+void ds_redirect_free(DsRedirect *redirect);
+void ds_command_init(DsCommand *command, DsCommandKind kind, DsSpan span);
+bool ds_command_clone(DsCommand *dst, const DsCommand *src);
+void ds_command_free(DsCommand *command);
+const DsCommandResultField *ds_command_result_field_lookup(DsStr field);
+const char *ds_command_result_field_kind_name(DsCommandResultFieldKind kind);
 
 /* Standalone Bash backend. */
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);

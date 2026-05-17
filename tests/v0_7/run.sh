@@ -26,7 +26,7 @@ run_ok process_result_unit "$TMP/test_v0_7_process_result"
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
   "$ROOT/tests/v0_7/unit/lower_command_result.c" \
   "$ROOT/src/lexer.c" "$ROOT/src/parser.c" "$ROOT/src/ast.c" "$ROOT/src/lower.c" \
-  "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/src/command.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_7_lower_command_result"
 run_ok lower_command_result_unit "$TMP/test_v0_7_lower_command_result"
 

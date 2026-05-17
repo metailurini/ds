@@ -138,9 +138,9 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.7.0` implementation and tests are complete for the scoped command-result capture and readable redirection pass.
+Current status: `v0.7.0` implementation and tests are complete for the scoped command-result capture and readable redirection pass; `v0.8.0` implementation cleanup is now in progress and has not added new user-facing syntax.
 
-The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, and the initial `v0.7.0` command-result/redirection path:
+The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, and the first `v0.8.0` command-model cleanup:
 
 Local imports use simple quoted paths resolved relative to the importing file:
 
@@ -194,7 +194,7 @@ bash /tmp/command-result.sh
 bash /tmp/redirection.sh
 ```
 
-The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, and plain command redirections. The VM also maintains runtime block scopes for lowered blocks. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast.
+The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, and plain command redirections. The VM also maintains runtime block scopes for lowered blocks. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast. The v0.8.0 cleanup centralizes lowered command ownership and command-result field metadata without changing that language surface.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

@@ -821,12 +821,12 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
                 ds_value_free(&value); free(name); free(field); return false;
             }
             DsValue field_value = ds_value_null();
-            if (strcmp(field, "stdout") == 0) ds_string_from_range(&field_value.as.string, value.as.command_result.stdout_text.data ? value.as.command_result.stdout_text.data : "", value.as.command_result.stdout_text.len), field_value.kind = DS_VALUE_STRING;
-            else if (strcmp(field, "stderr") == 0) ds_string_from_range(&field_value.as.string, value.as.command_result.stderr_text.data ? value.as.command_result.stderr_text.data : "", value.as.command_result.stderr_text.len), field_value.kind = DS_VALUE_STRING;
-            else if (strcmp(field, "code") == 0) field_value = ds_value_int(value.as.command_result.code);
-            else if (strcmp(field, "ok") == 0) field_value = ds_value_bool(value.as.command_result.code == 0);
-            else if (strcmp(field, "failed") == 0) field_value = ds_value_bool(value.as.command_result.code != 0);
-            else ds_diag_error(vm->diag, span, "unknown command result field `%s`", field);
+            bool ok = command_result_field(vm, &value, field, span, &field_value);
+            if (!ok) {
+                ds_value_free(&value);
+                free(name); free(field);
+                return false;
+            }
             DsString rendered;
             ds_value_to_string(&field_value, &rendered);
             *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
@@ -856,22 +856,55 @@ static bool render_redirect_target(Vm *vm, DsRedirect *redirect, char **out) {
     return true;
 }
 
-static int run_command(Vm *vm, Instr *ins) {
-    if (ins->word_count == 0) return 0;
-    char **argv = (char **)ds_xcalloc(ins->word_count + 1, sizeof(char *));
+typedef struct {
+    char **items;
+    size_t len;
+} VmArgv;
+
+typedef struct {
+    DsString stdout_text;
+    DsString stderr_text;
+    int code;
+} VmProcessResult;
+
+static void argv_free(VmArgv *argv) {
+    for (size_t i = 0; i < argv->len; i++) free(argv->items[i]);
+    free(argv->items);
+    argv->items = NULL;
+    argv->len = 0;
+}
+
+static bool argv_build(Vm *vm, Instr *ins, VmArgv *argv) {
+    argv->items = NULL;
+    argv->len = 0;
+    if (ins->word_count == 0) return false;
+    argv->items = (char **)ds_xcalloc(ins->word_count + 1, sizeof(char *));
+    argv->len = ins->word_count;
     for (size_t i = 0; i < ins->word_count; i++) {
-        if (!word_to_arg(vm, ins->words[i], ins->span, &argv[i])) {
-            for (size_t j = 0; j < i; j++) free(argv[j]);
-            free(argv);
-            return 1;
+        if (!word_to_arg(vm, ins->words[i], ins->span, &argv->items[i])) {
+            argv->len = i;
+            argv_free(argv);
+            return false;
         }
     }
+    return true;
+}
+
+static int process_status_code(int status) {
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return 1;
+}
+
+static int run_command(Vm *vm, Instr *ins) {
+    if (ins->word_count == 0) return 0;
+    VmArgv argv;
+    if (!argv_build(vm, ins, &argv)) return 1;
     int redirect_fd = -1;
     char *redirect_path = NULL;
     if (ins->redirect.kind != DS_REDIRECT_NONE) {
         if (!render_redirect_target(vm, &ins->redirect, &redirect_path)) {
-            for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-            free(argv);
+            argv_free(&argv);
             return 1;
         }
         int flags = O_CREAT | O_WRONLY;
@@ -881,18 +914,16 @@ static int run_command(Vm *vm, Instr *ins) {
         if (redirect_fd < 0) {
             ds_diag_error(vm->diag, ins->redirect.target_span, "failed to open redirection target `%s`: %s", redirect_path, strerror(errno));
             free(redirect_path);
-            for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-            free(argv);
+            argv_free(&argv);
             return 1;
         }
     }
     pid_t pid = fork();
     if (pid < 0) {
-        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv[0], strerror(errno));
+        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv.items[0], strerror(errno));
         if (redirect_fd >= 0) close(redirect_fd);
         free(redirect_path);
-        for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-        free(argv);
+        argv_free(&argv);
         return 1;
     }
     if (pid == 0) {
@@ -903,8 +934,8 @@ static int run_command(Vm *vm, Instr *ins) {
             close(redirect_fd);
             free(redirect_path);
         }
-        execvp(argv[0], argv);
-        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv[0], strerror(errno));
+        execvp(argv.items[0], argv.items);
+        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv.items[0], strerror(errno));
         _exit(127);
     }
     if (redirect_fd >= 0) close(redirect_fd);
@@ -912,16 +943,13 @@ static int run_command(Vm *vm, Instr *ins) {
     int status = 0;
     while (waitpid(pid, &status, 0) < 0) {
         if (errno != EINTR) {
-            ds_diag_error(vm->diag, ins->span, "failed waiting for command `%s`: %s", argv[0], strerror(errno));
+            ds_diag_error(vm->diag, ins->span, "failed waiting for command `%s`: %s", argv.items[0], strerror(errno));
             status = 1;
             break;
         }
     }
-    for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-    free(argv);
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
-    return 1;
+    argv_free(&argv);
+    return process_status_code(status);
 }
 
 static bool read_file_into_string(FILE *fp, DsString *out) {
@@ -937,55 +965,46 @@ static bool read_file_into_string(FILE *fp, DsString *out) {
 static int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
     *out_value = ds_value_null();
     if (ins->word_count == 0) return 1;
-    char **argv = (char **)ds_xcalloc(ins->word_count + 1, sizeof(char *));
-    for (size_t i = 0; i < ins->word_count; i++) {
-        if (!word_to_arg(vm, ins->words[i], ins->span, &argv[i])) {
-            for (size_t j = 0; j < i; j++) free(argv[j]);
-            free(argv);
-            return 1;
-        }
-    }
+    VmArgv argv;
+    if (!argv_build(vm, ins, &argv)) return 1;
     FILE *out_fp = tmpfile();
     FILE *err_fp = tmpfile();
     if (!out_fp || !err_fp) {
         ds_diag_error(vm->diag, ins->span, "failed to create command capture temporary files: %s", strerror(errno));
         if (out_fp) fclose(out_fp);
         if (err_fp) fclose(err_fp);
-        for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-        free(argv);
+        argv_free(&argv);
         return 1;
     }
     pid_t pid = fork();
     if (pid < 0) {
-        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv[0], strerror(errno));
+        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv.items[0], strerror(errno));
         fclose(out_fp); fclose(err_fp);
-        for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-        free(argv);
+        argv_free(&argv);
         return 1;
     }
     if (pid == 0) {
         dup2(fileno(out_fp), STDOUT_FILENO);
         dup2(fileno(err_fp), STDERR_FILENO);
-        execvp(argv[0], argv);
-        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv[0], strerror(errno));
+        execvp(argv.items[0], argv.items);
+        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv.items[0], strerror(errno));
         _exit(127);
     }
     int status = 0;
     while (waitpid(pid, &status, 0) < 0) {
         if (errno != EINTR) { status = 1; break; }
     }
-    int code = 1;
-    if (WIFEXITED(status)) code = WEXITSTATUS(status);
-    else if (WIFSIGNALED(status)) code = 128 + WTERMSIG(status);
-    DsString stdout_text, stderr_text;
-    if (!read_file_into_string(out_fp, &stdout_text) || !read_file_into_string(err_fp, &stderr_text)) {
+    VmProcessResult result;
+    ds_string_init(&result.stdout_text);
+    ds_string_init(&result.stderr_text);
+    result.code = process_status_code(status);
+    if (!read_file_into_string(out_fp, &result.stdout_text) || !read_file_into_string(err_fp, &result.stderr_text)) {
         ds_diag_error(vm->diag, ins->span, "failed to read command capture output");
-        code = 1;
+        result.code = 1;
     }
     fclose(out_fp); fclose(err_fp);
-    for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
-    free(argv);
-    *out_value = ds_value_command_result_take(&stdout_text, &stderr_text, code);
+    argv_free(&argv);
+    *out_value = ds_value_command_result_take(&result.stdout_text, &result.stderr_text, result.code);
     return 0;
 }
 
@@ -994,11 +1013,13 @@ static bool command_result_field(Vm *vm, const DsValue *value, const char *field
         ds_diag_error(vm->diag, span, "field access is only supported on command results in v0.7.0");
         return false;
     }
-    if (strcmp(field, "stdout") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len); out->kind = DS_VALUE_STRING; return true; }
-    if (strcmp(field, "stderr") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len); out->kind = DS_VALUE_STRING; return true; }
-    if (strcmp(field, "code") == 0) { *out = ds_value_int(value->as.command_result.code); return true; }
-    if (strcmp(field, "ok") == 0) { *out = ds_value_bool(value->as.command_result.code == 0); return true; }
-    if (strcmp(field, "failed") == 0) { *out = ds_value_bool(value->as.command_result.code != 0); return true; }
+    DsStr field_view = {(char *)field, strlen(field)};
+    const DsCommandResultField *desc = ds_command_result_field_lookup(field_view);
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_STRING && strcmp(desc->name, "stdout") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len); out->kind = DS_VALUE_STRING; return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_STRING && strcmp(desc->name, "stderr") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len); out->kind = DS_VALUE_STRING; return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_INT) { *out = ds_value_int(value->as.command_result.code); return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "ok") == 0) { *out = ds_value_bool(value->as.command_result.code == 0); return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "failed") == 0) { *out = ds_value_bool(value->as.command_result.code != 0); return true; }
     ds_diag_error(vm->diag, span, "unknown command result field `%s`", field);
     return false;
 }
