@@ -235,6 +235,7 @@ bool ds_source_read(const char *path, DsSource *out, DsDiag *diag);
 void ds_source_free(DsSource *source);
 
 void ds_diag_init(DsDiag *diag, const DsSource *source);
+void ds_diag_format_location(const DsSource *source, DsSpan span, char *buf, size_t buf_len);
 void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...);
 
 /* Frontend: lexer, parser, and syntax debug output. */

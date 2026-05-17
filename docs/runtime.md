@@ -533,7 +533,7 @@ The runtime should support diagnostics instead of printing ad hoc errors from ra
 Good diagnostic shape:
 
 ```txt
-deploy.ds:12:1 error: command failed with exit code 1
+deploy.ds:12:1: error: command failed with exit code 1
 
   npm run build
   ^^^^^^^^^^^^^

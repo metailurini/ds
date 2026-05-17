@@ -147,7 +147,7 @@ assert_contains "$TMP/tokens_strings.out" 'STRING         "\"xin chào\""' "lexe
 
 printf 'let x = "unterminated' >"$TMP/unterminated.ds"
 run_fail lexer_unterminated "$DS" tokens "$TMP/unterminated.ds"
-assert_contains "$TMP/lexer_unterminated.err" "$TMP/unterminated.ds:1:9 error: unterminated string literal" "lexer unterminated string diagnostic location"
+assert_contains "$TMP/lexer_unterminated.err" "$TMP/unterminated.ds:1:9: error: unterminated string literal" "lexer unterminated string diagnostic location"
 
 cat >"$TMP/invalid_escape.ds" <<'EOF_BAD_ESCAPE'
 let bad = "hello \q"
@@ -228,7 +228,7 @@ cat >"$TMP/missing_expr.ds" <<'EOF_BAD'
 let name =
 EOF_BAD
 run_fail diag_missing_expr "$DS" check "$TMP/missing_expr.ds"
-assert_contains "$TMP/diag_missing_expr.err" "$TMP/missing_expr.ds:1:11 error: expected expression after" "diagnostic missing expression includes file line column"
+assert_contains "$TMP/diag_missing_expr.err" "$TMP/missing_expr.ds:1:11: error: expected expression after" "diagnostic missing expression includes file line column"
 assert_contains "$TMP/diag_missing_expr.err" '^' "diagnostic missing expression includes caret"
 
 cat >"$TMP/missing_brace.ds" <<'EOF_BAD'
@@ -298,7 +298,7 @@ fi
 pass "cli check valid prints no stdout"
 run_fail cli_check_invalid "$DS" check "$TMP/missing_expr.ds"
 run_fail cli_tokens_missing "$DS" tokens "$TMP/missing-file.ds"
-assert_contains "$TMP/cli_tokens_missing.err" "$TMP/missing-file.ds:1:1 error: failed to open source file" "cli missing file diagnostic includes requested path"
+assert_contains "$TMP/cli_tokens_missing.err" "$TMP/missing-file.ds:1:1: error: failed to open source file" "cli missing file diagnostic includes requested path"
 run_fail cli_ast_invalid "$DS" ast "$TMP/missing_expr.ds"
 run_fail cli_unknown_command "$DS" nope "$FIX/ast_mixed.ds"
 assert_contains "$TMP/cli_unknown_command.err" "unknown command" "cli unknown command diagnostic"

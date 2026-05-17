@@ -43,11 +43,13 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `make asan` and `make ubsan` sanitizer test targets for runtime/VM ownership checks where the local compiler supports them.
 - `v0.4.0` cleanup implementation for shared CLI parse/lower plumbing and backend entrypoints that consume lowered programs directly.
 - Runtime container clear APIs for reuse-friendly ownership boundaries: `ds_array_clear()` and `ds_map_clear()`.
+- Shared diagnostic location formatting helper for source-tied errors.
 
 ### Fixed
 
 - `ds run` and `ds bytecode` without an input file now report usage instead of treating the subcommand name as an implicit script path.
 - `ds check`, `ds emit bash`, `ds run`, direct script execution, and `ds bytecode` now share one CLI parse/lower path instead of each lowering or parsing separately.
+- Source-tied diagnostics now use the standardized `file:line:column: error: message` shape across the shared diagnostics path.
 
 ## v0.4.0 — Implementation complete, tests pending
 

@@ -63,7 +63,7 @@ Expected runtime primitives include:
 - `DsArena` for phase-owned temporary allocation;
 - `DsValue` for VM values;
 - `DsProcessResult` and process helpers for command execution;
-- `DsDiag`, `DsSourceLoc`, and `DsSourceSpan` for diagnostics;
+- `DsDiag`, `DsLoc`, and `DsSpan` for diagnostics;
 - `DsRegex` later, only after a VM/Bash parity strategy exists.
 
 The runtime should be boring and heavily tested. It should avoid clever abstractions that make C debugging harder.
