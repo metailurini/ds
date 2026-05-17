@@ -142,3 +142,43 @@ emit_bash() {
     fail "emit bash failed for $input"
   }
 }
+
+assert_vm_bash_parity() {
+  local name="$1"
+  local fixture="$2"
+  local expected_status="$3"
+  local output_files="$4"
+  shift 4
+
+  local work_vm="$TMP/parity_${name}_vm_work"
+  local work_bash="$TMP/parity_${name}_bash_work"
+  local script="$TMP/$name.sh"
+  mkdir -p "$work_vm" "$work_bash"
+
+  set +e
+  (cd "$work_vm" && "$DS" run "$fixture" "$@") >"$TMP/${name}_vm.out" 2>"$TMP/${name}_vm.err"
+  local vm_rc=$?
+  set -e
+  printf '%s' "$vm_rc" >"$TMP/${name}_vm.rc"
+
+  run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
+  run_ok "${name}_bash_syntax" bash -n "$script"
+
+  set +e
+  (cd "$work_bash" && bash "$script" "$@") >"$TMP/${name}_bash.out" 2>"$TMP/${name}_bash.err"
+  local bash_rc=$?
+  set -e
+  printf '%s' "$bash_rc" >"$TMP/${name}_bash.rc"
+
+  assert_status "${name}_vm" "$expected_status"
+  assert_status "${name}_bash" "$expected_status"
+  assert_same "$TMP/${name}_vm.out" "$TMP/${name}_bash.out" "VM/Bash stdout parity: $name"
+  assert_same "$TMP/${name}_vm.err" "$TMP/${name}_bash.err" "VM/Bash stderr parity: $name"
+
+  local rel
+  for rel in $output_files; do
+    if [ -f "$work_vm/$rel" ] || [ -f "$work_bash/$rel" ]; then
+      assert_same "$work_vm/$rel" "$work_bash/$rel" "VM/Bash $rel parity: $name"
+    fi
+  done
+}

@@ -841,7 +841,7 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
     return true;
 }
 
-static bool render_redirect_target(Vm *vm, DsRedirect *redirect, char **out) {
+static bool render_redirect_target(Vm *vm, const DsRedirect *redirect, char **out) {
     DsString decoded;
     if (!decode_string_text(redirect->target, &decoded)) {
         ds_diag_error(vm->diag, redirect->target_span, "invalid redirection target");
@@ -866,6 +866,13 @@ typedef struct {
     DsString stderr_text;
     int code;
 } VmProcessResult;
+
+typedef struct {
+    VmArgv argv;
+    DsRedirect redirect;
+    DsSpan span;
+    bool capture;
+} VmProcessSpec;
 
 static void argv_free(VmArgv *argv) {
     for (size_t i = 0; i < argv->len; i++) free(argv->items[i]);
@@ -896,60 +903,16 @@ static int process_status_code(int status) {
     return 1;
 }
 
-static int run_command(Vm *vm, Instr *ins) {
-    if (ins->word_count == 0) return 0;
-    VmArgv argv;
-    if (!argv_build(vm, ins, &argv)) return 1;
-    int redirect_fd = -1;
-    char *redirect_path = NULL;
-    if (ins->redirect.kind != DS_REDIRECT_NONE) {
-        if (!render_redirect_target(vm, &ins->redirect, &redirect_path)) {
-            argv_free(&argv);
-            return 1;
-        }
-        int flags = O_CREAT | O_WRONLY;
-        if (ins->redirect.kind == DS_REDIRECT_OUT_APPEND || ins->redirect.kind == DS_REDIRECT_ERR_APPEND || ins->redirect.kind == DS_REDIRECT_ALL_APPEND) flags |= O_APPEND;
-        else flags |= O_TRUNC;
-        redirect_fd = open(redirect_path, flags, 0666);
-        if (redirect_fd < 0) {
-            ds_diag_error(vm->diag, ins->redirect.target_span, "failed to open redirection target `%s`: %s", redirect_path, strerror(errno));
-            free(redirect_path);
-            argv_free(&argv);
-            return 1;
-        }
-    }
-    pid_t pid = fork();
-    if (pid < 0) {
-        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv.items[0], strerror(errno));
-        if (redirect_fd >= 0) close(redirect_fd);
-        free(redirect_path);
-        argv_free(&argv);
-        return 1;
-    }
-    if (pid == 0) {
-        if (ins->redirect.kind != DS_REDIRECT_NONE) {
-            if (ins->redirect.kind == DS_REDIRECT_OUT || ins->redirect.kind == DS_REDIRECT_OUT_APPEND) dup2(redirect_fd, STDOUT_FILENO);
-            else if (ins->redirect.kind == DS_REDIRECT_ERR || ins->redirect.kind == DS_REDIRECT_ERR_APPEND) dup2(redirect_fd, STDERR_FILENO);
-            else { dup2(redirect_fd, STDOUT_FILENO); dup2(redirect_fd, STDERR_FILENO); }
-            close(redirect_fd);
-            free(redirect_path);
-        }
-        execvp(argv.items[0], argv.items);
-        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv.items[0], strerror(errno));
-        _exit(127);
-    }
-    if (redirect_fd >= 0) close(redirect_fd);
-    free(redirect_path);
-    int status = 0;
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno != EINTR) {
-            ds_diag_error(vm->diag, ins->span, "failed waiting for command `%s`: %s", argv.items[0], strerror(errno));
-            status = 1;
-            break;
-        }
-    }
-    argv_free(&argv);
-    return process_status_code(status);
+static void process_result_init(VmProcessResult *result) {
+    ds_string_init(&result->stdout_text);
+    ds_string_init(&result->stderr_text);
+    result->code = 0;
+}
+
+static void process_result_free(VmProcessResult *result) {
+    ds_string_free(&result->stdout_text);
+    ds_string_free(&result->stderr_text);
+    result->code = 0;
 }
 
 static bool read_file_into_string(FILE *fp, DsString *out) {
@@ -962,48 +925,136 @@ static bool read_file_into_string(FILE *fp, DsString *out) {
     return ferror(fp) == 0;
 }
 
+static bool open_redirect_target(Vm *vm, const DsRedirect *redirect, int *out_fd) {
+    *out_fd = -1;
+    char *redirect_path = NULL;
+    if (!render_redirect_target(vm, redirect, &redirect_path)) return false;
+
+    int flags = O_CREAT | O_WRONLY;
+    if (redirect->kind == DS_REDIRECT_OUT_APPEND || redirect->kind == DS_REDIRECT_ERR_APPEND || redirect->kind == DS_REDIRECT_ALL_APPEND) flags |= O_APPEND;
+    else flags |= O_TRUNC;
+
+    int fd = open(redirect_path, flags, 0666);
+    if (fd < 0) {
+        ds_diag_error(vm->diag, redirect->target_span, "failed to open redirection target `%s`: %s", redirect_path, strerror(errno));
+        free(redirect_path);
+        return false;
+    }
+    free(redirect_path);
+    *out_fd = fd;
+    return true;
+}
+
+static bool process_spec_from_instr(Vm *vm, Instr *ins, bool capture, VmProcessSpec *spec) {
+    memset(spec, 0, sizeof(*spec));
+    spec->span = ins->span;
+    spec->redirect = ins->redirect;
+    spec->capture = capture;
+    return argv_build(vm, ins, &spec->argv);
+}
+
+static void process_spec_free(VmProcessSpec *spec) {
+    argv_free(&spec->argv);
+}
+
+static void process_child_exec(const VmProcessSpec *spec, int redirect_fd, FILE *out_fp, FILE *err_fp) {
+    if (spec->capture) {
+        dup2(fileno(out_fp), STDOUT_FILENO);
+        dup2(fileno(err_fp), STDERR_FILENO);
+    } else if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        if (spec->redirect.kind == DS_REDIRECT_OUT || spec->redirect.kind == DS_REDIRECT_OUT_APPEND) dup2(redirect_fd, STDOUT_FILENO);
+        else if (spec->redirect.kind == DS_REDIRECT_ERR || spec->redirect.kind == DS_REDIRECT_ERR_APPEND) dup2(redirect_fd, STDERR_FILENO);
+        else { dup2(redirect_fd, STDOUT_FILENO); dup2(redirect_fd, STDERR_FILENO); }
+    }
+    if (redirect_fd >= 0) close(redirect_fd);
+    execvp(spec->argv.items[0], spec->argv.items);
+    fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(errno));
+    _exit(127);
+}
+
+static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result) {
+    process_result_init(result);
+    int redirect_fd = -1;
+    FILE *out_fp = NULL;
+    FILE *err_fp = NULL;
+
+    if (!spec->capture && spec->redirect.kind != DS_REDIRECT_NONE) {
+        if (!open_redirect_target(vm, &spec->redirect, &redirect_fd)) return false;
+    }
+
+    if (spec->capture) {
+        out_fp = tmpfile();
+        err_fp = tmpfile();
+        if (!out_fp || !err_fp) {
+            ds_diag_error(vm->diag, spec->span, "failed to create command capture temporary files: %s", strerror(errno));
+            if (out_fp) fclose(out_fp);
+            if (err_fp) fclose(err_fp);
+            return false;
+        }
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(errno));
+        if (redirect_fd >= 0) close(redirect_fd);
+        if (out_fp) fclose(out_fp);
+        if (err_fp) fclose(err_fp);
+        return false;
+    }
+
+    if (pid == 0) {
+        process_child_exec(spec, redirect_fd, out_fp, err_fp);
+    }
+
+    if (redirect_fd >= 0) close(redirect_fd);
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            ds_diag_error(vm->diag, spec->span, "failed waiting for command `%s`: %s", spec->argv.items[0], strerror(errno));
+            if (out_fp) fclose(out_fp);
+            if (err_fp) fclose(err_fp);
+            return false;
+        }
+    }
+    result->code = process_status_code(status);
+
+    if (spec->capture) {
+        if (!read_file_into_string(out_fp, &result->stdout_text) || !read_file_into_string(err_fp, &result->stderr_text)) {
+            ds_diag_error(vm->diag, spec->span, "failed to read command capture output");
+            fclose(out_fp);
+            fclose(err_fp);
+            return false;
+        }
+        fclose(out_fp);
+        fclose(err_fp);
+    }
+    return true;
+}
+
+static int run_command(Vm *vm, Instr *ins) {
+    if (ins->word_count == 0) return 0;
+    VmProcessSpec spec;
+    if (!process_spec_from_instr(vm, ins, false, &spec)) return 1;
+    VmProcessResult result;
+    bool ok = process_execute(vm, &spec, &result);
+    int code = ok ? result.code : 1;
+    process_result_free(&result);
+    process_spec_free(&spec);
+    return code;
+}
+
 static int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
     *out_value = ds_value_null();
     if (ins->word_count == 0) return 1;
-    VmArgv argv;
-    if (!argv_build(vm, ins, &argv)) return 1;
-    FILE *out_fp = tmpfile();
-    FILE *err_fp = tmpfile();
-    if (!out_fp || !err_fp) {
-        ds_diag_error(vm->diag, ins->span, "failed to create command capture temporary files: %s", strerror(errno));
-        if (out_fp) fclose(out_fp);
-        if (err_fp) fclose(err_fp);
-        argv_free(&argv);
-        return 1;
-    }
-    pid_t pid = fork();
-    if (pid < 0) {
-        ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv.items[0], strerror(errno));
-        fclose(out_fp); fclose(err_fp);
-        argv_free(&argv);
-        return 1;
-    }
-    if (pid == 0) {
-        dup2(fileno(out_fp), STDOUT_FILENO);
-        dup2(fileno(err_fp), STDERR_FILENO);
-        execvp(argv.items[0], argv.items);
-        fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv.items[0], strerror(errno));
-        _exit(127);
-    }
-    int status = 0;
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno != EINTR) { status = 1; break; }
-    }
+    VmProcessSpec spec;
+    if (!process_spec_from_instr(vm, ins, true, &spec)) return 1;
     VmProcessResult result;
-    ds_string_init(&result.stdout_text);
-    ds_string_init(&result.stderr_text);
-    result.code = process_status_code(status);
-    if (!read_file_into_string(out_fp, &result.stdout_text) || !read_file_into_string(err_fp, &result.stderr_text)) {
-        ds_diag_error(vm->diag, ins->span, "failed to read command capture output");
-        result.code = 1;
+    bool ok = process_execute(vm, &spec, &result);
+    process_spec_free(&spec);
+    if (!ok) {
+        process_result_free(&result);
+        return 1;
     }
-    fclose(out_fp); fclose(err_fp);
-    argv_free(&argv);
     *out_value = ds_value_command_result_take(&result.stdout_text, &result.stderr_text, result.code);
     return 0;
 }
