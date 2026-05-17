@@ -44,6 +44,8 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `v0.4.0` cleanup implementation for shared CLI parse/lower plumbing and backend entrypoints that consume lowered programs directly.
 - Runtime container clear APIs for reuse-friendly ownership boundaries: `ds_array_clear()` and `ds_map_clear()`.
 - Shared diagnostic location formatting helper for source-tied errors.
+- Shared shell test helper for versioned regression runners.
+- `v0.4.0` cleanup regression suite covering pipeline boundaries, diagnostic consistency, source locations, runtime ownership, `DsMap` wrapper behavior, static backend/staged-library boundaries, generated Bash standalone behavior, command exit parity, and cleanup-only future-syntax rejection.
 
 ### Fixed
 
@@ -51,7 +53,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `ds check`, `ds emit bash`, `ds run`, direct script execution, and `ds bytecode` now share one CLI parse/lower path instead of each lowering or parsing separately.
 - Source-tied diagnostics now use the standardized `file:line:column: error: message` shape across the shared diagnostics path.
 
-## v0.4.0 — Implementation complete, tests pending
+## v0.4.0 — Complete
 
 ### Implemented
 
@@ -63,8 +65,9 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 
 ### Tests
 
-- No new `v0.4.0` tests have been added yet.
-- Existing `v0.1.0`, `v0.2.0`, and `v0.3.0` regression tests continue to pass.
+- Added `tests/run_v0_4.sh` and `tests/test_v0_4_runtime.c`.
+- Added `tests/testlib.sh` as the first shared shell helper for reusable runner assertions.
+- Existing `v0.1.0`, `v0.2.0`, and `v0.3.0` regression tests continue to pass, and `make test` now runs the `v0.4.0` cleanup suite too.
 
 ## v0.3.0 — Complete
 

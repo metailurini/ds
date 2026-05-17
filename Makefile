@@ -6,7 +6,7 @@ SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
 
-.PHONY: all clean check smoke test asan ubsan
+.PHONY: all clean check smoke test test-v0-4 asan ubsan
 
 all: $(BIN)
 
@@ -27,6 +27,10 @@ test: $(BIN)
 	./tests/run_v0_1.sh
 	./tests/run_v0_2.sh
 	./tests/run_v0_3.sh
+	./tests/run_v0_4.sh
+
+test-v0-4: $(BIN)
+	./tests/run_v0_4.sh
 
 asan:
 	$(MAKE) clean

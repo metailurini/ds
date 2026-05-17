@@ -130,7 +130,7 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.4.0` implementation is complete for the scoped cleanup/refactor pass. Tests for `v0.4.0` have not been added yet; existing `v0.1.0` through `v0.3.0` regression suites continue to pass.
+Current status: `v0.4.0` implementation is complete and tests are complete for the scoped cleanup/refactor pass. Existing `v0.1.0` through `v0.3.0` regression suites continue to pass, and `v0.4.0` adds cleanup-focused regression coverage for pipeline boundaries, diagnostics, source locations, runtime ownership, `DsMap`, generated Bash standalone behavior, and staged-library boundaries.
 
 The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, and the `v0.4.0` internal cleanup pass:
 
