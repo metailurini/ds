@@ -57,6 +57,14 @@ static void expr_vec_push(DsExprVec *vec, DsExpr *expr) {
     vec->items[vec->len++] = expr;
 }
 
+static void map_entry_vec_push(DsMapEntryVec *vec, DsMapEntry entry) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsMapEntry *)ds_xrealloc(vec->items, vec->cap * sizeof(DsMapEntry));
+    }
+    vec->items[vec->len++] = entry;
+}
+
 static void fn_param_vec_push(DsFnParamVec *vec, DsFnParam param) {
     if (vec->len == vec->cap) {
         vec->cap = vec->cap ? vec->cap * 2 : 8;
@@ -171,7 +179,75 @@ static int precedence(DsTokenKind kind) {
 }
 
 static DsExpr *parse_expr_prec(Parser *p, int min_prec);
+static DsExpr *parse_expr(Parser *p);
 static void parse_call_args(Parser *p, DsExprVec *args);
+
+static void skip_collection_newlines(Parser *p) { skip_newlines(p); }
+
+static DsExpr *parse_array_literal(Parser *p) {
+    DsToken *open = previous(p);
+    DsExpr *expr = new_expr(DS_EXPR_ARRAY, open->span);
+    skip_collection_newlines(p);
+    if (!at(p, DS_TOK_RBRACKET)) {
+        while (!at_end(p) && !at(p, DS_TOK_RBRACKET)) {
+            expr_vec_push(&expr->as.array.elements, parse_expr(p));
+            skip_collection_newlines(p);
+            if (!advance_if(p, DS_TOK_COMMA)) break;
+            skip_collection_newlines(p);
+            if (at(p, DS_TOK_RBRACKET)) {
+                ds_diag_error(p->diag, peek(p)->span, "expected array element after `,`");
+                break;
+            }
+        }
+    }
+    if (!expect(p, DS_TOK_RBRACKET, "expected `]` to close array literal")) return expr;
+    expr->span.end = previous(p)->span.end;
+    return expr;
+}
+
+static DsExpr *parse_map_literal(Parser *p) {
+    DsToken *open = previous(p);
+    DsExpr *expr = new_expr(DS_EXPR_MAP, open->span);
+    skip_collection_newlines(p);
+    if (at(p, DS_TOK_RBRACE)) {
+        ds_diag_error(p->diag, peek(p)->span, "empty map literals are deferred in v0.10.0");
+        advance(p);
+        expr->span.end = previous(p)->span.end;
+        return expr;
+    }
+    while (!at_end(p) && !at(p, DS_TOK_RBRACE)) {
+        DsMapEntry entry;
+        memset(&entry, 0, sizeof(entry));
+        if (advance_if(p, DS_TOK_IDENT) || advance_if(p, DS_TOK_STRING)) {
+            DsToken *key = previous(p);
+            entry.key = copy_token_text(key);
+            entry.quoted_key = key->kind == DS_TOK_STRING;
+            entry.span = key->span;
+        } else {
+            ds_diag_error(p->diag, peek(p)->span, "expected map key before `:`");
+            break;
+        }
+        if (!expect(p, DS_TOK_COLON, "expected `:` after map key")) break;
+        skip_collection_newlines(p);
+        if (at(p, DS_TOK_COMMA) || at(p, DS_TOK_RBRACE) || at_end(p)) {
+            ds_diag_error(p->diag, peek(p)->span, "expected map value after `:`");
+            break;
+        }
+        entry.value = parse_expr(p);
+        if (entry.value) entry.span.end = entry.value->span.end;
+        map_entry_vec_push(&expr->as.map.entries, entry);
+        skip_collection_newlines(p);
+        if (!advance_if(p, DS_TOK_COMMA)) break;
+        skip_collection_newlines(p);
+        if (at(p, DS_TOK_RBRACE)) {
+            ds_diag_error(p->diag, peek(p)->span, "expected map entry after `,`");
+            break;
+        }
+    }
+    if (!expect(p, DS_TOK_RBRACE, "expected `}` to close map literal")) return expr;
+    expr->span.end = previous(p)->span.end;
+    return expr;
+}
 
 static void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *span, bool reject_redirection) {
     DsWord current = {0};
@@ -273,6 +349,12 @@ static DsExpr *parse_primary(Parser *p) {
         if (expr) expr->span.end = previous(p)->span.end;
         return expr;
     }
+    if (advance_if(p, DS_TOK_LBRACKET)) {
+        return parse_array_literal(p);
+    }
+    if (advance_if(p, DS_TOK_LBRACE)) {
+        return parse_map_literal(p);
+    }
 
     ds_diag_error(p->diag, tok->span, "expected expression");
     return new_expr(DS_EXPR_ERROR, tok->span);
@@ -288,6 +370,20 @@ static DsExpr *parse_postfix(Parser *p) {
         if (!expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) break;
         call->span.end = previous(p)->span.end;
         expr = call;
+    }
+    while (advance_if(p, DS_TOK_LBRACKET)) {
+        DsToken *open = previous(p);
+        DsExpr *idx = NULL;
+        if (at(p, DS_TOK_RBRACKET)) {
+            ds_diag_error(p->diag, open->span, "expected index expression after `[` ");
+        } else {
+            idx = parse_expr(p);
+        }
+        if (!expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
+        DsExpr *index_expr = new_expr(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, previous(p)->span.end, open->span.source});
+        index_expr->as.index.object = expr;
+        index_expr->as.index.index = idx;
+        expr = index_expr;
     }
     while (advance_if(p, DS_TOK_DOT)) {
         DsToken *dot = previous(p);
@@ -318,7 +414,7 @@ static DsExpr *parse_unary(Parser *p) {
 static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
     DsExpr *left = parse_unary(p);
 
-    while (!is_stmt_end(p) && !at(p, DS_TOK_LBRACE) && !at(p, DS_TOK_RPAREN) && !at(p, DS_TOK_COMMA)) {
+    while (!is_stmt_end(p) && !at(p, DS_TOK_LBRACE) && !at(p, DS_TOK_RBRACE) && !at(p, DS_TOK_RPAREN) && !at(p, DS_TOK_RBRACKET) && !at(p, DS_TOK_COMMA)) {
         DsTokenKind op_kind = peek(p)->kind;
         int prec = precedence(op_kind);
         if (prec < min_prec || prec == 0) break;
@@ -534,6 +630,56 @@ static DsStmt *parse_call_stmt(Parser *p) {
     return stmt;
 }
 
+static DsStmt *parse_push_stmt(Parser *p) {
+    DsToken *name = advance(p);
+    DsStmt *stmt = new_stmt(DS_STMT_PUSH, name->span);
+    stmt->as.push_stmt.name = copy_token_text(name);
+    expect(p, DS_TOK_DOT, "expected `.` before `push`");
+    DsToken *push_name = advance(p);
+    if (!(push_name->text.len == 4 && memcmp(push_name->text.data, "push", 4) == 0)) {
+        ds_diag_error(p->diag, push_name->span, "only `push` collection method is supported in v0.10.0");
+    }
+    if (!expect(p, DS_TOK_LPAREN, "expected `(` after `push`")) return stmt;
+    if (at(p, DS_TOK_RPAREN)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected value argument for `push`");
+    } else {
+        stmt->as.push_stmt.value = parse_expr(p);
+    }
+    if (advance_if(p, DS_TOK_COMMA)) {
+        ds_diag_error(p->diag, previous(p)->span, "`push` accepts exactly one argument in v0.10.0");
+        while (!at_end(p) && !at(p, DS_TOK_RPAREN) && !is_stmt_end(p)) advance(p);
+    }
+    if (!expect(p, DS_TOK_RPAREN, "expected `)` after `push` argument")) return stmt;
+    stmt->span.end = previous(p)->span.end;
+    if (!is_stmt_end(p)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected end of push statement");
+        while (!is_stmt_end(p)) advance(p);
+    }
+    consume_statement_end(p);
+    return stmt;
+}
+
+static DsStmt *parse_for(Parser *p) {
+    DsToken *start = previous(p);
+    if (!expect_identifier_like(p, "expected loop variable after `for`")) return NULL;
+    DsToken *name = previous(p);
+    DsStmt *stmt = new_stmt(DS_STMT_FOR, start->span);
+    stmt->as.for_stmt.key_name = copy_token_text(name);
+    if (advance_if(p, DS_TOK_COMMA)) {
+        stmt->as.for_stmt.has_value_name = true;
+        if (!expect_identifier_like(p, "expected value loop variable after `,`")) return stmt;
+        stmt->as.for_stmt.value_name = copy_token_text(previous(p));
+    }
+    if (!expect(p, DS_TOK_IN, "expected `in` after loop variable")) return stmt;
+    if (at(p, DS_TOK_LBRACE)) ds_diag_error(p->diag, peek(p)->span, "expected iterable expression after `in`");
+    stmt->as.for_stmt.iterable = parse_expr(p);
+    if (!expect(p, DS_TOK_LBRACE, "expected `{` after for iterable")) return stmt;
+    stmt->as.for_stmt.body = parse_block(p);
+    stmt->span = (DsSpan){start->span.start, stmt->as.for_stmt.body ? stmt->as.for_stmt.body->span.end : previous(p)->span.end, start->span.source};
+    consume_statement_end(p);
+    return stmt;
+}
+
 static DsStmt *parse_fn(Parser *p, bool top_level) {
     DsToken *start = previous(p);
     if (!top_level) ds_diag_error(p->diag, start->span, "function declarations are only allowed at top level in v0.9.0");
@@ -685,6 +831,24 @@ static DsStmt *parse_stmt(Parser *p) {
     }
     if (advance_if(p, DS_TOK_LET)) return parse_let(p);
     if (advance_if(p, DS_TOK_IF)) return parse_if(p);
+    if (advance_if(p, DS_TOK_FOR)) return parse_for(p);
+    if (advance_if(p, DS_TOK_WHILE)) {
+        ds_diag_error(p->diag, previous(p)->span, "`while` loops are deferred in v0.10.0 because reassignment is not implemented yet");
+        while (!at_end(p) && !at(p, DS_TOK_LBRACE) && !is_stmt_end(p)) advance(p);
+        if (advance_if(p, DS_TOK_LBRACE)) {
+            int depth = 1;
+            while (!at_end(p) && depth > 0) {
+                if (advance_if(p, DS_TOK_LBRACE)) depth++;
+                else if (advance_if(p, DS_TOK_RBRACE)) depth--;
+                else advance(p);
+            }
+        } else {
+            while (!is_stmt_end(p)) advance(p);
+        }
+        consume_statement_end(p);
+        return NULL;
+    }
+    if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_DOT)) return parse_push_stmt(p);
     if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_LPAREN)) return parse_call_stmt(p);
     if (at(p, DS_TOK_ELSE)) {
         ds_diag_error(p->diag, peek(p)->span, "unexpected `else` without matching `if`");

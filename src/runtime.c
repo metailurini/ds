@@ -107,6 +107,22 @@ DsValue ds_value_copy(const DsValue *value) {
                                  value->as.command_result.stderr_text.len);
             out.as.command_result.code = value->as.command_result.code;
             break;
+        case DS_VALUE_ARRAY:
+            ds_array_init(&out.as.array);
+            for (size_t i = 0; i < value->as.array.len; i++) {
+                DsValue *item = (DsValue *)value->as.array.items[i];
+                DsValue *copy = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
+                *copy = ds_value_copy(item);
+                ds_array_push(&out.as.array, copy);
+            }
+            break;
+        case DS_VALUE_MAP:
+            ds_map_init(&out.as.map);
+            for (size_t i = 0; i < value->as.map.len; i++) {
+                DsStr key = {value->as.map.keys[i], strlen(value->as.map.keys[i])};
+                ds_map_set(&out.as.map, key, ds_value_copy(&value->as.map.values[i]));
+            }
+            break;
         case DS_VALUE_BOOL:
             out.as.boolean = value->as.boolean;
             break;
@@ -125,6 +141,14 @@ void ds_value_free(DsValue *value) {
         ds_string_free(&value->as.command_result.stdout_text);
         ds_string_free(&value->as.command_result.stderr_text);
     }
+    if (value->kind == DS_VALUE_ARRAY) {
+        for (size_t i = 0; i < value->as.array.len; i++) {
+            DsValue *item = (DsValue *)value->as.array.items[i];
+            if (item) { ds_value_free(item); free(item); }
+        }
+        ds_array_free(&value->as.array);
+    }
+    if (value->kind == DS_VALUE_MAP) ds_map_free(&value->as.map);
     *value = ds_value_null();
 }
 
@@ -145,6 +169,12 @@ bool ds_value_truthy(const DsValue *value, bool *out) {
         case DS_VALUE_COMMAND_RESULT:
             *out = value->as.command_result.code == 0;
             return true;
+        case DS_VALUE_ARRAY:
+            *out = value->as.array.len != 0;
+            return true;
+        case DS_VALUE_MAP:
+            *out = value->as.map.len != 0;
+            return true;
     }
     return false;
 }
@@ -164,6 +194,10 @@ bool ds_value_to_string(const DsValue *value, DsString *out) {
             return ds_string_append_range(out, value->as.string.data ? value->as.string.data : "", value->as.string.len);
         case DS_VALUE_COMMAND_RESULT:
             return ds_string_append_cstr(out, "[command result]");
+        case DS_VALUE_ARRAY:
+            return ds_string_append_cstr(out, "[array]");
+        case DS_VALUE_MAP:
+            return ds_string_append_cstr(out, "[map]");
     }
     return false;
 }

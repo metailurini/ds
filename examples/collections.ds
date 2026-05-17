@@ -1,0 +1,19 @@
+let services = ["api", "web"]
+services.push("worker")
+
+let first = services[0]
+echo "first={first}"
+
+for service in services {
+  echo "service={service}"
+}
+
+let ports = {
+  api: 3000,
+  web: 5173,
+  "worker-service": 9000
+}
+
+let api_port = ports.api
+let worker_port = ports["worker-service"]
+echo "ports={api_port},{worker_port}"

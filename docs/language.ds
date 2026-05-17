@@ -307,7 +307,7 @@ for service in services {
 
 
 # -----------------------------------------------------------------------------
-# 16. Maps / objects [v0.10.0] [candidate]
+# 16. Maps / objects [v0.10.0] [partially implemented]
 # -----------------------------------------------------------------------------
 
 let ports = {
@@ -319,35 +319,44 @@ let ports = {
 let api_port = ports.api
 let web_port = ports["web"]
 
-for name, port in ports {
-  echo "{name} runs on {port}"
-}
+# Map iteration is deferred in the initial v0.10.0 implementation; use direct
+# field or bracket access instead.
+#
+# for name, port in ports {
+#   echo "{name} runs on {port}"
+# }
 
-# Bash emission may require Bash 4+ associative arrays.
+# Empty map literals, nested maps, nested arrays, and computed non-string keys
+# are deferred. Bash emission uses Bash associative arrays for maps.
 
 
 # -----------------------------------------------------------------------------
-# 17. Loops [v0.10.0] [stable]
+# 17. Loops [v0.10.0] [partially implemented]
 # -----------------------------------------------------------------------------
 
-let i = 0
+# `for item in array` is implemented. `while` remains deferred because mutable
+# reassignment / update syntax is not implemented yet.
 
-while i < 5 {
-  echo "{i}"
-  i += 1
-}
+# let i = 0
+#
+# while i < 5 {
+#   echo "{i}"
+#   i += 1
+# }
 
 for service in services {
   echo "{service}"
 }
 
-for n in 1..10 {
-  echo "{n}"
-}
-
-for line in lines("README.md") {
-  echo $line
-}
+# Ranges and stdlib-backed iteration are later-version syntax.
+#
+# for n in 1..10 {
+#   echo "{n}"
+# }
+#
+# for line in lines("README.md") {
+#   echo $line
+# }
 
 
 # -----------------------------------------------------------------------------

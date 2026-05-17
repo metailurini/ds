@@ -51,6 +51,24 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             fprintf(out, "CallExpr %.*s\n", (int)expr->as.call.name.len, expr->as.call.name.data);
             for (size_t i = 0; i < expr->as.call.args.len; i++) print_expr(expr->as.call.args.items[i], out, level + 1);
             break;
+        case DS_EXPR_ARRAY:
+            fputs("ArrayExpr\n", out);
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) print_expr(expr->as.array.elements.items[i], out, level + 1);
+            break;
+        case DS_EXPR_MAP:
+            fputs("MapExpr\n", out);
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                const DsMapEntry *entry = &expr->as.map.entries.items[i];
+                indent(out, level + 1);
+                fprintf(out, "Entry %.*s\n", (int)entry->key.len, entry->key.data);
+                print_expr(entry->value, out, level + 2);
+            }
+            break;
+        case DS_EXPR_INDEX:
+            fputs("IndexExpr\n", out);
+            print_expr(expr->as.index.object, out, level + 1);
+            print_expr(expr->as.index.index, out, level + 1);
+            break;
         case DS_EXPR_ERROR:
             fputs("ErrorExpr\n", out);
             break;
@@ -114,6 +132,21 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
         case DS_STMT_CALL:
             fprintf(out, "CallStmt %.*s\n", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) print_expr(stmt->as.call_stmt.args.items[i], out, level + 1);
+            break;
+        case DS_STMT_FOR:
+            fprintf(out, "ForStmt %.*s", (int)stmt->as.for_stmt.key_name.len, stmt->as.for_stmt.key_name.data);
+            if (stmt->as.for_stmt.has_value_name) fprintf(out, ", %.*s", (int)stmt->as.for_stmt.value_name.len, stmt->as.for_stmt.value_name.data);
+            fputc('\n', out);
+            indent(out, level + 1);
+            fputs("Iterable\n", out);
+            print_expr(stmt->as.for_stmt.iterable, out, level + 2);
+            indent(out, level + 1);
+            fputs("Body\n", out);
+            print_stmt(stmt->as.for_stmt.body, out, level + 2);
+            break;
+        case DS_STMT_PUSH:
+            fprintf(out, "PushStmt %.*s\n", (int)stmt->as.push_stmt.name.len, stmt->as.push_stmt.name.data);
+            print_expr(stmt->as.push_stmt.value, out, level + 1);
             break;
     }
 }
@@ -187,6 +220,21 @@ static void free_expr(DsExpr *expr) {
             for (size_t i = 0; i < expr->as.call.args.len; i++) free_expr(expr->as.call.args.items[i]);
             free(expr->as.call.args.items);
             break;
+        case DS_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) free_expr(expr->as.array.elements.items[i]);
+            free(expr->as.array.elements.items);
+            break;
+        case DS_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                free(expr->as.map.entries.items[i].key.data);
+                free_expr(expr->as.map.entries.items[i].value);
+            }
+            free(expr->as.map.entries.items);
+            break;
+        case DS_EXPR_INDEX:
+            free_expr(expr->as.index.object);
+            free_expr(expr->as.index.index);
+            break;
         case DS_EXPR_BOOL:
         case DS_EXPR_ERROR:
             break;
@@ -235,6 +283,16 @@ static void free_stmt(DsStmt *stmt) {
             free(stmt->as.call_stmt.name.data);
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) free_expr(stmt->as.call_stmt.args.items[i]);
             free(stmt->as.call_stmt.args.items);
+            break;
+        case DS_STMT_FOR:
+            free(stmt->as.for_stmt.key_name.data);
+            free(stmt->as.for_stmt.value_name.data);
+            free_expr(stmt->as.for_stmt.iterable);
+            free_stmt(stmt->as.for_stmt.body);
+            break;
+        case DS_STMT_PUSH:
+            free(stmt->as.push_stmt.name.data);
+            free_expr(stmt->as.push_stmt.value);
             break;
     }
     free(stmt);

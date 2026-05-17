@@ -36,6 +36,9 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 4 && strncmp(text, "true", 4) == 0) return DS_TOK_TRUE;
     if (len == 5 && strncmp(text, "false", 5) == 0) return DS_TOK_FALSE;
     if (len == 2 && strncmp(text, "fn", 2) == 0) return DS_TOK_FN;
+    if (len == 3 && strncmp(text, "for", 3) == 0) return DS_TOK_FOR;
+    if (len == 2 && strncmp(text, "in", 2) == 0) return DS_TOK_IN;
+    if (len == 5 && strncmp(text, "while", 5) == 0) return DS_TOK_WHILE;
     return DS_TOK_IDENT;
 }
 
@@ -73,6 +76,9 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_TRUE: return "TRUE";
         case DS_TOK_FALSE: return "FALSE";
         case DS_TOK_FN: return "FN";
+        case DS_TOK_FOR: return "FOR";
+        case DS_TOK_IN: return "IN";
+        case DS_TOK_WHILE: return "WHILE";
         case DS_TOK_COLON: return "COLON";
         case DS_TOK_COMMA: return "COMMA";
         case DS_TOK_EQUAL: return "EQUAL";
@@ -96,6 +102,8 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_REDIRECT_ALL_APPEND: return "REDIRECT_ALL_APPEND";
         case DS_TOK_LBRACE: return "LBRACE";
         case DS_TOK_RBRACE: return "RBRACE";
+        case DS_TOK_LBRACKET: return "LBRACKET";
+        case DS_TOK_RBRACKET: return "RBRACKET";
         case DS_TOK_LPAREN: return "LPAREN";
         case DS_TOK_RPAREN: return "RPAREN";
         case DS_TOK_UNKNOWN: return "UNKNOWN";
@@ -256,6 +264,8 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         else if (c == '.') kind = DS_TOK_DOT;
         else if (c == '{') kind = DS_TOK_LBRACE;
         else if (c == '}') kind = DS_TOK_RBRACE;
+        else if (c == '[') kind = DS_TOK_LBRACKET;
+        else if (c == ']') kind = DS_TOK_RBRACKET;
         else if (c == '(') kind = DS_TOK_LPAREN;
         else if (c == ')') kind = DS_TOK_RPAREN;
 

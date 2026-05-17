@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum { SYM_BOOL, SYM_INT, SYM_STRING, SYM_COMMAND_RESULT, SYM_FUNCTION, SYM_TOPLEVEL_PREDECLARED, SYM_UNKNOWN } SymKind;
+typedef enum { SYM_BOOL, SYM_INT, SYM_STRING, SYM_COMMAND_RESULT, SYM_ARRAY, SYM_MAP, SYM_FUNCTION, SYM_TOPLEVEL_PREDECLARED, SYM_UNKNOWN } SymKind;
 
 typedef struct {
     char *name;
@@ -27,6 +27,7 @@ typedef struct {
 } Lower;
 
 static bool is_result_field(DsStr field, SymKind *kind_out);
+static bool decode_string_text(DsStr text, DsStr *out);
 
 static bool str_eq(DsStr a, const char *b) {
     size_t len = strlen(b);
@@ -145,6 +146,28 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
 static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span);
 static void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr);
 
+static void lower_map_entry_vec_push(DsLowerMapEntryVec *vec, DsLowerMapEntry entry) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsLowerMapEntry *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerMapEntry));
+    }
+    vec->items[vec->len++] = entry;
+}
+
+static DsStr map_key_decode(const DsMapEntry *entry) {
+    DsStr out = {0};
+    if (entry->quoted_key) decode_string_text(entry->key, &out);
+    else out = str_clone(entry->key);
+    return out;
+}
+
+static bool map_has_duplicate_key(const DsLowerMapEntryVec *entries, DsStr key) {
+    for (size_t i = 0; i < entries->len; i++) {
+        if (entries->items[i].key.len == key.len && memcmp(entries->items[i].key.data, key.data, key.len) == 0) return true;
+    }
+    return false;
+}
+
 static DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {
     for (size_t i = 0; i < program->functions.len; i++) {
         DsLowerFn *fn = &program->functions.items[i];
@@ -261,10 +284,27 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
             SymKind object_kind = SYM_UNKNOWN;
             DsLowerExpr *object = lower_expr(lower, expr->as.field.object, &object_kind);
             SymKind field_kind = SYM_UNKNOWN;
-            if (object_kind != SYM_COMMAND_RESULT) {
-                ds_diag_error(lower->diag, expr->span, "field access is only supported on command results in v0.7.0");
-            } else if (!is_result_field(expr->as.field.field, &field_kind)) {
-                ds_diag_error(lower->diag, expr->span, "unknown command result field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
+            if (object_kind == SYM_COMMAND_RESULT) {
+                if (!is_result_field(expr->as.field.field, &field_kind)) {
+                    ds_diag_error(lower->diag, expr->span, "unknown command result field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
+                }
+            } else if (object_kind == SYM_MAP) {
+                DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INDEX, expr->span);
+                out->as.index.object = object;
+                out->as.index.index = expr_new(DS_LOWER_EXPR_STRING, expr->span);
+                DsString quoted;
+                ds_string_init(&quoted);
+                ds_string_append_char(&quoted, '"');
+                ds_string_append_range(&quoted, expr->as.field.field.data, expr->as.field.field.len);
+                ds_string_append_char(&quoted, '"');
+                out->as.index.index->as.text.data = quoted.data;
+                out->as.index.index->as.text.len = quoted.len;
+                out->as.index.map_key_literal = true;
+                out->as.index.map_key = str_clone(expr->as.field.field);
+                *kind_out = SYM_UNKNOWN;
+                return out;
+            } else {
+                ds_diag_error(lower->diag, expr->span, "field access is only supported on command results and maps in v0.10.0");
             }
             *kind_out = field_kind;
             DsLowerExpr *out = expr_new(DS_LOWER_EXPR_FIELD, expr->span);
@@ -298,6 +338,65 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
             }
             return out;
         }
+        case DS_EXPR_ARRAY: {
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_ARRAY, expr->span);
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) {
+                SymKind elem_kind = SYM_UNKNOWN;
+                lower_expr_vec_push(&out->as.array.elements, lower_expr(lower, expr->as.array.elements.items[i], &elem_kind));
+                if (elem_kind == SYM_ARRAY || elem_kind == SYM_MAP) {
+                    ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "nested collections are deferred in v0.10.0");
+                }
+            }
+            *kind_out = SYM_ARRAY;
+            return out;
+        }
+        case DS_EXPR_MAP: {
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_MAP, expr->span);
+            if (expr->as.map.entries.len == 0) {
+                ds_diag_error(lower->diag, expr->span, "empty map literals are deferred in v0.10.0");
+            }
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                const DsMapEntry *entry = &expr->as.map.entries.items[i];
+                DsLowerMapEntry lowered;
+                memset(&lowered, 0, sizeof(lowered));
+                lowered.key = map_key_decode(entry);
+                lowered.span = entry->span;
+                if (map_has_duplicate_key(&out->as.map.entries, lowered.key)) {
+                    ds_diag_error(lower->diag, entry->span, "duplicate map key `%.*s`", (int)lowered.key.len, lowered.key.data);
+                }
+                SymKind value_kind = SYM_UNKNOWN;
+                lowered.value = lower_expr(lower, entry->value, &value_kind);
+                if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
+                    ds_diag_error(lower->diag, entry->span, "nested collections are deferred in v0.10.0");
+                }
+                lower_map_entry_vec_push(&out->as.map.entries, lowered);
+            }
+            *kind_out = SYM_MAP;
+            return out;
+        }
+        case DS_EXPR_INDEX: {
+            SymKind obj_kind = SYM_UNKNOWN;
+            SymKind idx_kind = SYM_UNKNOWN;
+            DsLowerExpr *object = lower_expr(lower, expr->as.index.object, &obj_kind);
+            DsLowerExpr *index = lower_expr(lower, expr->as.index.index, &idx_kind);
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INDEX, expr->span);
+            out->as.index.object = object;
+            out->as.index.index = index;
+            if (obj_kind == SYM_ARRAY) {
+                if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
+            } else if (obj_kind == SYM_MAP) {
+                if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
+                    out->as.index.map_key_literal = true;
+                    decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);
+                } else if (idx_kind != SYM_STRING && idx_kind != SYM_UNKNOWN) {
+                    ds_diag_error(lower->diag, expr->as.index.index->span, "map index must be a string in v0.10.0");
+                }
+            } else {
+                ds_diag_error(lower->diag, expr->span, "indexing requires an array or map in v0.10.0");
+            }
+            *kind_out = SYM_UNKNOWN;
+            return out;
+        }
         case DS_EXPR_ERROR:
             return expr_new(DS_LOWER_EXPR_ERROR, expr->span);
     }
@@ -318,6 +417,10 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
         }
         if (sym->kind == SYM_FUNCTION) {
             ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
+            return false;
+        }
+        if (sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) {
+            ds_diag_error(lower->diag, span, "collection `%.*s` cannot be passed directly as a command argument in v0.10.0; index it first", (int)name.len, name.data);
             return false;
         }
     }
@@ -345,7 +448,11 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
                 return false;
             }
             if (sym->kind != SYM_COMMAND_RESULT) {
-                ds_diag_error(lower->diag, field_span, "field access is only supported on command results in v0.7.0");
+                if (sym->kind == SYM_MAP) {
+                    ds_diag_error(lower->diag, field_span, "map field command arguments are deferred in v0.10.0; bind the field to a variable first");
+                    return false;
+                }
+                ds_diag_error(lower->diag, field_span, "field access is only supported on command results and maps in v0.10.0");
                 return false;
             }
             if (!is_result_field(field, &field_kind)) {
@@ -639,8 +746,11 @@ static bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t 
                 if (stmt_reaches_function(lower, stmt->as.block_stmt.statements.items[i], target_index, seen, cycle_span)) return true;
             }
             return false;
+        case DS_LOWER_STMT_FOR_ARRAY:
+            return stmt_reaches_function(lower, stmt->as.for_stmt.body, target_index, seen, cycle_span);
         case DS_LOWER_STMT_LET:
         case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_PUSH:
             return false;
     }
     return false;
@@ -719,6 +829,43 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             if (stmt->as.if_stmt.else_branch) out->as.if_stmt.else_branch = lower_block(lower, stmt->as.if_stmt.else_branch, true);
             return out;
         }
+        case DS_STMT_FOR: {
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_FOR_ARRAY, stmt->span);
+            out->as.for_stmt.name = str_clone(stmt->as.for_stmt.key_name);
+            if (stmt->as.for_stmt.has_value_name) {
+                ds_diag_error(lower->diag, stmt->span, "map iteration is deferred in v0.10.0; use direct map access instead");
+            }
+            SymKind iterable_kind = SYM_UNKNOWN;
+            out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
+            if (iterable_kind != SYM_ARRAY && iterable_kind != SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
+            }
+            Scope local;
+            scope_init(&local, lower->scope);
+            Scope *saved = lower->scope;
+            lower->scope = &local;
+            scope_define(lower, &local, stmt->as.for_stmt.key_name, SYM_UNKNOWN, stmt->span);
+            out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
+            lower->scope = saved;
+            scope_free(&local);
+            return out;
+        }
+        case DS_STMT_PUSH: {
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_PUSH, stmt->span);
+            out->as.push_stmt.name = str_clone(stmt->as.push_stmt.name);
+            Symbol *sym = scope_find(lower->scope, stmt->as.push_stmt.name);
+            if (!sym) {
+                ds_diag_error(lower->diag, stmt->span, "unknown array `%.*s`", (int)stmt->as.push_stmt.name.len, stmt->as.push_stmt.name.data);
+            } else if (sym->kind != SYM_ARRAY && sym->kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) {
+                ds_diag_error(lower->diag, stmt->span, "`push` requires an array variable in v0.10.0");
+            }
+            SymKind value_kind = SYM_UNKNOWN;
+            out->as.push_stmt.value = lower_expr(lower, stmt->as.push_stmt.value, &value_kind);
+            if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
+                ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "pushing collection values is deferred in v0.10.0");
+            }
+            return out;
+        }
         case DS_STMT_BLOCK:
             return lower_block(lower, stmt, true);
         case DS_STMT_IMPORT:
@@ -759,6 +906,22 @@ static void lower_expr_free(DsLowerExpr *expr) {
             for (size_t i = 0; i < expr->as.call.args.len; i++) lower_expr_free(expr->as.call.args.items[i]);
             free(expr->as.call.args.items);
             break;
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) lower_expr_free(expr->as.array.elements.items[i]);
+            free(expr->as.array.elements.items);
+            break;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                free(expr->as.map.entries.items[i].key.data);
+                lower_expr_free(expr->as.map.entries.items[i].value);
+            }
+            free(expr->as.map.entries.items);
+            break;
+        case DS_LOWER_EXPR_INDEX:
+            lower_expr_free(expr->as.index.object);
+            lower_expr_free(expr->as.index.index);
+            free(expr->as.index.map_key.data);
+            break;
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_ERROR:
             break;
@@ -789,6 +952,15 @@ static void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.call_stmt.name.data);
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) lower_expr_free(stmt->as.call_stmt.args.items[i]);
             free(stmt->as.call_stmt.args.items);
+            break;
+        case DS_LOWER_STMT_FOR_ARRAY:
+            free(stmt->as.for_stmt.name.data);
+            lower_expr_free(stmt->as.for_stmt.iterable);
+            lower_stmt_free(stmt->as.for_stmt.body);
+            break;
+        case DS_LOWER_STMT_PUSH:
+            free(stmt->as.push_stmt.name.data);
+            lower_expr_free(stmt->as.push_stmt.value);
             break;
     }
     free(stmt);

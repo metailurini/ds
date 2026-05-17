@@ -366,6 +366,11 @@ static bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, Em
 
 static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
+        case DS_LOWER_EXPR_IDENT:
+            buf_append(out, "\"$");
+            emit_var_name(out, expr->as.text);
+            buf_append(out, "\"");
+            return true;
         case DS_LOWER_EXPR_STRING:
             return emit_interpolated_string(e, expr, out);
         case DS_LOWER_EXPR_INT:
@@ -385,6 +390,30 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             buf_append_len(out, expr->as.field.field.data, expr->as.field.field.len);
             buf_append(out, "\"");
             return true;
+        case DS_LOWER_EXPR_INDEX:
+            if (expr->as.index.object->kind != DS_LOWER_EXPR_IDENT) {
+                ds_diag_error(e->diag, expr->span, "Bash emission only supports indexing named collections in v0.10.0");
+                return false;
+            }
+            buf_append(out, "\"${");
+            emit_var_name(out, expr->as.index.object->as.text);
+            buf_append(out, "[");
+            if (expr->as.index.index->kind == DS_LOWER_EXPR_INT) {
+                buf_append_len(out, expr->as.index.index->as.text.data, expr->as.index.index->as.text.len);
+            } else if (expr->as.index.index->kind == DS_LOWER_EXPR_STRING) {
+                char *decoded = NULL; size_t len = 0;
+                if (!decode_string_literal(e->diag, expr->as.index.index, &decoded, &len)) return false;
+                buf_append_len(out, decoded, len);
+                free(decoded);
+            } else if (expr->as.index.index->kind == DS_LOWER_EXPR_IDENT) {
+                buf_append(out, "$");
+                emit_var_name(out, expr->as.index.index->as.text);
+            } else {
+                ds_diag_error(e->diag, expr->span, "unsupported Bash collection index expression in v0.10.0");
+                return false;
+            }
+            buf_append(out, "]}\"");
+            return true;
         case DS_LOWER_EXPR_CALL:
             ds_diag_error(e->diag, expr->span, "function calls do not produce values in v0.9.0");
             return false;
@@ -392,6 +421,33 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");
             return false;
     }
+}
+
+static bool emit_array_elements(BashEmitter *e, const DsLowerExprVec *elements, EmitBuf *out) {
+    buf_append(out, "(");
+    for (size_t i = 0; i < elements->len; i++) {
+        if (i) buf_append(out, " ");
+        if (!emit_value_expr(e, elements->items[i], out)) return false;
+    }
+    buf_append(out, ")");
+    return true;
+}
+
+static bool emit_map_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, EmitBuf *out) {
+    buf_append(out, "(");
+    for (size_t i = 0; i < entries->len; i++) {
+        if (i) buf_append(out, " ");
+        buf_append(out, "[");
+        for (size_t j = 0; j < entries->items[i].key.len; j++) {
+            char c = entries->items[i].key.data[j];
+            if (c == ']' || c == '\\' || c == '"' || c == '$' || c == '`') buf_append(out, "\\");
+            buf_append_len(out, &c, 1);
+        }
+        buf_append(out, "]=");
+        if (!emit_value_expr(e, entries->items[i].value, out)) return false;
+    }
+    buf_append(out, ")");
+    return true;
 }
 
 static bool emit_call_arg_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
@@ -599,6 +655,13 @@ static bool expr_uses_run(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_RUN: return true;
         case DS_LOWER_EXPR_FIELD: return expr_uses_run(expr->as.field.object);
+        case DS_LOWER_EXPR_INDEX: return expr_uses_run(expr->as.index.object) || expr_uses_run(expr->as.index.index);
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_run(expr->as.array.elements.items[i])) return true;
+            return false;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_run(expr->as.map.entries.items[i].value)) return true;
+            return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_run(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_run(expr->as.binary.left) || expr_uses_run(expr->as.binary.right);
         default: return false;
@@ -616,6 +679,8 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_CMD: return false;
         case DS_LOWER_STMT_CALL: return false;
+        case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_run(stmt->as.for_stmt.iterable) || stmt_uses_run(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_PUSH: return expr_uses_run(stmt->as.push_stmt.value);
     }
     return false;
 }
@@ -715,6 +780,18 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "__ds_capture ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 if (!emit_capture_words(e, &stmt->as.let_stmt.value->as.run.words, &e->out, stmt->span)) return false;
+            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
+                if (e->function_depth > 0) buf_append(&e->out, "local -a ");
+                else buf_append(&e->out, "declare -a ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "=");
+                if (!emit_array_elements(e, &stmt->as.let_stmt.value->as.array.elements, &e->out)) return false;
+            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
+                if (e->function_depth > 0) buf_append(&e->out, "local -A ");
+                else buf_append(&e->out, "declare -A ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "=");
+                if (!emit_map_entries(e, &stmt->as.let_stmt.value->as.map.entries, &e->out)) return false;
             } else {
                 if (e->function_depth > 0) buf_append(&e->out, "local ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
@@ -744,6 +821,36 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             if (!emit_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
             buf_append(&e->out, "\n\n");
             return true;
+
+        case DS_LOWER_STMT_PUSH:
+            emit_indent(&e->out, indent);
+            emit_var_name(&e->out, stmt->as.push_stmt.name);
+            buf_append(&e->out, "+=(");
+            if (!emit_value_expr(e, stmt->as.push_stmt.value, &e->out)) return false;
+            buf_append(&e->out, ")\n\n");
+            return true;
+
+        case DS_LOWER_STMT_FOR_ARRAY: {
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "for ");
+            emit_var_name(&e->out, stmt->as.for_stmt.name);
+            buf_append(&e->out, " in ");
+            if (stmt->as.for_stmt.iterable->kind != DS_LOWER_EXPR_IDENT) {
+                ds_diag_error(e->diag, stmt->span, "Bash emission only supports looping over named arrays in v0.10.0");
+                return false;
+            }
+            buf_append(&e->out, "\"${");
+            emit_var_name(&e->out, stmt->as.for_stmt.iterable->as.text);
+            buf_append(&e->out, "[@]}\"; do\n");
+            size_t mark = e->symbols.len;
+            DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
+            symbol_vec_push(&e->symbols, copy);
+            if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
+            symbols_truncate(&e->symbols, mark);
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "done\n\n");
+            return true;
+        }
 
         case DS_LOWER_STMT_IF:
             emit_indent(&e->out, indent);

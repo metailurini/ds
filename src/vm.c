@@ -27,6 +27,11 @@ typedef enum {
     OP_POP_SCOPE,
     OP_RUN_CMD,
     OP_CALL,
+    OP_ARRAY_LITERAL,
+    OP_MAP_LITERAL,
+    OP_GET_INDEX,
+    OP_PUSH_ARRAY,
+    OP_FOR_ARRAY,
     OP_RETURN_FUNC,
     OP_RETURN,
     OP_NOP
@@ -61,6 +66,8 @@ typedef struct {
     DsStr *words;
     size_t word_count;
     DsRedirect redirect;
+    size_t loop_index;
+    bool loop_active;
 } Instr;
 
 typedef struct {
@@ -303,6 +310,49 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
+        case DS_LOWER_EXPR_ARRAY: {
+            int r = new_reg(p);
+            Instr ins = {0};
+            ins.op = OP_ARRAY_LITERAL;
+            ins.span = expr->span;
+            ins.dst = r;
+            ins.arg_count = expr->as.array.elements.len;
+            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) ins.args[i] = compile_expr(p, expr->as.array.elements.items[i]);
+            emit_instr(p, ins);
+            return r;
+        }
+        case DS_LOWER_EXPR_MAP: {
+            int r = new_reg(p);
+            Instr ins = {0};
+            ins.op = OP_MAP_LITERAL;
+            ins.span = expr->span;
+            ins.dst = r;
+            ins.arg_count = expr->as.map.entries.len;
+            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            ins.word_count = expr->as.map.entries.len;
+            ins.words = (DsStr *)ds_xcalloc(ins.word_count ? ins.word_count : 1, sizeof(DsStr));
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                ins.args[i] = compile_expr(p, expr->as.map.entries.items[i].value);
+                ins.words[i].data = ds_str_dup_range(expr->as.map.entries.items[i].key.data, expr->as.map.entries.items[i].key.len);
+                ins.words[i].len = expr->as.map.entries.items[i].key.len;
+            }
+            emit_instr(p, ins);
+            return r;
+        }
+        case DS_LOWER_EXPR_INDEX: {
+            int obj = compile_expr(p, expr->as.index.object);
+            int idx = compile_expr(p, expr->as.index.index);
+            int r = new_reg(p);
+            Instr ins = {0};
+            ins.op = OP_GET_INDEX;
+            ins.span = expr->span;
+            ins.dst = r;
+            ins.a = obj;
+            ins.b = idx;
+            emit_instr(p, ins);
+            return r;
+        }
         case DS_LOWER_EXPR_CALL:
             return new_reg(p);
         case DS_LOWER_EXPR_ERROR:
@@ -365,6 +415,37 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) ins.args[i] = compile_expr(p, stmt->as.call_stmt.args.items[i]);
             emit_instr(p, ins);
+            break;
+        }
+        case DS_LOWER_STMT_PUSH: {
+            int value = compile_expr(p, stmt->as.push_stmt.value);
+            Instr ins = {0};
+            ins.op = OP_PUSH_ARRAY;
+            ins.span = stmt->span;
+            ins.a = value;
+            ins.name = ds_str_dup_range(stmt->as.push_stmt.name.data, stmt->as.push_stmt.name.len);
+            emit_instr(p, ins);
+            break;
+        }
+        case DS_LOWER_STMT_FOR_ARRAY: {
+            int iterable = compile_expr(p, stmt->as.for_stmt.iterable);
+            Instr begin = {0};
+            begin.op = OP_FOR_ARRAY;
+            begin.span = stmt->span;
+            begin.a = iterable;
+            begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
+            size_t begin_pos = emit_instr(p, begin);
+            compile_block(p, stmt->as.for_stmt.body);
+            Instr pop = {0};
+            pop.op = OP_POP_SCOPE;
+            pop.span = stmt->span;
+            emit_instr(p, pop);
+            Instr jump = {0};
+            jump.op = OP_JUMP;
+            jump.span = stmt->span;
+            jump.target = (int)begin_pos;
+            emit_instr(p, jump);
+            p->instrs[begin_pos].target = (int)p->instr_len;
             break;
         }
         case DS_LOWER_STMT_IF: {
@@ -439,6 +520,11 @@ static const char *op_name(OpCode op) {
         case OP_POP_SCOPE: return "POP_SCOPE";
         case OP_RUN_CMD: return "RUN_CMD";
         case OP_CALL: return "CALL";
+        case OP_ARRAY_LITERAL: return "ARRAY_LITERAL";
+        case OP_MAP_LITERAL: return "MAP_LITERAL";
+        case OP_GET_INDEX: return "GET_INDEX";
+        case OP_PUSH_ARRAY: return "PUSH_ARRAY";
+        case OP_FOR_ARRAY: return "FOR_ARRAY";
         case OP_RETURN_FUNC: return "RETURN_FUNC";
         case OP_RETURN: return "RETURN";
         case OP_NOP: return "NOP";
@@ -475,6 +561,12 @@ static void print_value_literal(FILE *out, const DsValue *v) {
             break;
         case DS_VALUE_COMMAND_RESULT:
             fputs("command_result", out);
+            break;
+        case DS_VALUE_ARRAY:
+            fprintf(out, "array[%zu]", v->as.array.len);
+            break;
+        case DS_VALUE_MAP:
+            fprintf(out, "map[%zu]", v->as.map.len);
             break;
     }
 }
@@ -585,6 +677,19 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 }
                 fputc(')', out);
                 break;
+            case OP_ARRAY_LITERAL:
+                fprintf(out, " r%d, [", ins->dst);
+                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                fputc(']', out);
+                break;
+            case OP_MAP_LITERAL:
+                fprintf(out, " r%d, {", ins->dst);
+                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "%.*s: r%d", (int)ins->words[j].len, ins->words[j].data, ins->args[j]); }
+                fputc('}', out);
+                break;
+            case OP_GET_INDEX: fprintf(out, " r%d, r%d[r%d]", ins->dst, ins->a, ins->b); break;
+            case OP_PUSH_ARRAY: fprintf(out, " %s, r%d", ins->name, ins->a); break;
+            case OP_FOR_ARRAY: fprintf(out, " %s in r%d -> %d", ins->name, ins->a, ins->target); break;
             case OP_RETURN_FUNC: break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
@@ -913,6 +1018,15 @@ static bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span) {
     }
 }
 
+static DsValue *lookup_var_ref(Vm *vm, const char *name) {
+    DsStr key = {(char *)name, strlen(name)};
+    for (VmScope *scope = vm->scope; scope; scope = scope->parent) {
+        DsValue *found = ds_map_get(&scope->vars, key);
+        if (found) return found;
+    }
+    return NULL;
+}
+
 static bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span) {
     ds_string_init(out);
     for (size_t i = 0; i < input->len; i++) {
@@ -1008,10 +1122,6 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
             char *field = ds_str_dup_range(word.data + i + 1, word.len - i - 1);
             DsValue value;
             if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
-            if (value.kind != DS_VALUE_COMMAND_RESULT) {
-                ds_diag_error(vm->diag, span, "field access is only supported on command results in v0.7.0");
-                ds_value_free(&value); free(name); free(field); return false;
-            }
             DsValue field_value = ds_value_null();
             bool ok = command_result_field(vm, &value, field, span, &field_value);
             if (!ok) {
@@ -1307,8 +1417,18 @@ static int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
 }
 
 static bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out) {
+    if (value->kind == DS_VALUE_MAP) {
+        DsStr key = {(char *)field, strlen(field)};
+        DsValue *found = ds_map_get((DsMap *)&value->as.map, key);
+        if (!found) {
+            ds_diag_error(vm->diag, span, "missing map key `%s`", field);
+            return false;
+        }
+        *out = ds_value_copy(found);
+        return true;
+    }
     if (value->kind != DS_VALUE_COMMAND_RESULT) {
-        ds_diag_error(vm->diag, span, "field access is only supported on command results in v0.7.0");
+        ds_diag_error(vm->diag, span, "field access is only supported on command results and maps in v0.10.0");
         return false;
     }
     DsStr field_view = {(char *)field, strlen(field)};
@@ -1440,6 +1560,69 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
                 size_t target_ip = 0;
                 if (!call_function(&vm, ins, ip + 1, &target_ip)) { rc = 1; goto done; }
                 ip = target_ip;
+                break;
+            }
+            case OP_ARRAY_LITERAL: {
+                DsValue array = ds_value_null();
+                array.kind = DS_VALUE_ARRAY;
+                ds_array_init(&array.as.array);
+                for (size_t i = 0; i < ins->arg_count; i++) {
+                    DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
+                    *item = ds_value_copy(&vm.regs[ins->args[i]]);
+                    ds_array_push(&array.as.array, item);
+                }
+                set_reg(&vm, ins->dst, array);
+                ip++;
+                break;
+            }
+            case OP_MAP_LITERAL: {
+                DsValue map = ds_value_null();
+                map.kind = DS_VALUE_MAP;
+                ds_map_init(&map.as.map);
+                for (size_t i = 0; i < ins->arg_count; i++) ds_map_set(&map.as.map, ins->words[i], ds_value_copy(&vm.regs[ins->args[i]]));
+                set_reg(&vm, ins->dst, map);
+                ip++;
+                break;
+            }
+            case OP_GET_INDEX: {
+                DsValue *obj = &vm.regs[ins->a];
+                DsValue *idx = &vm.regs[ins->b];
+                if (obj->kind == DS_VALUE_ARRAY) {
+                    if (idx->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "array index must be an int"); rc = 1; goto done; }
+                    if (idx->as.integer < 0 || (size_t)idx->as.integer >= obj->as.array.len) { ds_diag_error(diag, ins->span, "array index %lld out of range", (long long)idx->as.integer); rc = 1; goto done; }
+                    set_reg(&vm, ins->dst, ds_value_copy((DsValue *)obj->as.array.items[idx->as.integer]));
+                } else if (obj->kind == DS_VALUE_MAP) {
+                    DsString key;
+                    ds_value_to_string(idx, &key);
+                    DsStr key_view = {key.data ? key.data : "", key.len};
+                    DsValue *found = ds_map_get(&obj->as.map, key_view);
+                    if (!found) { ds_diag_error(diag, ins->span, "missing map key `%.*s`", (int)key_view.len, key_view.data); ds_string_free(&key); rc = 1; goto done; }
+                    set_reg(&vm, ins->dst, ds_value_copy(found));
+                    ds_string_free(&key);
+                } else { ds_diag_error(diag, ins->span, "indexing requires an array or map"); rc = 1; goto done; }
+                ip++;
+                break;
+            }
+            case OP_PUSH_ARRAY: {
+                DsValue *array = lookup_var_ref(&vm, ins->name);
+                if (!array) { ds_diag_error(diag, ins->span, "unknown array `%s`", ins->name); rc = 1; goto done; }
+                if (array->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "`push` requires an array variable"); rc = 1; goto done; }
+                DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
+                *item = ds_value_copy(&vm.regs[ins->a]);
+                ds_array_push(&array->as.array, item);
+                ip++;
+                break;
+            }
+            case OP_FOR_ARRAY: {
+                DsValue *iter = &vm.regs[ins->a];
+                if (iter->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "for loop iterable must be an array"); rc = 1; goto done; }
+                if (!ins->loop_active) { ins->loop_active = true; ins->loop_index = 0; }
+                if (ins->loop_index >= iter->as.array.len) { ins->loop_active = false; ip = (size_t)ins->target; break; }
+                vm_push_scope(&vm);
+                DsStr key = {ins->name, strlen(ins->name)};
+                ds_map_set(&vm.scope->vars, key, ds_value_copy((DsValue *)iter->as.array.items[ins->loop_index]));
+                ins->loop_index++;
+                ip++;
                 break;
             }
             case OP_RETURN_FUNC: {

@@ -56,6 +56,9 @@ typedef enum {
     DS_TOK_TRUE,
     DS_TOK_FALSE,
     DS_TOK_FN,
+    DS_TOK_FOR,
+    DS_TOK_IN,
+    DS_TOK_WHILE,
     DS_TOK_COLON,
     DS_TOK_COMMA,
     DS_TOK_EQUAL,
@@ -79,6 +82,8 @@ typedef enum {
     DS_TOK_REDIRECT_ALL_APPEND,
     DS_TOK_LBRACE,
     DS_TOK_RBRACE,
+    DS_TOK_LBRACKET,
+    DS_TOK_RBRACKET,
     DS_TOK_LPAREN,
     DS_TOK_RPAREN,
     DS_TOK_UNKNOWN
@@ -106,6 +111,9 @@ typedef enum {
     DS_EXPR_UNARY,
     DS_EXPR_BINARY,
     DS_EXPR_CALL,
+    DS_EXPR_ARRAY,
+    DS_EXPR_MAP,
+    DS_EXPR_INDEX,
     DS_EXPR_ERROR
 } DsExprKind;
 
@@ -128,6 +136,19 @@ typedef struct {
     size_t cap;
 } DsExprVec;
 
+typedef struct {
+    DsStr key;
+    bool quoted_key;
+    DsExpr *value;
+    DsSpan span;
+} DsMapEntry;
+
+typedef struct {
+    DsMapEntry *items;
+    size_t len;
+    size_t cap;
+} DsMapEntryVec;
+
 struct DsExpr {
     DsExprKind kind;
     DsSpan span;
@@ -139,6 +160,9 @@ struct DsExpr {
         struct { DsStr op; DsExpr *right; } unary;
         struct { DsExpr *left; DsStr op; DsExpr *right; } binary;
         struct { DsStr name; DsExprVec args; } call;
+        struct { DsExprVec elements; } array;
+        struct { DsMapEntryVec entries; } map;
+        struct { DsExpr *object; DsExpr *index; } index;
     } as;
 };
 
@@ -149,7 +173,9 @@ typedef enum {
     DS_STMT_CMD,
     DS_STMT_IMPORT,
     DS_STMT_FN,
-    DS_STMT_CALL
+    DS_STMT_CALL,
+    DS_STMT_FOR,
+    DS_STMT_PUSH
 } DsStmtKind;
 
 typedef struct DsStmt DsStmt;
@@ -245,6 +271,8 @@ struct DsStmt {
         struct { DsStr path; } import_stmt;
         struct { DsStr name; DsFnParamVec params; DsStmt *body; } fn_stmt;
         struct { DsStr name; DsExprVec args; } call_stmt;
+        struct { DsStr key_name; DsStr value_name; bool has_value_name; DsExpr *iterable; DsStmt *body; } for_stmt;
+        struct { DsStr name; DsExpr *value; } push_stmt;
     } as;
 };
 
@@ -282,6 +310,9 @@ typedef enum {
     DS_LOWER_EXPR_UNARY,
     DS_LOWER_EXPR_BINARY,
     DS_LOWER_EXPR_CALL,
+    DS_LOWER_EXPR_ARRAY,
+    DS_LOWER_EXPR_MAP,
+    DS_LOWER_EXPR_INDEX,
     DS_LOWER_EXPR_ERROR
 } DsLowerExprKind;
 
@@ -292,6 +323,18 @@ typedef struct {
     size_t len;
     size_t cap;
 } DsLowerExprVec;
+
+typedef struct {
+    DsStr key;
+    DsLowerExpr *value;
+    DsSpan span;
+} DsLowerMapEntry;
+
+typedef struct {
+    DsLowerMapEntry *items;
+    size_t len;
+    size_t cap;
+} DsLowerMapEntryVec;
 
 struct DsLowerExpr {
     DsLowerExprKind kind;
@@ -304,6 +347,9 @@ struct DsLowerExpr {
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
         struct { DsStr name; DsLowerExprVec args; } call;
+        struct { DsLowerExprVec elements; } array;
+        struct { DsLowerMapEntryVec entries; } map;
+        struct { DsLowerExpr *object; DsLowerExpr *index; bool map_key_literal; DsStr map_key; } index;
     } as;
 };
 
@@ -312,7 +358,9 @@ typedef enum {
     DS_LOWER_STMT_IF,
     DS_LOWER_STMT_BLOCK,
     DS_LOWER_STMT_CMD,
-    DS_LOWER_STMT_CALL
+    DS_LOWER_STMT_CALL,
+    DS_LOWER_STMT_FOR_ARRAY,
+    DS_LOWER_STMT_PUSH
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
@@ -358,6 +406,8 @@ struct DsLowerStmt {
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
+        struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; } for_stmt;
+        struct { DsStr name; DsLowerExpr *value; } push_stmt;
         DsCommand cmd_stmt;
     } as;
 };
@@ -375,7 +425,9 @@ typedef enum {
     DS_VALUE_BOOL,
     DS_VALUE_INT,
     DS_VALUE_STRING,
-    DS_VALUE_COMMAND_RESULT
+    DS_VALUE_COMMAND_RESULT,
+    DS_VALUE_ARRAY,
+    DS_VALUE_MAP
 } DsValueKind;
 
 typedef struct {
@@ -391,20 +443,12 @@ typedef struct {
 } DsCommandResult;
 
 typedef struct {
-    DsValueKind kind;
-    union {
-        bool boolean;
-        int64_t integer;
-        DsString string;
-        DsCommandResult command_result;
-    } as;
-} DsValue;
-
-typedef struct {
     void **items;
     size_t len;
     size_t cap;
 } DsArray;
+
+typedef struct DsValue DsValue;
 
 typedef struct {
     char **keys;
@@ -412,6 +456,18 @@ typedef struct {
     size_t len;
     size_t cap;
 } DsMap;
+
+struct DsValue {
+    DsValueKind kind;
+    union {
+        bool boolean;
+        int64_t integer;
+        DsString string;
+        DsCommandResult command_result;
+        DsArray array;
+        DsMap map;
+    } as;
+};
 
 typedef enum {
     DS_BYTECODE_MODE_DUMP,
