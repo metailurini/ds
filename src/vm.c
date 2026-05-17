@@ -18,6 +18,8 @@ typedef enum {
     OP_INTERPOLATE,
     OP_JUMP,
     OP_JUMP_IF_FALSE,
+    OP_PUSH_SCOPE,
+    OP_POP_SCOPE,
     OP_RUN_CMD,
     OP_RETURN,
     OP_NOP
@@ -192,6 +194,18 @@ static void compile_block(Program *p, const DsLowerStmt *block) {
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) compile_stmt(p, block->as.block_stmt.statements.items[i]);
 }
 
+static void compile_scoped_block(Program *p, const DsLowerStmt *block) {
+    Instr push = {0};
+    push.op = OP_PUSH_SCOPE;
+    push.span = block->span;
+    emit_instr(p, push);
+    compile_block(p, block);
+    Instr pop = {0};
+    pop.op = OP_POP_SCOPE;
+    pop.span = block->span;
+    emit_instr(p, pop);
+}
+
 static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: {
@@ -225,14 +239,14 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             jif.span = stmt->as.if_stmt.condition->span;
             jif.a = cond;
             size_t jif_pos = emit_instr(p, jif);
-            compile_block(p, stmt->as.if_stmt.then_branch);
+            compile_scoped_block(p, stmt->as.if_stmt.then_branch);
             if (stmt->as.if_stmt.else_branch) {
                 Instr jump = {0};
                 jump.op = OP_JUMP;
                 jump.span = stmt->span;
                 size_t jump_pos = emit_instr(p, jump);
                 p->instrs[jif_pos].target = (int)p->instr_len;
-                compile_block(p, stmt->as.if_stmt.else_branch);
+                compile_scoped_block(p, stmt->as.if_stmt.else_branch);
                 p->instrs[jump_pos].target = (int)p->instr_len;
             } else {
                 p->instrs[jif_pos].target = (int)p->instr_len;
@@ -240,7 +254,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             break;
         }
         case DS_LOWER_STMT_BLOCK:
-            compile_block(p, stmt);
+            compile_scoped_block(p, stmt);
             break;
     }
 }
@@ -267,6 +281,8 @@ static const char *op_name(OpCode op) {
         case OP_INTERPOLATE: return "INTERPOLATE";
         case OP_JUMP: return "JUMP";
         case OP_JUMP_IF_FALSE: return "JUMP_IF_FALSE";
+        case OP_PUSH_SCOPE: return "PUSH_SCOPE";
+        case OP_POP_SCOPE: return "POP_SCOPE";
         case OP_RUN_CMD: return "RUN_CMD";
         case OP_RETURN: return "RETURN";
         case OP_NOP: return "NOP";
@@ -323,6 +339,8 @@ bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDia
             case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
             case OP_JUMP: fprintf(out, " %d", ins->target); break;
             case OP_JUMP_IF_FALSE: fprintf(out, " r%d, %d", ins->a, ins->target); break;
+            case OP_PUSH_SCOPE: break;
+            case OP_POP_SCOPE: break;
             case OP_RUN_CMD:
                 fputs(" [", out);
                 for (size_t j = 0; j < ins->word_count; j++) {
@@ -343,22 +361,65 @@ bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDia
     return true;
 }
 
+typedef struct VmScope VmScope;
+struct VmScope {
+    DsMap vars;
+    VmScope *parent;
+};
+
 typedef struct {
     Program *program;
     DsValue *regs;
-    DsMap vars;
+    VmScope *scope;
     DsDiag *diag;
 } Vm;
 
+static VmScope *scope_new(VmScope *parent) {
+    VmScope *scope = (VmScope *)ds_xcalloc(1, sizeof(VmScope));
+    ds_map_init(&scope->vars);
+    scope->parent = parent;
+    return scope;
+}
+
+static void scope_free_one(VmScope *scope) {
+    if (!scope) return;
+    ds_map_free(&scope->vars);
+    free(scope);
+}
+
+static void scope_free_chain(VmScope *scope) {
+    while (scope) {
+        VmScope *parent = scope->parent;
+        scope_free_one(scope);
+        scope = parent;
+    }
+}
+
+static void vm_push_scope(Vm *vm) {
+    vm->scope = scope_new(vm->scope);
+}
+
+static void vm_pop_scope(Vm *vm) {
+    if (!vm->scope || !vm->scope->parent) return;
+    VmScope *old = vm->scope;
+    vm->scope = old->parent;
+    old->parent = NULL;
+    scope_free_one(old);
+}
+
 static bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span) {
     DsStr key = {(char *)name, strlen(name)};
-    DsValue *found = ds_map_get(&vm->vars, key);
-    if (!found) {
+    for (VmScope *scope = vm->scope; scope; scope = scope->parent) {
+        DsValue *found = ds_map_get(&scope->vars, key);
+        if (found) {
+            *out = ds_value_copy(found);
+            return true;
+        }
+    }
+    {
         ds_diag_error(vm->diag, span, "unknown variable `%s`", name);
         return false;
     }
-    *out = ds_value_copy(found);
-    return true;
 }
 
 static bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span) {
@@ -491,7 +552,7 @@ int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
     memset(&vm, 0, sizeof(vm));
     vm.program = &p;
     vm.diag = diag;
-    ds_map_init(&vm.vars);
+    vm.scope = scope_new(NULL);
     ensure_regs(&vm);
 
     int rc = 0;
@@ -512,7 +573,7 @@ int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
             }
             case OP_STORE_VAR: {
                 DsStr key = {ins->name, strlen(ins->name)};
-                ds_map_set(&vm.vars, key, ds_value_copy(&vm.regs[ins->a]));
+                ds_map_set(&vm.scope->vars, key, ds_value_copy(&vm.regs[ins->a]));
                 ip++;
                 break;
             }
@@ -552,6 +613,14 @@ int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
                 ip = truth ? ip + 1 : (size_t)ins->target;
                 break;
             }
+            case OP_PUSH_SCOPE:
+                vm_push_scope(&vm);
+                ip++;
+                break;
+            case OP_POP_SCOPE:
+                vm_pop_scope(&vm);
+                ip++;
+                break;
             case OP_RUN_CMD:
                 rc = run_command(&vm, ins);
                 if (rc != 0) goto done;
@@ -569,7 +638,7 @@ int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
 done:
     for (int i = 0; i < p.next_reg; i++) ds_value_free(&vm.regs[i]);
     free(vm.regs);
-    ds_map_free(&vm.vars);
+    scope_free_chain(vm.scope);
     program_free(&p);
     ds_lower_program_free(lowered);
     return rc;

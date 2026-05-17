@@ -332,6 +332,11 @@ while centralizing symbol lookup, interpolation validation, duplicate
 declaration checks, supported operator checks, and block-scope boundary checks.
 Future milestones can simplify this representation further as syntax grows.
 
+In `v0.3.0`, lowered blocks also compile to explicit VM scope push/pop
+instructions. This keeps runtime variable storage aligned with lowering: values
+declared inside a block are available to statements in that block and are
+discarded when execution leaves it.
+
 ## Bytecode backend
 
 `ds` is an interpreter, but it can compile internally to bytecode.

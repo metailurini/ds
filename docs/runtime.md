@@ -227,6 +227,13 @@ They are intentionally small and internal-only:
   copies keys, owns stored `DsValue` values, and does not expose the staged
   `libs/hashmap` API to the rest of the codebase.
 
+The VM stores variables in a small runtime scope stack. The root scope holds
+top-level declarations. Each lowered block pushes a child scope and pops it
+when the block exits, so branch-local variables remain usable inside their
+block but do not leak into later statements, outer scopes, or sibling blocks.
+Lowering remains conservative and rejects nested shadowing for now; sibling
+blocks may reuse the same branch-local name because their scopes are distinct.
+
 The initial VM truthiness rule is deliberately simple and mirrored by tests:
 `false`, `0`, `null`, and empty strings are falsey; `true`, non-zero integers,
 and non-empty strings are truthy. Comparisons render values to deterministic

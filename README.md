@@ -148,7 +148,7 @@ bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 ```
 
-The VM and Bash emitter now consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The v0.3 test suite covers runtime primitives, bytecode dumps, VM execution, command failures, diagnostics, and VM/Bash parity.
+The VM and Bash emitter now consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The VM also maintains runtime block scopes for lowered blocks. The v0.3 test suite covers runtime primitives, direct lowering shape checks, bytecode dumps, source-map/jump edges, VM execution, command failures, diagnostics, and VM/Bash parity.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

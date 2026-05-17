@@ -5,8 +5,12 @@ instructions:
   0000 LOAD_CONST     r0, const 0    # tests/v0_3/fixtures/if_true.ds:1:10
   0001 STORE_VAR      ok, r0    # tests/v0_3/fixtures/if_true.ds:1:1
   0002 LOAD_VAR       r1, ok    # tests/v0_3/fixtures/if_true.ds:2:4
-  0003 JUMP_IF_FALSE  r1, 6    # tests/v0_3/fixtures/if_true.ds:2:4
-  0004 RUN_CMD        ["echo", "\"yes\""]    # tests/v0_3/fixtures/if_true.ds:3:3
-  0005 JUMP           7    # tests/v0_3/fixtures/if_true.ds:2:1
-  0006 RUN_CMD        ["echo", "\"no\""]    # tests/v0_3/fixtures/if_true.ds:5:3
-  0007 RETURN         0    # tests/v0_3/fixtures/if_true.ds:1:1
+  0003 JUMP_IF_FALSE  r1, 8    # tests/v0_3/fixtures/if_true.ds:2:4
+  0004 PUSH_SCOPE        # tests/v0_3/fixtures/if_true.ds:2:7
+  0005 RUN_CMD        ["echo", "\"yes\""]    # tests/v0_3/fixtures/if_true.ds:3:3
+  0006 POP_SCOPE         # tests/v0_3/fixtures/if_true.ds:2:7
+  0007 JUMP           11    # tests/v0_3/fixtures/if_true.ds:2:1
+  0008 PUSH_SCOPE        # tests/v0_3/fixtures/if_true.ds:4:8
+  0009 RUN_CMD        ["echo", "\"no\""]    # tests/v0_3/fixtures/if_true.ds:5:3
+  0010 POP_SCOPE         # tests/v0_3/fixtures/if_true.ds:4:8
+  0011 RETURN         0    # tests/v0_3/fixtures/if_true.ds:1:1

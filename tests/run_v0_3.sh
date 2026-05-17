@@ -159,6 +159,15 @@ cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
   -o "$TMP/test_v0_3_runtime"
 run_ok runtime_unit "$TMP/test_v0_3_runtime"
 
+# Direct lowering tests prove the shared lowered representation shape instead
+# of only exercising it through the VM and Bash backends.
+cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
+  "$ROOT/tests/test_v0_3_lower.c" \
+  "$ROOT/src/lexer.c" "$ROOT/src/parser.c" "$ROOT/src/ast.c" "$ROOT/src/lower.c" \
+  "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  -o "$TMP/test_v0_3_lower"
+run_ok lowering_unit "$TMP/test_v0_3_lower"
+
 # Bytecode dump golden tests and stable dump shape.
 for name in empty comments_only simple_variable interpolation if_true if_false nested_if mixed; do
   (cd "$ROOT" && "$DS" bytecode "$FIX/$name.ds") >"$TMP/$name.bytecode" 2>"$TMP/$name.bytecode.err" || {
@@ -177,11 +186,37 @@ assert_contains "$TMP/mixed.bytecode" "STORE_VAR" "bytecode emits STORE_VAR"
 assert_contains "$TMP/mixed.bytecode" "LOAD_VAR" "bytecode emits LOAD_VAR"
 assert_contains "$TMP/mixed.bytecode" "COMPARE" "bytecode emits COMPARE"
 assert_contains "$TMP/mixed.bytecode" "JUMP_IF_FALSE" "bytecode emits conditional jump"
+assert_contains "$TMP/mixed.bytecode" "PUSH_SCOPE" "bytecode emits scope push"
+assert_contains "$TMP/mixed.bytecode" "POP_SCOPE" "bytecode emits scope pop"
 assert_contains "$TMP/mixed.bytecode" "RUN_CMD" "bytecode emits command instruction"
 assert_contains "$TMP/interpolation.bytecode" "string \"api\"" "bytecode string constant formatting"
 assert_contains "$TMP/if_true.bytecode" "bool true" "bytecode bool constant formatting"
 assert_contains "$TMP/mixed.bytecode" "int 2" "bytecode int constant formatting"
 assert_contains "$TMP/nested_if.bytecode" "tests/v0_3/fixtures/nested_if.ds:4:6" "bytecode source location inside nested block"
+
+cat >"$TMP/source_map_comments.ds" <<'DS'
+# leading comment
+
+let name = "Danh"
+
+# comment before command
+echo $name
+DS
+run_ok bytecode_source_map_comments "$DS" bytecode "$TMP/source_map_comments.ds"
+assert_contains "$TMP/bytecode_source_map_comments.out" "$TMP/source_map_comments.ds:3:12" "bytecode source mapping after blank lines for let value"
+assert_contains "$TMP/bytecode_source_map_comments.out" "$TMP/source_map_comments.ds:6:1" "bytecode source mapping after comments for command"
+
+cat >"$TMP/empty_block.ds" <<'DS'
+if false {
+}
+echo "after"
+DS
+run_ok bytecode_empty_block "$DS" bytecode "$TMP/empty_block.ds"
+assert_contains "$TMP/bytecode_empty_block.out" "JUMP_IF_FALSE" "bytecode empty block has conditional jump"
+assert_contains "$TMP/bytecode_empty_block.out" "PUSH_SCOPE" "bytecode empty block has scope push"
+assert_contains "$TMP/bytecode_empty_block.out" "POP_SCOPE" "bytecode empty block has scope pop"
+run_ok vm_empty_block "$DS" run "$TMP/empty_block.ds"
+assert_same_text $'after\n' "$TMP/vm_empty_block.out" "VM jumps over empty block"
 
 # CLI behavior: implicit run, explicit run, bytecode dump, existing commands, and errors.
 run_ok cli_implicit "$DS" "tests/v0_3/fixtures/simple_variable.ds"
@@ -435,6 +470,42 @@ run_ok lower_inner_scope_ok "$DS" check "$TMP/inner_scope_ok.ds"
 run_ok vm_inner_scope_ok "$DS" run "$TMP/inner_scope_ok.ds"
 assert_same_text $'ok\n' "$TMP/vm_inner_scope_ok.out" "branch-local variable works inside block"
 
+cat >"$TMP/runtime_scope_shadow.ds" <<'DS'
+let name = "outer"
+if true {
+  let inner = "inner"
+  echo $inner
+}
+echo $name
+if true {
+  let left = "left"
+  echo $left
+}
+if true {
+  let left = "right"
+  echo $left
+}
+echo $name
+DS
+run_ok vm_runtime_scope_shadow "$DS" run "$TMP/runtime_scope_shadow.ds"
+cat >"$TMP/runtime_scope_shadow.expected" <<'EOF_EXPECT'
+inner
+outer
+left
+right
+outer
+EOF_EXPECT
+assert_same "$TMP/runtime_scope_shadow.expected" "$TMP/vm_runtime_scope_shadow.out" "VM runtime scopes isolate nested declarations"
+
+cat >"$TMP/lower_shadow_rejected.ds" <<'DS'
+let name = "outer"
+if true {
+  let name = "inner"
+}
+DS
+run_fail lower_shadow_rejected "$DS" check "$TMP/lower_shadow_rejected.ds"
+assert_contains "$TMP/lower_shadow_rejected.err" 'duplicate variable `name` in this scope' "lowering rejects nested shadowing consistently"
+
 cat >"$TMP/unsupported_expr.ds" <<'DS'
 let total = 1 + 2
 DS
@@ -460,6 +531,19 @@ echo "after"
 DS
 run_fail vm_failing_command "$DS" run "$TMP/failing_command.ds"
 assert_not_contains "$TMP/vm_failing_command.out" 'after' "VM stops after failing command"
+
+cat >"$TMP/exit_7.ds" <<'DS'
+sh "-c" "exit 7"
+DS
+capture_status vm_exit_7 "$DS" run "$TMP/exit_7.ds"
+assert_status vm_exit_7 "7"
+
+cat >"$TMP/long_output.ds" <<'DS'
+sh "-c" "i=0; while [ $i -lt 300 ]; do printf 'line-%03d abcdefghijklmnopqrstuvwxyz\n' $i; i=$((i + 1)); done"
+DS
+run_ok vm_long_command_output "$DS" run "$TMP/long_output.ds"
+seq 0 299 | awk '{printf "line-%03d abcdefghijklmnopqrstuvwxyz\n", $1}' >"$TMP/long_output.expected"
+assert_same "$TMP/long_output.expected" "$TMP/vm_long_command_output.out" "VM preserves long command output across stdio buffering"
 
 cat >"$TMP/failing_branch.ds" <<'DS'
 if true {

@@ -36,8 +36,10 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Initial `v0.3.0` VM implementation with `ds <file.ds>`, `ds run <file.ds>`, and `ds bytecode <file.ds>`.
 - Minimal runtime primitives for owned strings, tagged values, internal arrays, and `DsMap` symbol/value storage.
 - Shared lowered program representation consumed by both bytecode generation/VM execution and Bash emission, including known variable checks, interpolation names, supported expressions, duplicate declarations, and block-local scope boundaries.
+- VM runtime scope push/pop behavior for lowered blocks, so branch-local declarations do not leak into outer or sibling scopes.
 - Deterministic bytecode dump output and a small direct execution VM for the supported `v0.1.0` / `v0.2.0` subset.
 - `v0.3.0` runtime, lowering, bytecode, VM execution, diagnostics, command execution, sanitizer, and VM/Bash parity tests.
+- Expanded `v0.3.0` strict-plan coverage for direct lowered-tree assertions, source locations after blank lines/comments, empty-block jumps, explicit command exit status, and long command output.
 - `make asan` and `make ubsan` sanitizer test targets for runtime/VM ownership checks where the local compiler supports them.
 
 ### Fixed
