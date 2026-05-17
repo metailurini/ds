@@ -1,0 +1,2 @@
+import "./imported_dir"
+echo "should not run"

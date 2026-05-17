@@ -43,11 +43,15 @@ bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
     }
 
     if (fseek(fp, 0, SEEK_END) != 0) {
+        DsSpan span = {{0, 1, 1}, {0, 1, 1}, out};
+        ds_diag_error(diag, span, "failed to read source file `%s`: %s", path, strerror(errno));
         fclose(fp);
         return false;
     }
     long size = ftell(fp);
     if (size < 0) {
+        DsSpan span = {{0, 1, 1}, {0, 1, 1}, out};
+        ds_diag_error(diag, span, "failed to read source file `%s`: %s", path, strerror(errno));
         fclose(fp);
         return false;
     }
@@ -61,6 +65,13 @@ bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
     }
 
     size_t got = fread(data, 1, (size_t)size, fp);
+    if (got < (size_t)size && ferror(fp)) {
+        DsSpan span = {{0, 1, 1}, {0, 1, 1}, out};
+        ds_diag_error(diag, span, "failed to read source file `%s`: %s", path, strerror(errno));
+        free(data);
+        fclose(fp);
+        return false;
+    }
     fclose(fp);
     data[got] = '\0';
 

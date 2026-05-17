@@ -207,7 +207,10 @@ static bool process_ast_statements(CliProgram *program, LoadedUnit *unit, bool i
             }
             char *dir = dir_name_dup(unit->source.path ? unit->source.path : ".");
             char *joined = join_path(dir, import_rel);
-            load_composed_file(program, joined, stmt->span, false, composed);
+            bool loaded = load_composed_file(program, joined, stmt->span, false, composed);
+            if (!loaded && !program->diag.has_error) {
+                ds_diag_error(&program->diag, stmt->span, "failed to load imported file `%s`", joined);
+            }
             free(joined);
             free(dir);
             free(import_rel);
@@ -255,6 +258,7 @@ static bool load_composed_file(CliProgram *program, const char *path, DsSpan imp
     char *owned_path = ds_str_dup_range(path, strlen(path));
     ds_diag_init(&program->diag, &unit->source);
     if (!ds_source_read(owned_path, &unit->source, &program->diag)) {
+        if (!is_root) ds_diag_error(&program->diag, import_span, "failed to read imported file `%s`", path);
         free(owned_path);
         free(unit);
         free(program->stack[--program->stack_len]);

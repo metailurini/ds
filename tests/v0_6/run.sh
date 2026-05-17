@@ -97,6 +97,7 @@ assert_same_text $'shared fan once\nfan a fan\nfan b fan\nfanout done\n' "$TMP/r
 declare -A graph_errors=(
   [missing.ds]='failed to open imported file'
   [nested_missing_main.ds]='failed to open imported file'
+  [directory_import_main.ds]='failed to read imported file'
   [cycle_self.ds]='import cycle detected'
   [cycle_a.ds]='import cycle detected'
   [cycle_3_a.ds]='import cycle detected'
@@ -121,6 +122,8 @@ done
 assert_contains "$TMP/check_graph_cycle_a.err" 'cycle_a.ds' "cycle stack includes first file"
 assert_contains "$TMP/check_graph_cycle_a.err" 'cycle_b.ds' "cycle stack includes second file"
 assert_contains "$TMP/check_graph_nested_missing_main.err" 'nested_missing_lib.ds' "nested missing points at importer file"
+assert_contains "$TMP/check_graph_directory_import_main.err" 'directory_import_main.ds:1:1' "directory import points at import site"
+assert_contains "$TMP/check_graph_directory_import_main.err" 'imported_dir' "directory import diagnostic names path"
 assert_contains "$TMP/check_graph_duplicate_decl_main.err" 'duplicate_decl_main.ds' "root/import duplicate points at root declaration"
 assert_contains "$TMP/check_graph_duplicate_across_imports_main.err" 'duplicate_b.ds' "import/import duplicate points at second import declaration"
 assert_contains "$TMP/check_graph_unknown_in_import_main.err" 'unknown_in_import_lib.ds' "imported lowering error path preserved"
