@@ -4,6 +4,7 @@
 
 - Implemented initial local `import "./file.ds"` parsing and composition for `check`, `bytecode`, `run`, direct execution, and `emit bash`.
 - Added deterministic load-once import resolution relative to the importing file, cycle diagnostics, missing-import diagnostics, and standalone Bash bundling of imported statements.
+- Fixed top-level import ordering so multiple imports before executable statements are accepted and composed in order.
 - Added import examples under `examples/import-main.ds` and `examples/import-lib.ds`.
 
 ## v0.5.0 — Complete

@@ -437,6 +437,7 @@ static DsStmt *parse_stmt(Parser *p) {
 DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
     Parser p = {tokens, 0, diag};
     DsAst *ast = (DsAst *)ds_xcalloc(1, sizeof(DsAst));
+    bool after_executable = false;
     if (tokens->len > 0) ast->span.start = tokens->items[0].span.start;
     skip_newlines(&p);
     while (!at_end(&p)) {
@@ -446,13 +447,14 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
             continue;
         }
         if (advance_if(&p, DS_TOK_IMPORT)) {
-            DsStmt *stmt = parse_import_stmt(&p, true, ast->statements.len > 0);
+            DsStmt *stmt = parse_import_stmt(&p, true, after_executable);
             if (stmt) stmt_vec_push(&ast->statements, stmt);
             skip_newlines(&p);
             continue;
         }
         DsStmt *stmt = parse_stmt(&p);
         if (stmt) stmt_vec_push(&ast->statements, stmt);
+        after_executable = true;
         skip_newlines(&p);
     }
     if (tokens->len > 0) ast->span.end = tokens->items[tokens->len - 1].span.end;
