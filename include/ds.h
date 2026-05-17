@@ -137,6 +137,60 @@ typedef struct {
 } DsAst;
 
 typedef enum {
+    DS_LOWER_EXPR_IDENT,
+    DS_LOWER_EXPR_STRING,
+    DS_LOWER_EXPR_INT,
+    DS_LOWER_EXPR_BOOL,
+    DS_LOWER_EXPR_UNARY,
+    DS_LOWER_EXPR_BINARY,
+    DS_LOWER_EXPR_ERROR
+} DsLowerExprKind;
+
+typedef struct DsLowerExpr DsLowerExpr;
+
+struct DsLowerExpr {
+    DsLowerExprKind kind;
+    DsSpan span;
+    union {
+        DsStr text;
+        bool boolean;
+        struct { DsStr op; DsLowerExpr *right; } unary;
+        struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
+    } as;
+};
+
+typedef enum {
+    DS_LOWER_STMT_LET,
+    DS_LOWER_STMT_IF,
+    DS_LOWER_STMT_BLOCK,
+    DS_LOWER_STMT_CMD
+} DsLowerStmtKind;
+
+typedef struct DsLowerStmt DsLowerStmt;
+
+typedef struct {
+    DsLowerStmt **items;
+    size_t len;
+    size_t cap;
+} DsLowerStmtVec;
+
+struct DsLowerStmt {
+    DsLowerStmtKind kind;
+    DsSpan span;
+    union {
+        struct { DsStr name; DsLowerExpr *value; } let_stmt;
+        struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
+        struct { DsLowerStmtVec statements; } block_stmt;
+        struct { DsWordVec words; } cmd_stmt;
+    } as;
+};
+
+typedef struct {
+    DsLowerStmtVec statements;
+    DsSpan span;
+} DsLowerProgram;
+
+typedef enum {
     DS_VALUE_NULL,
     DS_VALUE_BOOL,
     DS_VALUE_INT,
@@ -191,7 +245,9 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag);
 void ds_ast_print(const DsAst *ast, FILE *out);
 void ds_ast_free(DsAst *ast);
 
+DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag);
 bool ds_lower_validate(const DsAst *ast, DsDiag *diag);
+void ds_lower_program_free(DsLowerProgram *program);
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);
 
 void ds_string_init(DsString *s);

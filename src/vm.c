@@ -100,9 +100,9 @@ static bool decode_string_text(DsStr text, DsString *out) {
     return true;
 }
 
-static int compile_expr(Program *p, const DsExpr *expr);
+static int compile_expr(Program *p, const DsLowerExpr *expr);
 
-static int compile_string_expr(Program *p, const DsExpr *expr) {
+static int compile_string_expr(Program *p, const DsLowerExpr *expr) {
     DsString decoded;
     decode_string_text(expr->as.text, &decoded);
     int c = add_const(p, ds_value_string_take(&decoded));
@@ -116,11 +116,11 @@ static int compile_string_expr(Program *p, const DsExpr *expr) {
     return r;
 }
 
-static int compile_expr(Program *p, const DsExpr *expr) {
+static int compile_expr(Program *p, const DsLowerExpr *expr) {
     switch (expr->kind) {
-        case DS_EXPR_STRING:
+        case DS_LOWER_EXPR_STRING:
             return compile_string_expr(p, expr);
-        case DS_EXPR_INT: {
+        case DS_LOWER_EXPR_INT: {
             char *tmp = ds_str_dup_range(expr->as.text.data, expr->as.text.len);
             int64_t value = strtoll(tmp, NULL, 10);
             free(tmp);
@@ -134,7 +134,7 @@ static int compile_expr(Program *p, const DsExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
-        case DS_EXPR_BOOL: {
+        case DS_LOWER_EXPR_BOOL: {
             int c = add_const(p, ds_value_bool(expr->as.boolean));
             int r = new_reg(p);
             Instr ins = {0};
@@ -145,7 +145,7 @@ static int compile_expr(Program *p, const DsExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
-        case DS_EXPR_IDENT: {
+        case DS_LOWER_EXPR_IDENT: {
             int r = new_reg(p);
             Instr ins = {0};
             ins.op = OP_LOAD_VAR;
@@ -155,7 +155,7 @@ static int compile_expr(Program *p, const DsExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
-        case DS_EXPR_UNARY: {
+        case DS_LOWER_EXPR_UNARY: {
             int right = compile_expr(p, expr->as.unary.right);
             int r = new_reg(p);
             Instr ins = {0};
@@ -166,7 +166,7 @@ static int compile_expr(Program *p, const DsExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
-        case DS_EXPR_BINARY: {
+        case DS_LOWER_EXPR_BINARY: {
             int left = compile_expr(p, expr->as.binary.left);
             int right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
@@ -180,21 +180,21 @@ static int compile_expr(Program *p, const DsExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
-        case DS_EXPR_ERROR:
+        case DS_LOWER_EXPR_ERROR:
             return new_reg(p);
     }
     return new_reg(p);
 }
 
-static void compile_stmt(Program *p, const DsStmt *stmt);
+static void compile_stmt(Program *p, const DsLowerStmt *stmt);
 
-static void compile_block(Program *p, const DsStmt *block) {
+static void compile_block(Program *p, const DsLowerStmt *block) {
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) compile_stmt(p, block->as.block_stmt.statements.items[i]);
 }
 
-static void compile_stmt(Program *p, const DsStmt *stmt) {
+static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
     switch (stmt->kind) {
-        case DS_STMT_LET: {
+        case DS_LOWER_STMT_LET: {
             int src = compile_expr(p, stmt->as.let_stmt.value);
             Instr ins = {0};
             ins.op = OP_STORE_VAR;
@@ -204,7 +204,7 @@ static void compile_stmt(Program *p, const DsStmt *stmt) {
             emit_instr(p, ins);
             break;
         }
-        case DS_STMT_CMD: {
+        case DS_LOWER_STMT_CMD: {
             Instr ins = {0};
             ins.op = OP_RUN_CMD;
             ins.span = stmt->span;
@@ -218,7 +218,7 @@ static void compile_stmt(Program *p, const DsStmt *stmt) {
             emit_instr(p, ins);
             break;
         }
-        case DS_STMT_IF: {
+        case DS_LOWER_STMT_IF: {
             int cond = compile_expr(p, stmt->as.if_stmt.condition);
             Instr jif = {0};
             jif.op = OP_JUMP_IF_FALSE;
@@ -239,20 +239,20 @@ static void compile_stmt(Program *p, const DsStmt *stmt) {
             }
             break;
         }
-        case DS_STMT_BLOCK:
+        case DS_LOWER_STMT_BLOCK:
             compile_block(p, stmt);
             break;
     }
 }
 
-static bool compile_program(const DsAst *ast, Program *p, DsDiag *diag) {
+static bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag) {
     (void)diag;
     program_init(p);
-    for (size_t i = 0; i < ast->statements.len; i++) compile_stmt(p, ast->statements.items[i]);
+    for (size_t i = 0; i < lowered->statements.len; i++) compile_stmt(p, lowered->statements.items[i]);
     Instr ret = {0};
     ret.op = OP_RETURN;
     ret.target = 0;
-    ret.span = ast->span;
+    ret.span = lowered->span;
     emit_instr(p, ret);
     return true;
 }
@@ -286,9 +286,13 @@ static void print_escaped(FILE *out, const char *data, size_t len) {
 }
 
 bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag) {
-    if (!ds_lower_validate(ast, diag)) return false;
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return false;
     Program p;
-    if (!compile_program(ast, &p, diag)) return false;
+    if (!compile_program(lowered, &p, diag)) {
+        ds_lower_program_free(lowered);
+        return false;
+    }
 
     fputs("constants:\n", out);
     for (size_t i = 0; i < p.const_len; i++) {
@@ -335,6 +339,7 @@ bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDia
         fprintf(out, "    # %s:%d:%d\n", source && source->path ? source->path : "<source>", ins->span.start.line, ins->span.start.column);
     }
     program_free(&p);
+    ds_lower_program_free(lowered);
     return true;
 }
 
@@ -475,9 +480,13 @@ static void set_reg(Vm *vm, int reg, DsValue value) {
 
 int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
     (void)source;
-    if (!ds_lower_validate(ast, diag)) return 1;
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return 1;
     Program p;
-    if (!compile_program(ast, &p, diag)) return 1;
+    if (!compile_program(lowered, &p, diag)) {
+        ds_lower_program_free(lowered);
+        return 1;
+    }
     Vm vm;
     memset(&vm, 0, sizeof(vm));
     vm.program = &p;
@@ -562,5 +571,6 @@ done:
     free(vm.regs);
     ds_map_free(&vm.vars);
     program_free(&p);
+    ds_lower_program_free(lowered);
     return rc;
 }

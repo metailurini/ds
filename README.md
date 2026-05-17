@@ -98,7 +98,7 @@ The project started with documentation only, then `v0.1.0` added the first front
 Current implementation directories:
 
 - `include/` — public internal C declarations for the early implementation;
-- `src/` — source loading, diagnostics, lexer, parser, AST printer, Bash emitter, and CLI entrypoint;
+- `src/` — source loading, diagnostics, lexer, parser, AST printer, shared lowering, bytecode/VM runtime, Bash emitter, and CLI entrypoint;
 - `examples/` — small scripts used for manual frontend smoke checks;
 - `libs/hashmap/` — temporary staging location for the owned hashmap code that should later be absorbed into `src/core` behind `DsMap`.
 
@@ -147,7 +147,7 @@ bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 ```
 
-The VM currently targets the same conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. Runtime/VM tests are not added yet in this implementation pass.
+The VM and Bash emitter now consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. Runtime/VM tests are not added yet in this implementation pass.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

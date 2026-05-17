@@ -109,7 +109,7 @@ static void emit_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
-static bool decode_string_literal(DsDiag *diag, const DsExpr *expr, char **out_data, size_t *out_len) {
+static bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_data, size_t *out_len) {
     DsStr text = expr->as.text;
     if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') {
         ds_diag_error(diag, expr->span, "invalid string literal for Bash emission");
@@ -136,7 +136,7 @@ static bool decode_string_literal(DsDiag *diag, const DsExpr *expr, char **out_d
     return true;
 }
 
-static bool emit_interpolated_string(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
+static bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     char *decoded = NULL;
     size_t len = 0;
     if (!decode_string_literal(e->diag, expr, &decoded, &len)) return false;
@@ -176,14 +176,14 @@ static bool emit_interpolated_string(BashEmitter *e, const DsExpr *expr, EmitBuf
     return true;
 }
 
-static bool emit_value_expr(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
+static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
-        case DS_EXPR_STRING:
+        case DS_LOWER_EXPR_STRING:
             return emit_interpolated_string(e, expr, out);
-        case DS_EXPR_INT:
+        case DS_LOWER_EXPR_INT:
             buf_append_len(out, expr->as.text.data, expr->as.text.len);
             return true;
-        case DS_EXPR_BOOL:
+        case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
             return true;
         default:
@@ -192,9 +192,9 @@ static bool emit_value_expr(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
     }
 }
 
-static bool emit_condition_operand(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
+static bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
-        case DS_EXPR_IDENT:
+        case DS_LOWER_EXPR_IDENT:
             if (!symbol_exists(&e->symbols, expr->as.text)) {
                 ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
                 return false;
@@ -203,12 +203,12 @@ static bool emit_condition_operand(BashEmitter *e, const DsExpr *expr, EmitBuf *
             emit_var_name(out, expr->as.text);
             buf_append(out, "\"");
             return true;
-        case DS_EXPR_STRING:
+        case DS_LOWER_EXPR_STRING:
             return emit_interpolated_string(e, expr, out);
-        case DS_EXPR_INT:
+        case DS_LOWER_EXPR_INT:
             buf_append_len(out, expr->as.text.data, expr->as.text.len);
             return true;
-        case DS_EXPR_BOOL:
+        case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
             return true;
         default:
@@ -217,8 +217,8 @@ static bool emit_condition_operand(BashEmitter *e, const DsExpr *expr, EmitBuf *
     }
 }
 
-static bool emit_condition(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
-    if (expr->kind == DS_EXPR_IDENT) {
+static bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    if (expr->kind == DS_LOWER_EXPR_IDENT) {
         if (!symbol_exists(&e->symbols, expr->as.text)) {
             ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
             return false;
@@ -228,15 +228,15 @@ static bool emit_condition(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
         buf_append(out, "\" == true ]]");
         return true;
     }
-    if (expr->kind == DS_EXPR_BOOL) {
+    if (expr->kind == DS_LOWER_EXPR_BOOL) {
         buf_append(out, expr->as.boolean ? "true" : "false");
         return true;
     }
-    if (expr->kind == DS_EXPR_UNARY && str_eq(expr->as.unary.op, "!")) {
+    if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "!")) {
         buf_append(out, "! ");
         return emit_condition(e, expr->as.unary.right, out);
     }
-    if (expr->kind == DS_EXPR_BINARY) {
+    if (expr->kind == DS_LOWER_EXPR_BINARY) {
         const char *op = NULL;
         bool negate = false;
         if (str_eq(expr->as.binary.op, "==")) op = "==";
@@ -268,7 +268,7 @@ static bool emit_condition(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
 
 static bool emit_command_word(BashEmitter *e, DsStr word, EmitBuf *out, DsSpan span) {
     if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
-        DsExpr fake = {.kind = DS_EXPR_STRING, .span = span};
+        DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = span};
         fake.as.text = word;
         return emit_interpolated_string(e, &fake, out);
     }
@@ -287,21 +287,21 @@ static bool emit_command_word(BashEmitter *e, DsStr word, EmitBuf *out, DsSpan s
     return true;
 }
 
-static bool emit_stmt(BashEmitter *e, const DsStmt *stmt, int indent);
+static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent);
 
-static bool emit_block_body(BashEmitter *e, const DsStmt *block, int indent) {
+static bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) {
         if (!emit_stmt(e, block->as.block_stmt.statements.items[i], indent)) return false;
     }
     return true;
 }
 
-static bool emit_stmt(BashEmitter *e, const DsStmt *stmt, int indent) {
+static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     emit_indent(&e->out, indent);
     buf_appendf(&e->out, "# ds: %s:%d\n", e->source->path ? e->source->path : "<source>", stmt->span.start.line);
 
     switch (stmt->kind) {
-        case DS_STMT_LET:
+        case DS_LOWER_STMT_LET:
             if (!is_safe_identifier(stmt->as.let_stmt.name)) {
                 ds_diag_error(e->diag, stmt->span, "cannot emit unsafe Bash variable name `%.*s`", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
                 return false;
@@ -317,7 +317,7 @@ static bool emit_stmt(BashEmitter *e, const DsStmt *stmt, int indent) {
             }
             return true;
 
-        case DS_STMT_CMD:
+        case DS_LOWER_STMT_CMD:
             emit_indent(&e->out, indent);
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
                 if (i > 0) buf_append(&e->out, " ");
@@ -326,7 +326,7 @@ static bool emit_stmt(BashEmitter *e, const DsStmt *stmt, int indent) {
             buf_append(&e->out, "\n\n");
             return true;
 
-        case DS_STMT_IF:
+        case DS_LOWER_STMT_IF:
             emit_indent(&e->out, indent);
             buf_append(&e->out, "if ");
             if (!emit_condition(e, stmt->as.if_stmt.condition, &e->out)) return false;
@@ -341,14 +341,15 @@ static bool emit_stmt(BashEmitter *e, const DsStmt *stmt, int indent) {
             buf_append(&e->out, "fi\n\n");
             return true;
 
-        case DS_STMT_BLOCK:
+        case DS_LOWER_STMT_BLOCK:
             return emit_block_body(e, stmt, indent);
     }
     return true;
 }
 
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag) {
-    if (!ds_lower_validate(ast, diag)) return false;
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return false;
 
     BashEmitter e;
     memset(&e, 0, sizeof(e));
@@ -358,10 +359,11 @@ bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_p
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");
 
-    for (size_t i = 0; i < ast->statements.len; i++) {
-        if (!emit_stmt(&e, ast->statements.items[i], 0)) {
+    for (size_t i = 0; i < lowered->statements.len; i++) {
+        if (!emit_stmt(&e, lowered->statements.items[i], 0)) {
             free_symbols(&e.symbols);
             free(e.out.data);
+            ds_lower_program_free(lowered);
             return false;
         }
     }
@@ -372,6 +374,7 @@ bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_p
         ds_diag_error(diag, span, "failed to open output file `%s`: %s", output_path, strerror(errno));
         free_symbols(&e.symbols);
         free(e.out.data);
+        ds_lower_program_free(lowered);
         return false;
     }
     size_t written = fwrite(e.out.data ? e.out.data : "", 1, e.out.len, fp);
@@ -379,10 +382,12 @@ bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_p
         ds_diag_error(diag, ast->span, "failed to write output file `%s`: %s", output_path, strerror(errno));
         free_symbols(&e.symbols);
         free(e.out.data);
+        ds_lower_program_free(lowered);
         return false;
     }
 
     free_symbols(&e.symbols);
     free(e.out.data);
+    ds_lower_program_free(lowered);
     return true;
 }

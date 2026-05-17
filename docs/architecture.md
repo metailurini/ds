@@ -326,6 +326,12 @@ RunCommand
 
 Both VM execution and Bash emission should use this form.
 
+The first `v0.3.0` lowering layer is intentionally small. It keeps the
+currently supported AST shape mostly intact as a backend-facing lowered program,
+while centralizing symbol lookup, interpolation validation, duplicate
+declaration checks, supported operator checks, and block-scope boundary checks.
+Future milestones can simplify this representation further as syntax grows.
+
 ## Bytecode backend
 
 `ds` is an interpreter, but it can compile internally to bytecode.

@@ -34,6 +34,11 @@ static bool name_eq(DsStr a, const char *b) {
     return a.len == len && memcmp(a.data, b, len) == 0;
 }
 
+static DsStr str_clone(DsStr s) {
+    DsStr out = {ds_str_dup_range(s.data, s.len), s.len};
+    return out;
+}
+
 static void scope_init(Scope *scope, Scope *parent) {
     scope->parent = parent;
     scope->items = NULL;
@@ -105,53 +110,88 @@ static bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
     return true;
 }
 
-static SymKind expr_kind(Lower *lower, const DsExpr *expr);
+static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 
-static SymKind binary_kind(Lower *lower, const DsExpr *expr) {
-    (void)expr_kind(lower, expr->as.binary.left);
-    (void)expr_kind(lower, expr->as.binary.right);
+static DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
+    DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(DsLowerExpr));
+    expr->kind = kind;
+    expr->span = span;
+    return expr;
+}
+
+static DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
+    SymKind left_kind = SYM_UNKNOWN;
+    SymKind right_kind = SYM_UNKNOWN;
+    DsLowerExpr *left = lower_expr(lower, expr->as.binary.left, &left_kind);
+    DsLowerExpr *right = lower_expr(lower, expr->as.binary.right, &right_kind);
+    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_BINARY, expr->span);
+    out->as.binary.left = left;
+    out->as.binary.op = str_clone(expr->as.binary.op);
+    out->as.binary.right = right;
     if (str_eq(expr->as.binary.op, "==") || str_eq(expr->as.binary.op, "!=") ||
         str_eq(expr->as.binary.op, ">") || str_eq(expr->as.binary.op, ">=") ||
         str_eq(expr->as.binary.op, "<") || str_eq(expr->as.binary.op, "<=")) {
-        return SYM_BOOL;
+        *kind_out = SYM_BOOL;
+        return out;
     }
     ds_diag_error(lower->diag, expr->span,
                   "this expression cannot be emitted as a Bash assignment in v0.2.0; unsupported operator `%.*s` in v0.3.0",
                   (int)expr->as.binary.op.len, expr->as.binary.op.data);
-    return SYM_UNKNOWN;
+    *kind_out = SYM_UNKNOWN;
+    return out;
 }
 
-static SymKind expr_kind(Lower *lower, const DsExpr *expr) {
-    if (!expr) return SYM_UNKNOWN;
+static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
+    *kind_out = SYM_UNKNOWN;
+    if (!expr) return expr_new(DS_LOWER_EXPR_ERROR, (DsSpan){0});
     switch (expr->kind) {
         case DS_EXPR_IDENT: {
             Symbol *sym = scope_find(lower->scope, expr->as.text);
-            if (!sym) {
-                ds_diag_error(lower->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
-                return SYM_UNKNOWN;
-            }
-            return sym->kind;
+            if (!sym) ds_diag_error(lower->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
+            else *kind_out = sym->kind;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_IDENT, expr->span);
+            out->as.text = str_clone(expr->as.text);
+            return out;
         }
-        case DS_EXPR_STRING:
+        case DS_EXPR_STRING: {
             validate_interpolation(lower, expr->as.text, expr->span);
-            return SYM_STRING;
-        case DS_EXPR_INT:
-            return SYM_INT;
-        case DS_EXPR_BOOL:
-            return SYM_BOOL;
-        case DS_EXPR_UNARY:
+            *kind_out = SYM_STRING;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, expr->span);
+            out->as.text = str_clone(expr->as.text);
+            return out;
+        }
+        case DS_EXPR_INT: {
+            *kind_out = SYM_INT;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INT, expr->span);
+            out->as.text = str_clone(expr->as.text);
+            return out;
+        }
+        case DS_EXPR_BOOL: {
+            *kind_out = SYM_BOOL;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_BOOL, expr->span);
+            out->as.boolean = expr->as.boolean;
+            return out;
+        }
+        case DS_EXPR_UNARY: {
+            SymKind right_kind = SYM_UNKNOWN;
+            DsLowerExpr *right = lower_expr(lower, expr->as.unary.right, &right_kind);
             if (!str_eq(expr->as.unary.op, "!")) {
                 ds_diag_error(lower->diag, expr->span, "unsupported unary operator `%.*s` in v0.3.0", (int)expr->as.unary.op.len, expr->as.unary.op.data);
-                return SYM_UNKNOWN;
+                *kind_out = SYM_UNKNOWN;
+            } else {
+                *kind_out = SYM_BOOL;
             }
-            (void)expr_kind(lower, expr->as.unary.right);
-            return SYM_BOOL;
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_UNARY, expr->span);
+            out->as.unary.op = str_clone(expr->as.unary.op);
+            out->as.unary.right = right;
+            return out;
+        }
         case DS_EXPR_BINARY:
-            return binary_kind(lower, expr);
+            return lower_binary_expr(lower, expr, kind_out);
         case DS_EXPR_ERROR:
-            return SYM_UNKNOWN;
+            return expr_new(DS_LOWER_EXPR_ERROR, expr->span);
     }
-    return SYM_UNKNOWN;
+    return expr_new(DS_LOWER_EXPR_ERROR, expr->span);
 }
 
 static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
@@ -162,15 +202,29 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
             return false;
         }
     }
-    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
-        return validate_interpolation(lower, word, span);
-    }
+    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') return validate_interpolation(lower, word, span);
     return true;
 }
 
-static void validate_stmt(Lower *lower, const DsStmt *stmt);
+static void lower_stmt_vec_push(DsLowerStmtVec *vec, DsLowerStmt *stmt) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 16;
+        vec->items = (DsLowerStmt **)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerStmt *));
+    }
+    vec->items[vec->len++] = stmt;
+}
 
-static void validate_block(Lower *lower, const DsStmt *block, bool child_scope) {
+static DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
+    DsLowerStmt *stmt = (DsLowerStmt *)ds_xcalloc(1, sizeof(DsLowerStmt));
+    stmt->kind = kind;
+    stmt->span = span;
+    return stmt;
+}
+
+static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt);
+
+static DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope) {
+    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_BLOCK, block->span);
     Scope *saved = lower->scope;
     Scope *local = NULL;
     if (child_scope) {
@@ -179,45 +233,124 @@ static void validate_block(Lower *lower, const DsStmt *block, bool child_scope) 
         lower->scope = local;
     }
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) {
-        validate_stmt(lower, block->as.block_stmt.statements.items[i]);
+        lower_stmt_vec_push(&out->as.block_stmt.statements, lower_stmt(lower, block->as.block_stmt.statements.items[i]));
     }
     if (child_scope) {
         lower->scope = saved;
         scope_free(local);
         free(local);
     }
+    return out;
 }
 
-static void validate_stmt(Lower *lower, const DsStmt *stmt) {
+static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
     switch (stmt->kind) {
         case DS_STMT_LET: {
-            SymKind kind = expr_kind(lower, stmt->as.let_stmt.value);
+            SymKind kind = SYM_UNKNOWN;
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
+            out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
+            out->as.let_stmt.value = lower_expr(lower, stmt->as.let_stmt.value, &kind);
             scope_define(lower, lower->scope, stmt->as.let_stmt.name, kind, stmt->span);
-            break;
+            return out;
         }
-        case DS_STMT_CMD:
+        case DS_STMT_CMD: {
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
+            out->as.cmd_stmt.words.len = stmt->as.cmd_stmt.words.len;
+            out->as.cmd_stmt.words.cap = stmt->as.cmd_stmt.words.len;
+            out->as.cmd_stmt.words.items = (DsStr *)ds_xcalloc(out->as.cmd_stmt.words.len ? out->as.cmd_stmt.words.len : 1, sizeof(DsStr));
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
                 validate_cmd_word(lower, stmt->as.cmd_stmt.words.items[i], stmt->span);
+                out->as.cmd_stmt.words.items[i] = str_clone(stmt->as.cmd_stmt.words.items[i]);
             }
-            break;
-        case DS_STMT_IF:
-            (void)expr_kind(lower, stmt->as.if_stmt.condition);
-            validate_block(lower, stmt->as.if_stmt.then_branch, true);
-            if (stmt->as.if_stmt.else_branch) validate_block(lower, stmt->as.if_stmt.else_branch, true);
-            break;
+            return out;
+        }
+        case DS_STMT_IF: {
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_IF, stmt->span);
+            SymKind cond_kind = SYM_UNKNOWN;
+            out->as.if_stmt.condition = lower_expr(lower, stmt->as.if_stmt.condition, &cond_kind);
+            out->as.if_stmt.then_branch = lower_block(lower, stmt->as.if_stmt.then_branch, true);
+            if (stmt->as.if_stmt.else_branch) out->as.if_stmt.else_branch = lower_block(lower, stmt->as.if_stmt.else_branch, true);
+            return out;
+        }
         case DS_STMT_BLOCK:
-            validate_block(lower, stmt, true);
-            break;
+            return lower_block(lower, stmt, true);
     }
+    return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
 }
 
-bool ds_lower_validate(const DsAst *ast, DsDiag *diag) {
+static void lower_expr_free(DsLowerExpr *expr) {
+    if (!expr) return;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_IDENT:
+        case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INT:
+            free(expr->as.text.data);
+            break;
+        case DS_LOWER_EXPR_UNARY:
+            free(expr->as.unary.op.data);
+            lower_expr_free(expr->as.unary.right);
+            break;
+        case DS_LOWER_EXPR_BINARY:
+            lower_expr_free(expr->as.binary.left);
+            free(expr->as.binary.op.data);
+            lower_expr_free(expr->as.binary.right);
+            break;
+        case DS_LOWER_EXPR_BOOL:
+        case DS_LOWER_EXPR_ERROR:
+            break;
+    }
+    free(expr);
+}
+
+static void lower_stmt_free(DsLowerStmt *stmt) {
+    if (!stmt) return;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET:
+            free(stmt->as.let_stmt.name.data);
+            lower_expr_free(stmt->as.let_stmt.value);
+            break;
+        case DS_LOWER_STMT_IF:
+            lower_expr_free(stmt->as.if_stmt.condition);
+            lower_stmt_free(stmt->as.if_stmt.then_branch);
+            lower_stmt_free(stmt->as.if_stmt.else_branch);
+            break;
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) lower_stmt_free(stmt->as.block_stmt.statements.items[i]);
+            free(stmt->as.block_stmt.statements.items);
+            break;
+        case DS_LOWER_STMT_CMD:
+            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) free(stmt->as.cmd_stmt.words.items[i].data);
+            free(stmt->as.cmd_stmt.words.items);
+            break;
+    }
+    free(stmt);
+}
+
+DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     Scope root;
     scope_init(&root, NULL);
     Lower lower = {diag, &root};
-    for (size_t i = 0; i < ast->statements.len; i++) {
-        validate_stmt(&lower, ast->statements.items[i]);
-    }
+    DsLowerProgram *program = (DsLowerProgram *)ds_xcalloc(1, sizeof(DsLowerProgram));
+    program->span = ast->span;
+    for (size_t i = 0; i < ast->statements.len; i++) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
     scope_free(&root);
-    return !diag->has_error;
+    if (diag->has_error) {
+        ds_lower_program_free(program);
+        return NULL;
+    }
+    return program;
+}
+
+bool ds_lower_validate(const DsAst *ast, DsDiag *diag) {
+    DsLowerProgram *program = ds_lower_program(ast, diag);
+    if (!program) return false;
+    ds_lower_program_free(program);
+    return true;
+}
+
+void ds_lower_program_free(DsLowerProgram *program) {
+    if (!program) return;
+    for (size_t i = 0; i < program->statements.len; i++) lower_stmt_free(program->statements.items[i]);
+    free(program->statements.items);
+    free(program);
 }
