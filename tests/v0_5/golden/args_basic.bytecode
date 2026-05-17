@@ -4,6 +4,9 @@ args:
   option retries: int = 3    # tests/v0_5/fixtures/args_basic.ds:4:3
   flag force: bool = false    # tests/v0_5/fixtures/args_basic.ds:5:3
 
+functions:
+  <none>
+
 constants:
 
 instructions:

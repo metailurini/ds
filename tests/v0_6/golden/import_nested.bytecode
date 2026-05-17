@@ -1,6 +1,9 @@
 args:
   <none>
 
+functions:
+  <none>
+
 constants:
   0: string "COMMON"
   1: string "B"

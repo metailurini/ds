@@ -65,6 +65,14 @@ show("req", "override", 4)
 show("req", "override", 4, true)
 DS
 
+write_fixture "$FIX/default_metachar.ds" <<'DS'
+fn show(value = "spaces $HOME `echo bad` ; [brace] \"quoted\"") {
+  echo "value={value}"
+}
+
+show()
+DS
+
 write_fixture "$FIX/all_defaults.ds" <<'DS'
 fn greet(name = "world", suffix = "!") {
   echo "hello {name}{suffix}"
@@ -210,6 +218,40 @@ fn announce(message) {
 greet("world")
 call_root()
 DS
+write_fixture "$FIX/import_once_lib.ds" <<'DS'
+echo "loaded once"
+fn once(message) {
+  echo "once {message}"
+}
+DS
+write_fixture "$FIX/import_once_main.ds" <<DS
+import "$FIX/import_once_lib.ds"
+import "$FIX/import_once_lib.ds"
+
+once("call")
+DS
+write_fixture "$FIX/import_dup_a.ds" <<'DS'
+fn conflict() {}
+DS
+write_fixture "$FIX/import_dup_b.ds" <<'DS'
+fn conflict() {}
+DS
+write_fixture "$FIX/import_dup_main.ds" <<DS
+import "$FIX/import_dup_a.ds"
+import "$FIX/import_dup_b.ds"
+DS
+write_fixture "$FIX/import_cycle_a.ds" <<DS
+import "$FIX/import_cycle_b.ds"
+fn cycle_a() {}
+DS
+write_fixture "$FIX/import_cycle_b.ds" <<DS
+import "$FIX/import_cycle_a.ds"
+fn cycle_b() {}
+DS
+write_fixture "$FIX/import_cycle_main.ds" <<DS
+import "$FIX/import_cycle_a.ds"
+cycle_a()
+DS
 
 # Lexer, parser, AST, bytecode, and check smoke coverage.
 run_ok tokens_defaults "$DS" tokens "$FIX/defaults.ds"
@@ -223,6 +265,11 @@ assert_contains "$TMP/ast_defaults.out" 'Param b =' "AST prints default paramete
 assert_contains "$TMP/ast_defaults.out" 'CallStmt show' "AST prints function call"
 assert_not_contains "$TMP/ast_defaults.out" '0x' "AST pointer-free"
 run_ok bytecode_defaults "$DS" bytecode "$FIX/defaults.ds"
+assert_contains "$TMP/bytecode_defaults.out" 'functions:' "bytecode prints function metadata section"
+assert_contains "$TMP/bytecode_defaults.out" 'fn0 show(required=1, params=4)' "bytecode prints function name and arity metadata"
+assert_contains "$TMP/bytecode_defaults.out" 'param 1 b = string "x"' "bytecode prints string default metadata"
+assert_contains "$TMP/bytecode_defaults.out" 'param 2 c = int 0' "bytecode prints int default metadata"
+assert_contains "$TMP/bytecode_defaults.out" 'param 3 d = bool false' "bytecode prints bool default metadata"
 assert_contains "$TMP/bytecode_defaults.out" 'CALL' "bytecode prints function call instruction"
 assert_not_contains "$TMP/bytecode_defaults.out" '0x' "bytecode pointer-free"
 run_ok check_declaration_only "$DS" check "$FIX/declaration_only.ds"
@@ -235,6 +282,8 @@ assert_same_text $'hello\n' "$TMP/v0_9_basic_vm.out" "basic function output"
 assert_vm_bash_parity v0_9_positional "$FIX/positional.ds" 0 ""
 assert_vm_bash_parity v0_9_defaults "$FIX/defaults.ds" 0 ""
 assert_same_text $'req:x:0:false\nreq:override:0:false\nreq:override:4:false\nreq:override:4:true\n' "$TMP/v0_9_defaults_vm.out" "default parameter binding output"
+assert_vm_bash_parity v0_9_default_metachar "$FIX/default_metachar.ds" 0 ""
+assert_contains "$TMP/v0_9_default_metachar_vm.out" 'spaces $HOME `echo bad` ; [brace] "quoted"' "default string metacharacters preserved"
 assert_vm_bash_parity v0_9_all_defaults "$FIX/all_defaults.ds" 0 ""
 assert_vm_bash_parity v0_9_call_before_declaration "$FIX/call_before_declaration.ds" 0 ""
 assert_vm_bash_parity v0_9_scopes "$FIX/scopes.ds" 0 ""
@@ -263,6 +312,8 @@ assert_vm_bash_parity v0_9_metachar_args "$FIX/metachar_args.ds" 0 "" 'spaces $H
 assert_contains "$TMP/v0_9_metachar_args_vm.out" 'spaces $HOME `echo bad` ; {brace} "quoted"' "metacharacter argument preserved"
 assert_vm_bash_parity v0_9_import "$FIX/import_main.ds" 0 ""
 assert_same_text $'import body\nhello world\nannounce from import\n' "$TMP/v0_9_import_vm.out" "imported and root functions are whole-program visible"
+assert_vm_bash_parity v0_9_import_once "$FIX/import_once_main.ds" 0 ""
+assert_same_text $'loaded once\nonce call\n' "$TMP/v0_9_import_once_vm.out" "repeated import with functions loads once"
 
 # Direct execution matches `ds run`, and script help exits before executing functions.
 capture_status direct_functions "$DS" "$FIX/script_args.ds" api --target prod --force
@@ -296,11 +347,33 @@ fn deploy(target,, other) { }
 DS
 assert_diag malformed_param_list "$FIX/bad_param_list.ds" 'expected parameter name'
 
+write_fixture "$FIX/bad_trailing_param_comma.ds" <<'DS'
+fn deploy(target,) { }
+DS
+assert_diag trailing_param_comma "$FIX/bad_trailing_param_comma.ds" 'expected parameter name after `,`'
+
+write_fixture "$FIX/bad_trailing_call_comma.ds" <<'DS'
+fn deploy(target) { }
+deploy("x",)
+DS
+assert_diag trailing_call_comma "$FIX/bad_trailing_call_comma.ds" 'expected function call argument after `,`'
+
 write_fixture "$FIX/bad_duplicate_function.ds" <<'DS'
 fn deploy() {}
 fn deploy() {}
 DS
 assert_diag duplicate_function "$FIX/bad_duplicate_function.ds" 'duplicate function `deploy`'
+run_fail duplicate_imported_function_check "$DS" check "$FIX/import_dup_main.ds"
+assert_contains "$TMP/duplicate_imported_function_check.err" 'import_dup_b.ds:' "duplicate imported function reports imported source path"
+assert_contains "$TMP/duplicate_imported_function_check.err" 'duplicate function `conflict`' "duplicate imported function diagnostic message"
+run_fail duplicate_imported_function_emit "$DS" emit bash "$FIX/import_dup_main.ds" -o "$TMP/duplicate_imported_function.sh"
+assert_file_missing_or_empty "$TMP/duplicate_imported_function.sh" "duplicate imported function failed emit leaves no artifact"
+run_fail import_cycle_functions_check "$DS" check "$FIX/import_cycle_main.ds"
+assert_contains "$TMP/import_cycle_functions_check.err" 'import cycle detected' "function import cycle diagnostic message"
+assert_contains "$TMP/import_cycle_functions_check.err" 'import_cycle_a.ds' "function import cycle includes first file"
+assert_contains "$TMP/import_cycle_functions_check.err" 'import_cycle_b.ds' "function import cycle includes second file"
+run_fail import_cycle_functions_emit "$DS" emit bash "$FIX/import_cycle_main.ds" -o "$TMP/import_cycle_functions.sh"
+assert_file_missing_or_empty "$TMP/import_cycle_functions.sh" "function import cycle failed emit leaves no artifact"
 
 write_fixture "$FIX/bad_duplicate_param.ds" <<'DS'
 fn deploy(target, target) {}
@@ -344,6 +417,15 @@ fn deploy() {}
 let result = deploy()
 DS
 assert_diag call_value "$FIX/bad_call_value.ds" 'function calls do not produce values in v0.9.0'
+
+write_fixture "$FIX/bad_function_as_variable.ds" <<'DS'
+fn deploy() {}
+echo $deploy
+DS
+assert_diag function_as_variable "$FIX/bad_function_as_variable.ds" 'function `deploy` cannot be used as a variable in v0.9.0'
+count_function_as_variable="$(grep -c 'function `deploy` cannot be used as a variable in v0.9.0' "$TMP/function_as_variable_check.err" || true)"
+[ "$count_function_as_variable" = 1 ] || fail "function-as-variable should be reported once, got $count_function_as_variable"
+pass "function-as-variable conflict reports once"
 
 write_fixture "$FIX/bad_nested.ds" <<'DS'
 fn outer() {

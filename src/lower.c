@@ -207,8 +207,19 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     switch (expr->kind) {
         case DS_EXPR_IDENT: {
             Symbol *sym = scope_find(lower->scope, expr->as.text);
-            if (!sym) ds_diag_error(lower->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
-            else *kind_out = sym->kind;
+            if (!sym) {
+                if (find_function(lower->program, expr->as.text)) {
+                    ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a variable in v0.9.0",
+                                  (int)expr->as.text.len, expr->as.text.data);
+                } else {
+                    ds_diag_error(lower->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
+                }
+            } else if (sym->kind == SYM_FUNCTION) {
+                ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a variable in v0.9.0",
+                              (int)expr->as.text.len, expr->as.text.data);
+            } else {
+                *kind_out = sym->kind;
+            }
             DsLowerExpr *out = expr_new(DS_LOWER_EXPR_IDENT, expr->span);
             out->as.text = str_clone(expr->as.text);
             return out;
@@ -296,8 +307,17 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
 static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
     if (word.len >= 2 && word.data[0] == '$') {
         DsStr name = {word.data + 1, word.len - 1};
-        if (!scope_find(lower->scope, name)) {
-            ds_diag_error(lower->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+        Symbol *sym = scope_find(lower->scope, name);
+        if (!sym) {
+            if (find_function(lower->program, name)) {
+                ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
+            } else {
+                ds_diag_error(lower->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+            }
+            return false;
+        }
+        if (sym->kind == SYM_FUNCTION) {
+            ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
             return false;
         }
     }

@@ -345,6 +345,10 @@ static void parse_call_args(Parser *p, DsExprVec *args) {
     while (!at_end(p) && !at(p, DS_TOK_RPAREN)) {
         expr_vec_push(args, parse_expr(p));
         if (!advance_if(p, DS_TOK_COMMA)) break;
+        if (at(p, DS_TOK_RPAREN)) {
+            ds_diag_error(p->diag, peek(p)->span, "expected function call argument after `,`");
+            break;
+        }
     }
 }
 
@@ -566,6 +570,10 @@ static DsStmt *parse_fn(Parser *p, bool top_level) {
             }
             fn_param_vec_push(&stmt->as.fn_stmt.params, param);
             if (!advance_if(p, DS_TOK_COMMA)) break;
+            if (at(p, DS_TOK_RPAREN)) {
+                ds_diag_error(p->diag, peek(p)->span, "expected parameter name after `,`");
+                break;
+            }
         }
     }
     if (!expect(p, DS_TOK_RPAREN, "expected `)` after function parameters")) return stmt;

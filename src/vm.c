@@ -457,6 +457,28 @@ static void print_escaped(FILE *out, const char *data, size_t len) {
     }
 }
 
+static void print_value_literal(FILE *out, const DsValue *v) {
+    switch (v->kind) {
+        case DS_VALUE_NULL:
+            fputs("null", out);
+            break;
+        case DS_VALUE_BOOL:
+            fprintf(out, "bool %s", v->as.boolean ? "true" : "false");
+            break;
+        case DS_VALUE_INT:
+            fprintf(out, "int %lld", (long long)v->as.integer);
+            break;
+        case DS_VALUE_STRING:
+            fputs("string \"", out);
+            print_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
+            fputc('"', out);
+            break;
+        case DS_VALUE_COMMAND_RESULT:
+            fputs("command_result", out);
+            break;
+    }
+}
+
 bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowered, FILE *out, DsDiag *diag) {
     Program p;
     if (!compile_program(lowered, &p, diag)) {
@@ -487,23 +509,30 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
         }
     }
 
+    fputs("\nfunctions:\n", out);
+    if (p.function_len == 0) {
+        fputs("  <none>\n", out);
+    } else {
+        for (size_t i = 0; i < p.function_len; i++) {
+            FnMeta *fn = &p.functions[i];
+            fprintf(out, "  fn%zu %s(required=%zu, params=%zu)\n", i, fn->name, fn->required_count, fn->param_count);
+            for (size_t j = 0; j < fn->param_count; j++) {
+                FnParamMeta *param = &fn->params[j];
+                fprintf(out, "    param %zu %s", j, param->name);
+                if (param->has_default) {
+                    fputs(" = ", out);
+                    print_value_literal(out, &param->default_value);
+                }
+                fputc('\n', out);
+            }
+        }
+    }
+
     fputs("\nconstants:\n", out);
     for (size_t i = 0; i < p.const_len; i++) {
         fprintf(out, "  %zu: ", i);
         DsValue *v = &p.consts[i];
-        switch (v->kind) {
-            case DS_VALUE_NULL: fputs("null", out); break;
-            case DS_VALUE_BOOL: fprintf(out, "bool %s", v->as.boolean ? "true" : "false"); break;
-            case DS_VALUE_INT: fprintf(out, "int %lld", (long long)v->as.integer); break;
-            case DS_VALUE_STRING:
-                fputs("string \"", out);
-                print_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
-                fputc('"', out);
-                break;
-            case DS_VALUE_COMMAND_RESULT:
-                fputs("command_result", out);
-                break;
-        }
+        print_value_literal(out, v);
         fputc('\n', out);
     }
     fputs("\ninstructions:\n", out);

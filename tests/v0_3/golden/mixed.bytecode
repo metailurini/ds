@@ -1,6 +1,9 @@
 args:
   <none>
 
+functions:
+  <none>
+
 constants:
   0: string "Danh"
   1: int 2
