@@ -32,6 +32,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Standalone generated Bash with shebang, strict mode, prefixed variables, source comments, command emission, simple string interpolation, and `if`/`else` emission.
 - `v0.2.0` Bash emitter test suite with golden output, `bash -n` validation, runtime behavior checks, quoting/safety coverage, diagnostics, and CLI edge cases.
 - Expanded `v0.2.0` edge-case coverage for no-input CLI usage, invalid source failures before emission, no trailing newline, deeper nested conditionals, long strings, many variables, interpolation next to punctuation, and future syntax rejection.
+- Milestone spec and comprehensive regression-focused test plan for `v0.4.0` cleanup of frontend, runtime, and backend boundaries.
 
 ## v0.1.0 — Complete
 
