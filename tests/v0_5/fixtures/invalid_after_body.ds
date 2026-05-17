@@ -1,0 +1,4 @@
+echo "before"
+script {
+  arg app: string
+}

@@ -105,8 +105,9 @@ assert_same_text() {
   local expected="$1"
   local actual_file="$2"
   local name="$3"
-  printf '%s' "$expected" >"$TMP/$name.expected"
-  assert_same "$TMP/$name.expected" "$actual_file" "$name"
+  local expected_file="$TMP/assert_text_${pass_count}_expected"
+  printf '%s' "$expected" >"$expected_file"
+  assert_same "$expected_file" "$actual_file" "$name"
 }
 
 assert_file_missing_or_empty() {

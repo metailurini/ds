@@ -1,0 +1,4 @@
+script {
+  arg app: string
+  option app: string = "x"
+}

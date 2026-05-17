@@ -136,7 +136,7 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.5.0` implementation is complete for the scoped first-class CLI argument pass, without new v0.5.0 tests yet. Existing `v0.1.0` through `v0.4.0` regression suites continue to pass.
+Current status: `v0.5.0` implementation and tests are complete for the scoped first-class CLI argument pass. Existing `v0.1.0` through `v0.5.0` regression suites continue to pass.
 
 The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, and the first `v0.5.0` script argument contract:
 
@@ -159,7 +159,7 @@ bash /tmp/args.sh api --target production --retries 5 --force
 bash /tmp/args.sh --help
 ```
 
-The CLI now centralizes source loading, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The VM also maintains runtime block scopes for lowered blocks. The v0.3 test suite covers runtime primitives, direct lowering shape checks, bytecode dumps, source-map/jump edges, VM execution, command failures, diagnostics, and VM/Bash parity.
+The CLI now centralizes source loading, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative `v0.1.0` / `v0.2.0` language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, and simple command statements. The VM also maintains runtime block scopes for lowered blocks. The v0.5 test suite covers lexer/parser/AST output, direct lowering shape checks, VM argv parsing, emitted Bash parser behavior, help output, bytecode arg contracts, diagnostics, shell-sensitive values, CLI integration, and older-version regressions.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

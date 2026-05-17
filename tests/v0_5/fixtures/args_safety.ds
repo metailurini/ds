@@ -1,0 +1,7 @@
+script {
+  arg value: string
+  option label: string = "default label"
+}
+
+echo "value={value}"
+echo "label={label}"

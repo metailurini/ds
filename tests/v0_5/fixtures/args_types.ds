@@ -1,0 +1,9 @@
+script {
+  arg count: int
+  option dry: bool = false
+  option label: string = "safe default"
+}
+
+echo "count={count}"
+echo "dry={dry}"
+echo "label={label}"

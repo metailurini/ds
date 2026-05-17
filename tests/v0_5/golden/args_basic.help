@@ -1,0 +1,10 @@
+Usage: args_basic.ds <app> [options]
+
+Arguments:
+  app string
+
+Options:
+  --target string    default: staging
+  --retries int    default: 3
+  --force            boolean flag
+  --help             show this help

@@ -1,0 +1,31 @@
+Script
+  ScriptBlock
+    ArgDecl app: string
+    OptionDecl target: string
+      Default
+        StringExpr "staging"
+    OptionDecl retries: int
+      Default
+        IntExpr 3
+    FlagDecl force: bool
+      Default
+        BoolExpr false
+  CmdStmt
+    Word echo
+    Word "Deploying {app} to {target}"
+  CmdStmt
+    Word echo
+    Word "retries={retries}"
+  IfStmt
+    Condition
+      IdentExpr force
+    Then
+      BlockStmt
+        CmdStmt
+          Word echo
+          Word "force enabled"
+    Else
+      BlockStmt
+        CmdStmt
+          Word echo
+          Word "force disabled"

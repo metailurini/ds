@@ -1,0 +1,9 @@
+# utf8: mẹ
+script {
+
+  # comment near declaration
+  arg app: string
+  option target: string = "staging"
+}
+
+echo "{app}:{target}"

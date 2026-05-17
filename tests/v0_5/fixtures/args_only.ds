@@ -1,0 +1,5 @@
+script {
+  arg app: string
+}
+
+echo "app={app}"

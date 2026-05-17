@@ -1,0 +1,7 @@
+script {
+  option target: string = "staging"
+  flag force: bool = false
+}
+
+echo "target={target}"
+echo "force={force}"

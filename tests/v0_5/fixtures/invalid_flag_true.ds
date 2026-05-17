@@ -1,0 +1,3 @@
+script {
+  flag force: bool = true
+}

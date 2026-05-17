@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
     }
 
     if (argc >= 2 && is_direct_script_arg(argv[1]) &&
-        (argc == 2 || access(argv[1], R_OK) == 0 || looks_like_script_path(argv[1]))) {
+        (access(argv[1], R_OK) == 0 || looks_like_script_path(argv[1]))) {
         CliProgram program;
         int rc = cli_load_lower(argv[1], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 2, argv + 2, &program.diag) : 1;
         cli_program_free(&program);

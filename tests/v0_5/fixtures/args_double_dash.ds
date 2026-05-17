@@ -1,0 +1,7 @@
+script {
+  arg first: string
+  arg second: string
+}
+
+echo "first={first}"
+echo "second={second}"
