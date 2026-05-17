@@ -5,6 +5,8 @@
 - Implemented initial local `import "./file.ds"` parsing and composition for `check`, `bytecode`, `run`, direct execution, and `emit bash`.
 - Added deterministic load-once import resolution relative to the importing file, cycle diagnostics, missing-import diagnostics, and standalone Bash bundling of imported statements.
 - Fixed top-level import ordering so multiple imports before executable statements are accepted and composed in order.
+- Added `tests/v0_6/run.sh`, import fixtures, and golden outputs covering parser/AST import syntax, relative and nested resolution, duplicate load-once behavior, cycle and missing-file diagnostics, cross-file lowering errors, bytecode source mapping, VM execution, standalone Bash bundling, VM/Bash parity, script-argument interaction, and older-version regressions.
+- `make test` now runs the v0.6.0 suite; current count is `v0.6.0 tests passed: 220 checks`.
 - Added import examples under `examples/import-main.ds` and `examples/import-lib.ds`.
 
 ## v0.5.0 — Complete

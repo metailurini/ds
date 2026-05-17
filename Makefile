@@ -6,7 +6,7 @@ SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
 
-.PHONY: all clean check smoke test test-v0-4 test-v0-5 asan ubsan
+.PHONY: all clean check smoke test test-v0-4 test-v0-5 test-v0-6 asan ubsan
 
 all: $(BIN)
 
@@ -24,17 +24,21 @@ check: $(BIN)
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
 
 test: $(BIN)
-	./tests/v0_1/run.sh
-	./tests/v0_2/run.sh
-	./tests/v0_3/run.sh
-	./tests/v0_4/run.sh
-	./tests/v0_5/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_1/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_2/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_3/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_4/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_5/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_6/run.sh
 
 test-v0-4: $(BIN)
-	./tests/v0_4/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_4/run.sh
 
 test-v0-5: $(BIN)
-	./tests/v0_5/run.sh
+	DS_SKIP_BUILD=1 ./tests/v0_5/run.sh
+
+test-v0-6: $(BIN)
+	DS_SKIP_BUILD=1 ./tests/v0_6/run.sh
 
 asan:
 	$(MAKE) clean

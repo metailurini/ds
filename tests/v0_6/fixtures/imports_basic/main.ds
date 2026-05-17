@@ -1,0 +1,7 @@
+import "./lib.ds"
+import "./constants.ds"
+echo "Deploying {app} to {target}"
+echo $retries
+if enabled {
+  echo "enabled"
+}

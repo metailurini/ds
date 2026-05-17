@@ -1,0 +1,2 @@
+import "./shared/a.ds"
+echo "root sees {a} {b} {common}"

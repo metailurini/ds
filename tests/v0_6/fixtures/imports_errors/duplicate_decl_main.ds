@@ -1,0 +1,2 @@
+import "./duplicate_decl_lib.ds"
+let app = "root"

@@ -1,0 +1,2 @@
+import "../parent_lib.ds"
+echo "parent={parent_value}"

@@ -1,0 +1,19 @@
+args:
+  <none>
+
+constants:
+  0: string "COMMON"
+  1: string "B"
+  2: string "A"
+
+instructions:
+  0000 INTERPOLATE    r0, const 0    # tests/v0_6/fixtures/imports_nested/shared/common.ds:1:14
+  0001 STORE_VAR      common, r0    # tests/v0_6/fixtures/imports_nested/shared/common.ds:1:1
+  0002 INTERPOLATE    r1, const 1    # tests/v0_6/fixtures/imports_nested/shared/b.ds:2:9
+  0003 STORE_VAR      b, r1    # tests/v0_6/fixtures/imports_nested/shared/b.ds:2:1
+  0004 RUN_CMD        ["echo", "\"b sees {common}\""]    # tests/v0_6/fixtures/imports_nested/shared/b.ds:3:1
+  0005 INTERPOLATE    r2, const 2    # tests/v0_6/fixtures/imports_nested/shared/a.ds:2:9
+  0006 STORE_VAR      a, r2    # tests/v0_6/fixtures/imports_nested/shared/a.ds:2:1
+  0007 RUN_CMD        ["echo", "\"a sees {b} and {common}\""]    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:1
+  0008 RUN_CMD        ["echo", "\"root sees {a} {b} {common}\""]    # tests/v0_6/fixtures/imports_nested/main.ds:2:1
+  0009 RETURN         0    # tests/v0_6/fixtures/imports_nested/main.ds:1:1

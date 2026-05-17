@@ -1,0 +1,2 @@
+echo "before"
+import "./duplicate_a.ds"

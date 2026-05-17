@@ -1,0 +1,3 @@
+import "./side.ds"
+import "./dir/../side.ds"
+echo "root done"

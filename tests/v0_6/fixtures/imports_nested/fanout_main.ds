@@ -1,0 +1,3 @@
+import "./fan/a.ds"
+import "./fan/b.ds"
+echo "fanout done"

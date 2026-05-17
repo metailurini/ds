@@ -1,0 +1,3 @@
+if true {
+  import "./duplicate_a.ds"
+}

@@ -1,0 +1,2 @@
+import "./shared.ds"
+echo "fan a {fan}"

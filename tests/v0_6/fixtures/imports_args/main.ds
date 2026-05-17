@@ -1,0 +1,10 @@
+script {
+  arg name: string
+  option target: string = "staging"
+  flag force: bool = false
+}
+import "./arg_lib.ds"
+echo "root {name} {target} {suffix}"
+if force {
+  echo "force"
+}

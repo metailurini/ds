@@ -1,0 +1,2 @@
+echo "side once"
+let side = "loaded"

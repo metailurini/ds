@@ -1,0 +1,2 @@
+import "./failing_command_lib.ds"
+echo "never"

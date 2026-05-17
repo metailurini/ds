@@ -1,0 +1,3 @@
+import "./b.ds"
+let a = "A"
+echo "a sees {b} and {common}"

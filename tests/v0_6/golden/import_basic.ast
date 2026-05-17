@@ -1,0 +1,17 @@
+Script
+  ImportStmt "./lib.ds"
+  ImportStmt "./constants.ds"
+  CmdStmt
+    Word echo
+    Word "Deploying {app} to {target}"
+  CmdStmt
+    Word echo
+    Word $retries
+  IfStmt
+    Condition
+      IdentExpr enabled
+    Then
+      BlockStmt
+        CmdStmt
+          Word echo
+          Word "enabled"

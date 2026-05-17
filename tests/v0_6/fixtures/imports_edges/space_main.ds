@@ -1,0 +1,2 @@
+import "./space dir/space_lib.ds"
+echo "{spaced}"

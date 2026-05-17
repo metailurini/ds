@@ -1,0 +1,2 @@
+echo "lib sees {name}"
+let suffix = "done"
