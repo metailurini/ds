@@ -68,6 +68,11 @@ static bool is_direct_script_arg(const char *arg) {
            strcmp(arg, "bytecode") != 0 && strcmp(arg, "emit") != 0;
 }
 
+static bool looks_like_script_path(const char *arg) {
+    size_t len = strlen(arg);
+    return strstr(arg, "/") != NULL || (len >= 3 && strcmp(arg + len - 3, ".ds") == 0);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
         usage(argc < 2 ? stderr : stdout);
@@ -85,7 +90,8 @@ int main(int argc, char **argv) {
         return rc;
     }
 
-    if (argc >= 2 && is_direct_script_arg(argv[1]) && (argc == 2 || access(argv[1], R_OK) == 0)) {
+    if (argc >= 2 && is_direct_script_arg(argv[1]) &&
+        (argc == 2 || access(argv[1], R_OK) == 0 || looks_like_script_path(argv[1]))) {
         CliProgram program;
         int rc = cli_load_lower(argv[1], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 2, argv + 2, &program.diag) : 1;
         cli_program_free(&program);

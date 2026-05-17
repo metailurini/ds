@@ -5,6 +5,8 @@
 - Implemented first-class `script { ... }` argument contracts for `arg`, `option`, and `flag` declarations.
 - Added parser, AST debug output, lowering, VM argv binding, generated help, and standalone Bash argv parser emission for the scoped v0.5.0 feature set.
 - Added `examples/args.ds` and updated CLI help to show `ds <file.ds> [args...]` and `ds run <file.ds> [args...]`.
+- Fixed direct script invocation with arguments so path-like missing files, such as `ds /tmp/nope.ds arg`, report source/file diagnostics instead of being treated as unknown commands.
+- Documented that v0.5.0 treats option values beginning with `--` as option tokens; richer `--name=value` or escaped option-value handling remains deferred.
 - New v0.5.0 tests are intentionally not added yet; existing v0.1.0 through v0.4.0 suites continue to run.
 
 
