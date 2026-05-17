@@ -296,7 +296,7 @@ Early semantic checks:
 - unknown syntax not supported by current version;
 - invalid command interpolation;
 - future: unknown variable references;
-- future: type mismatch in CLI args;
+- type mismatch in CLI args for implemented `script { ... }` declarations;
 - future: invalid imports.
 
 Semantic checks should produce diagnostics, not crashes.
@@ -344,6 +344,12 @@ all lower once through the same entrypoint plumbing. Backend-specific functions
 now accept an already-lowered program where practical, so Bash emission,
 bytecode dumping, and VM execution no longer each need to own parse/lower setup.
 `ds tokens` and `ds ast` intentionally remain frontend/debug commands.
+
+In `v0.5.0`, lowering also owns the script argument contract. `script { ... }`
+declarations are lowered into ordered backend-facing argument declarations before
+VM execution or Bash emission. The VM binds runtime argv into the root scope
+before bytecode runs. The Bash backend emits a standalone parser before the
+script body and binds the same lowered names into `__ds_` variables.
 
 ## Bytecode backend
 

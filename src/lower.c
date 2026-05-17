@@ -214,6 +214,116 @@ static void lower_stmt_vec_push(DsLowerStmtVec *vec, DsLowerStmt *stmt) {
     vec->items[vec->len++] = stmt;
 }
 
+static void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsLowerScriptDecl *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerScriptDecl));
+    }
+    vec->items[vec->len++] = decl;
+}
+
+static bool parse_i64(DsStr text, int64_t *out) {
+    char *tmp = ds_str_dup_range(text.data, text.len);
+    char *end = NULL;
+    long long value = strtoll(tmp, &end, 10);
+    bool ok = end && *end == '\0';
+    if (ok) *out = (int64_t)value;
+    free(tmp);
+    return ok;
+}
+
+static bool decode_string_text(DsStr text, DsStr *out) {
+    out->data = NULL;
+    out->len = 0;
+    if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') return false;
+    char *buf = (char *)ds_xcalloc(text.len, 1);
+    size_t len = 0;
+    for (size_t i = 1; i + 1 < text.len; i++) {
+        char c = text.data[i];
+        if (c == '\\' && i + 1 < text.len - 1) {
+            char escaped = text.data[++i];
+            if (escaped == 'n') c = '\n';
+            else if (escaped == 't') c = '\t';
+            else if (escaped == '"') c = '"';
+            else if (escaped == '\\') c = '\\';
+            else c = escaped;
+        }
+        buf[len++] = c;
+    }
+    out->data = buf;
+    out->len = len;
+    return true;
+}
+
+static SymKind script_type_to_sym(DsScriptType type) {
+    switch (type) {
+        case DS_SCRIPT_TYPE_STRING: return SYM_STRING;
+        case DS_SCRIPT_TYPE_INT: return SYM_INT;
+        case DS_SCRIPT_TYPE_BOOL: return SYM_BOOL;
+    }
+    return SYM_UNKNOWN;
+}
+
+static const char *script_type_name(DsScriptType type) {
+    switch (type) {
+        case DS_SCRIPT_TYPE_STRING: return "string";
+        case DS_SCRIPT_TYPE_INT: return "int";
+        case DS_SCRIPT_TYPE_BOOL: return "bool";
+    }
+    return "unknown";
+}
+
+static bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program) {
+    DsLowerScriptDecl out;
+    memset(&out, 0, sizeof(out));
+    out.kind = decl->kind;
+    out.type = decl->type;
+    out.name = str_clone(decl->name);
+    out.span = decl->span;
+
+    if (decl->kind == DS_SCRIPT_DECL_ARG && decl->type == DS_SCRIPT_TYPE_BOOL) {
+        ds_diag_error(lower->diag, decl->span, "bool positional args are not supported in v0.5.0");
+    }
+    if (decl->kind == DS_SCRIPT_DECL_FLAG && decl->type != DS_SCRIPT_TYPE_BOOL) {
+        ds_diag_error(lower->diag, decl->span, "flag `%.*s` must have type `bool`", (int)decl->name.len, decl->name.data);
+    }
+
+    if (decl->default_value) {
+        out.has_default = true;
+        switch (decl->type) {
+            case DS_SCRIPT_TYPE_STRING:
+                if (decl->default_value->kind != DS_EXPR_STRING) {
+                    ds_diag_error(lower->diag, decl->default_value->span, "default for `%.*s` must be a string", (int)decl->name.len, decl->name.data);
+                } else {
+                    decode_string_text(decl->default_value->as.text, &out.default_text);
+                }
+                break;
+            case DS_SCRIPT_TYPE_INT:
+                if (decl->default_value->kind != DS_EXPR_INT || !parse_i64(decl->default_value->as.text, &out.default_int)) {
+                    ds_diag_error(lower->diag, decl->default_value->span, "default for `%.*s` must be an int", (int)decl->name.len, decl->name.data);
+                }
+                break;
+            case DS_SCRIPT_TYPE_BOOL:
+                if (decl->default_value->kind != DS_EXPR_BOOL) {
+                    ds_diag_error(lower->diag, decl->default_value->span, "default for `%.*s` must be a bool", (int)decl->name.len, decl->name.data);
+                } else {
+                    out.default_bool = decl->default_value->as.boolean;
+                    if (decl->kind == DS_SCRIPT_DECL_FLAG && out.default_bool) {
+                        ds_diag_error(lower->diag, decl->default_value->span, "flag `%.*s` default `true` is deferred until `--no-name` support exists", (int)decl->name.len, decl->name.data);
+                    }
+                }
+                break;
+        }
+    } else if (decl->kind != DS_SCRIPT_DECL_ARG) {
+        ds_diag_error(lower->diag, decl->span, "%s `%.*s` requires a default value", decl->kind == DS_SCRIPT_DECL_OPTION ? "option" : "flag", (int)decl->name.len, decl->name.data);
+    }
+
+    scope_define(lower, lower->scope, decl->name, script_type_to_sym(decl->type), decl->span);
+    lower_decl_vec_push(&program->script_decls, out);
+    (void)script_type_name;
+    return !lower->diag->has_error;
+}
+
 static DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
     DsLowerStmt *stmt = (DsLowerStmt *)ds_xcalloc(1, sizeof(DsLowerStmt));
     stmt->kind = kind;
@@ -332,6 +442,10 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     Lower lower = {diag, &root};
     DsLowerProgram *program = (DsLowerProgram *)ds_xcalloc(1, sizeof(DsLowerProgram));
     program->span = ast->span;
+    program->has_script = ast->has_script;
+    if (ast->has_script) {
+        for (size_t i = 0; i < ast->script.declarations.len; i++) lower_script_decl(&lower, &ast->script.declarations.items[i], program);
+    }
     for (size_t i = 0; i < ast->statements.len; i++) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
     scope_free(&root);
     if (diag->has_error) {
@@ -350,6 +464,11 @@ bool ds_lower_validate(const DsAst *ast, DsDiag *diag) {
 
 void ds_lower_program_free(DsLowerProgram *program) {
     if (!program) return;
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        free(program->script_decls.items[i].name.data);
+        free(program->script_decls.items[i].default_text.data);
+    }
+    free(program->script_decls.items);
     for (size_t i = 0; i < program->statements.len; i++) lower_stmt_free(program->statements.items[i]);
     free(program->statements.items);
     free(program);

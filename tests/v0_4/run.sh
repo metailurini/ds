@@ -128,7 +128,7 @@ assert_contains "$TMP/usage_ast_missing.err" "error: expected a command and <fil
 run_fail usage_check_missing "$DS" check
 assert_contains "$TMP/usage_check_missing.err" "error: expected a command and <file.ds>" "check missing input usage"
 run_fail usage_run_missing "$DS" run
-assert_contains "$TMP/usage_run_missing.err" "error: expected a command and <file.ds>" "run missing input usage"
+assert_contains "$TMP/usage_run_missing.err" 'error: expected `ds run <file.ds> [args...]`' "run missing input usage"
 run_fail usage_bytecode_missing "$DS" bytecode
 assert_contains "$TMP/usage_bytecode_missing.err" "error: expected a command and <file.ds>" "bytecode missing input usage"
 run_fail usage_emit_missing_input "$DS" emit bash
@@ -137,14 +137,16 @@ run_fail usage_emit_missing_output "$DS" emit bash "$TMP/pipeline_valid.ds" -o
 assert_contains "$TMP/usage_emit_missing_output.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "emit missing output usage"
 run_fail usage_emit_extra_arg "$DS" emit bash "$TMP/pipeline_valid.ds" -o "$TMP/extra.sh" extra
 assert_contains "$TMP/usage_emit_extra_arg.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "emit extra arg rejected"
-for cmd in tokens ast check run bytecode; do
+for cmd in tokens ast check bytecode; do
   run_fail "usage_${cmd}_extra_arg" "$DS" "$cmd" "$TMP/pipeline_valid.ds" extra
   assert_contains "$TMP/usage_${cmd}_extra_arg.err" "error: expected a command and <file.ds>" "$cmd extra arg rejected"
 done
+run_fail usage_run_extra_arg "$DS" run "$TMP/pipeline_valid.ds" extra
+assert_contains "$TMP/usage_run_extra_arg.err" 'unexpected script arguments' "run extra arg rejected for scripts without arg contract"
 run_fail usage_unknown_command "$DS" frobnicate "$TMP/pipeline_valid.ds"
 assert_contains "$TMP/usage_unknown_command.err" 'error: unknown command `frobnicate`' "unknown command usage"
 run_fail usage_direct_extra_arg "$DS" "$TMP/pipeline_valid.ds" extra
-assert_contains "$TMP/usage_direct_extra_arg.err" 'error: unknown command `' "direct script extra arg rejected"
+assert_contains "$TMP/usage_direct_extra_arg.err" 'unexpected script arguments' "direct script extra arg rejected for scripts without arg contract"
 
 cat >"$TMP/future_assignment.ds" <<'DS'
 let total = 1 + 2
@@ -222,7 +224,6 @@ pass "staged hashmap API does not leak into production src/include"
 
 # Future syntax from docs/language.ds must remain rejected during cleanup-only v0.4.
 declare -A future_syntax
-future_syntax[script_block]='script { args name }'
 future_syntax[import_block]='import "other.ds" { }'
 future_syntax[function]='fn greet() { echo "hi" }'
 future_syntax[loop]='for item in items { echo $item }'
@@ -267,8 +268,8 @@ assert_not_contains "$TMP/pipeline_bytecode.out" "0x" "bytecode has no pointer a
 
 run_ok help_output "$DS" --help
 for line in \
-  "ds <file.ds>" \
-  "ds run <file.ds>" \
+  "ds <file.ds> [args...]" \
+  "ds run <file.ds> [args...]" \
   "ds tokens <file.ds>" \
   "ds ast <file.ds>" \
   "ds check <file.ds>" \

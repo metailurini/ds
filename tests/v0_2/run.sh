@@ -393,12 +393,10 @@ EOF_EXPECT
 assert_same "$TMP/interp_punctuation.expected" "$TMP/run_interp_punctuation.out" "interpolation next to punctuation preserves text"
 
 cat >"$TMP/future_syntax.ds" <<'EOF_DS'
-script {
-  arg app: string
-}
+let xs = [1, 2]
 EOF_DS
 run_fail future_syntax_rejected "$DS" emit bash "$TMP/future_syntax.ds" -o "$TMP/future_syntax.sh"
-assert_contains "$TMP/future_syntax_rejected.err" 'unexpected `}`' "future syntax rejected by v0.2 emitter"
+assert_contains "$TMP/future_syntax_rejected.err" 'expected expression' "future array syntax rejected before arrays"
 [ ! -e "$TMP/future_syntax.sh" ] || fail "future syntax should not write output"
 pass "future syntax leaves no output file"
 
@@ -406,7 +404,7 @@ test -f "$ROOT/docs/language.ds" || fail "docs/language.ds should exist"
 pass "syntax catalog exists"
 
 # Docs should reflect that v0.2.0 tests now exist.
-assert_contains "$ROOT/README.md" 'Current status: `v0.4.0` implementation is complete' "README says v0.4.0 implementation complete"
+assert_contains "$ROOT/README.md" 'Current status: `v0.5.0` implementation is complete' "README says v0.5.0 implementation complete"
 assert_contains "$ROOT/docs/milestones/v0.2.0-spec.md" 'Implementation and tests complete' "spec status complete"
 assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" 'Command failure' "test plan command failure case retained"
 assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" '- [x] Edge cases are covered.' "test plan checklist marks edge cases covered"

@@ -43,8 +43,16 @@ typedef enum {
     DS_TOK_LET,
     DS_TOK_IF,
     DS_TOK_ELSE,
+    DS_TOK_SCRIPT,
+    DS_TOK_ARG,
+    DS_TOK_OPTION,
+    DS_TOK_FLAG,
+    DS_TOK_TYPE_STRING,
+    DS_TOK_TYPE_INT,
+    DS_TOK_TYPE_BOOL,
     DS_TOK_TRUE,
     DS_TOK_FALSE,
+    DS_TOK_COLON,
     DS_TOK_EQUAL,
     DS_TOK_EQUAL_EQUAL,
     DS_TOK_BANG,
@@ -108,6 +116,37 @@ typedef enum {
 
 typedef struct DsStmt DsStmt;
 
+typedef enum {
+    DS_SCRIPT_DECL_ARG,
+    DS_SCRIPT_DECL_OPTION,
+    DS_SCRIPT_DECL_FLAG
+} DsScriptDeclKind;
+
+typedef enum {
+    DS_SCRIPT_TYPE_STRING,
+    DS_SCRIPT_TYPE_INT,
+    DS_SCRIPT_TYPE_BOOL
+} DsScriptType;
+
+typedef struct {
+    DsScriptDeclKind kind;
+    DsScriptType type;
+    DsStr name;
+    DsExpr *default_value;
+    DsSpan span;
+} DsScriptDecl;
+
+typedef struct {
+    DsScriptDecl *items;
+    size_t len;
+    size_t cap;
+} DsScriptDeclVec;
+
+typedef struct {
+    DsScriptDeclVec declarations;
+    DsSpan span;
+} DsScriptBlock;
+
 typedef struct {
     DsStmt **items;
     size_t len;
@@ -132,9 +171,28 @@ struct DsStmt {
 };
 
 typedef struct {
+    bool has_script;
+    DsScriptBlock script;
     DsStmtVec statements;
     DsSpan span;
 } DsAst;
+
+typedef struct {
+    DsScriptDeclKind kind;
+    DsScriptType type;
+    DsStr name;
+    bool has_default;
+    DsStr default_text;
+    int64_t default_int;
+    bool default_bool;
+    DsSpan span;
+} DsLowerScriptDecl;
+
+typedef struct {
+    DsLowerScriptDecl *items;
+    size_t len;
+    size_t cap;
+} DsLowerScriptDeclVec;
 
 typedef enum {
     DS_LOWER_EXPR_IDENT,
@@ -186,6 +244,8 @@ struct DsLowerStmt {
 };
 
 typedef struct {
+    bool has_script;
+    DsLowerScriptDeclVec script_decls;
     DsLowerStmtVec statements;
     DsSpan span;
 } DsLowerProgram;
@@ -292,6 +352,7 @@ bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDia
 bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *program, FILE *out, DsDiag *diag);
 int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag);
 int ds_vm_run_program(const DsSource *source, const DsLowerProgram *program, DsDiag *diag);
+int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag);
 
 /* Utility allocation helpers. These abort on allocation failure. */
 char *ds_str_dup_range(const char *data, size_t len);

@@ -1,0 +1,15 @@
+script {
+  arg app: string
+  option target: string = "staging"
+  option retries: int = 3
+  flag force: bool = false
+}
+
+echo "Deploying {app} to {target}"
+echo "retries={retries}"
+
+if force {
+  echo "force enabled"
+} else {
+  echo "force disabled"
+}

@@ -269,6 +269,20 @@ the only map boundary used by the VM/runtime. Hashmap absorption is deferred
 until the wrapper API needs behavior such as deletion, iteration, or stronger
 collision-performance guarantees.
 
+
+## Implemented v0.5.0 argv binding
+
+`v0.5.0` adds first-class script argument binding for the VM path. Lowering
+produces a script argument contract for `arg`, `option`, and `flag` declarations.
+Before executing bytecode, the VM parses runtime argv, applies defaults, validates
+required positionals and typed integer/bool values, and stores the resulting
+`DsValue`s in the root scope. Body statements then use those names like normal
+top-level variables.
+
+The emitted Bash path does not use the C runtime. It emits a standalone Bash argv
+parser from the same lowered contract and binds parsed values to the existing
+`__ds_` variable namespace before the emitted body.
+
 ## Hashmap absorption plan
 
 The hashmap support code from the owned `hashmap` project is included in this repository under `libs/hashmap/` for now.

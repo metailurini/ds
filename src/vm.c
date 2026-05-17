@@ -307,7 +307,31 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
         return false;
     }
 
-    fputs("constants:\n", out);
+    fputs("args:\n", out);
+    if (!lowered->has_script || lowered->script_decls.len == 0) {
+        fputs("  <none>\n", out);
+    } else {
+        for (size_t i = 0; i < lowered->script_decls.len; i++) {
+            const DsLowerScriptDecl *decl = &lowered->script_decls.items[i];
+            const char *kind = decl->kind == DS_SCRIPT_DECL_ARG ? "arg" : (decl->kind == DS_SCRIPT_DECL_OPTION ? "option" : "flag");
+            const char *type = decl->type == DS_SCRIPT_TYPE_STRING ? "string" : (decl->type == DS_SCRIPT_TYPE_INT ? "int" : "bool");
+            fprintf(out, "  %s %.*s: %s", kind, (int)decl->name.len, decl->name.data, type);
+            if (decl->has_default) {
+                if (decl->type == DS_SCRIPT_TYPE_STRING) {
+                    fputs(" = \"", out);
+                    print_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+                    fputc('"', out);
+                } else if (decl->type == DS_SCRIPT_TYPE_INT) {
+                    fprintf(out, " = %lld", (long long)decl->default_int);
+                } else {
+                    fprintf(out, " = %s", decl->default_bool ? "true" : "false");
+                }
+            }
+            fprintf(out, "    # %s:%d:%d\n", source && source->path ? source->path : "<source>", decl->span.start.line, decl->span.start.column);
+        }
+    }
+
+    fputs("\nconstants:\n", out);
     for (size_t i = 0; i < p.const_len; i++) {
         fprintf(out, "  %zu: ", i);
         DsValue *v = &p.consts[i];
@@ -376,7 +400,212 @@ typedef struct {
     DsValue *regs;
     VmScope *scope;
     DsDiag *diag;
+    const DsSource *source;
 } Vm;
+
+static const char *script_basename(const DsSource *source) {
+    const char *path = source && source->path ? source->path : "<script>";
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
+static const char *script_type_name(DsScriptType type) {
+    switch (type) {
+        case DS_SCRIPT_TYPE_STRING: return "string";
+        case DS_SCRIPT_TYPE_INT: return "int";
+        case DS_SCRIPT_TYPE_BOOL: return "bool";
+    }
+    return "unknown";
+}
+
+static bool parse_runtime_int(const char *text, int64_t *out) {
+    if (!text || text[0] == '\0') return false;
+    errno = 0;
+    char *end = NULL;
+    long long value = strtoll(text, &end, 10);
+    if (errno == ERANGE || !end || *end != '\0') return false;
+    if (text[0] == '+' || text[0] == '-') {
+        if (text[1] == '\0') return false;
+    }
+    *out = (int64_t)value;
+    return true;
+}
+
+static bool parse_runtime_bool(const char *text, bool *out) {
+    if (strcmp(text, "true") == 0) { *out = true; return true; }
+    if (strcmp(text, "false") == 0) { *out = false; return true; }
+    return false;
+}
+
+static void print_script_help(const DsSource *source, const DsLowerProgram *program, FILE *out) {
+    fprintf(out, "Usage: %s", script_basename(source));
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, " <%.*s>", (int)decl->name.len, decl->name.data);
+    }
+    bool has_options = false;
+    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind != DS_SCRIPT_DECL_ARG) has_options = true;
+    if (has_options) fputs(" [options]", out);
+    fputs("\n", out);
+
+    bool has_args = false;
+    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind == DS_SCRIPT_DECL_ARG) has_args = true;
+    if (has_args) {
+        fputs("\nArguments:\n", out);
+        for (size_t i = 0; i < program->script_decls.len; i++) {
+            const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+            if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+        }
+    }
+
+    fputs("\nOptions:\n", out);
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_OPTION) {
+            fprintf(out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+            if (decl->type == DS_SCRIPT_TYPE_STRING) fprintf(out, "%.*s", (int)decl->default_text.len, decl->default_text.data ? decl->default_text.data : "");
+            else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, "%lld", (long long)decl->default_int);
+            else fprintf(out, "%s", decl->default_bool ? "true" : "false");
+            fputc('\n', out);
+        } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
+            fprintf(out, "  --%.*s            boolean flag\n", (int)decl->name.len, decl->name.data);
+        }
+    }
+    fputs("  --help             show this help\n", out);
+}
+
+static int find_decl_by_option(const DsLowerProgram *program, const char *name) {
+    size_t len = strlen(name);
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind != DS_SCRIPT_DECL_ARG && decl->name.len == len && memcmp(decl->name.data, name, len) == 0) return (int)i;
+    }
+    return -1;
+}
+
+static bool set_var_from_decl(Vm *vm, const DsLowerScriptDecl *decl, const char *text, DsSpan span) {
+    DsValue value = ds_value_null();
+    if (decl->type == DS_SCRIPT_TYPE_STRING) {
+        DsString s;
+        ds_string_from_cstr(&s, text ? text : "");
+        value = ds_value_string_take(&s);
+    } else if (decl->type == DS_SCRIPT_TYPE_INT) {
+        int64_t parsed = 0;
+        if (!parse_runtime_int(text, &parsed)) {
+            ds_diag_error(vm->diag, span, "invalid int value `%s` for `%.*s`", text ? text : "", (int)decl->name.len, decl->name.data);
+            return false;
+        }
+        value = ds_value_int(parsed);
+    } else {
+        bool parsed = false;
+        if (!parse_runtime_bool(text, &parsed)) {
+            ds_diag_error(vm->diag, span, "invalid bool value `%s` for `%.*s`", text ? text : "", (int)decl->name.len, decl->name.data);
+            return false;
+        }
+        value = ds_value_bool(parsed);
+    }
+    ds_map_set(&vm->scope->vars, decl->name, value);
+    return true;
+}
+
+static bool set_default_from_decl(Vm *vm, const DsLowerScriptDecl *decl) {
+    DsValue value = ds_value_null();
+    if (decl->type == DS_SCRIPT_TYPE_STRING) {
+        DsString s;
+        ds_string_from_range(&s, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+        value = ds_value_string_take(&s);
+    } else if (decl->type == DS_SCRIPT_TYPE_INT) {
+        value = ds_value_int(decl->default_int);
+    } else {
+        value = ds_value_bool(decl->default_bool);
+    }
+    ds_map_set(&vm->scope->vars, decl->name, value);
+    return true;
+}
+
+static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **argv) {
+    if (!program->has_script) {
+        if (argc > 0) {
+            fprintf(stderr, "%s: error: unexpected script arguments\n", script_basename(vm->source));
+            return 1;
+        }
+        return 0;
+    }
+
+    bool *seen = (bool *)ds_xcalloc(program->script_decls.len ? program->script_decls.len : 1, sizeof(bool));
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind != DS_SCRIPT_DECL_ARG) set_default_from_decl(vm, decl);
+    }
+
+    size_t next_arg = 0;
+    bool end_options = false;
+    for (int i = 0; i < argc; i++) {
+        const char *arg = argv[i];
+        if (!end_options && (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)) {
+            print_script_help(vm->source, program, stdout);
+            free(seen);
+            return 2;
+        }
+        if (!end_options && strcmp(arg, "--") == 0) {
+            end_options = true;
+            continue;
+        }
+        if (!end_options && strncmp(arg, "--", 2) == 0) {
+            int idx = find_decl_by_option(program, arg + 2);
+            if (idx < 0) {
+                fprintf(stderr, "%s: error: unknown option `%s`\n", script_basename(vm->source), arg);
+                free(seen);
+                return 1;
+            }
+            if (seen[idx]) {
+                fprintf(stderr, "%s: error: duplicate option `%s`\n", script_basename(vm->source), arg);
+                free(seen);
+                return 1;
+            }
+            seen[idx] = true;
+            const DsLowerScriptDecl *decl = &program->script_decls.items[idx];
+            if (decl->kind == DS_SCRIPT_DECL_FLAG) {
+                ds_map_set(&vm->scope->vars, decl->name, ds_value_bool(true));
+            } else {
+                if (i + 1 >= argc || strncmp(argv[i + 1], "--", 2) == 0) {
+                    fprintf(stderr, "%s: error: option `%s` requires a value\n", script_basename(vm->source), arg);
+                    free(seen);
+                    return 1;
+                }
+                i++;
+                if (!set_var_from_decl(vm, decl, argv[i], decl->span)) {
+                    free(seen);
+                    return 1;
+                }
+            }
+            continue;
+        }
+        while (next_arg < program->script_decls.len && program->script_decls.items[next_arg].kind != DS_SCRIPT_DECL_ARG) next_arg++;
+        if (next_arg >= program->script_decls.len) {
+            fprintf(stderr, "%s: error: unexpected extra positional argument `%s`\n", script_basename(vm->source), arg);
+            free(seen);
+            return 1;
+        }
+        if (!set_var_from_decl(vm, &program->script_decls.items[next_arg], arg, program->script_decls.items[next_arg].span)) {
+            free(seen);
+            return 1;
+        }
+        seen[next_arg] = true;
+        next_arg++;
+    }
+
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_ARG && !seen[i]) {
+            fprintf(stderr, "%s: error: missing required argument `%.*s`\n", script_basename(vm->source), (int)decl->name.len, decl->name.data);
+            free(seen);
+            return 1;
+        }
+    }
+    free(seen);
+    return 0;
+}
 
 static VmScope *scope_new(VmScope *parent) {
     VmScope *scope = (VmScope *)ds_xcalloc(1, sizeof(VmScope));
@@ -543,7 +772,7 @@ static void set_reg(Vm *vm, int reg, DsValue value) {
     vm->regs[reg] = value;
 }
 
-int ds_vm_run_program(const DsSource *source, const DsLowerProgram *lowered, DsDiag *diag) {
+int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag) {
     (void)source;
     Program p;
     if (!compile_program(lowered, &p, diag)) {
@@ -553,10 +782,14 @@ int ds_vm_run_program(const DsSource *source, const DsLowerProgram *lowered, DsD
     memset(&vm, 0, sizeof(vm));
     vm.program = &p;
     vm.diag = diag;
+    vm.source = source;
     vm.scope = scope_new(NULL);
     ensure_regs(&vm);
 
     int rc = 0;
+    int bind_rc = bind_script_args(&vm, lowered, argc, argv);
+    if (bind_rc == 2) { rc = 0; goto done; }
+    if (bind_rc != 0) { rc = bind_rc; goto done; }
     size_t ip = 0;
     while (ip < p.instr_len) {
         Instr *ins = &p.instrs[ip];
@@ -642,6 +875,10 @@ done:
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;
+}
+
+int ds_vm_run_program(const DsSource *source, const DsLowerProgram *lowered, DsDiag *diag) {
+    return ds_vm_run_program_args(source, lowered, 0, NULL, diag);
 }
 
 int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {

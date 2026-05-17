@@ -1,3 +1,6 @@
+args:
+  <none>
+
 constants:
   0: bool true
 

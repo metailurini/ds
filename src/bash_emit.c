@@ -109,6 +109,156 @@ static void emit_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
+static const char *script_basename(const DsSource *source) {
+    const char *path = source && source->path ? source->path : "<script>";
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
+static const char *script_type_name(DsScriptType type) {
+    switch (type) {
+        case DS_SCRIPT_TYPE_STRING: return "string";
+        case DS_SCRIPT_TYPE_INT: return "int";
+        case DS_SCRIPT_TYPE_BOOL: return "bool";
+    }
+    return "unknown";
+}
+
+static void bash_single_quote(EmitBuf *out, const char *data, size_t len) {
+    buf_append(out, "'");
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] == '\'') buf_append(out, "'\\''");
+        else buf_append_len(out, &data[i], 1);
+    }
+    buf_append(out, "'");
+}
+
+static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
+    buf_append(&e->out, "__ds_usage() {\n");
+    buf_append(&e->out, "  cat <<'__DS_USAGE__'\n");
+    buf_appendf(&e->out, "Usage: %s", script_basename(e->source));
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, " <%.*s>", (int)decl->name.len, decl->name.data);
+    }
+    bool has_options = false;
+    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind != DS_SCRIPT_DECL_ARG) has_options = true;
+    if (has_options) buf_append(&e->out, " [options]");
+    buf_append(&e->out, "\n");
+    bool has_args = false;
+    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind == DS_SCRIPT_DECL_ARG) has_args = true;
+    if (has_args) {
+        buf_append(&e->out, "\nArguments:\n");
+        for (size_t i = 0; i < program->script_decls.len; i++) {
+            const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+            if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+        }
+    }
+    buf_append(&e->out, "\nOptions:\n");
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_OPTION) {
+            buf_appendf(&e->out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+            if (decl->type == DS_SCRIPT_TYPE_STRING) buf_append_len(&e->out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+            else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
+            else buf_append(&e->out, decl->default_bool ? "true" : "false");
+            buf_append(&e->out, "\n");
+        } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
+            buf_appendf(&e->out, "  --%.*s            boolean flag\n", (int)decl->name.len, decl->name.data);
+        }
+    }
+    buf_append(&e->out, "  --help             show this help\n");
+    buf_append(&e->out, "__DS_USAGE__\n");
+    buf_append(&e->out, "}\n\n");
+}
+
+static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
+    if (!program->has_script) return;
+    emit_script_usage(e, program);
+    buf_append(&e->out, "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n");
+    buf_append(&e->out, "__ds_parse_int() { [[ \"$1\" =~ ^[+-]?[0-9]+$ ]] && [[ \"$1\" != \"+\" ]] && [[ \"$1\" != \"-\" ]]; }\n\n");
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_OPTION) {
+            emit_var_name(&e->out, decl->name);
+            buf_append(&e->out, "=");
+            if (decl->type == DS_SCRIPT_TYPE_STRING) bash_single_quote(&e->out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+            else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
+            else buf_append(&e->out, decl->default_bool ? "true" : "false");
+            buf_append(&e->out, "\n");
+        } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
+            emit_var_name(&e->out, decl->name);
+            buf_append(&e->out, "=false\n");
+        } else {
+            emit_var_name(&e->out, decl->name);
+            buf_append(&e->out, "=\n");
+        }
+        if (decl->kind != DS_SCRIPT_DECL_ARG) {
+            buf_append(&e->out, "__ds_seen_");
+            buf_append_len(&e->out, decl->name.data, decl->name.len);
+            buf_append(&e->out, "=false\n");
+        }
+    }
+    buf_append(&e->out, "__ds_positionals=()\n");
+    buf_append(&e->out, "while (($#)); do\n");
+    buf_append(&e->out, "  case \"$1\" in\n");
+    buf_append(&e->out, "    --help|-h) __ds_usage; exit 0 ;;\n");
+    buf_append(&e->out, "    --) shift; while (($#)); do __ds_positionals+=(\"$1\"); shift; done; break ;;\n");
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_ARG) continue;
+        buf_appendf(&e->out, "    --%.*s)\n", (int)decl->name.len, decl->name.data);
+        buf_append(&e->out, "      $__ds_seen_");
+        buf_append_len(&e->out, decl->name.data, decl->name.len);
+        buf_append(&e->out, " && __ds_error 'duplicate option `--");
+        buf_append_len(&e->out, decl->name.data, decl->name.len);
+        buf_append(&e->out, "`'\n");
+        buf_append(&e->out, "      __ds_seen_");
+        buf_append_len(&e->out, decl->name.data, decl->name.len);
+        buf_append(&e->out, "=true\n");
+        if (decl->kind == DS_SCRIPT_DECL_FLAG) {
+            emit_var_name(&e->out, decl->name);
+            buf_append(&e->out, "=true\n");
+        } else {
+            buf_append(&e->out, "      shift\n");
+            buf_append(&e->out, "      [[ $# -gt 0 && \"$1\" != --* ]] || __ds_error 'option `--");
+            buf_append_len(&e->out, decl->name.data, decl->name.len);
+            buf_append(&e->out, "` requires a value'\n");
+            if (decl->type == DS_SCRIPT_TYPE_INT) {
+                buf_append(&e->out, "      __ds_parse_int \"$1\" || __ds_error 'invalid int value `'\"$1\"'` for `");
+                buf_append_len(&e->out, decl->name.data, decl->name.len);
+                buf_append(&e->out, "`'\n");
+            } else if (decl->type == DS_SCRIPT_TYPE_BOOL) {
+                buf_append(&e->out, "      [[ \"$1\" == true || \"$1\" == false ]] || __ds_error 'invalid bool value `'\"$1\"'` for `");
+                buf_append_len(&e->out, decl->name.data, decl->name.len);
+                buf_append(&e->out, "`'\n");
+            }
+            emit_var_name(&e->out, decl->name);
+            buf_append(&e->out, "=\"$1\"\n");
+        }
+        buf_append(&e->out, "      ;;\n");
+    }
+    buf_append(&e->out, "    --*) __ds_error 'unknown option `'\"$1\"'`' ;;\n");
+    buf_append(&e->out, "    *) __ds_positionals+=(\"$1\") ;;\n");
+    buf_append(&e->out, "  esac\n");
+    buf_append(&e->out, "  shift\n");
+    buf_append(&e->out, "done\n\n");
+
+    size_t arg_index = 0;
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind != DS_SCRIPT_DECL_ARG) continue;
+        buf_appendf(&e->out, "[[ ${#__ds_positionals[@]} -gt %zu ]] || __ds_error 'missing required argument `%.*s`'\n", arg_index, (int)decl->name.len, decl->name.data);
+        if (decl->type == DS_SCRIPT_TYPE_INT) {
+            buf_appendf(&e->out, "__ds_parse_int \"${__ds_positionals[%zu]}\" || __ds_error 'invalid int value `'\"${__ds_positionals[%zu]}\"'` for `%.*s`'\n", arg_index, arg_index, (int)decl->name.len, decl->name.data);
+        }
+        emit_var_name(&e->out, decl->name);
+        buf_appendf(&e->out, "=\"${__ds_positionals[%zu]}\"\n", arg_index);
+        arg_index++;
+    }
+    buf_appendf(&e->out, "[[ ${#__ds_positionals[@]} -eq %zu ]] || __ds_error 'unexpected extra positional argument `'\"${__ds_positionals[%zu]}\"'`'\n\n", arg_index, arg_index);
+}
+
 static bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_data, size_t *out_len) {
     DsStr text = expr->as.text;
     if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') {
@@ -355,6 +505,13 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
 
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");
+
+    for (size_t i = 0; i < lowered->script_decls.len; i++) {
+        DsStr copy = {ds_str_dup_range(lowered->script_decls.items[i].name.data, lowered->script_decls.items[i].name.len), lowered->script_decls.items[i].name.len};
+        symbol_vec_push(&e.symbols, copy);
+    }
+
+    emit_script_args(&e, lowered);
 
     for (size_t i = 0; i < lowered->statements.len; i++) {
         if (!emit_stmt(&e, lowered->statements.items[i], 0)) {

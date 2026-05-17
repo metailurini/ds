@@ -555,12 +555,10 @@ run_fail vm_failing_branch "$DS" run "$TMP/failing_branch.ds"
 assert_not_contains "$TMP/vm_failing_branch.out" 'after' "VM stops after failing command in branch"
 
 cat >"$TMP/future_syntax.ds" <<'DS'
-script {
-  arg app: string
-}
+let xs = [1, 2]
 DS
 run_fail future_syntax_rejected "$DS" run "$TMP/future_syntax.ds"
-assert_contains "$TMP/future_syntax_rejected.err" 'unexpected `}`' "future syntax remains rejected"
+assert_contains "$TMP/future_syntax_rejected.err" 'expected expression' "future array syntax remains rejected"
 
 # VM/Bash parity across supported success and failure cases.
 parity_ok parity_empty "tests/v0_3/fixtures/empty.ds"

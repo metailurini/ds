@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef struct {
     DsSource source;
@@ -12,10 +13,10 @@ typedef struct {
 } CliProgram;
 
 static void usage(FILE *out) {
-    fputs("ds v0.4.0\n\n", out);
+    fputs("ds v0.5.0\n\n", out);
     fputs("Usage:\n", out);
-    fputs("  ds <file.ds>\n", out);
-    fputs("  ds run <file.ds>\n", out);
+    fputs("  ds <file.ds> [args...]\n", out);
+    fputs("  ds run <file.ds> [args...]\n", out);
     fputs("  ds tokens <file.ds>\n", out);
     fputs("  ds ast <file.ds>\n", out);
     fputs("  ds check <file.ds>\n", out);
@@ -84,9 +85,17 @@ int main(int argc, char **argv) {
         return rc;
     }
 
-    if (argc == 2 && is_direct_script_arg(argv[1])) {
+    if (argc >= 2 && is_direct_script_arg(argv[1]) && (argc == 2 || access(argv[1], R_OK) == 0)) {
         CliProgram program;
-        int rc = cli_load_lower(argv[1], &program) ? ds_vm_run_program(&program.source, program.lowered, &program.diag) : 1;
+        int rc = cli_load_lower(argv[1], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 2, argv + 2, &program.diag) : 1;
+        cli_program_free(&program);
+        return rc;
+    }
+
+    if (strcmp(argv[1], "run") == 0) {
+        if (argc < 3) return usage_error("expected `ds run <file.ds> [args...]`");
+        CliProgram program;
+        int rc = cli_load_lower(argv[2], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 3, argv + 3, &program.diag) : 1;
         cli_program_free(&program);
         return rc;
     }
@@ -122,12 +131,6 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "bytecode") == 0) {
         int rc = cli_load_lower(path, &program) ? 0 : 1;
         if (rc == 0 && !ds_bytecode_dump_program(&program.source, program.lowered, stdout, &program.diag)) rc = 1;
-        cli_program_free(&program);
-        return rc;
-    }
-
-    if (strcmp(cmd, "run") == 0) {
-        int rc = cli_load_lower(path, &program) ? ds_vm_run_program(&program.source, program.lowered, &program.diag) : 1;
         cli_program_free(&program);
         return rc;
     }

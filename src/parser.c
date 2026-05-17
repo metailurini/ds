@@ -48,6 +48,14 @@ static void word_vec_push(DsWordVec *vec, DsStr word) {
     vec->items[vec->len++] = word;
 }
 
+static void script_decl_vec_push(DsScriptDeclVec *vec, DsScriptDecl decl) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsScriptDecl *)ds_xrealloc(vec->items, vec->cap * sizeof(DsScriptDecl));
+    }
+    vec->items[vec->len++] = decl;
+}
+
 static DsExpr *new_expr(DsExprKind kind, DsSpan span) {
     DsExpr *expr = (DsExpr *)ds_xcalloc(1, sizeof(DsExpr));
     expr->kind = kind;
@@ -82,6 +90,21 @@ static bool expect(Parser *p, DsTokenKind kind, const char *message) {
     return false;
 }
 
+static bool is_identifier_like(DsTokenKind kind) {
+    return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_ARG ||
+           kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
+           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL;
+}
+
+static bool expect_identifier_like(Parser *p, const char *message) {
+    if (is_identifier_like(peek(p)->kind)) {
+        advance(p);
+        return true;
+    }
+    ds_diag_error(p->diag, peek(p)->span, "%s", message);
+    return false;
+}
+
 static int precedence(DsTokenKind kind) {
     switch (kind) {
         case DS_TOK_EQUAL_EQUAL:
@@ -105,6 +128,14 @@ static DsExpr *parse_primary(Parser *p) {
     if (advance_if(p, DS_TOK_IDENT)) {
         DsExpr *expr = new_expr(DS_EXPR_IDENT, tok->span);
         expr->as.text = copy_token_text(tok);
+        return expr;
+    }
+    if (advance_if(p, DS_TOK_TYPE_STRING) || advance_if(p, DS_TOK_TYPE_INT) ||
+        advance_if(p, DS_TOK_TYPE_BOOL) || advance_if(p, DS_TOK_SCRIPT) ||
+        advance_if(p, DS_TOK_ARG) || advance_if(p, DS_TOK_OPTION) || advance_if(p, DS_TOK_FLAG)) {
+        DsToken *used = previous(p);
+        DsExpr *expr = new_expr(DS_EXPR_IDENT, used->span);
+        expr->as.text = copy_token_text(used);
         return expr;
     }
     if (advance_if(p, DS_TOK_STRING)) {
@@ -176,6 +207,85 @@ static DsExpr *parse_expr(Parser *p) {
 
 static DsStmt *parse_stmt(Parser *p);
 
+static bool parse_type(Parser *p, DsScriptType *out) {
+    if (advance_if(p, DS_TOK_TYPE_STRING)) { *out = DS_SCRIPT_TYPE_STRING; return true; }
+    if (advance_if(p, DS_TOK_TYPE_INT)) { *out = DS_SCRIPT_TYPE_INT; return true; }
+    if (advance_if(p, DS_TOK_TYPE_BOOL)) { *out = DS_SCRIPT_TYPE_BOOL; return true; }
+    ds_diag_error(p->diag, peek(p)->span, "expected type name `string`, `int`, or `bool`");
+    return false;
+}
+
+static bool parse_script_decl(Parser *p, DsScriptBlock *script) {
+    DsToken *start = peek(p);
+    DsScriptDecl decl;
+    memset(&decl, 0, sizeof(decl));
+
+    if (advance_if(p, DS_TOK_ARG)) {
+        decl.kind = DS_SCRIPT_DECL_ARG;
+    } else if (advance_if(p, DS_TOK_OPTION)) {
+        decl.kind = DS_SCRIPT_DECL_OPTION;
+    } else if (advance_if(p, DS_TOK_FLAG)) {
+        decl.kind = DS_SCRIPT_DECL_FLAG;
+    } else {
+        ds_diag_error(p->diag, peek(p)->span, "expected `arg`, `option`, or `flag` declaration");
+        while (!is_stmt_end(p)) advance(p);
+        consume_statement_end(p);
+        return false;
+    }
+
+    if (!expect_identifier_like(p, "expected declaration name")) return false;
+    DsToken *name = previous(p);
+    decl.name = copy_token_text(name);
+    if (!expect(p, DS_TOK_COLON, "expected `:` after declaration name")) return false;
+    if (!parse_type(p, &decl.type)) return false;
+
+    if (decl.kind == DS_SCRIPT_DECL_ARG) {
+        if (advance_if(p, DS_TOK_EQUAL)) {
+            ds_diag_error(p->diag, previous(p)->span, "`arg` declarations do not support defaults in v0.5.0");
+            if (!is_stmt_end(p)) decl.default_value = parse_expr(p);
+        }
+    } else {
+        if (!expect(p, DS_TOK_EQUAL, decl.kind == DS_SCRIPT_DECL_OPTION ?
+                    "expected `=` after option type" : "expected `=` after flag type")) return false;
+        if (is_stmt_end(p)) {
+            ds_diag_error(p->diag, peek(p)->span, "expected default value after `=`");
+            return false;
+        }
+        decl.default_value = parse_expr(p);
+    }
+
+    decl.span = (DsSpan){start->span.start, (decl.default_value ? decl.default_value->span.end : previous(p)->span.end)};
+    if (!is_stmt_end(p)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected end of declaration");
+        while (!is_stmt_end(p)) advance(p);
+    }
+    consume_statement_end(p);
+    script_decl_vec_push(&script->declarations, decl);
+    return true;
+}
+
+static bool parse_script_block(Parser *p, DsAst *ast) {
+    DsToken *start = previous(p);
+    if (ast->statements.len > 0) {
+        ds_diag_error(p->diag, start->span, "`script` block must appear before executable statements");
+    }
+    if (ast->has_script) {
+        ds_diag_error(p->diag, start->span, "duplicate `script` block");
+    }
+    ast->has_script = true;
+    ast->script.span = start->span;
+    if (!expect(p, DS_TOK_LBRACE, "expected `{` after `script`")) return false;
+    skip_newlines(p);
+    while (!at_end(p) && !at(p, DS_TOK_RBRACE)) {
+        parse_script_decl(p, &ast->script);
+        skip_newlines(p);
+    }
+    if (!expect(p, DS_TOK_RBRACE, "expected `}` to close script block")) return false;
+    ast->script.span = (DsSpan){start->span.start, previous(p)->span.end};
+    consume_statement_end(p);
+    return true;
+}
+
 static DsStmt *parse_block(Parser *p) {
     DsToken *open = previous(p);
     DsStmt *block = new_stmt(DS_STMT_BLOCK, open->span);
@@ -196,7 +306,7 @@ static DsStmt *parse_block(Parser *p) {
 
 static DsStmt *parse_let(Parser *p) {
     DsToken *start = previous(p);
-    if (!expect(p, DS_TOK_IDENT, "expected identifier after `let`")) return NULL;
+    if (!expect_identifier_like(p, "expected identifier after `let`")) return NULL;
     DsToken *name = previous(p);
     if (!expect(p, DS_TOK_EQUAL, "expected `=` after variable name")) return NULL;
     if (is_stmt_end(p)) {
@@ -283,6 +393,11 @@ static DsStmt *parse_cmd(Parser *p) {
 }
 
 static DsStmt *parse_stmt(Parser *p) {
+    if (at(p, DS_TOK_SCRIPT)) {
+        ds_diag_error(p->diag, peek(p)->span, "`script` block is only allowed at top level before executable statements");
+        advance(p);
+        return NULL;
+    }
     if (advance_if(p, DS_TOK_LET)) return parse_let(p);
     if (advance_if(p, DS_TOK_IF)) return parse_if(p);
     if (at(p, DS_TOK_ELSE)) {
@@ -304,6 +419,11 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
     if (tokens->len > 0) ast->span.start = tokens->items[0].span.start;
     skip_newlines(&p);
     while (!at_end(&p)) {
+        if (advance_if(&p, DS_TOK_SCRIPT)) {
+            parse_script_block(&p, ast);
+            skip_newlines(&p);
+            continue;
+        }
         DsStmt *stmt = parse_stmt(&p);
         if (stmt) stmt_vec_push(&ast->statements, stmt);
         skip_newlines(&p);

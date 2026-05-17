@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0 — Implementation in progress
+
+- Implemented first-class `script { ... }` argument contracts for `arg`, `option`, and `flag` declarations.
+- Added parser, AST debug output, lowering, VM argv binding, generated help, and standalone Bash argv parser emission for the scoped v0.5.0 feature set.
+- Added `examples/args.ds` and updated CLI help to show `ds <file.ds> [args...]` and `ds run <file.ds> [args...]`.
+- New v0.5.0 tests are intentionally not added yet; existing v0.1.0 through v0.4.0 suites continue to run.
+
+
 All notable changes to this project will be documented in this file.
 
 The project uses semantic versioning once stable, but during pre-`1.0.0` development the minor version is used for planned milestone work.

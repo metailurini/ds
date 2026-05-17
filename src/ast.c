@@ -80,8 +80,40 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
     }
 }
 
+static const char *decl_kind_name(DsScriptDeclKind kind) {
+    switch (kind) {
+        case DS_SCRIPT_DECL_ARG: return "ArgDecl";
+        case DS_SCRIPT_DECL_OPTION: return "OptionDecl";
+        case DS_SCRIPT_DECL_FLAG: return "FlagDecl";
+    }
+    return "Decl";
+}
+
+static const char *decl_type_name(DsScriptType type) {
+    switch (type) {
+        case DS_SCRIPT_TYPE_STRING: return "string";
+        case DS_SCRIPT_TYPE_INT: return "int";
+        case DS_SCRIPT_TYPE_BOOL: return "bool";
+    }
+    return "unknown";
+}
+
 void ds_ast_print(const DsAst *ast, FILE *out) {
     fputs("Script\n", out);
+    if (ast->has_script) {
+        indent(out, 1);
+        fputs("ScriptBlock\n", out);
+        for (size_t i = 0; i < ast->script.declarations.len; i++) {
+            const DsScriptDecl *decl = &ast->script.declarations.items[i];
+            indent(out, 2);
+            fprintf(out, "%s %.*s: %s\n", decl_kind_name(decl->kind), (int)decl->name.len, decl->name.data, decl_type_name(decl->type));
+            if (decl->default_value) {
+                indent(out, 3);
+                fputs("Default\n", out);
+                print_expr(decl->default_value, out, 4);
+            }
+        }
+    }
     for (size_t i = 0; i < ast->statements.len; i++) {
         print_stmt(ast->statements.items[i], out, 1);
     }
@@ -141,6 +173,11 @@ static void free_stmt(DsStmt *stmt) {
 
 void ds_ast_free(DsAst *ast) {
     if (!ast) return;
+    for (size_t i = 0; i < ast->script.declarations.len; i++) {
+        free(ast->script.declarations.items[i].name.data);
+        free_expr(ast->script.declarations.items[i].default_value);
+    }
+    free(ast->script.declarations.items);
     for (size_t i = 0; i < ast->statements.len; i++) {
         free_stmt(ast->statements.items[i]);
     }
