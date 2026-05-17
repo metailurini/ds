@@ -348,6 +348,7 @@ int main(int argc, char **argv) {
         int rc = cli_load_lower(argv[3], &program) ? 0 : 1;
         if (rc == 0 && !ds_emit_bash_program(&program.source, program.lowered, argv[5], &program.diag)) rc = 1;
         cli_program_free(&program);
+        if (rc != 0) unlink(argv[5]);
         return rc;
     }
 

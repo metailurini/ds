@@ -1,0 +1,6 @@
+let r = run __ds_missing_command_for_v0_7_tests__
+echo r.code
+if r.failed {
+  echo captured
+}
+echo r.stderr

@@ -4,6 +4,7 @@
 
 - Implemented `run` expressions for captured command execution in both VM mode and emitted standalone Bash.
 - Added command-result fields: `stdout`, `stderr`, `code`, `ok`, and `failed`.
+- Added `{result.stdout}`-style command-result field interpolation in strings for VM and Bash parity.
 - Captured command failures are now inspectable without aborting the script, while plain command statements remain fail-fast.
 - Added readable redirection suffixes for plain command statements: `|>`, `|>>`, `!>`, `!>>`, `&>`, and `&>>`.
 - Added stable token, AST, and bytecode shapes for captured commands, field access, and redirected commands.
@@ -11,6 +12,8 @@
 - Added `tests/v0_7/run.sh`, capture/redirection/diagnostic/parity fixtures, golden token/AST/bytecode/Bash outputs, and C unit tests for command-result ownership and lowered command-result/redirection shape.
 - Fixed unsupported pipeline and legacy shell-redirection diagnostics so v0.7.0 rejects out-of-scope command forms before execution or Bash emission.
 - Improved command-word field diagnostics for missing fields and known non-result receivers.
+- Fixed VM redirection-open failures to use normal source-located diagnostics and failed Bash emission to remove stale output artifacts.
+- Expanded v0.7.0 edge coverage for command-not-found capture, executable paths with spaces, block scoping, field interpolation, redirection-open locations, and stale emit artifacts.
 - `make test` now runs the v0.7.0 suite in addition to prior suites.
 
 ## v0.6.0 - Imports / Includes

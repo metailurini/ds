@@ -1,0 +1,2 @@
+let r = run sh -c "printf out; printf err >&2; exit 3"
+echo "stdout={r.stdout} stderr={r.stderr} code={r.code} ok={r.ok} failed={r.failed}"

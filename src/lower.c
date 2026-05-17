@@ -25,6 +25,8 @@ typedef struct {
     Scope *scope;
 } Lower;
 
+static bool is_result_field(DsStr field, SymKind *kind_out);
+
 static bool str_eq(DsStr a, const char *b) {
     size_t len = strlen(b);
     return a.len == len && memcmp(a.data, b, len) == 0;
@@ -95,17 +97,39 @@ static bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
         if (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || text.data[j] == '_')) {
             j++;
             while (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || (text.data[j] >= '0' && text.data[j] <= '9') || text.data[j] == '_')) j++;
-            if (j < text.len - 1 && text.data[j] == '}') {
+            if (j < text.len - 1 && (text.data[j] == '}' || text.data[j] == '.')) {
                 DsStr name = {text.data + start, j - start};
-                if (!scope_find(lower->scope, name)) {
+                Symbol *sym = scope_find(lower->scope, name);
+                if (!sym) {
                     ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
                     return false;
+                }
+                if (text.data[j] == '.') {
+                    size_t field_start = ++j;
+                    if (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || text.data[j] == '_')) {
+                        j++;
+                        while (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || (text.data[j] >= '0' && text.data[j] <= '9') || text.data[j] == '_')) j++;
+                    }
+                    if (j >= text.len - 1 || text.data[j] != '}') {
+                        ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                        return false;
+                    }
+                    DsStr field = {text.data + field_start, j - field_start};
+                    SymKind field_kind = SYM_UNKNOWN;
+                    if (sym->kind != SYM_COMMAND_RESULT) {
+                        ds_diag_error(lower->diag, span, "field interpolation is only supported on command results in v0.7.0");
+                        return false;
+                    }
+                    if (!is_result_field(field, &field_kind)) {
+                        ds_diag_error(lower->diag, span, "unknown command result field `%.*s`", (int)field.len, field.data);
+                        return false;
+                    }
                 }
                 i = j;
                 continue;
             }
         }
-        ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}`");
+        ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
         return false;
     }
     return true;

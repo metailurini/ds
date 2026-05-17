@@ -1,0 +1,4 @@
+if true {
+  let inside = run printf scoped
+}
+echo inside.stdout

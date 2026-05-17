@@ -467,6 +467,8 @@ typedef struct {
     const DsSource *source;
 } Vm;
 
+static bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
+
 static const char *script_basename(const DsSource *source) {
     const char *path = source && source->path ? source->path : "<script>";
     const char *slash = strrchr(path, '/');
@@ -729,13 +731,38 @@ static bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsS
             if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
                 j++;
                 while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
-                if (j < input->len && input->data[j] == '}') {
+                if (j < input->len && (input->data[j] == '}' || input->data[j] == '.')) {
                     char *name = ds_str_dup_range(input->data + start, j - start);
                     DsValue value;
                     if (!lookup_var(vm, name, &value, span)) {
                         free(name);
                         ds_string_free(out);
                         return false;
+                    }
+                    if (input->data[j] == '.') {
+                        size_t field_start = ++j;
+                        if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+                            j++;
+                            while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                        }
+                        if (j >= input->len || input->data[j] != '}') {
+                            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            ds_value_free(&value);
+                            free(name);
+                            ds_string_free(out);
+                            return false;
+                        }
+                        char *field = ds_str_dup_range(input->data + field_start, j - field_start);
+                        DsValue field_value = ds_value_null();
+                        bool ok = command_result_field(vm, &value, field, span, &field_value);
+                        free(field);
+                        ds_value_free(&value);
+                        if (!ok) {
+                            free(name);
+                            ds_string_free(out);
+                            return false;
+                        }
+                        value = field_value;
                     }
                     DsString rendered;
                     ds_value_to_string(&value, &rendered);
@@ -747,7 +774,7 @@ static bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsS
                     continue;
                 }
             }
-            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}`");
+            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
             ds_string_free(out);
             return false;
         }
@@ -839,35 +866,49 @@ static int run_command(Vm *vm, Instr *ins) {
             return 1;
         }
     }
+    int redirect_fd = -1;
+    char *redirect_path = NULL;
+    if (ins->redirect.kind != DS_REDIRECT_NONE) {
+        if (!render_redirect_target(vm, &ins->redirect, &redirect_path)) {
+            for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
+            free(argv);
+            return 1;
+        }
+        int flags = O_CREAT | O_WRONLY;
+        if (ins->redirect.kind == DS_REDIRECT_OUT_APPEND || ins->redirect.kind == DS_REDIRECT_ERR_APPEND || ins->redirect.kind == DS_REDIRECT_ALL_APPEND) flags |= O_APPEND;
+        else flags |= O_TRUNC;
+        redirect_fd = open(redirect_path, flags, 0666);
+        if (redirect_fd < 0) {
+            ds_diag_error(vm->diag, ins->redirect.target_span, "failed to open redirection target `%s`: %s", redirect_path, strerror(errno));
+            free(redirect_path);
+            for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
+            free(argv);
+            return 1;
+        }
+    }
     pid_t pid = fork();
     if (pid < 0) {
         ds_diag_error(vm->diag, ins->span, "failed to launch command `%s`: %s", argv[0], strerror(errno));
+        if (redirect_fd >= 0) close(redirect_fd);
+        free(redirect_path);
         for (size_t i = 0; i < ins->word_count; i++) free(argv[i]);
         free(argv);
         return 1;
     }
     if (pid == 0) {
         if (ins->redirect.kind != DS_REDIRECT_NONE) {
-            char *path = NULL;
-            if (!render_redirect_target(vm, &ins->redirect, &path)) _exit(1);
-            int flags = O_CREAT | O_WRONLY;
-            if (ins->redirect.kind == DS_REDIRECT_OUT_APPEND || ins->redirect.kind == DS_REDIRECT_ERR_APPEND || ins->redirect.kind == DS_REDIRECT_ALL_APPEND) flags |= O_APPEND;
-            else flags |= O_TRUNC;
-            int fd = open(path, flags, 0666);
-            if (fd < 0) {
-                fprintf(stderr, "ds: failed to open redirection target `%s`: %s\n", path, strerror(errno));
-                _exit(1);
-            }
-            if (ins->redirect.kind == DS_REDIRECT_OUT || ins->redirect.kind == DS_REDIRECT_OUT_APPEND) dup2(fd, STDOUT_FILENO);
-            else if (ins->redirect.kind == DS_REDIRECT_ERR || ins->redirect.kind == DS_REDIRECT_ERR_APPEND) dup2(fd, STDERR_FILENO);
-            else { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); }
-            close(fd);
-            free(path);
+            if (ins->redirect.kind == DS_REDIRECT_OUT || ins->redirect.kind == DS_REDIRECT_OUT_APPEND) dup2(redirect_fd, STDOUT_FILENO);
+            else if (ins->redirect.kind == DS_REDIRECT_ERR || ins->redirect.kind == DS_REDIRECT_ERR_APPEND) dup2(redirect_fd, STDERR_FILENO);
+            else { dup2(redirect_fd, STDOUT_FILENO); dup2(redirect_fd, STDERR_FILENO); }
+            close(redirect_fd);
+            free(redirect_path);
         }
         execvp(argv[0], argv);
         fprintf(stderr, "ds: failed to launch command `%s`: %s\n", argv[0], strerror(errno));
         _exit(127);
     }
+    if (redirect_fd >= 0) close(redirect_fd);
+    free(redirect_path);
     int status = 0;
     while (waitpid(pid, &status, 0) < 0) {
         if (errno != EINTR) {

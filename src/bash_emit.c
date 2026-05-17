@@ -309,7 +309,7 @@ static bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, Em
             if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
                 j++;
                 while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
-                if (j < len && decoded[j] == '}') {
+                if (j < len && (decoded[j] == '}' || decoded[j] == '.')) {
                     DsStr name = {decoded + start, j - start};
                     if (!symbol_exists(&e->symbols, name)) {
                         ds_diag_error(e->diag, expr->span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
@@ -318,12 +318,26 @@ static bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, Em
                     }
                     buf_append(out, "${__ds_");
                     buf_append_len(out, name.data, name.len);
+                    if (decoded[j] == '.') {
+                        size_t field_start = ++j;
+                        if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
+                            j++;
+                            while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
+                        }
+                        if (j >= len || decoded[j] != '}') {
+                            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            free(decoded);
+                            return false;
+                        }
+                        buf_append(out, "_");
+                        buf_append_len(out, decoded + field_start, j - field_start);
+                    }
                     buf_append(out, "}");
                     i = j;
                     continue;
                 }
             }
-            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}`");
+            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
             free(decoded);
             return false;
         }

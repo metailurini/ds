@@ -84,6 +84,36 @@ fi
 pass "large captured output is not truncated"
 run_ok capture_many "$DS" run "$FIX/capture/many.ds"
 assert_same_text $'one\ntwo\nerr\n1\n' "$TMP/capture_many.out" "repeated captures do not reuse stale fields"
+run_ok capture_field_interpolation "$DS" run "$FIX/capture/field_interpolation.ds"
+assert_same_text $'stdout=out stderr=err code=3 ok=false failed=true\n' "$TMP/capture_field_interpolation.out" "command-result fields interpolate in strings"
+parity_field_interpolation_vm="$TMP/capture_field_interpolation.out"
+run_ok capture_field_interpolation_emit "$DS" emit bash "$FIX/capture/field_interpolation.ds" -o "$TMP/field_interpolation.sh"
+run_ok capture_field_interpolation_syntax bash -n "$TMP/field_interpolation.sh"
+run_ok capture_field_interpolation_bash bash "$TMP/field_interpolation.sh"
+assert_same "$parity_field_interpolation_vm" "$TMP/capture_field_interpolation_bash.out" "field interpolation VM/Bash parity"
+run_ok capture_command_not_found "$DS" run "$FIX/capture/command_not_found.ds"
+assert_contains "$TMP/capture_command_not_found.out" '127' "command-not-found capture records status"
+assert_contains "$TMP/capture_command_not_found.out" 'captured' "command-not-found capture remains inspectable"
+assert_contains "$TMP/capture_command_not_found.out" 'failed to launch command' "command-not-found stderr is captured"
+assert_same_text '' "$TMP/capture_command_not_found.err" "command-not-found capture does not stream stderr"
+run_ok capture_block_scope "$DS" run "$FIX/capture/block_scope.ds"
+assert_same_text $'scoped\ndone\n' "$TMP/capture_block_scope.out" "command-result variables follow block scope"
+
+# Executable paths containing spaces are valid command words when invoked through variables.
+mkdir -p "$TMP/bin space"
+cat >"$TMP/bin space/tool with spaces" <<'SH'
+#!/usr/bin/env sh
+printf 'space:%s\n' "$1"
+SH
+chmod +x "$TMP/bin space/tool with spaces"
+cat >"$TMP/executable_space.ds" <<DS
+let tool = "$TMP/bin space/tool with spaces"
+let arg = "ok value"
+let r = run \$tool \$arg
+echo r.stdout
+DS
+run_ok capture_executable_path_with_spaces "$DS" run "$TMP/executable_space.ds"
+assert_same_text $'space:ok value\n\n' "$TMP/capture_executable_path_with_spaces.out" "captured executable path with spaces works"
 
 # Plain command fail-fast behavior is preserved.
 capture_status plain_fail_fast "$DS" run "$FIX/redirection/fail_fast.ds"
@@ -118,6 +148,7 @@ DS
 capture_status redir_open_missing "$DS" run "$TMP/redir_missing_parent.ds"
 assert_nonzero_status redir_open_missing
 assert_contains "$TMP/redir_open_missing.err" "failed to open redirection target" "redirection missing parent diagnostic"
+assert_contains "$TMP/redir_open_missing.err" "$TMP/redir_missing_parent.ds:1:15: error:" "redirection missing parent diagnostic has source location"
 cat >"$TMP/redir_target_directory.ds" <<'DS'
 printf "x" |> "target"
 DS
@@ -125,6 +156,7 @@ mkdir -p "$TMP/target"
 capture_status redir_open_dir bash -c "cd '$TMP' && '$DS' run '$TMP/redir_target_directory.ds'"
 assert_nonzero_status redir_open_dir
 assert_contains "$TMP/redir_open_dir.err" "failed to open redirection target" "redirection directory diagnostic"
+assert_contains "$TMP/redir_open_dir.err" "$TMP/redir_target_directory.ds:1:15: error:" "redirection directory diagnostic has source location"
 
 # Bash emission goldens and standalone helper checks.
 run_ok emit_bash_capture "$DS" emit bash tests/v0_7/fixtures/helpers/bash_capture.ds -o "$TMP/bash_capture.sh"
@@ -200,6 +232,8 @@ declare -A diag_messages=(
   [redirect_bad_target.ds]='redirection target must be a string literal'
   [redirect_duplicate.ds]='duplicate redirection suffix'
   [unknown_command_var.ds]='unknown command variable `missing`'
+  [out_of_scope_result.ds]='unknown command variable `inside`'
+  [unknown_interpolation_field.ds]='unknown command result field `missing`'
 )
 for file in "${!diag_messages[@]}"; do
   base="${file%.ds}"
@@ -216,6 +250,12 @@ for file in "${!diag_messages[@]}"; do
   run_fail "emit_$base" "$DS" emit bash "$FIX/diagnostics/$file" -o "$TMP/$base.sh"
   assert_file_missing_or_empty "$TMP/$base.sh" "$base invalid emit leaves no artifact"
 done
+
+# Failed Bash emission must remove stale output artifacts from earlier successful emits.
+run_ok stale_emit_initial "$DS" emit bash examples/basic.ds -o "$TMP/stale_emit.sh"
+assert_contains "$TMP/stale_emit.sh" '#!/usr/bin/env bash' "initial emit creates artifact"
+run_fail stale_emit_invalid "$DS" emit bash "$FIX/diagnostics/unknown_interpolation_field.ds" -o "$TMP/stale_emit.sh"
+assert_file_missing_or_empty "$TMP/stale_emit.sh" "failed emit removes stale artifact"
 
 # Invalid legacy shell redirection tokens should be rejected clearly.
 for src in 'npm test > "out.txt"' 'npm test >> "out.txt"' 'npm test 2> "err.txt"'; do
