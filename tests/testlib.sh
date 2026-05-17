@@ -120,6 +120,18 @@ assert_file_missing_or_empty() {
   pass "$name"
 }
 
+assert_golden() {
+  local golden="$1"
+  local actual="$2"
+  local name="$3"
+  [ -f "$golden" ] || fail "$name: missing golden file $golden"
+  [ -f "$actual" ] || fail "$name: missing actual file $actual"
+  if ! diff -u "$golden" "$actual"; then
+    fail "$name: golden mismatch"
+  fi
+  pass "$name"
+}
+
 emit_bash() {
   local input="$1"
   local output="$2"

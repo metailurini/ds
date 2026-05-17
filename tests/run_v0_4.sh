@@ -123,12 +123,28 @@ assert_contains "$TMP/missing_file.err" "$TMP/does_not_exist.ds:1:1: error: fail
 run_fail usage_tokens_missing "$DS" tokens
 assert_contains "$TMP/usage_tokens_missing.err" "error: expected a command and <file.ds>" "tokens missing input usage"
 assert_not_contains "$TMP/usage_tokens_missing.err" ":1:1: error:" "usage error is not source-tied"
+run_fail usage_ast_missing "$DS" ast
+assert_contains "$TMP/usage_ast_missing.err" "error: expected a command and <file.ds>" "ast missing input usage"
+run_fail usage_check_missing "$DS" check
+assert_contains "$TMP/usage_check_missing.err" "error: expected a command and <file.ds>" "check missing input usage"
+run_fail usage_run_missing "$DS" run
+assert_contains "$TMP/usage_run_missing.err" "error: expected a command and <file.ds>" "run missing input usage"
+run_fail usage_bytecode_missing "$DS" bytecode
+assert_contains "$TMP/usage_bytecode_missing.err" "error: expected a command and <file.ds>" "bytecode missing input usage"
 run_fail usage_emit_missing_input "$DS" emit bash
 assert_contains "$TMP/usage_emit_missing_input.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "emit missing input usage"
 run_fail usage_emit_missing_output "$DS" emit bash "$TMP/pipeline_valid.ds" -o
 assert_contains "$TMP/usage_emit_missing_output.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "emit missing output usage"
-run_fail usage_extra_arg "$DS" check "$TMP/pipeline_valid.ds" extra
-assert_contains "$TMP/usage_extra_arg.err" "error: expected a command and <file.ds>" "extra arg rejected"
+run_fail usage_emit_extra_arg "$DS" emit bash "$TMP/pipeline_valid.ds" -o "$TMP/extra.sh" extra
+assert_contains "$TMP/usage_emit_extra_arg.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "emit extra arg rejected"
+for cmd in tokens ast check run bytecode; do
+  run_fail "usage_${cmd}_extra_arg" "$DS" "$cmd" "$TMP/pipeline_valid.ds" extra
+  assert_contains "$TMP/usage_${cmd}_extra_arg.err" "error: expected a command and <file.ds>" "$cmd extra arg rejected"
+done
+run_fail usage_unknown_command "$DS" frobnicate "$TMP/pipeline_valid.ds"
+assert_contains "$TMP/usage_unknown_command.err" 'error: unknown command `frobnicate`' "unknown command usage"
+run_fail usage_direct_extra_arg "$DS" "$TMP/pipeline_valid.ds" extra
+assert_contains "$TMP/usage_direct_extra_arg.err" 'error: unknown command `' "direct script extra arg rejected"
 
 cat >"$TMP/future_assignment.ds" <<'DS'
 let total = 1 + 2
@@ -229,7 +245,48 @@ pass "v0.4 fixture directory exists"
 pass "v0.4 golden directory exists"
 [ -x "$ROOT/tests/testlib.sh" ] || fail "shared test helper must be executable"
 pass "shared shell test helper is executable"
+
+printf 'same\n' >"$TMP/golden.expected"
+printf 'same\n' >"$TMP/golden.actual"
+assert_golden "$TMP/golden.expected" "$TMP/golden.actual" "shared golden helper accepts matching files"
+if (TMP="$TMP/golden_missing_tmp"; mkdir -p "$TMP"; source "$ROOT/tests/testlib.sh"; assert_golden "$TMP/missing.golden" "$TMP/golden.actual" missing_golden_case) \
+  >"$TMP/golden_missing.out" 2>"$TMP/golden_missing.err"; then
+  fail "shared golden helper should fail on missing golden"
+fi
+pass "shared golden helper rejects missing golden"
+assert_contains "$TMP/golden_missing.err" "missing golden file" "missing golden failure explains cause"
+printf 'different\n' >"$TMP/golden.actual"
+if (TMP="$TMP/golden_mismatch_tmp"; mkdir -p "$TMP"; source "$ROOT/tests/testlib.sh"; assert_golden "$TMP/../golden.expected" "$TMP/../golden.actual" mismatch_case) \
+  >"$TMP/golden_mismatch.out" 2>"$TMP/golden_mismatch.err"; then
+  fail "shared golden helper should fail on mismatch"
+fi
+pass "shared golden helper rejects mismatch"
+assert_contains "$TMP/golden_mismatch.err" "golden mismatch" "golden mismatch failure explains cause"
 assert_not_contains "$TMP/pipeline_valid.sh" "0x" "generated bash has no pointer addresses"
 assert_not_contains "$TMP/pipeline_bytecode.out" "0x" "bytecode has no pointer addresses"
+
+run_ok help_output "$DS" --help
+for line in \
+  "ds <file.ds>" \
+  "ds run <file.ds>" \
+  "ds tokens <file.ds>" \
+  "ds ast <file.ds>" \
+  "ds check <file.ds>" \
+  "ds bytecode <file.ds>" \
+  "ds emit bash <file.ds> -o <file.sh>"; do
+  assert_contains "$TMP/help_output.out" "$line" "help lists $line"
+done
+assert_contains "$ROOT/README.md" "./ds examples/basic.ds" "README documents direct execution"
+assert_contains "$ROOT/README.md" "./ds run examples/basic.ds" "README documents run command"
+assert_contains "$ROOT/README.md" "./ds tokens examples/basic.ds" "README documents tokens command"
+assert_contains "$ROOT/README.md" "./ds ast examples/basic.ds" "README documents ast command"
+assert_contains "$ROOT/README.md" "./ds check examples/basic.ds" "README documents check command"
+assert_contains "$ROOT/README.md" "./ds bytecode examples/basic.ds" "README documents bytecode command"
+assert_contains "$ROOT/README.md" "./ds emit bash examples/basic.ds -o /tmp/basic.sh" "README documents emit bash command"
+assert_contains "$ROOT/docs/architecture.md" "lowered" "architecture documents lowered pipeline"
+assert_contains "$ROOT/docs/runtime.md" "ownership" "runtime docs mention ownership"
+assert_contains "$ROOT/docs/language.ds" "future" "language catalog marks future syntax"
+assert_not_contains "$ROOT/README.md" "arrays are implemented" "README does not claim arrays implemented"
+assert_not_contains "$ROOT/README.md" "maps are implemented" "README does not claim maps implemented"
 
 printf 'v0.4.0 tests passed: %d checks\n' "$pass_count"
