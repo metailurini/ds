@@ -1,0 +1,9 @@
+args:
+  <none>
+
+constants:
+
+instructions:
+  0000 RUN_CMD        ["sh", "-c", "\"printf one; printf two >&2\""] &> "\"all.txt\""    # tests/v0_7/fixtures/redirection/combined_append.ds:1:1
+  0001 RUN_CMD        ["sh", "-c", "\"printf three; printf four >&2\""] &>> "\"all.txt\""    # tests/v0_7/fixtures/redirection/combined_append.ds:2:1
+  0002 RETURN         0    # tests/v0_7/fixtures/redirection/combined_append.ds:1:1

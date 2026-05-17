@@ -82,7 +82,7 @@ run_fail lower_bytecode_error "$DS" bytecode "$TMP/lowering_error.ds"
 run_fail lower_run_error "$DS" run "$TMP/lowering_error.ds"
 run_fail lower_direct_error "$DS" "$TMP/lowering_error.ds"
 for name in lower_check_error lower_emit_error lower_bytecode_error lower_run_error lower_direct_error; do
-  assert_contains "$TMP/$name.err" "$TMP/lowering_error.ds:2:1: error: unknown interpolation variable" "$name lowering source diagnostic shape"
+  assert_contains "$TMP/$name.err" "$TMP/lowering_error.ds:2:6: error: unknown interpolation variable" "$name lowering source diagnostic shape"
   assert_contains "$TMP/$name.err" '^' "$name keeps caret rendering"
 done
 assert_file_missing_or_empty "$TMP/lowering_error.sh" "emit bash leaves no artifact on lowering failure"
@@ -95,7 +95,7 @@ assert_contains "$TMP/first_column_error.err" "$TMP/first_column_error.ds:1:1: e
 
 printf 'let name = "Danh"\necho $missing' >"$TMP/eof_error.ds"
 run_fail eof_error "$DS" check "$TMP/eof_error.ds"
-assert_contains "$TMP/eof_error.err" "$TMP/eof_error.ds:2:1: error: unknown command variable" "EOF without newline diagnostic shape"
+assert_contains "$TMP/eof_error.err" "$TMP/eof_error.ds:2:6: error: unknown command variable" "EOF without newline diagnostic shape"
 
 cat >"$TMP/blank_nested_error.ds" <<'DS'
 let ok = true
@@ -108,7 +108,7 @@ if ok {
 }
 DS
 run_fail blank_nested_error "$DS" check "$TMP/blank_nested_error.ds"
-assert_contains "$TMP/blank_nested_error.err" "$TMP/blank_nested_error.ds:6:5: error: unknown interpolation variable" "nested diagnostic after blank lines"
+assert_contains "$TMP/blank_nested_error.err" "$TMP/blank_nested_error.ds:6:10: error: unknown interpolation variable" "nested diagnostic after blank lines"
 
 cat >"$TMP/else_error.ds" <<'DS'
 if false {
@@ -118,7 +118,7 @@ if false {
 }
 DS
 run_fail else_error "$DS" check "$TMP/else_error.ds"
-assert_contains "$TMP/else_error.err" "$TMP/else_error.ds:4:3: error: unknown command variable" "else branch source span"
+assert_contains "$TMP/else_error.err" "$TMP/else_error.ds:4:8: error: unknown command variable" "else branch source span"
 
 run_fail missing_file "$DS" check "$TMP/does_not_exist.ds"
 assert_contains "$TMP/missing_file.err" "$TMP/does_not_exist.ds:1:1: error: failed to open source file" "missing file diagnostic shape"

@@ -136,7 +136,7 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.7.0` implementation is in place for the scoped command-result capture and readable redirection pass. The dedicated `v0.7.0` tests have not been added yet in this implementation-only step.
+Current status: `v0.7.0` implementation and tests are complete for the scoped command-result capture and readable redirection pass.
 
 The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, and the initial `v0.7.0` command-result/redirection path:
 
@@ -144,6 +144,24 @@ Local imports use simple quoted paths resolved relative to the importing file:
 
 ```ds
 import "./lib.ds"
+```
+
+Command results capture stdout, stderr, and exit status without making non-zero
+captured exits fatal:
+
+```ds
+let result = run npm test
+
+if result.failed {
+  echo result.stderr
+  exit result.code
+}
+```
+
+Plain command statements also support readable redirection syntax:
+
+```ds
+npm run build &> "build.log"
 ```
 
 ```sh

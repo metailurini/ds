@@ -1,0 +1,8 @@
+let result = run npm test
+echo result.stdout
+npm run build |> "out.txt"
+npm run build |>> "out.txt"
+npm run build !> "err.txt"
+npm run build !>> "err.txt"
+npm run build &> "all.txt"
+npm run build &>> "all.txt"

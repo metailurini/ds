@@ -1,0 +1,5 @@
+let r = run sh -c "printf out; printf err >&2; exit 7"
+echo r.stdout
+echo r.stderr
+echo r.code
+if r.failed { echo "failed" }

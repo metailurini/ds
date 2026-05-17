@@ -1,0 +1,2 @@
+let r = run sh -c "i=0; while [ $i -lt 500 ]; do printf 0123456789; i=$((i+1)); done"
+echo r.stdout

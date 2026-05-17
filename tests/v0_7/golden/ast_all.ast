@@ -1,0 +1,40 @@
+Script
+  LetStmt result
+    RunExpr
+      Word printf
+      Word "hello"
+  CmdStmt
+    Word echo
+    Word result.stdout
+  IfStmt
+    Condition
+      FieldExpr stdout
+        IdentExpr result
+    Then
+      BlockStmt
+        CmdStmt
+          Word echo
+          Word "has stdout"
+  IfStmt
+    Condition
+      FieldExpr ok
+        IdentExpr result
+    Then
+      BlockStmt
+        CmdStmt
+          Word echo
+          Word "ok"
+  CmdStmt
+    Word printf
+    Word "hello"
+    Redirect |> "out.txt"
+  CmdStmt
+    Word sh
+    Word -c
+    Word "printf err >&2"
+    Redirect !>> "err.txt"
+  CmdStmt
+    Word sh
+    Word -c
+    Word "printf all; printf err >&2"
+    Redirect &> "all.txt"

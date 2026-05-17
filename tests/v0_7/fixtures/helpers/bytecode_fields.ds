@@ -1,0 +1,10 @@
+let r = run sh -c "exit 7"
+echo r.stdout
+echo r.stderr
+echo r.code
+if r.ok {
+  echo "ok"
+}
+if r.failed {
+  echo "failed"
+}

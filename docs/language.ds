@@ -250,12 +250,16 @@ npm run build &>> "build.log"
 
 
 # -----------------------------------------------------------------------------
-# 13. Pipes [v0.7.0] [stable]
+# 13. Pipes [deferred] [planned]
 # -----------------------------------------------------------------------------
 
 cat access.log | grep "ERROR" | sort | uniq
 
 let errors = run cat access.log | grep "ERROR"
+
+# v0.7.0 deliberately rejects pipelines in both plain commands and captured
+# `run` expressions. Pipeline semantics remain planned for a later command-model
+# milestone.
 
 
 # -----------------------------------------------------------------------------

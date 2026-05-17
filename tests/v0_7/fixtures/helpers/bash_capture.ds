@@ -1,0 +1,3 @@
+let word = "hello world"
+let r = run printf $word
+echo r.stdout

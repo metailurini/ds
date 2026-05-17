@@ -102,6 +102,19 @@ static bool is_redirect_token(DsTokenKind kind) {
            kind == DS_TOK_REDIRECT_ALL || kind == DS_TOK_REDIRECT_ALL_APPEND;
 }
 
+static bool is_unsupported_command_operator(const DsToken *tok) {
+    if (tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 && tok->text.data[0] == '|') return true;
+    return tok->kind == DS_TOK_GREATER || tok->kind == DS_TOK_GREATER_EQUAL || tok->kind == DS_TOK_LESS || tok->kind == DS_TOK_LESS_EQUAL;
+}
+
+static void report_unsupported_command_operator(Parser *p, const DsToken *tok) {
+    if (tok->text.len == 1 && tok->text.data[0] == '|') {
+        ds_diag_error(p->diag, tok->span, "pipelines are not supported in v0.7.0");
+    } else {
+        ds_diag_error(p->diag, tok->span, "unsupported command operator `%.*s` in v0.7.0; use `|>`, `|>>`, `!>`, `!>>`, `&>`, or `&>>` for redirection", (int)tok->text.len, tok->text.data);
+    }
+}
+
 static DsRedirectKind redirect_kind_from_token(DsTokenKind kind) {
     switch (kind) {
         case DS_TOK_REDIRECT_OUT: return DS_REDIRECT_OUT;
@@ -147,6 +160,11 @@ static void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *s
     size_t prev_end = 0;
     bool have_current = false;
     while (!is_stmt_end(p)) {
+        if (is_unsupported_command_operator(peek(p))) {
+            report_unsupported_command_operator(p, peek(p));
+            while (!is_stmt_end(p)) advance(p);
+            break;
+        }
         if (is_redirect_token(peek(p)->kind)) {
             if (reject_redirection) {
                 ds_diag_error(p->diag, peek(p)->span, "captured `run` commands do not support redirection in v0.7.0");
@@ -467,6 +485,18 @@ static DsStmt *parse_cmd(Parser *p) {
     bool have_current = false;
 
     while (!is_stmt_end(p)) {
+        if (is_unsupported_command_operator(peek(p))) {
+            if (have_current) {
+                word_vec_push(&stmt->as.cmd_stmt.words, current);
+                current.text.data = NULL;
+                current.text.len = 0;
+                current_cap = 0;
+                have_current = false;
+            }
+            report_unsupported_command_operator(p, peek(p));
+            while (!is_stmt_end(p)) advance(p);
+            break;
+        }
         if (is_redirect_token(peek(p)->kind)) {
             if (have_current) {
                 word_vec_push(&stmt->as.cmd_stmt.words, current);

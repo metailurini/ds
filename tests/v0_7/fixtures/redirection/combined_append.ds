@@ -1,0 +1,2 @@
+sh -c "printf one; printf two >&2" &> "all.txt"
+sh -c "printf three; printf four >&2" &>> "all.txt"

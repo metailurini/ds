@@ -1,0 +1,12 @@
+let r = run sh -c "exit 2"
+echo r.stdout
+echo r.stderr
+echo r.code
+if r.ok {
+  echo "ok"
+} else {
+  echo "not ok"
+}
+if r.failed {
+  echo "failed"
+}

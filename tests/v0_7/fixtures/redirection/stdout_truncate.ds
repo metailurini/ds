@@ -1,0 +1,2 @@
+printf "one" |> "out.txt"
+printf "two" |> "out.txt"

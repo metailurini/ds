@@ -1,0 +1,5 @@
+script {
+  arg name: string
+}
+let r = run printf $name
+echo r.stdout

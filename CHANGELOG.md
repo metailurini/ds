@@ -8,7 +8,10 @@
 - Added readable redirection suffixes for plain command statements: `|>`, `|>>`, `!>`, `!>>`, `&>`, and `&>>`.
 - Added stable token, AST, and bytecode shapes for captured commands, field access, and redirected commands.
 - Added portable examples under `examples/command-result.ds` and `examples/redirection.ds`.
-- Tests for this version are intentionally not added in this implementation-only step.
+- Added `tests/v0_7/run.sh`, capture/redirection/diagnostic/parity fixtures, golden token/AST/bytecode/Bash outputs, and C unit tests for command-result ownership and lowered command-result/redirection shape.
+- Fixed unsupported pipeline and legacy shell-redirection diagnostics so v0.7.0 rejects out-of-scope command forms before execution or Bash emission.
+- Improved command-word field diagnostics for missing fields and known non-result receivers.
+- `make test` now runs the v0.7.0 suite in addition to prior suites.
 
 ## v0.6.0 - Imports / Includes
 

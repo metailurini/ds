@@ -405,8 +405,9 @@ pass "future syntax leaves no output file"
 test -f "$ROOT/docs/language.ds" || fail "docs/language.ds should exist"
 pass "syntax catalog exists"
 
-# Docs should reflect that v0.2.0 tests now exist.
-assert_contains "$ROOT/README.md" 'Current status: `v0.6.0` implementation and tests are complete' "README says v0.6.0 complete"
+# Docs should reflect current project status while retaining the v0.2.0 records.
+assert_contains "$ROOT/README.md" 'Current status:' "README has current status"
+assert_contains "$ROOT/README.md" 'v0.7.0` implementation and tests are complete' "README status is current"
 assert_contains "$ROOT/docs/milestones/v0.2.0-spec.md" 'Implementation and tests complete' "spec status complete"
 assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" 'Command failure' "test plan command failure case retained"
 assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" '- [x] Edge cases are covered.' "test plan checklist marks edge cases covered"

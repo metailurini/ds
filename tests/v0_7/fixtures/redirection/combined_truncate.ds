@@ -1,0 +1,1 @@
+sh -c "printf out; printf err >&2" &> "all.txt"

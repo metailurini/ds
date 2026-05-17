@@ -1,0 +1,5 @@
+printf "one" |> "out.txt"
+printf "two" |>> "out.txt"
+sh -c "printf err >&2" !> "err.txt"
+sh -c "printf both; printf streams >&2" &> "all.txt"
+echo "done"

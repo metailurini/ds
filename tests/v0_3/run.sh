@@ -437,7 +437,7 @@ echo $missing
 DS
 run_fail diag_unknown_cmd_var "$DS" run "$TMP/unknown_var.ds"
 assert_contains "$TMP/diag_unknown_cmd_var.err" 'unknown command variable `missing`' "lowering unknown command variable diagnostic"
-assert_contains "$TMP/diag_unknown_cmd_var.err" ':1:1: error:' "diagnostic location first line"
+assert_contains "$TMP/diag_unknown_cmd_var.err" ':1:6: error:' "diagnostic location points at command variable"
 
 cat >"$TMP/unknown_interp.ds" <<'DS'
 echo "Hello {missing}"
@@ -460,7 +460,7 @@ echo $hidden
 DS
 run_fail diag_block_scope "$DS" run "$TMP/block_scope.ds"
 assert_contains "$TMP/diag_block_scope.err" 'unknown command variable `hidden`' "lowering branch-local variable rejected after block"
-assert_contains "$TMP/diag_block_scope.err" ':4:1: error:' "diagnostic after block location"
+assert_contains "$TMP/diag_block_scope.err" ':4:6: error:' "diagnostic after block points at command variable"
 
 cat >"$TMP/inner_scope_ok.ds" <<'DS'
 if true {

@@ -1,0 +1,7 @@
+let a = run printf "one"
+let b = run printf "two"
+let c = run sh -c "printf err >&2; exit 1"
+echo a.stdout
+echo b.stdout
+echo c.stderr
+echo c.code

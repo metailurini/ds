@@ -1,0 +1,11 @@
+let result = run printf "hello"
+echo result.stdout
+if result.stdout {
+  echo "has stdout"
+}
+if result.ok {
+  echo "ok"
+}
+printf "hello" |> "out.txt"
+sh -c "printf err >&2" !>> "err.txt"
+sh -c "printf all; printf err >&2" &> "all.txt"

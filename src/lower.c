@@ -247,7 +247,7 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
         }
     }
     if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') return validate_interpolation(lower, word, span);
-    for (size_t i = 1; i + 1 < word.len; i++) {
+    for (size_t i = 1; i < word.len; i++) {
         if (word.data[i] == '.') {
             DsStr name = {word.data, i};
             DsStr field = {word.data + i + 1, word.len - i - 1};
@@ -256,6 +256,10 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
             field_span.start.column = span.start.column + (int)i + 1;
             field_span.end.offset = field_span.start.offset + (int)field.len;
             field_span.end.column = field_span.start.column + (int)field.len;
+            if (field.len == 0) {
+                ds_diag_error(lower->diag, field_span, "expected field name after `.`");
+                return false;
+            }
             SymKind field_kind = SYM_UNKNOWN;
             Symbol *sym = scope_find(lower->scope, name);
             if (!sym) {
@@ -265,7 +269,11 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
                 ds_diag_error(lower->diag, name_span, "unknown command variable `%.*s`", (int)name.len, name.data);
                 return false;
             }
-            if (sym->kind != SYM_COMMAND_RESULT || !is_result_field(field, &field_kind)) {
+            if (sym->kind != SYM_COMMAND_RESULT) {
+                ds_diag_error(lower->diag, field_span, "field access is only supported on command results in v0.7.0");
+                return false;
+            }
+            if (!is_result_field(field, &field_kind)) {
                 ds_diag_error(lower->diag, field_span, "unsupported command result field `%.*s`", (int)field.len, field.data);
                 return false;
             }

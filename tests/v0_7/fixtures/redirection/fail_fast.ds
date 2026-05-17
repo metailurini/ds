@@ -1,0 +1,2 @@
+sh -c "printf before; exit 7" |> "out.txt"
+echo "unreachable"

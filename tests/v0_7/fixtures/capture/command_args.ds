@@ -1,0 +1,12 @@
+let word = "hello world"
+let dollar = "$(echo hacked)"
+let backtick = "`echo hacked`"
+let semi = "semi;colon"
+let r = run printf $word
+let s = run printf $dollar
+let t = run printf $backtick
+let u = run printf $semi
+echo r.stdout
+echo s.stdout
+echo t.stdout
+echo u.stdout

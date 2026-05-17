@@ -1,0 +1,4 @@
+let r = run printf "hello"
+echo r.stdout
+echo r.code
+if r.ok { echo "ok" }
