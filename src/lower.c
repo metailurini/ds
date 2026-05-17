@@ -153,6 +153,14 @@ static DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {
     return NULL;
 }
 
+static int find_function_index(DsLowerProgram *program, DsStr name) {
+    for (size_t i = 0; i < program->functions.len; i++) {
+        DsLowerFn *fn = &program->functions.items[i];
+        if (fn->name.len == name.len && memcmp(fn->name.data, name.data, name.len) == 0) return (int)i;
+    }
+    return -1;
+}
+
 static DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
     DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(DsLowerExpr));
     expr->kind = kind;
@@ -580,10 +588,61 @@ static void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLower
 static void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {
     if (stmt->kind != DS_STMT_LET) return;
     if (scope_find_current(lower->scope, stmt->as.let_stmt.name)) {
-        ds_diag_error(lower->diag, stmt->span, "duplicate variable `%.*s` in this scope", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
         return;
     }
     scope_define(lower, lower->scope, stmt->as.let_stmt.name, SYM_TOPLEVEL_PREDECLARED, stmt->span);
+}
+
+static bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index, bool *seen, DsSpan *cycle_span);
+
+static bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_index, bool *seen, DsSpan *cycle_span) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_CALL: {
+            int callee = find_function_index(lower->program, stmt->as.call_stmt.name);
+            if (callee < 0) return false;
+            if ((size_t)callee == target_index) {
+                *cycle_span = stmt->span;
+                return true;
+            }
+            return function_body_reaches(lower, (size_t)callee, target_index, seen, cycle_span);
+        }
+        case DS_LOWER_STMT_IF:
+            if (stmt_reaches_function(lower, stmt->as.if_stmt.then_branch, target_index, seen, cycle_span)) return true;
+            return stmt_reaches_function(lower, stmt->as.if_stmt.else_branch, target_index, seen, cycle_span);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
+                if (stmt_reaches_function(lower, stmt->as.block_stmt.statements.items[i], target_index, seen, cycle_span)) return true;
+            }
+            return false;
+        case DS_LOWER_STMT_LET:
+        case DS_LOWER_STMT_CMD:
+            return false;
+    }
+    return false;
+}
+
+static bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index, bool *seen, DsSpan *cycle_span) {
+    if (current_index >= lower->program->functions.len) return false;
+    if (seen[current_index]) return false;
+    seen[current_index] = true;
+    return stmt_reaches_function(lower, lower->program->functions.items[current_index].body, target_index, seen, cycle_span);
+}
+
+static void reject_recursive_functions(Lower *lower) {
+    if (lower->program->functions.len == 0) return;
+    bool *seen = (bool *)ds_xcalloc(lower->program->functions.len, sizeof(bool));
+    for (size_t i = 0; i < lower->program->functions.len; i++) {
+        memset(seen, 0, lower->program->functions.len * sizeof(bool));
+        DsSpan cycle_span = lower->program->functions.items[i].span;
+        if (function_body_reaches(lower, i, i, seen, &cycle_span)) {
+            DsLowerFn *fn = &lower->program->functions.items[i];
+            ds_diag_error(lower->diag, cycle_span,
+                          "recursive function calls are deferred in v0.9.0; `%.*s` participates in a recursion cycle",
+                          (int)fn->name.len, fn->name.data);
+        }
+    }
+    free(seen);
 }
 
 static void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
@@ -729,6 +788,7 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
             if (fn) lower_function_body(&lower, fn, ast->statements.items[i]);
         }
     }
+    reject_recursive_functions(&lower);
     for (size_t i = 0; i < ast->statements.len; i++) {
         if (ast->statements.items[i]->kind != DS_STMT_FN) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
     }
