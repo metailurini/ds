@@ -70,7 +70,7 @@ static void copy_words_to_instr(Instr *ins, const DsWordVec *words) {
     ins->word_count = words->len;
     ins->words = (DsStr *)ds_xcalloc(ins->word_count ? ins->word_count : 1, sizeof(DsStr));
     for (size_t i = 0; i < ins->word_count; i++) {
-        DsStr w = words->items[i];
+        DsStr w = words->items[i].text;
         ins->words[i].data = ds_str_dup_range(w.data, w.len);
         ins->words[i].len = w.len;
     }

@@ -31,7 +31,7 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             fputs("RunExpr\n", out);
             for (size_t i = 0; i < expr->as.run.words.len; i++) {
                 indent(out, level + 1);
-                fprintf(out, "Word %.*s\n", (int)expr->as.run.words.items[i].len, expr->as.run.words.items[i].data);
+                fprintf(out, "Word %.*s\n", (int)expr->as.run.words.items[i].text.len, expr->as.run.words.items[i].text.data);
             }
             break;
         case DS_EXPR_FIELD:
@@ -87,8 +87,8 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fputs("CmdStmt\n", out);
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
                 indent(out, level + 1);
-                fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.words.items[i].len,
-                        stmt->as.cmd_stmt.words.items[i].data);
+                fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.words.items[i].text.len,
+                        stmt->as.cmd_stmt.words.items[i].text.data);
             }
             if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
                 static const char *names[] = {"none", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
@@ -148,7 +148,7 @@ static void free_expr(DsExpr *expr) {
             free(expr->as.text.data);
             break;
         case DS_EXPR_RUN:
-            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].data);
+            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].text.data);
             free(expr->as.run.words.items);
             break;
         case DS_EXPR_FIELD:
@@ -194,7 +194,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_CMD:
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
-                free(stmt->as.cmd_stmt.words.items[i].data);
+                free(stmt->as.cmd_stmt.words.items[i].text.data);
             }
             free(stmt->as.cmd_stmt.words.items);
             free(stmt->as.cmd_stmt.redirect.target.data);

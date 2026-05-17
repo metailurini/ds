@@ -40,10 +40,10 @@ static void stmt_vec_push(DsStmtVec *vec, DsStmt *stmt) {
     vec->items[vec->len++] = stmt;
 }
 
-static void word_vec_push(DsWordVec *vec, DsStr word) {
+static void word_vec_push(DsWordVec *vec, DsWord word) {
     if (vec->len == vec->cap) {
         vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsStr *)ds_xrealloc(vec->items, vec->cap * sizeof(DsStr));
+        vec->items = (DsWord *)ds_xrealloc(vec->items, vec->cap * sizeof(DsWord));
     }
     vec->items[vec->len++] = word;
 }
@@ -142,7 +142,7 @@ static int precedence(DsTokenKind kind) {
 static DsExpr *parse_expr_prec(Parser *p, int min_prec);
 
 static void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *span, bool reject_redirection) {
-    DsStr current = {0};
+    DsWord current = {0};
     size_t current_cap = 0;
     size_t prev_end = 0;
     bool have_current = false;
@@ -158,23 +158,25 @@ static void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *s
         bool adjacent = have_current && tok->span.start.offset == prev_end;
         if (!adjacent && have_current) {
             word_vec_push(words, current);
-            current.data = NULL;
-            current.len = 0;
+            current.text.data = NULL;
+            current.text.len = 0;
             current_cap = 0;
             have_current = false;
         }
         if (!have_current) {
             current_cap = tok->text.len + 1;
-            current.data = (char *)ds_xcalloc(current_cap, 1);
-            current.len = 0;
+            current.text.data = (char *)ds_xcalloc(current_cap, 1);
+            current.text.len = 0;
+            current.span = tok->span;
             have_current = true;
-        } else if (current.len + tok->text.len + 1 > current_cap) {
-            current_cap = (current.len + tok->text.len + 1) * 2;
-            current.data = (char *)ds_xrealloc(current.data, current_cap);
+        } else if (current.text.len + tok->text.len + 1 > current_cap) {
+            current_cap = (current.text.len + tok->text.len + 1) * 2;
+            current.text.data = (char *)ds_xrealloc(current.text.data, current_cap);
         }
-        memcpy(current.data + current.len, tok->text.data, tok->text.len);
-        current.len += tok->text.len;
-        current.data[current.len] = '\0';
+        memcpy(current.text.data + current.text.len, tok->text.data, tok->text.len);
+        current.text.len += tok->text.len;
+        current.text.data[current.text.len] = '\0';
+        current.span.end = tok->span.end;
         prev_end = tok->span.end.offset;
         if (span) span->end = tok->span.end;
     }
@@ -459,7 +461,7 @@ static DsStmt *parse_if(Parser *p) {
 static DsStmt *parse_cmd(Parser *p) {
     DsToken *start = peek(p);
     DsStmt *stmt = new_stmt(DS_STMT_CMD, start->span);
-    DsStr current = {0};
+    DsWord current = {0};
     size_t current_cap = 0;
     size_t prev_end = 0;
     bool have_current = false;
@@ -468,8 +470,8 @@ static DsStmt *parse_cmd(Parser *p) {
         if (is_redirect_token(peek(p)->kind)) {
             if (have_current) {
                 word_vec_push(&stmt->as.cmd_stmt.words, current);
-                current.data = NULL;
-                current.len = 0;
+                current.text.data = NULL;
+                current.text.len = 0;
                 current_cap = 0;
                 have_current = false;
             }
@@ -503,25 +505,27 @@ static DsStmt *parse_cmd(Parser *p) {
         bool adjacent = have_current && tok->span.start.offset == prev_end;
         if (!adjacent && have_current) {
             word_vec_push(&stmt->as.cmd_stmt.words, current);
-            current.data = NULL;
-            current.len = 0;
+            current.text.data = NULL;
+            current.text.len = 0;
             current_cap = 0;
             have_current = false;
         }
 
         if (!have_current) {
             current_cap = tok->text.len + 1;
-            current.data = (char *)ds_xcalloc(current_cap, 1);
-            current.len = 0;
+            current.text.data = (char *)ds_xcalloc(current_cap, 1);
+            current.text.len = 0;
+            current.span = tok->span;
             have_current = true;
-        } else if (current.len + tok->text.len + 1 > current_cap) {
-            current_cap = (current.len + tok->text.len + 1) * 2;
-            current.data = (char *)ds_xrealloc(current.data, current_cap);
+        } else if (current.text.len + tok->text.len + 1 > current_cap) {
+            current_cap = (current.text.len + tok->text.len + 1) * 2;
+            current.text.data = (char *)ds_xrealloc(current.text.data, current_cap);
         }
 
-        memcpy(current.data + current.len, tok->text.data, tok->text.len);
-        current.len += tok->text.len;
-        current.data[current.len] = '\0';
+        memcpy(current.text.data + current.text.len, tok->text.data, tok->text.len);
+        current.text.len += tok->text.len;
+        current.text.data[current.text.len] = '\0';
+        current.span.end = tok->span.end;
         prev_end = tok->span.end.offset;
         stmt->span.end = tok->span.end;
     }

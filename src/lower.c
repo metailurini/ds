@@ -131,8 +131,11 @@ static bool is_result_field(DsStr field, SymKind *kind_out) {
 static void clone_words(DsWordVec *dst, const DsWordVec *src) {
     dst->len = src->len;
     dst->cap = src->len;
-    dst->items = (DsStr *)ds_xcalloc(dst->len ? dst->len : 1, sizeof(DsStr));
-    for (size_t i = 0; i < src->len; i++) dst->items[i] = str_clone(src->items[i]);
+    dst->items = (DsWord *)ds_xcalloc(dst->len ? dst->len : 1, sizeof(DsWord));
+    for (size_t i = 0; i < src->len; i++) {
+        dst->items[i].text = str_clone(src->items[i].text);
+        dst->items[i].span = src->items[i].span;
+    }
 }
 
 static DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
@@ -192,7 +195,7 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
             if (expr->as.run.words.len == 0) {
                 ds_diag_error(lower->diag, expr->span, "expected command after `run`");
             }
-            for (size_t i = 0; i < expr->as.run.words.len; i++) validate_cmd_word(lower, expr->as.run.words.items[i], expr->span);
+            for (size_t i = 0; i < expr->as.run.words.len; i++) validate_cmd_word(lower, expr->as.run.words.items[i].text, expr->as.run.words.items[i].span);
             *kind_out = SYM_COMMAND_RESULT;
             DsLowerExpr *out = expr_new(DS_LOWER_EXPR_RUN, expr->span);
             clone_words(&out->as.run.words, &expr->as.run.words);
@@ -248,14 +251,22 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
         if (word.data[i] == '.') {
             DsStr name = {word.data, i};
             DsStr field = {word.data + i + 1, word.len - i - 1};
+            DsSpan field_span = span;
+            field_span.start.offset = span.start.offset + (int)i + 1;
+            field_span.start.column = span.start.column + (int)i + 1;
+            field_span.end.offset = field_span.start.offset + (int)field.len;
+            field_span.end.column = field_span.start.column + (int)field.len;
             SymKind field_kind = SYM_UNKNOWN;
             Symbol *sym = scope_find(lower->scope, name);
             if (!sym) {
-                ds_diag_error(lower->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+                DsSpan name_span = span;
+                name_span.end.offset = name_span.start.offset + (int)name.len;
+                name_span.end.column = name_span.start.column + (int)name.len;
+                ds_diag_error(lower->diag, name_span, "unknown command variable `%.*s`", (int)name.len, name.data);
                 return false;
             }
             if (sym->kind != SYM_COMMAND_RESULT || !is_result_field(field, &field_kind)) {
-                ds_diag_error(lower->diag, span, "unsupported command result field `%.*s`", (int)field.len, field.data);
+                ds_diag_error(lower->diag, field_span, "unsupported command result field `%.*s`", (int)field.len, field.data);
                 return false;
             }
         }
@@ -425,10 +436,11 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
             out->as.cmd_stmt.words.len = stmt->as.cmd_stmt.words.len;
             out->as.cmd_stmt.words.cap = stmt->as.cmd_stmt.words.len;
-            out->as.cmd_stmt.words.items = (DsStr *)ds_xcalloc(out->as.cmd_stmt.words.len ? out->as.cmd_stmt.words.len : 1, sizeof(DsStr));
+            out->as.cmd_stmt.words.items = (DsWord *)ds_xcalloc(out->as.cmd_stmt.words.len ? out->as.cmd_stmt.words.len : 1, sizeof(DsWord));
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
-                validate_cmd_word(lower, stmt->as.cmd_stmt.words.items[i], stmt->span);
-                out->as.cmd_stmt.words.items[i] = str_clone(stmt->as.cmd_stmt.words.items[i]);
+                validate_cmd_word(lower, stmt->as.cmd_stmt.words.items[i].text, stmt->as.cmd_stmt.words.items[i].span);
+                out->as.cmd_stmt.words.items[i].text = str_clone(stmt->as.cmd_stmt.words.items[i].text);
+                out->as.cmd_stmt.words.items[i].span = stmt->as.cmd_stmt.words.items[i].span;
             }
             out->as.cmd_stmt.redirect.kind = stmt->as.cmd_stmt.redirect.kind;
             out->as.cmd_stmt.redirect.op_span = stmt->as.cmd_stmt.redirect.op_span;
@@ -469,7 +481,7 @@ static void lower_expr_free(DsLowerExpr *expr) {
             free(expr->as.text.data);
             break;
         case DS_LOWER_EXPR_RUN:
-            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].data);
+            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].text.data);
             free(expr->as.run.words.items);
             break;
         case DS_LOWER_EXPR_FIELD:
@@ -509,7 +521,7 @@ static void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.block_stmt.statements.items);
             break;
         case DS_LOWER_STMT_CMD:
-            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) free(stmt->as.cmd_stmt.words.items[i].data);
+            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) free(stmt->as.cmd_stmt.words.items[i].text.data);
             free(stmt->as.cmd_stmt.words.items);
             free(stmt->as.cmd_stmt.redirect.target.data);
             break;

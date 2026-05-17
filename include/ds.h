@@ -109,7 +109,12 @@ typedef enum {
 typedef struct DsExpr DsExpr;
 
 typedef struct {
-    DsStr *items;
+    DsStr text;
+    DsSpan span;
+} DsWord;
+
+typedef struct {
+    DsWord *items;
     size_t len;
     size_t cap;
 } DsWordVec;

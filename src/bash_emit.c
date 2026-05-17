@@ -450,7 +450,9 @@ static bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out
     return false;
 }
 
-static bool emit_command_word(BashEmitter *e, DsStr word, EmitBuf *out, DsSpan span) {
+static bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
+    DsStr word = command_word.text;
+    DsSpan span = command_word.span;
     if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
         DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = span};
         fake.as.text = word;
@@ -509,8 +511,9 @@ static bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *o
 static bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span) {
     for (size_t i = 0; i < words->len; i++) {
         buf_append(out, " ");
-        if (!emit_command_word(e, words->items[i], out, span)) return false;
+        if (!emit_command_word(e, words->items[i], out)) return false;
     }
+    (void)span;
     return true;
 }
 
@@ -616,7 +619,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
                 if (i > 0) buf_append(&e->out, " ");
-                if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out, stmt->span)) return false;
+                if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
             }
             if (!emit_redirect(e, &stmt->as.cmd_stmt.redirect, &e->out, stmt->span)) return false;
             buf_append(&e->out, "\n\n");
