@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DS="$ROOT/ds"
 FIX="$ROOT/tests/v0_1/fixtures"
 GOLD="$ROOT/tests/v0_1/golden"

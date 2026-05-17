@@ -45,6 +45,8 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Runtime container clear APIs for reuse-friendly ownership boundaries: `ds_array_clear()` and `ds_map_clear()`.
 - Shared diagnostic location formatting helper for source-tied errors.
 - Shared shell test helper for versioned regression runners.
+- Consistent version-owned test layout: each milestone runner and unit source now
+  lives under `tests/v0_*/`, with shared helpers under `tests/lib/`.
 - `v0.4.0` cleanup regression suite covering pipeline boundaries, diagnostic consistency, source locations, runtime ownership, `DsMap` wrapper behavior, static backend/staged-library boundaries, generated Bash standalone behavior, command exit parity, cleanup-only future-syntax rejection, CLI usage consistency, shared golden-helper failure quality, and docs/help-command alignment.
 
 ### Fixed
@@ -65,8 +67,8 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 
 ### Tests
 
-- Added `tests/run_v0_4.sh` and `tests/test_v0_4_runtime.c`.
-- Added `tests/testlib.sh` as the first shared shell helper for reusable runner assertions.
+- Added `tests/v0_4/run.sh` and `tests/v0_4/unit/runtime.c`.
+- Added `tests/lib/testlib.sh` as the first shared shell helper for reusable runner assertions.
 - Expanded the v0.4.0 suite to 163 cleanup-focused checks, including missing-golden and golden-mismatch helper behavior plus README/help/docs sanity checks.
 - Existing `v0.1.0`, `v0.2.0`, and `v0.3.0` regression tests continue to pass, and `make test` now runs the `v0.4.0` cleanup suite too.
 

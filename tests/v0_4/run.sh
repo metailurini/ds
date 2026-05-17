@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DS="$ROOT/ds"
 TMP="${TMPDIR:-/tmp}/ds_v0_4_tests.$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
-# shellcheck source=tests/testlib.sh
-source "$ROOT/tests/testlib.sh"
+# shellcheck source=tests/lib/testlib.sh
+source "$ROOT/tests/lib/testlib.sh"
 
 make -C "$ROOT" clean all >/dev/null
 
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/test_v0_4_runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/tests/v0_4/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_4_runtime"
 run_ok runtime_ownership_unit "$TMP/test_v0_4_runtime"
 
@@ -243,20 +243,20 @@ done
 pass "v0.4 fixture directory exists"
 [ -d "$ROOT/tests/v0_4/golden" ] || fail "v0.4 golden directory missing"
 pass "v0.4 golden directory exists"
-[ -x "$ROOT/tests/testlib.sh" ] || fail "shared test helper must be executable"
+[ -x "$ROOT/tests/lib/testlib.sh" ] || fail "shared test helper must be executable"
 pass "shared shell test helper is executable"
 
 printf 'same\n' >"$TMP/golden.expected"
 printf 'same\n' >"$TMP/golden.actual"
 assert_golden "$TMP/golden.expected" "$TMP/golden.actual" "shared golden helper accepts matching files"
-if (TMP="$TMP/golden_missing_tmp"; mkdir -p "$TMP"; source "$ROOT/tests/testlib.sh"; assert_golden "$TMP/missing.golden" "$TMP/golden.actual" missing_golden_case) \
+if (TMP="$TMP/golden_missing_tmp"; mkdir -p "$TMP"; source "$ROOT/tests/lib/testlib.sh"; assert_golden "$TMP/missing.golden" "$TMP/golden.actual" missing_golden_case) \
   >"$TMP/golden_missing.out" 2>"$TMP/golden_missing.err"; then
   fail "shared golden helper should fail on missing golden"
 fi
 pass "shared golden helper rejects missing golden"
 assert_contains "$TMP/golden_missing.err" "missing golden file" "missing golden failure explains cause"
 printf 'different\n' >"$TMP/golden.actual"
-if (TMP="$TMP/golden_mismatch_tmp"; mkdir -p "$TMP"; source "$ROOT/tests/testlib.sh"; assert_golden "$TMP/../golden.expected" "$TMP/../golden.actual" mismatch_case) \
+if (TMP="$TMP/golden_mismatch_tmp"; mkdir -p "$TMP"; source "$ROOT/tests/lib/testlib.sh"; assert_golden "$TMP/../golden.expected" "$TMP/../golden.actual" mismatch_case) \
   >"$TMP/golden_mismatch.out" 2>"$TMP/golden_mismatch.err"; then
   fail "shared golden helper should fail on mismatch"
 fi

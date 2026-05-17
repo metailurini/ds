@@ -24,13 +24,13 @@ check: $(BIN)
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
 
 test: $(BIN)
-	./tests/run_v0_1.sh
-	./tests/run_v0_2.sh
-	./tests/run_v0_3.sh
-	./tests/run_v0_4.sh
+	./tests/v0_1/run.sh
+	./tests/v0_2/run.sh
+	./tests/v0_3/run.sh
+	./tests/v0_4/run.sh
 
 test-v0-4: $(BIN)
-	./tests/run_v0_4.sh
+	./tests/v0_4/run.sh
 
 asan:
 	$(MAKE) clean

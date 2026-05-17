@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DS="$ROOT/ds"
 FIX="tests/v0_3/fixtures"
 GOLD="tests/v0_3/golden"
@@ -155,14 +155,14 @@ make -C "$ROOT" clean all >/dev/null
 
 # Runtime unit tests for strings, values, arrays, and map wrapper.
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/test_v0_3_runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/tests/v0_3/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_3_runtime"
 run_ok runtime_unit "$TMP/test_v0_3_runtime"
 
 # Direct lowering tests prove the shared lowered representation shape instead
 # of only exercising it through the VM and Bash backends.
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/test_v0_3_lower.c" \
+  "$ROOT/tests/v0_3/unit/lower.c" \
   "$ROOT/src/lexer.c" "$ROOT/src/parser.c" "$ROOT/src/ast.c" "$ROOT/src/lower.c" \
   "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_3_lower"
@@ -582,7 +582,7 @@ parity_fail parity_missing_command "$TMP/missing_command.ds"
 # Memory/ownership checks under available sanitizers. These are skipped only when
 # the local compiler cannot build sanitizer binaries.
 if cc -std=c99 -Wall -Wextra -Wpedantic -fsanitize=address -I"$ROOT/include" \
-  "$ROOT/tests/test_v0_3_runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/tests/v0_3/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_3_runtime_asan" >/dev/null 2>"$TMP/asan_build.err"; then
   run_ok runtime_unit_asan "$TMP/test_v0_3_runtime_asan"
 else
@@ -590,7 +590,7 @@ else
 fi
 
 if cc -std=c99 -Wall -Wextra -Wpedantic -fsanitize=undefined -I"$ROOT/include" \
-  "$ROOT/tests/test_v0_3_runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/tests/v0_3/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_3_runtime_ubsan" >/dev/null 2>"$TMP/ubsan_build.err"; then
   run_ok runtime_unit_ubsan "$TMP/test_v0_3_runtime_ubsan"
 else
