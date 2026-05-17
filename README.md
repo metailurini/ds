@@ -119,7 +119,7 @@ Important files:
 
 ## Project status
 
-Current status: `v0.2.0` implementation is complete. Tests for `v0.2.0` have not been added yet.
+Current status: `v0.2.0` implementation and tests are complete.
 
 The current implementation supports the `v0.1.0` frontend plus the first `v0.2.0` Bash emission path:
 
@@ -135,7 +135,7 @@ bash /tmp/basic.sh
 
 It does not execute scripts through the VM yet. Direct VM execution begins in `v0.3.0`.
 
-Known `v0.2.0` Bash-emission limitation: comparison operators are emitted with Bash `[[ ... ]]` comparison syntax and do not perform type-aware numeric dispatch yet. Numeric comparison semantics are intentionally deferred until the runtime/VM work can define typed behavior consistently.
+Known `v0.2.0` Bash-emission limitation: comparison operators are emitted with Bash `[[ ... ]]` string-style condition semantics and do not perform type-aware numeric dispatch yet. Numeric comparison semantics are intentionally deferred until the runtime/VM work can define typed behavior consistently.
 
 ## Syntax catalog
 

@@ -1,0 +1,3 @@
+let first = "Danh"
+let last = "Nguyen"
+echo "{first} {last}!"

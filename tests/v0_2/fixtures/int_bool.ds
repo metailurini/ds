@@ -1,0 +1,4 @@
+let zero = 0
+let count = 3
+let ok = true
+let bad = false

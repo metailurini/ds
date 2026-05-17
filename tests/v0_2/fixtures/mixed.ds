@@ -1,0 +1,13 @@
+let name = "Danh"
+let count = 3
+let enabled = true
+echo "Deploying {name}"
+if name == "Danh" {
+  echo "matched"
+  if count >= 3 {
+    echo $name
+  }
+} else {
+  echo "no"
+}
+echo "done"

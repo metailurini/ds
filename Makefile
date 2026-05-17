@@ -25,6 +25,7 @@ check: $(BIN)
 
 test: $(BIN)
 	./tests/run_v0_1.sh
+	./tests/run_v0_2.sh
 
 smoke: $(BIN)
 	./$(BIN) tokens examples/basic.ds

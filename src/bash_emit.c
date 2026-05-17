@@ -238,16 +238,23 @@ static bool emit_condition(BashEmitter *e, const DsExpr *expr, EmitBuf *out) {
     }
     if (expr->kind == DS_EXPR_BINARY) {
         const char *op = NULL;
+        bool negate = false;
         if (str_eq(expr->as.binary.op, "==")) op = "==";
         else if (str_eq(expr->as.binary.op, "!=")) op = "!=";
         else if (str_eq(expr->as.binary.op, ">")) op = ">";
-        else if (str_eq(expr->as.binary.op, ">=")) op = ">=";
-        else if (str_eq(expr->as.binary.op, "<")) op = "<";
-        else if (str_eq(expr->as.binary.op, "<=")) op = "<=";
+        else if (str_eq(expr->as.binary.op, ">=")) {
+            op = "<";
+            negate = true;
+        } else if (str_eq(expr->as.binary.op, "<")) op = "<";
+        else if (str_eq(expr->as.binary.op, "<=")) {
+            op = ">";
+            negate = true;
+        }
         if (!op) {
             ds_diag_error(e->diag, expr->span, "operator `%.*s` cannot be emitted in a Bash condition in v0.2.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
             return false;
         }
+        if (negate) buf_append(out, "! ");
         buf_append(out, "[[ ");
         if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
         buf_appendf(out, " %s ", op);

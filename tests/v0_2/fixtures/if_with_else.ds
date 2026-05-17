@@ -1,0 +1,6 @@
+let ok = false
+if ok {
+  echo "yes"
+} else {
+  echo "no"
+}

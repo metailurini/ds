@@ -1,0 +1,7 @@
+let ok = true
+let ready = true
+if ok {
+  if ready {
+    echo "ready"
+  }
+}
