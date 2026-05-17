@@ -291,6 +291,9 @@ assert_contains "$TMP/unknown_condition_var.err" 'unknown variable `missing`' "u
 run_fail cli_emit_missing_output "$DS" emit bash "$TMP/commands.ds"
 assert_contains "$TMP/cli_emit_missing_output.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "CLI emit missing output diagnostic"
 
+run_fail cli_emit_no_input "$DS" emit bash
+assert_contains "$TMP/cli_emit_no_input.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "CLI emit no input diagnostic"
+
 run_fail cli_emit_wrong_backend "$DS" emit zsh "$TMP/commands.ds" -o "$TMP/bad.sh"
 assert_contains "$TMP/cli_emit_wrong_backend.err" 'expected `ds emit bash <file.ds> -o <file.sh>`' "CLI emit wrong backend diagnostic"
 
@@ -299,6 +302,15 @@ assert_contains "$TMP/cli_emit_missing_input.err" 'failed to open source file' "
 
 run_fail cli_emit_unwritable_output "$DS" emit bash "$TMP/commands.ds" -o "$TMP/no_such_dir/out.sh"
 assert_contains "$TMP/cli_emit_unwritable_output.err" 'failed to open output file' "CLI emit unwritable output diagnostic"
+
+cat >"$TMP/invalid_source.ds" <<'EOF_DS'
+if true {
+  echo "missing close"
+EOF_DS
+run_fail invalid_source_before_emission "$DS" emit bash "$TMP/invalid_source.ds" -o "$TMP/invalid_source.sh"
+assert_contains "$TMP/invalid_source_before_emission.err" 'expected `}`' "invalid source parse diagnostic"
+[ ! -e "$TMP/invalid_source.sh" ] || fail "invalid source should not write output"
+pass "invalid source leaves no output file"
 
 # Variable names use the generated prefix consistently, including names that could look similar to helpers.
 cat >"$TMP/prefix_collision.ds" <<'EOF_DS'
@@ -312,10 +324,92 @@ run_ok run_prefix_collision bash "$TMP/prefix_collision.sh"
 printf 'safe\n' >"$TMP/prefix_collision.expected"
 assert_same "$TMP/prefix_collision.expected" "$TMP/run_prefix_collision.out" "runtime prefixed variable behavior"
 
+# Edge cases explicitly listed in the v0.2.0 test plan.
+printf 'let name = "Danh"\necho "hi {name}"' >"$TMP/no_trailing_newline.ds"
+run_ok emit_no_trailing_newline "$DS" emit bash "$TMP/no_trailing_newline.ds" -o "$TMP/no_trailing_newline.sh"
+run_ok bash_syntax_no_trailing_newline bash -n "$TMP/no_trailing_newline.sh"
+run_ok run_no_trailing_newline bash "$TMP/no_trailing_newline.sh"
+printf 'hi Danh\n' >"$TMP/no_trailing_newline.expected"
+assert_same "$TMP/no_trailing_newline.expected" "$TMP/run_no_trailing_newline.out" "file without trailing newline emits valid Bash"
+
+cat >"$TMP/deep_nested_if.ds" <<'EOF_DS'
+let a = true
+let b = true
+let c = true
+let d = true
+if a {
+  if b {
+    if c {
+      if d {
+        echo "deep"
+      }
+    }
+  }
+}
+EOF_DS
+run_ok emit_deep_nested_if "$DS" emit bash "$TMP/deep_nested_if.ds" -o "$TMP/deep_nested_if.sh"
+run_ok bash_syntax_deep_nested_if bash -n "$TMP/deep_nested_if.sh"
+run_ok run_deep_nested_if bash "$TMP/deep_nested_if.sh"
+printf 'deep\n' >"$TMP/deep_nested_if.expected"
+assert_same "$TMP/deep_nested_if.expected" "$TMP/run_deep_nested_if.out" "deeply nested if emits valid Bash"
+
+long_value="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+cat >"$TMP/long_string.ds" <<EOF_DS
+let text = "$long_value"
+echo \$text
+EOF_DS
+run_ok emit_long_string "$DS" emit bash "$TMP/long_string.ds" -o "$TMP/long_string.sh"
+run_ok bash_syntax_long_string bash -n "$TMP/long_string.sh"
+run_ok run_long_string bash "$TMP/long_string.sh"
+printf '%s\n' "$long_value" >"$TMP/long_string.expected"
+assert_same "$TMP/long_string.expected" "$TMP/run_long_string.out" "long string emits valid Bash"
+
+{
+  for i in $(seq 1 40); do
+    printf 'let v%s = "%s"\n' "$i" "$i"
+  done
+  for i in $(seq 1 40); do
+    printf 'echo $v%s\n' "$i"
+  done
+} >"$TMP/many_variables.ds"
+run_ok emit_many_variables "$DS" emit bash "$TMP/many_variables.ds" -o "$TMP/many_variables.sh"
+run_ok bash_syntax_many_variables bash -n "$TMP/many_variables.sh"
+run_ok run_many_variables bash "$TMP/many_variables.sh"
+seq 1 40 >"$TMP/many_variables.expected"
+assert_same "$TMP/many_variables.expected" "$TMP/run_many_variables.out" "many variables emit valid Bash"
+
+cat >"$TMP/interp_punctuation.ds" <<'EOF_DS'
+let name = "Danh"
+echo "Hello, {name}!"
+echo "({name})[{name}]."
+EOF_DS
+run_ok emit_interp_punctuation "$DS" emit bash "$TMP/interp_punctuation.ds" -o "$TMP/interp_punctuation.sh"
+assert_contains "$TMP/interp_punctuation.sh" 'echo "Hello, ${__ds_name}!"' "interpolation next to punctuation emits correctly"
+run_ok run_interp_punctuation bash "$TMP/interp_punctuation.sh"
+cat >"$TMP/interp_punctuation.expected" <<'EOF_EXPECT'
+Hello, Danh!
+(Danh)[Danh].
+EOF_EXPECT
+assert_same "$TMP/interp_punctuation.expected" "$TMP/run_interp_punctuation.out" "interpolation next to punctuation preserves text"
+
+cat >"$TMP/future_syntax.ds" <<'EOF_DS'
+script {
+  arg app: string
+}
+EOF_DS
+run_fail future_syntax_rejected "$DS" emit bash "$TMP/future_syntax.ds" -o "$TMP/future_syntax.sh"
+assert_contains "$TMP/future_syntax_rejected.err" 'unexpected `}`' "future syntax rejected by v0.2 emitter"
+[ ! -e "$TMP/future_syntax.sh" ] || fail "future syntax should not write output"
+pass "future syntax leaves no output file"
+
+test -f "$ROOT/docs/language.ds" || fail "docs/language.ds should exist"
+pass "syntax catalog exists"
+
 # Docs should reflect that v0.2.0 tests now exist.
 assert_contains "$ROOT/README.md" 'Current status: `v0.2.0` implementation and tests are complete.' "README says v0.2.0 complete"
 assert_contains "$ROOT/docs/milestones/v0.2.0-spec.md" 'Implementation and tests complete' "spec status complete"
 assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" 'Command failure' "test plan command failure case retained"
+assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" '- [x] Edge cases are covered.' "test plan checklist marks edge cases covered"
 
 make -C "$ROOT" check >/dev/null
 pass "make check passes"

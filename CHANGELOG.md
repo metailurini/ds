@@ -31,6 +31,7 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - `ds emit bash <file.ds> -o <file.sh>` for the `v0.1.0` source subset.
 - Standalone generated Bash with shebang, strict mode, prefixed variables, source comments, command emission, simple string interpolation, and `if`/`else` emission.
 - `v0.2.0` Bash emitter test suite with golden output, `bash -n` validation, runtime behavior checks, quoting/safety coverage, diagnostics, and CLI edge cases.
+- Expanded `v0.2.0` edge-case coverage for no-input CLI usage, invalid source failures before emission, no trailing newline, deeper nested conditionals, long strings, many variables, interpolation next to punctuation, and future syntax rejection.
 
 ## v0.1.0 — Complete
 
@@ -73,3 +74,4 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Safety and quoting tests for strings containing spaces, quotes, dollar signs, command substitutions, backticks, and backslashes.
 - Diagnostics tests for unsupported assignment expressions, unknown interpolation variables, unknown command variables, unknown condition variables, and invalid emit CLI forms.
 - CLI smoke tests for missing output paths, unsupported backends, missing inputs, and unwritable outputs.
+- Edge-case tests for no-input CLI usage, invalid source files failing before emission, files without trailing newlines, deeper nested conditionals, long strings, many variables, interpolation next to punctuation, and future syntax rejection.
