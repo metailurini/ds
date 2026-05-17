@@ -1,0 +1,6 @@
+let a = "space value"
+let b = "$(echo hacked)"
+let c = "semi;colon"
+let d = "brace-value"
+let r = run printf "%s\n%s\n%s\n%s\n" $a $b $c $d
+echo r.stdout

@@ -138,7 +138,7 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.7.0` implementation and tests are complete for the scoped command-result capture and readable redirection pass; `v0.8.0` implementation cleanup is complete for the scoped command-model/process-wrapper pass and has not added new user-facing syntax. The dedicated `v0.8.0` test-plan suite is still the next test phase.
+Current status: `v0.7.0` implementation and tests are complete for the scoped command-result capture and readable redirection pass; `v0.8.0` implementation and tests are complete for the scoped command-model/process-wrapper cleanup and have not added new user-facing syntax.
 
 The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, and the `v0.8.0` command-model/process-wrapper cleanup:
 

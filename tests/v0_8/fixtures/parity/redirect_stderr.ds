@@ -1,0 +1,2 @@
+sh -c "printf err >&2" !> "err.txt"
+sh -c "printf more >&2" !>> "err.txt"

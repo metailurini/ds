@@ -1,0 +1,2 @@
+sh -c "echo before; exit 6"
+echo unreachable

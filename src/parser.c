@@ -103,7 +103,8 @@ static bool is_redirect_token(DsTokenKind kind) {
 }
 
 static bool is_unsupported_command_operator(const DsToken *tok) {
-    if (tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 && tok->text.data[0] == '|') return true;
+    if (tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 &&
+        (tok->text.data[0] == '|' || tok->text.data[0] == '&')) return true;
     return tok->kind == DS_TOK_GREATER || tok->kind == DS_TOK_GREATER_EQUAL || tok->kind == DS_TOK_LESS || tok->kind == DS_TOK_LESS_EQUAL;
 }
 

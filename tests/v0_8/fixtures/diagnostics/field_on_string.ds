@@ -1,0 +1,2 @@
+let s = "x"
+echo s.stdout

@@ -1,0 +1,2 @@
+let r = run printf helper
+echo r.stdout

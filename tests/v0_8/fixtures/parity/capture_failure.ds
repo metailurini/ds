@@ -1,0 +1,6 @@
+let r = run sh -c "echo out; echo err >&2; exit 9"
+echo r.stdout
+echo r.stderr
+echo r.code
+echo r.ok
+echo r.failed

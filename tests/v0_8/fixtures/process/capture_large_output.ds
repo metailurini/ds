@@ -1,0 +1,2 @@
+let r = run python3 -c "import sys; sys.stdout.write('x'*4096)"
+echo r.stdout

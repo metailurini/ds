@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.8.0 - Cleanup: Command Model and Bash Parity
+
+- Added shared command model regression tests under `tests/v0_8/`, including ownership/clone/free unit coverage for `DsCommand` and direct checks for the shared command-result field descriptor table.
+- Added cleanup-focused VM/Bash parity coverage for captured commands, command-result field interpolation, redirection files, imports, script args with metacharacters, and plain-command fail-fast behavior.
+- Added process-wrapper regression coverage for command-not-found handling, empty and large capture output, repeated captures, executable paths with spaces, and generated Bash helper behavior.
+- Added diagnostic and unsupported-syntax coverage to ensure cleanup does not accidentally unlock pipelines, background jobs, stdin redirection, shell boolean operators, or future functions/loops.
+- Added `make test-v0-8` and wired `tests/v0_8/run.sh` into `make test`.
+- Fixed command parsing so bare `&`, `&&`, and `||` command operators are rejected instead of being treated as ordinary command words.
+
 ## v0.7.0 - Command Results and Redirection
 
 - Implemented `run` expressions for captured command execution in both VM mode and emitted standalone Bash.

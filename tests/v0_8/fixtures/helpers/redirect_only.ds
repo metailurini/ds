@@ -1,0 +1,1 @@
+printf "redir" |> "out.txt"

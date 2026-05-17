@@ -1,0 +1,2 @@
+let result = run printf x
+echo result.

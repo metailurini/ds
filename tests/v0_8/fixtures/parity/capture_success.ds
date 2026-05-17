@@ -1,0 +1,6 @@
+let r = run printf "ok"
+echo r.stdout
+echo r.stderr
+echo r.code
+echo r.ok
+echo r.failed
