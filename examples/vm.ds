@@ -1,0 +1,9 @@
+# Minimal v0.3.0 VM execution example.
+let name = "Danh"
+let target = "vm"
+
+if target == "vm" {
+  echo "Hello {name} from {target}"
+} else {
+  echo "unexpected target"
+}

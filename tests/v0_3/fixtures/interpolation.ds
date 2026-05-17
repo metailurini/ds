@@ -1,0 +1,3 @@
+let app = "api"
+let target = "staging"
+echo "deploy:{app}:{target}!"

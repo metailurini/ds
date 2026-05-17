@@ -1,0 +1,11 @@
+constants:
+  0: string "api"
+  1: string "staging"
+
+instructions:
+  0000 INTERPOLATE    r0, const 0    # tests/v0_3/fixtures/interpolation.ds:1:11
+  0001 STORE_VAR      app, r0    # tests/v0_3/fixtures/interpolation.ds:1:1
+  0002 INTERPOLATE    r1, const 1    # tests/v0_3/fixtures/interpolation.ds:2:14
+  0003 STORE_VAR      target, r1    # tests/v0_3/fixtures/interpolation.ds:2:1
+  0004 RUN_CMD        ["echo", "\"deploy:{app}:{target}!\""]    # tests/v0_3/fixtures/interpolation.ds:3:1
+  0005 RETURN         0    # tests/v0_3/fixtures/interpolation.ds:1:1

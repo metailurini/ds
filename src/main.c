@@ -58,7 +58,10 @@ int main(int argc, char **argv) {
         return rc;
     }
 
-    if (argc == 2) {
+    if (argc == 2 &&
+        strcmp(argv[1], "run") != 0 && strcmp(argv[1], "tokens") != 0 &&
+        strcmp(argv[1], "ast") != 0 && strcmp(argv[1], "check") != 0 &&
+        strcmp(argv[1], "bytecode") != 0) {
         const char *path = argv[1];
         DsSource source = {0};
         DsTokenVec tokens = {0};

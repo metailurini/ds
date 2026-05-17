@@ -6,7 +6,7 @@ SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
 
-.PHONY: all clean check smoke test
+.PHONY: all clean check smoke test asan ubsan
 
 all: $(BIN)
 
@@ -26,6 +26,15 @@ check: $(BIN)
 test: $(BIN)
 	./tests/run_v0_1.sh
 	./tests/run_v0_2.sh
+	./tests/run_v0_3.sh
+
+asan:
+	$(MAKE) clean
+	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test
+
+ubsan:
+	$(MAKE) clean
+	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test
 
 smoke: $(BIN)
 	./$(BIN) tokens examples/basic.ds

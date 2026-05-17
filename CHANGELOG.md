@@ -37,6 +37,31 @@ The project uses semantic versioning once stable, but during pre-`1.0.0` develop
 - Minimal runtime primitives for owned strings, tagged values, internal arrays, and `DsMap` symbol/value storage.
 - Shared lowered program representation consumed by both bytecode generation/VM execution and Bash emission, including known variable checks, interpolation names, supported expressions, duplicate declarations, and block-local scope boundaries.
 - Deterministic bytecode dump output and a small direct execution VM for the supported `v0.1.0` / `v0.2.0` subset.
+- `v0.3.0` runtime, lowering, bytecode, VM execution, diagnostics, command execution, sanitizer, and VM/Bash parity tests.
+- `make asan` and `make ubsan` sanitizer test targets for runtime/VM ownership checks where the local compiler supports them.
+
+### Fixed
+
+- `ds run` and `ds bytecode` without an input file now report usage instead of treating the subcommand name as an implicit script path.
+
+## v0.3.0 — Complete
+
+### Implemented
+
+- Direct VM execution through `ds <file.ds>` and `ds run <file.ds>`.
+- Deterministic bytecode dump output through `ds bytecode <file.ds>`.
+- Shared lowered program representation consumed by both VM bytecode generation and Bash emission.
+- Runtime primitives for owned strings, tagged values, growable arrays, and project-owned map storage.
+- Bytecode generation and register VM execution for the supported `v0.1.0` / `v0.2.0` subset.
+- Command execution through a small process-launch boundary with non-zero command exits propagated to the CLI.
+
+### Tests
+
+- Runtime C unit tests for `DsString`, `DsValue`, `DsArray`, and `DsMap`.
+- Bytecode golden tests for empty files, comments-only files, variables, interpolation, branches, nested conditionals, and mixed scripts.
+- VM integration tests for values, expressions, interpolation, conditionals, command execution, command failures, source-shape edge cases, and diagnostics.
+- VM/Bash parity tests for supported success and failure fixtures.
+- Sanitizer checks for runtime ownership where the local compiler supports AddressSanitizer and UndefinedBehaviorSanitizer.
 
 ## v0.1.0 — Complete
 

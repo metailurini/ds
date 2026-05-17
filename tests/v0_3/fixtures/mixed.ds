@@ -1,0 +1,10 @@
+let name = "Danh"
+let count = 2
+let ok = true
+if ok {
+  echo "Hello {name}"
+}
+if count >= 2 {
+  echo "count:{count}"
+}
+echo "done"

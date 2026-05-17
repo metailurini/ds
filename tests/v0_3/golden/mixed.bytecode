@@ -1,0 +1,23 @@
+constants:
+  0: string "Danh"
+  1: int 2
+  2: bool true
+  3: int 2
+
+instructions:
+  0000 INTERPOLATE    r0, const 0    # tests/v0_3/fixtures/mixed.ds:1:12
+  0001 STORE_VAR      name, r0    # tests/v0_3/fixtures/mixed.ds:1:1
+  0002 LOAD_CONST     r1, const 1    # tests/v0_3/fixtures/mixed.ds:2:13
+  0003 STORE_VAR      count, r1    # tests/v0_3/fixtures/mixed.ds:2:1
+  0004 LOAD_CONST     r2, const 2    # tests/v0_3/fixtures/mixed.ds:3:10
+  0005 STORE_VAR      ok, r2    # tests/v0_3/fixtures/mixed.ds:3:1
+  0006 LOAD_VAR       r3, ok    # tests/v0_3/fixtures/mixed.ds:4:4
+  0007 JUMP_IF_FALSE  r3, 9    # tests/v0_3/fixtures/mixed.ds:4:4
+  0008 RUN_CMD        ["echo", "\"Hello {name}\""]    # tests/v0_3/fixtures/mixed.ds:5:3
+  0009 LOAD_VAR       r4, count    # tests/v0_3/fixtures/mixed.ds:7:4
+  0010 LOAD_CONST     r5, const 3    # tests/v0_3/fixtures/mixed.ds:7:13
+  0011 COMPARE        r6, r4 >= r5    # tests/v0_3/fixtures/mixed.ds:7:4
+  0012 JUMP_IF_FALSE  r6, 14    # tests/v0_3/fixtures/mixed.ds:7:4
+  0013 RUN_CMD        ["echo", "\"count:{count}\""]    # tests/v0_3/fixtures/mixed.ds:8:3
+  0014 RUN_CMD        ["echo", "\"done\""]    # tests/v0_3/fixtures/mixed.ds:10:1
+  0015 RETURN         0    # tests/v0_3/fixtures/mixed.ds:1:1

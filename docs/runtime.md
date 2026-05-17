@@ -209,6 +209,30 @@ Questions every map API should answer:
 - Is iteration order stable or intentionally unspecified?
 - Which allocator owns internal memory?
 
+
+## Implemented v0.3.0 runtime subset
+
+`v0.3.0` adds the first concrete runtime pieces used by the direct VM path.
+They are intentionally small and internal-only:
+
+- `DsString` owns a dynamic, NUL-terminated byte buffer while still tracking
+  explicit length. It supports construction from C strings or source ranges,
+  append-by-range, append-by-C-string, append-by-character, and explicit free.
+- `DsValue` is a tagged value for `null`, `bool`, `int`, and owned `string`.
+  String values copy or take ownership explicitly so VM values do not dangle
+  after source buffers are released.
+- `DsArray` is a minimal growable pointer vector used for runtime/compiler
+  lists in this milestone.
+- `DsMap` is the project-owned map wrapper used for VM variable storage. It
+  copies keys, owns stored `DsValue` values, and does not expose the staged
+  `libs/hashmap` API to the rest of the codebase.
+
+The initial VM truthiness rule is deliberately simple and mirrored by tests:
+`false`, `0`, `null`, and empty strings are falsey; `true`, non-zero integers,
+and non-empty strings are truthy. Comparisons render values to deterministic
+strings before comparing, matching the current Bash-emission limitation. A
+future semantic pass may replace this with type-aware numeric dispatch.
+
 ## Hashmap absorption plan
 
 The hashmap support code from the owned `hashmap` project is included in this repository under `libs/hashmap/` for now.

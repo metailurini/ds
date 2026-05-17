@@ -1,0 +1,10 @@
+let outer = true
+let inner = false
+if outer {
+  if inner {
+    echo "bad"
+  } else {
+    echo "nested"
+  }
+}
+echo "after"

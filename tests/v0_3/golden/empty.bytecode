@@ -1,0 +1,4 @@
+constants:
+
+instructions:
+  0000 RETURN         0    # tests/v0_3/fixtures/empty.ds:1:1

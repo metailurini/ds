@@ -1,0 +1,18 @@
+constants:
+  0: bool true
+  1: bool false
+
+instructions:
+  0000 LOAD_CONST     r0, const 0    # tests/v0_3/fixtures/nested_if.ds:1:13
+  0001 STORE_VAR      outer, r0    # tests/v0_3/fixtures/nested_if.ds:1:1
+  0002 LOAD_CONST     r1, const 1    # tests/v0_3/fixtures/nested_if.ds:2:13
+  0003 STORE_VAR      inner, r1    # tests/v0_3/fixtures/nested_if.ds:2:1
+  0004 LOAD_VAR       r2, outer    # tests/v0_3/fixtures/nested_if.ds:3:4
+  0005 JUMP_IF_FALSE  r2, 11    # tests/v0_3/fixtures/nested_if.ds:3:4
+  0006 LOAD_VAR       r3, inner    # tests/v0_3/fixtures/nested_if.ds:4:6
+  0007 JUMP_IF_FALSE  r3, 10    # tests/v0_3/fixtures/nested_if.ds:4:6
+  0008 RUN_CMD        ["echo", "\"bad\""]    # tests/v0_3/fixtures/nested_if.ds:5:5
+  0009 JUMP           11    # tests/v0_3/fixtures/nested_if.ds:4:3
+  0010 RUN_CMD        ["echo", "\"nested\""]    # tests/v0_3/fixtures/nested_if.ds:7:5
+  0011 RUN_CMD        ["echo", "\"after\""]    # tests/v0_3/fixtures/nested_if.ds:10:1
+  0012 RETURN         0    # tests/v0_3/fixtures/nested_if.ds:1:1

@@ -133,6 +133,10 @@ if force {
   echo "normal mode"
 }
 
+# Current v0.3.0 VM/Bash condition semantics are conservative and tested:
+# booleans, integers, and strings may be used as conditions; comparisons are
+# string-style until a future type-aware semantic model is added.
+
 if file.exists("package.json") {
   npm install
 } else {
