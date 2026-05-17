@@ -7,8 +7,10 @@
 - Added `examples/args.ds` and updated CLI help to show `ds <file.ds> [args...]` and `ds run <file.ds> [args...]`.
 - Fixed direct script invocation with arguments so path-like missing files, such as `ds /tmp/nope.ds arg`, report source/file diagnostics instead of being treated as unknown commands.
 - Fixed one-argument unknown command handling so `ds frob` remains a usage error while readable/path-like script arguments still use direct execution.
-- Added `tests/v0_5/run.sh`, `tests/v0_5/unit/lower.c`, fixtures, and golden files for lexer/parser/AST output, lowering, VM argv parsing, standalone Bash argv parsing, help output, bytecode arg-contract dumps, diagnostics, shell safety, CLI integration, and older regression coverage.
-- `make test` now runs the v0.5.0 suite; current count is `v0.5.0 tests passed: 239 checks`.
+- Added `tests/v0_5/run.sh`, `tests/v0_5/unit/lower.c`, fixtures, and golden files for lexer/parser/AST output, lowering, VM argv parsing, standalone Bash argv parsing, help output, bytecode arg-contract dumps, diagnostics, shell safety, CLI integration, integer overflow parity, and older regression coverage.
+- `make test` now runs the v0.5.0 suite; current count is `v0.5.0 tests passed: 249 checks`.
+- Fixed v0.5.0 integer overflow handling so integer defaults fail during lowering and VM/emitted Bash argv parsing both reject values outside the supported signed 64-bit range.
+- Updated sanitizer targets to avoid rebuilding inside each versioned test runner and to run the AddressSanitizer suite with leak detection disabled for reliable full-suite completion in the tool environment.
 - Documented that v0.5.0 treats option values beginning with `--` as option tokens; richer `--name=value` or escaped option-value handling remains deferred.
 
 

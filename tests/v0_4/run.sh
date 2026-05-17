@@ -10,7 +10,9 @@ trap 'rm -rf "$TMP"' EXIT
 # shellcheck source=tests/lib/testlib.sh
 source "$ROOT/tests/lib/testlib.sh"
 
-make -C "$ROOT" clean all >/dev/null
+if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
+  make -C "$ROOT" clean all >/dev/null
+fi
 
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
   "$ROOT/tests/v0_4/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \

@@ -1,0 +1,5 @@
+script {
+  option retries: int = 999999999999999999999999999999999999
+}
+
+echo "retries={retries}"

@@ -17,7 +17,16 @@ __DS_USAGE__
 }
 
 __ds_error() { echo "${0##*/}: error: $1" >&2; exit 1; }
-__ds_parse_int() { [[ "$1" =~ ^[+-]?[0-9]+$ ]] && [[ "$1" != "+" ]] && [[ "$1" != "-" ]]; }
+__ds_parse_int() {
+  [[ "$1" =~ ^[+-]?[0-9]+$ ]] || return 1
+  [[ "$1" != "+" && "$1" != "-" ]] || return 1
+  local __ds_abs="$1" __ds_limit=9223372036854775807
+  if [[ "$__ds_abs" == -* ]]; then __ds_abs="${__ds_abs#-}"; __ds_limit=9223372036854775808; elif [[ "$__ds_abs" == +* ]]; then __ds_abs="${__ds_abs#+}"; fi
+  while [[ ${#__ds_abs} -gt 1 && "$__ds_abs" == 0* ]]; do __ds_abs="${__ds_abs#0}"; done
+  [[ ${#__ds_abs} -lt ${#__ds_limit} ]] && return 0
+  [[ ${#__ds_abs} -gt ${#__ds_limit} ]] && return 1
+  [[ "$__ds_abs" < "$__ds_limit" || "$__ds_abs" == "$__ds_limit" ]]
+}
 
 __ds_app=
 __ds_target='staging'

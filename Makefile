@@ -38,11 +38,13 @@ test-v0-5: $(BIN)
 
 asan:
 	$(MAKE) clean
-	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test
+	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" all
+	ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test
 
 ubsan:
 	$(MAKE) clean
-	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test
+	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" all
+	DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test
 
 smoke: $(BIN)
 	./$(BIN) tokens examples/basic.ds

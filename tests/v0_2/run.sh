@@ -85,7 +85,9 @@ emit_fixture() {
 }
 
 # Build first so all tests exercise the local executable.
-make -C "$ROOT" clean all >/dev/null
+if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
+  make -C "$ROOT" clean all >/dev/null
+fi
 
 # Golden emitter tests and generated Bash syntax validity.
 for name in empty comments_only simple_string int_bool simple_command interpolation if_without_else if_with_else nested_if mixed; do

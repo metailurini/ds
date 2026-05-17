@@ -1,5 +1,6 @@
 #include "ds.h"
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -225,8 +226,9 @@ static void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl dec
 static bool parse_i64(DsStr text, int64_t *out) {
     char *tmp = ds_str_dup_range(text.data, text.len);
     char *end = NULL;
+    errno = 0;
     long long value = strtoll(tmp, &end, 10);
-    bool ok = end && *end == '\0';
+    bool ok = errno != ERANGE && end && *end == '\0';
     if (ok) *out = (int64_t)value;
     free(tmp);
     return ok;

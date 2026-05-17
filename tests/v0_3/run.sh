@@ -151,7 +151,9 @@ parity_fail() {
 }
 
 # Build first so all tests exercise the local executable.
-make -C "$ROOT" clean all >/dev/null
+if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
+  make -C "$ROOT" clean all >/dev/null
+fi
 
 # Runtime unit tests for strings, values, arrays, and map wrapper.
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \

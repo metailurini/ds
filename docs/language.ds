@@ -180,6 +180,9 @@ script {
 # End option parsing with --.
 # ds deploy.ds api -- --not-an-option
 
+# Integer args/options/defaults use the project's signed 64-bit integer range.
+# Values outside that range are rejected by both VM execution and emitted Bash.
+
 
 # -----------------------------------------------------------------------------
 # 10. Imports / includes [v0.6.0] [stable]

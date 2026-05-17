@@ -84,7 +84,9 @@ EOF_INNER
 }
 
 # Build first so all tests exercise the local executable.
-make -C "$ROOT" clean all >/dev/null
+if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
+  make -C "$ROOT" clean all >/dev/null
+fi
 
 # Lexer golden tests.
 run_ok tokens_basic "$DS" tokens "$FIX/tokens_basic.ds"

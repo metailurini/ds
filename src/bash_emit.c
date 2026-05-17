@@ -176,7 +176,16 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
     if (!program->has_script) return;
     emit_script_usage(e, program);
     buf_append(&e->out, "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n");
-    buf_append(&e->out, "__ds_parse_int() { [[ \"$1\" =~ ^[+-]?[0-9]+$ ]] && [[ \"$1\" != \"+\" ]] && [[ \"$1\" != \"-\" ]]; }\n\n");
+    buf_append(&e->out, "__ds_parse_int() {\n");
+    buf_append(&e->out, "  [[ \"$1\" =~ ^[+-]?[0-9]+$ ]] || return 1\n");
+    buf_append(&e->out, "  [[ \"$1\" != \"+\" && \"$1\" != \"-\" ]] || return 1\n");
+    buf_append(&e->out, "  local __ds_abs=\"$1\" __ds_limit=9223372036854775807\n");
+    buf_append(&e->out, "  if [[ \"$__ds_abs\" == -* ]]; then __ds_abs=\"${__ds_abs#-}\"; __ds_limit=9223372036854775808; elif [[ \"$__ds_abs\" == +* ]]; then __ds_abs=\"${__ds_abs#+}\"; fi\n");
+    buf_append(&e->out, "  while [[ ${#__ds_abs} -gt 1 && \"$__ds_abs\" == 0* ]]; do __ds_abs=\"${__ds_abs#0}\"; done\n");
+    buf_append(&e->out, "  [[ ${#__ds_abs} -lt ${#__ds_limit} ]] && return 0\n");
+    buf_append(&e->out, "  [[ ${#__ds_abs} -gt ${#__ds_limit} ]] && return 1\n");
+    buf_append(&e->out, "  [[ \"$__ds_abs\" < \"$__ds_limit\" || \"$__ds_abs\" == \"$__ds_limit\" ]]\n");
+    buf_append(&e->out, "}\n\n");
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_OPTION) {

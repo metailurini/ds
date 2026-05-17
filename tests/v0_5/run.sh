@@ -12,7 +12,9 @@ trap 'rm -rf "$TMP"' EXIT
 # shellcheck source=tests/lib/testlib.sh
 source "$ROOT/tests/lib/testlib.sh"
 
-make -C "$ROOT" clean all >/dev/null
+if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
+  make -C "$ROOT" clean all >/dev/null
+fi
 
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
   "$ROOT/tests/v0_5/unit/lower.c" \
@@ -116,6 +118,9 @@ assert_contains "$TMP/invalid_int_empty.err" 'invalid int value `' "invalid empt
 capture_status invalid_int_lone_minus "$DS" run "$FIX/args_basic.ds" api --retries -
 assert_nonzero_status invalid_int_lone_minus
 assert_contains "$TMP/invalid_int_lone_minus.err" 'invalid int value `-`' "invalid lone minus diagnostic"
+capture_status invalid_int_overflow "$DS" run "$FIX/args_basic.ds" api --retries 999999999999999999999999999999999999
+assert_nonzero_status invalid_int_overflow
+assert_contains "$TMP/invalid_int_overflow.err" 'invalid int value `999999999999999999999999999999999999` for `retries`' "invalid int overflow diagnostic"
 capture_status invalid_bool "$DS" run "$FIX/args_types.ds" 1 --dry maybe
 assert_nonzero_status invalid_bool
 assert_contains "$TMP/invalid_bool.err" 'invalid bool value `maybe` for `dry`' "invalid bool diagnostic"
@@ -168,11 +173,15 @@ assert_contains "$TMP/bash_duplicate_flag.err" 'duplicate option `--force`' "Bas
 capture_status bash_invalid_int bash "$TMP/basic_emitted.sh" api --retries abc
 assert_nonzero_status bash_invalid_int
 assert_contains "$TMP/bash_invalid_int.err" 'invalid int value `abc` for `retries`' "Bash invalid int diagnostic"
+capture_status bash_invalid_int_overflow bash "$TMP/basic_emitted.sh" api --retries 999999999999999999999999999999999999
+assert_nonzero_status bash_invalid_int_overflow
+assert_contains "$TMP/bash_invalid_int_overflow.err" 'invalid int value `999999999999999999999999999999999999` for `retries`' "Bash invalid int overflow diagnostic"
 
 # Source diagnostics and no output artifact for invalid source.
 declare -A invalid_expect=(
   [invalid_duplicate.ds]='duplicate variable `app`'
   [invalid_default.ds]='default for `retries` must be an int'
+  [invalid_int_overflow_default.ds]='default for `retries` must be an int'
   [invalid_flag_true.ds]='flag `force` default `true`'
   [invalid_conflict_let.ds]='duplicate variable `app`'
   [invalid_after_body.ds]='script` block must appear before executable statements'
