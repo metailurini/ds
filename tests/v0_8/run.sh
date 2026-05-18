@@ -217,7 +217,8 @@ assert_contains "$ROOT/docs/language.ds" 'let result = run npm test' "language d
 
 # Makefile integration for this dedicated suite. Avoid recursively invoking the
 # target from inside itself; the full validation invokes the target directly.
-assert_contains "$ROOT/Makefile" 'test-v0-8:' "Makefile exposes test-v0-8 target"
-assert_contains "$ROOT/Makefile" './tests/v0_8/run.sh' "Makefile wires v0.8 suite into test targets"
+assert_contains "$ROOT/Makefile" 'TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10' "Makefile lists v0.8 in the generated test target set"
+assert_contains "$ROOT/Makefile" '$(TEST_TARGETS): $(BIN)' "Makefile exposes generated per-version test targets"
+assert_contains "$ROOT/Makefile" './tests/v$$dir/run.sh' "Makefile wires listed suites into the aggregate test target"
 
 echo "v0.8.0 tests passed: $pass_count checks"

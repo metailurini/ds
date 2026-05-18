@@ -494,8 +494,9 @@ run_fail stale_emit_invalid "$DS" emit bash "$FIX/bad_unknown_call.ds" -o "$TMP/
 assert_file_missing_or_empty "$TMP/stale.sh" "failed function emit removes stale artifact"
 
 # Makefile and completion-review integration.
-assert_contains "$ROOT/Makefile" 'test-v0-9:' "Makefile exposes test-v0-9 target"
-assert_contains "$ROOT/Makefile" './tests/v0_9/run.sh' "Makefile wires v0.9 suite into test targets"
+assert_contains "$ROOT/Makefile" 'TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10' "Makefile lists v0.9 in the generated test target set"
+assert_contains "$ROOT/Makefile" '$(TEST_TARGETS): $(BIN)' "Makefile exposes generated per-version test targets"
+assert_contains "$ROOT/Makefile" './tests/v$$dir/run.sh' "Makefile wires listed suites into the aggregate test target"
 assert_contains "$ROOT/docs/milestones/v0.9.0-spec.md" 'Tests added' "v0.9 spec completion review records tests"
 assert_contains "$ROOT/docs/milestones/v0.9.0-spec.md" 'tests/v0_9/run.sh' "v0.9 spec names test suite"
 assert_contains "$ROOT/README.md" 'v0.9.0` implementation and tests are complete' "README status is current for v0.9"
