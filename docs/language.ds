@@ -383,6 +383,9 @@ let text = file.read("README.md")
 file.write("out.txt", text)
 file.append("out.txt", "\n")
 
+# Text file helpers reject embedded NUL bytes in v0.11.0. Use future binary
+# helpers once they are designed instead.
+
 let cwd = path.cwd()
 let joined = path.join("src", "main.ds")
 let base = path.basename(joined)
@@ -397,6 +400,9 @@ let ext = path.ext(joined)
 if cmd.exists("git") {
   echo "git found"
 }
+
+# Direct or PATH-based command checks only count executable files, not
+# directories with execute/search permission.
 
 cmd.require("git")
 cmd.require("npm")

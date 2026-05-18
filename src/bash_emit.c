@@ -718,7 +718,9 @@ static void emit_stdlib_helpers(BashEmitter *e) {
         "__ds_stdlib_file_exists() { [[ -e \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_file_is_file() { [[ -f \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_dir_exists() { [[ -d \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
-        "__ds_stdlib_file_read() { [[ -f \"$1\" ]] || __ds_error \"failed to read file '$1'\"; cat -- \"$1\"; }\n"
+        "__ds_stdlib_has_nul() { ! cmp -s <(LC_ALL=C tr -d '\\000' <\"$1\") \"$1\"; }\n"
+        "__ds_stdlib_reject_nul() { __ds_stdlib_has_nul \"$1\" && __ds_error \"$2 '$1' contains embedded NUL bytes\" || true; }\n"
+        "__ds_stdlib_file_read() { [[ -f \"$1\" ]] || __ds_error \"failed to read file '$1'\"; __ds_stdlib_reject_nul \"$1\" file; cat -- \"$1\"; }\n"
         "__ds_stdlib_file_write() { printf '%s' \"$2\" >\"$1\" || __ds_error \"failed to write file '$1'\"; }\n"
         "__ds_stdlib_file_append() { printf '%s' \"$2\" >>\"$1\" || __ds_error \"failed to append file '$1'\"; }\n"
         "__ds_stdlib_path_cwd() { pwd -P; }\n"
@@ -726,7 +728,7 @@ static void emit_stdlib_helpers(BashEmitter *e) {
         "__ds_stdlib_path_basename() { local p=\"$1\"; printf '%s' \"${p##*/}\"; }\n"
         "__ds_stdlib_path_dirname() { local p=\"$1\"; if [[ \"$p\" != */* ]]; then printf .; elif [[ \"${p%/*}\" == \"\" ]]; then printf /; else printf '%s' \"${p%/*}\"; fi; }\n"
         "__ds_stdlib_path_ext() { local b=\"${1##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then printf ''; else printf '%s' \".${b##*.}\"; fi; }\n"
-        "__ds_stdlib_cmd_found() { local c=\"$1\" d; if [[ \"$c\" == */* ]]; then [[ -x \"$c\" ]] && return 0 || return 1; fi; IFS=: read -r -a __ds_path_parts <<<\"${PATH:-}\"; for d in \"${__ds_path_parts[@]}\"; do [[ -z \"$d\" ]] && d=.; [[ -x \"$d/$c\" && ! -d \"$d/$c\" ]] && return 0; done; return 1; }\n"
+        "__ds_stdlib_cmd_found() { local c=\"$1\" d; if [[ \"$c\" == */* ]]; then [[ -x \"$c\" && ! -d \"$c\" ]] && return 0 || return 1; fi; IFS=: read -r -a __ds_path_parts <<<\"${PATH:-}\"; for d in \"${__ds_path_parts[@]}\"; do [[ -z \"$d\" ]] && d=.; [[ -x \"$d/$c\" && ! -d \"$d/$c\" ]] && return 0; done; return 1; }\n"
         "__ds_stdlib_cmd_exists() { __ds_stdlib_cmd_found \"$1\" && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_cmd_require() { __ds_stdlib_cmd_found \"$1\" || __ds_error \"required command '$1' was not found\"; }\n"
         "__ds_stdlib_env_valid() { [[ \"$1\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || __ds_error \"invalid environment variable name '$1' in v0.11.0\"; }\n"
@@ -737,7 +739,7 @@ static void emit_stdlib_helpers(BashEmitter *e) {
         "__ds_stdlib_reject_recursive_glob() { [[ \"$1\" != *'**'* ]] || __ds_error \"recursive '**' glob patterns are deferred in v0.11.0\"; }\n"
         "__ds_stdlib_glob() { __ds_stdlib_reject_recursive_glob \"$1\"; { compgen -G \"$1\" || true; } | sort; }\n"
         "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
-        "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\n' \"$line\"; done <\"$1\"; }\n\n");
+        "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; __ds_stdlib_reject_nul \"$1\" \"lines from\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\n' \"$line\"; done <\"$1\"; }\n\n");
 }
 
 static bool expr_uses_run(const DsLowerExpr *expr) {

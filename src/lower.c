@@ -846,6 +846,12 @@ static DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_sc
 
 static void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
     if (stmt->kind != DS_STMT_FN) return;
+    if (is_stdlib_name(stmt->as.fn_stmt.name) || is_stdlib_namespace(stmt->as.fn_stmt.name)) {
+        ds_diag_error(lower->diag, stmt->span,
+                      "function `%.*s` conflicts with a v0.11.0 standard-library helper name",
+                      (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
+        return;
+    }
     if (find_function(program, stmt->as.fn_stmt.name)) {
         ds_diag_error(lower->diag, stmt->span, "duplicate function `%.*s`", (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
         return;

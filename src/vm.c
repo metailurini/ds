@@ -1533,6 +1533,11 @@ static bool array_push_string(DsValue *array, const char *data, size_t len) {
     return ds_array_push(&array->as.array, item);
 }
 
+static bool is_executable_file(const char *path) {
+    struct stat st;
+    return path && stat(path, &st) == 0 && !S_ISDIR(st.st_mode) && access(path, X_OK) == 0;
+}
+
 static bool read_path_to_string_msg(Vm *vm, Instr *ins, const char *path, const char *what, DsValue *out) {
     FILE *fp = fopen(path, "rb");
     if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to read %s `%s`: %s", what, path, strerror(errno)); return false; }
@@ -1556,9 +1561,10 @@ static bool read_path_to_string(Vm *vm, Instr *ins, const char *path, DsValue *o
 
 static bool write_string_to_path(Vm *vm, Instr *ins, const char *path, const char *text, size_t len, bool append) {
     FILE *fp = fopen(path, append ? "ab" : "wb");
-    if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to write file `%s`: %s", path, strerror(errno)); return false; }
-    if (len && fwrite(text, 1, len, fp) != len) { ds_diag_error(vm->diag, ins->span, "failed to write file `%s`: %s", path, strerror(errno)); fclose(fp); return false; }
-    if (fclose(fp) != 0) { ds_diag_error(vm->diag, ins->span, "failed to write file `%s`: %s", path, strerror(errno)); return false; }
+    const char *op = append ? "append" : "write";
+    if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to %s file `%s`: %s", op, path, strerror(errno)); return false; }
+    if (len && fwrite(text, 1, len, fp) != len) { ds_diag_error(vm->diag, ins->span, "failed to %s file `%s`: %s", op, path, strerror(errno)); fclose(fp); return false; }
+    if (fclose(fp) != 0) { ds_diag_error(vm->diag, ins->span, "failed to %s file `%s`: %s", op, path, strerror(errno)); return false; }
     return true;
 }
 
@@ -1609,8 +1615,8 @@ static bool vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     if (strcmp(name, "cmd.exists") == 0 || strcmp(name, "cmd.require") == 0) {
         char *cmd = vm_string_arg_dup(vm, ins, 0); if (!cmd) return false;
         char *path = getenv("PATH"); bool found = false;
-        if (strchr(cmd, '/')) found = access(cmd, X_OK) == 0;
-        else if (path) { char *copy = strdup(path); for (char *save = NULL, *dir = strtok_r(copy, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) { DsString full; ds_string_init(&full); ds_string_append_cstr(&full, *dir ? dir : "."); ds_string_append_char(&full, '/'); ds_string_append_cstr(&full, cmd); if (access(full.data, X_OK) == 0) found = true; ds_string_free(&full); if (found) break; } free(copy); }
+        if (strchr(cmd, '/')) found = is_executable_file(cmd);
+        else if (path) { char *copy = strdup(path); for (char *save = NULL, *dir = strtok_r(copy, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) { DsString full; ds_string_init(&full); ds_string_append_cstr(&full, *dir ? dir : "."); ds_string_append_char(&full, '/'); ds_string_append_cstr(&full, cmd); if (is_executable_file(full.data)) found = true; ds_string_free(&full); if (found) break; } free(copy); }
         if (!found && strcmp(name, "cmd.require") == 0) { ds_diag_error(vm->diag, ins->span, "required command `%s` was not found on PATH", cmd); free(cmd); return false; }
         free(cmd); *out = strcmp(name, "cmd.exists") == 0 ? ds_value_bool(found) : ds_value_null(); return true;
     }

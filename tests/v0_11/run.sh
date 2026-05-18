@@ -174,13 +174,15 @@ write_fixture "$FIX/file_io.ds" <<'DS'
 let text = file.read("input.txt")
 file.write("out.txt", text)
 file.append("out.txt", "tail")
+file.write("overwrite.txt", "old")
+file.write("overwrite.txt", "new")
 let empty = file.read("empty.txt")
 file.write("empty-copy.txt", empty)
 let spaced = file.read("name with spaces.txt")
 file.write("space out.txt", spaced)
 DS
-assert_vm_bash_parity_in_work "file_io" "$FIX/file_io.ds" "$seed_files" 0 "out.txt empty-copy.txt"
-python3 - "$TMP/file_io_vm_work/out.txt" "$TMP/file_io_bash_work/out.txt" "$TMP/file_io_vm_work/space out.txt" "$TMP/file_io_bash_work/space out.txt" <<'PY'
+assert_vm_bash_parity_in_work "file_io" "$FIX/file_io.ds" "$seed_files" 0 "out.txt empty-copy.txt overwrite.txt"
+python3 - "$TMP/file_io_vm_work/out.txt" "$TMP/file_io_bash_work/out.txt" "$TMP/file_io_vm_work/space out.txt" "$TMP/file_io_bash_work/space out.txt" "$TMP/file_io_vm_work/overwrite.txt" "$TMP/file_io_bash_work/overwrite.txt" <<'PY'
 import pathlib, sys
 expected = b"one\ntwo\ntail"
 for arg in sys.argv[1:3]:
@@ -191,6 +193,10 @@ space_vm = pathlib.Path(sys.argv[3]).read_bytes()
 space_bash = pathlib.Path(sys.argv[4]).read_bytes()
 if space_vm != b"space file text" or space_bash != space_vm:
     raise SystemExit("space path output mismatch")
+for arg in sys.argv[5:7]:
+    data = pathlib.Path(arg).read_bytes()
+    if data != b"new":
+        raise SystemExit(f"write did not overwrite {arg}: {data!r}")
 PY
 pass "file.read/write preserves trailing newline before append and space path output"
 
@@ -199,6 +205,8 @@ seed_glob="$SEED/glob"
 mkdir -p "$seed_glob/sub"
 printf 'A' >"$seed_glob/a.txt"
 printf 'B' >"$seed_glob/b.txt"
+printf 'Q' >"$seed_glob/q1.txt"
+printf 'R' >"$seed_glob/r2.txt"
 printf 'C' >"$seed_glob/c.ds"
 printf 'S' >"$seed_glob/space name.txt"
 printf 'one\ntwo\n' >"$seed_glob/lines.txt"
@@ -208,6 +216,12 @@ printf ' leading\n\ntrailing \n' >"$seed_glob/spaces.txt"
 write_fixture "$FIX/glob_lines.ds" <<'DS'
 for file in glob("*.txt") {
   echo "txt={file}"
+}
+for file in glob("q?.txt") {
+  echo "question={file}"
+}
+for file in glob("[br]*.txt") {
+  echo "bracket={file}"
 }
 echo "--required--"
 for file in glob!("*.ds") {
@@ -232,6 +246,9 @@ DS
 assert_vm_bash_parity_in_work "glob_lines" "$FIX/glob_lines.ds" "$seed_glob" 0 ""
 assert_contains "$TMP/glob_lines_vm.out" 'txt=a.txt' "glob includes a.txt"
 assert_contains "$TMP/glob_lines_vm.out" 'txt=space name.txt' "glob preserves spaces"
+assert_contains "$TMP/glob_lines_vm.out" 'question=q1.txt' "glob supports question mark pattern"
+assert_contains "$TMP/glob_lines_vm.out" 'bracket=b.txt' "glob supports bracket pattern"
+assert_contains "$TMP/glob_lines_vm.out" 'bracket=r2.txt' "glob bracket includes r2.txt"
 assert_contains "$TMP/glob_lines_vm.out" 'tail=tail' "lines emits unterminated final line"
 assert_contains "$TMP/glob_lines_vm.out" 'space= leading' "lines preserves leading spaces"
 assert_contains "$TMP/glob_lines_vm.out" 'space=' "lines emits blank lines"
@@ -243,10 +260,13 @@ mkdir -p "$seed_cmd/bin"
 printf '#!/usr/bin/env sh\nexit 0\n' >"$seed_cmd/bin/fake-tool"
 chmod +x "$seed_cmd/bin/fake-tool"
 printf 'not executable\n' >"$seed_cmd/bin/not-exec"
+mkdir -p "$seed_cmd/bin/dir-tool" "$seed_cmd/path-dir"
 write_fixture "$FIX/cmd_env.ds" <<'DS'
 if cmd.exists("fake-tool") { echo "fake yes" }
 if !cmd.exists("missing-tool") { echo "missing no" }
 if !cmd.exists("not-exec") { echo "not-exec no" }
+if !cmd.exists("dir-tool") { echo "dir-tool no" }
+if !cmd.exists("./path-dir") { echo "path-dir no" }
 cmd.require("fake-tool")
 let before = env.get("DS_V0_11_TARGET", "unset")
 echo "before={before}"
@@ -261,6 +281,8 @@ DS
 PATH="$seed_cmd/bin:$PATH" assert_vm_bash_parity_in_work "cmd_env" "$FIX/cmd_env.ds" "$seed_cmd" 0 ""
 assert_contains "$TMP/cmd_env_vm.out" 'fake yes' "cmd.exists finds fake executable"
 assert_contains "$TMP/cmd_env_vm.out" 'not-exec no' "cmd.exists ignores non-executable"
+assert_contains "$TMP/cmd_env_vm.out" 'dir-tool no' "cmd.exists ignores directories on PATH"
+assert_contains "$TMP/cmd_env_vm.out" 'path-dir no' "cmd.exists ignores path-like directories"
 assert_contains "$TMP/cmd_env_vm.out" 'child=prod value $HOME' "env.set exports exact value"
 
 # Functions/imports/loops integration.
@@ -350,6 +372,28 @@ let p = path.join()
 DS
 assert_diag "bad_path_join_arity" "$FIX/bad_path_join_arity.ds" 'expects 1 to'
 
+write_fixture "$FIX/bad_file_read_arity.ds" <<'DS'
+let text = file.read("a", "b")
+DS
+assert_diag "bad_file_read_arity" "$FIX/bad_file_read_arity.ds" 'expects 1 arguments'
+
+write_fixture "$FIX/bad_file_write_arity.ds" <<'DS'
+file.write("a")
+DS
+assert_diag "bad_file_write_arity" "$FIX/bad_file_write_arity.ds" 'expects 2 arguments'
+
+write_fixture "$FIX/bad_glob_arity.ds" <<'DS'
+let files = glob()
+DS
+assert_diag "bad_glob_arity" "$FIX/bad_glob_arity.ds" 'expects 1 arguments'
+
+write_fixture "$FIX/bad_builtin_function_name.ds" <<'DS'
+fn glob(pattern) {
+  echo pattern
+}
+DS
+assert_diag "bad_builtin_function_name" "$FIX/bad_builtin_function_name.ds" 'conflicts with a v0.11.0 standard-library helper name'
+
 write_fixture "$FIX/bad_env_name_static.ds" <<'DS'
 env.set("BAD-NAME", "x")
 DS
@@ -371,6 +415,41 @@ file.write("missing-parent/out.txt", "x")
 echo "after"
 DS
 assert_runtime_failure "fail_write_parent" "$FIX/fail_write_parent.ds" "$seed_basic" 'failed to write file'
+
+write_fixture "$FIX/fail_append_parent.ds" <<'DS'
+file.append("missing-parent/out.txt", "x")
+echo "after"
+DS
+assert_runtime_failure "fail_append_parent" "$FIX/fail_append_parent.ds" "$seed_basic" 'failed to append file'
+
+write_fixture "$FIX/fail_read_dir.ds" <<'DS'
+let text = file.read("src")
+echo "after={text}"
+DS
+assert_runtime_failure "fail_read_dir" "$FIX/fail_read_dir.ds" "$seed_basic" 'failed to read file'
+
+seed_nul="$SEED/nul"
+mkdir -p "$seed_nul"
+python3 - "$seed_nul/nul.txt" <<'PY'
+import pathlib, sys
+pathlib.Path(sys.argv[1]).write_bytes(b"a\0b\n")
+PY
+
+write_fixture "$FIX/fail_read_nul.ds" <<'DS'
+let text = file.read("nul.txt")
+echo "after={text}"
+DS
+assert_runtime_failure "fail_read_nul" "$FIX/fail_read_nul.ds" "$seed_nul" 'contains embedded NUL bytes'
+
+write_fixture "$FIX/fail_lines_nul.ds" <<'DS'
+for line in lines("nul.txt") {
+  echo "line={line}"
+}
+echo "after"
+DS
+assert_runtime_failure "fail_lines_nul" "$FIX/fail_lines_nul.ds" "$seed_nul" 'contains embedded NUL bytes'
+assert_not_contains "$TMP/fail_lines_nul_vm.out" 'after' "VM lines NUL failure is fail-fast"
+assert_not_contains "$TMP/fail_lines_nul_bash.out" 'after' "Bash lines NUL failure is fail-fast"
 
 write_fixture "$FIX/fail_lines_missing.ds" <<'DS'
 for line in lines("missing.txt") {
