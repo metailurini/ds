@@ -263,11 +263,11 @@ ownership rules explicit enough for future features to reuse safely:
   frees all keys and values while keeping capacity for reuse; `ds_map_free()`
   clears and releases storage.
 
-The staged `libs/hashmap` code remains **still staged and unused** in production
-code for this milestone. The current `DsMap` API is intentionally simple and is
-the only map boundary used by the VM/runtime. Hashmap absorption is deferred
-until the wrapper API needs behavior such as deletion, iteration, or stronger
-collision-performance guarantees.
+The staged `libs/hashmap` code is now used behind the `DsMap` runtime wrapper.
+Normal frontend, lowering, VM, and Bash-emitter code should still depend only on
+`DsMap` and its small API, not on the staged hashmap API directly. Full
+absorption into `src/core/` is still deferred until a cleanup milestone, but the
+runtime no longer carries a separate linear-search map implementation.
 
 
 ## Implemented v0.5.0 argv binding

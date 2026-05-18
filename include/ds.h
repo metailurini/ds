@@ -453,10 +453,7 @@ typedef struct {
 typedef struct DsValue DsValue;
 
 typedef struct {
-    char **keys;
-    DsValue *values;
-    size_t len;
-    size_t cap;
+    void *impl;
 } DsMap;
 
 struct DsValue {
@@ -555,6 +552,7 @@ void ds_array_free(DsArray *array);
 void ds_map_init(DsMap *map);
 bool ds_map_set(DsMap *map, DsStr key, DsValue value);
 DsValue *ds_map_get(DsMap *map, DsStr key);
+size_t ds_map_len(const DsMap *map);
 void ds_map_clear(DsMap *map);
 void ds_map_free(DsMap *map);
 

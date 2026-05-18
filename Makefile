@@ -1,9 +1,10 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -g
-CPPFLAGS ?= -Iinclude
+CPPFLAGS ?= -Iinclude -Ilibs/hashmap
 
 SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/lower.c src/command.c src/runtime.c src/vm.c src/bash_emit.c
-OBJ := $(SRC:src/%.c=build/%.o)
+HM_SRC := libs/hashmap/hashmap.c
+OBJ := $(SRC:src/%.c=build/%.o) build/libs/hashmap/hashmap.o
 BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
@@ -16,6 +17,10 @@ $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) -o $@
 
 build/%.o: src/%.c include/ds.h | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+build/libs/hashmap/hashmap.o: libs/hashmap/hashmap.c libs/hashmap/hashmap.h | build
+	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 build:

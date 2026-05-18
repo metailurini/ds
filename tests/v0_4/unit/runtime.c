@@ -72,7 +72,7 @@ static void test_map_key_copy_update_clear_and_reuse(void) {
     found = ds_map_get(&map, view("alpha"));
     assert(found != NULL);
     expect_value_string(found, "second");
-    assert(map.len == 1);
+    assert(ds_map_len(&map) == 1);
 
     assert(ds_map_set(&map, view(""), ds_value_int(0)));
     assert(ds_map_set(&map, view("common_prefix_a"), ds_value_int(1)));
@@ -91,14 +91,13 @@ static void test_map_key_copy_update_clear_and_reuse(void) {
     assert(ds_map_get(&map, view("collision_127"))->as.integer == 127);
 
     ds_map_clear(&map);
-    assert(map.len == 0);
-    assert(map.keys != NULL);
-    assert(map.values != NULL);
+    assert(ds_map_len(&map) == 0);
+    assert(map.impl != NULL);
     assert(ds_map_get(&map, view("alpha")) == NULL);
     assert(ds_map_set(&map, view("reuse"), ds_value_int(42)));
     assert(ds_map_get(&map, view("reuse"))->as.integer == 42);
     ds_map_free(&map);
-    assert(map.keys == NULL && map.values == NULL && map.len == 0 && map.cap == 0);
+    assert(map.impl == NULL);
 }
 
 int main(void) {

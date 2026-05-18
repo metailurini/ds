@@ -135,20 +135,20 @@ static void test_array(void) {
 static void test_map(void) {
     DsMap map;
     ds_map_init(&map);
-    assert(map.len == 0);
+    assert(ds_map_len(&map) == 0);
     assert(ds_map_get(&map, str_view("missing")) == NULL);
 
     assert(ds_map_set(&map, str_view("key"), ds_value_int(1)));
     assert(ds_map_set(&map, str_view("key_1"), ds_value_bool(true)));
     assert(ds_map_set(&map, str_view("key_10"), ds_value_int(10)));
-    assert(map.len == 3);
+    assert(ds_map_len(&map) == 3);
 
     DsValue *found = ds_map_get(&map, str_view("key"));
     assert(found != NULL && found->kind == DS_VALUE_INT && found->as.integer == 1);
     assert(ds_map_set(&map, str_view("key"), ds_value_int(2)));
     found = ds_map_get(&map, str_view("key"));
     assert(found != NULL && found->kind == DS_VALUE_INT && found->as.integer == 2);
-    assert(map.len == 3);
+    assert(ds_map_len(&map) == 3);
 
     for (int i = 0; i < 80; i++) {
         char key[32];
@@ -159,7 +159,7 @@ static void test_map(void) {
     assert(found != NULL && found->kind == DS_VALUE_INT && found->as.integer == 79);
     assert(ds_map_get(&map, str_view("many_80")) == NULL);
     ds_map_free(&map);
-    assert(map.keys == NULL && map.values == NULL && map.len == 0 && map.cap == 0);
+    assert(map.impl == NULL);
 }
 
 int main(void) {

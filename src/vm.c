@@ -583,7 +583,7 @@ static void print_value_literal(FILE *out, const DsValue *v) {
             fprintf(out, "array[%zu]", v->as.array.len);
             break;
         case DS_VALUE_MAP:
-            fprintf(out, "map[%zu]", v->as.map.len);
+            fprintf(out, "map[%zu]", ds_map_len(&v->as.map));
             break;
     }
 }

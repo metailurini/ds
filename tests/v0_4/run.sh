@@ -14,8 +14,8 @@ if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
   make -C "$ROOT" clean all >/dev/null
 fi
 
-cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/v0_4/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" -I"$ROOT/libs/hashmap" \
+  "$ROOT/tests/v0_4/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" "$ROOT/libs/hashmap/hashmap.c" \
   -o "$TMP/test_v0_4_runtime"
 run_ok runtime_ownership_unit "$TMP/test_v0_4_runtime"
 
@@ -218,11 +218,11 @@ if grep -E 'DS_STMT_|DS_EXPR_' "$ROOT/src/vm.c" "$ROOT/src/bash_emit.c" >/dev/nu
 fi
 pass "VM and Bash backends do not switch over AST enum cases"
 
-if grep -R -nE '#include[[:space:]]+[<"].*hashmap|struct hashmap|hashmap_' "$ROOT/src" "$ROOT/include" >/dev/null; then
-  grep -R -nE '#include[[:space:]]+[<"].*hashmap|struct hashmap|hashmap_' "$ROOT/src" "$ROOT/include" >&2 || true
-  fail "production src/include should not leak staged hashmap API"
+if grep -R -nE '#include[[:space:]]+[<"].*hashmap|struct hashmap|hashmap_' "$ROOT/src" "$ROOT/include" | grep -v 'src/runtime.c' >/dev/null; then
+  grep -R -nE '#include[[:space:]]+[<"].*hashmap|struct hashmap|hashmap_' "$ROOT/src" "$ROOT/include" | grep -v 'src/runtime.c' >&2 || true
+  fail "production src/include should not leak staged hashmap API outside DsMap runtime wrapper"
 fi
-pass "staged hashmap API does not leak into production src/include"
+pass "staged hashmap API is contained to the DsMap runtime wrapper"
 
 # Syntax that remains future/deferred after the current milestone must be rejected.
 declare -A future_syntax

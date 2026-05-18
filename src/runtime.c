@@ -1,8 +1,17 @@
 #include "ds.h"
+#include "hashmap.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+static hashmap *ds_map_impl(DsMap *map) {
+    return (hashmap *)map->impl;
+}
+
+static const hashmap *ds_map_impl_const(const DsMap *map) {
+    return (const hashmap *)map->impl;
+}
 
 void ds_string_init(DsString *s) {
     s->data = NULL;
@@ -118,9 +127,15 @@ DsValue ds_value_copy(const DsValue *value) {
             break;
         case DS_VALUE_MAP:
             ds_map_init(&out.as.map);
-            for (size_t i = 0; i < value->as.map.len; i++) {
-                DsStr key = {value->as.map.keys[i], strlen(value->as.map.keys[i])};
-                ds_map_set(&out.as.map, key, ds_value_copy(&value->as.map.values[i]));
+            hm_iter it;
+            const char *key = NULL;
+            size_t key_len = 0;
+            void *raw = NULL;
+            if (hm_iter_init(ds_map_impl_const(&value->as.map), &it) == HM_OK) {
+                while (hm_iter_next_len(ds_map_impl_const(&value->as.map), &it, &key, &key_len, &raw) == HM_OK) {
+                    DsStr key_view = {(char *)key, key_len};
+                    ds_map_set(&out.as.map, key_view, ds_value_copy((const DsValue *)raw));
+                }
             }
             break;
         case DS_VALUE_BOOL:
@@ -173,7 +188,7 @@ bool ds_value_truthy(const DsValue *value, bool *out) {
             *out = value->as.array.len != 0;
             return true;
         case DS_VALUE_MAP:
-            *out = value->as.map.len != 0;
+            *out = ds_map_len(&value->as.map) != 0;
             return true;
     }
     return false;
@@ -242,53 +257,58 @@ void ds_array_free(DsArray *array) {
 }
 
 void ds_map_init(DsMap *map) {
-    map->keys = NULL;
-    map->values = NULL;
-    map->len = 0;
-    map->cap = 0;
-}
-
-static bool ds_str_eq_cstr(DsStr a, const char *b) {
-    size_t len = strlen(b);
-    return a.len == len && memcmp(a.data, b, len) == 0;
+    map->impl = ds_xcalloc(1, sizeof(hashmap));
+    if (hm_init(ds_map_impl(map)) != HM_OK) {
+        fprintf(stderr, "fatal: failed to initialize hashmap\n");
+        exit(2);
+    }
 }
 
 DsValue *ds_map_get(DsMap *map, DsStr key) {
-    for (size_t i = 0; i < map->len; i++) {
-        if (ds_str_eq_cstr(key, map->keys[i])) return &map->values[i];
-    }
-    return NULL;
+    void *value = NULL;
+    if (!map->impl || hm_get_len(ds_map_impl(map), key.data, key.len, &value) != HM_OK) return NULL;
+    return (DsValue *)value;
 }
 
 bool ds_map_set(DsMap *map, DsStr key, DsValue value) {
-    DsValue *existing = ds_map_get(map, key);
-    if (existing) {
-        ds_value_free(existing);
-        *existing = value;
-        return true;
+    DsValue *boxed = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
+    void *old = NULL;
+    hm_result rc;
+    *boxed = value;
+    rc = hm_put_len(ds_map_impl(map), key.data, key.len, boxed, &old);
+    if (rc != HM_OK) {
+        ds_value_free(boxed);
+        free(boxed);
+        return false;
     }
-    if (map->len == map->cap) {
-        map->cap = map->cap ? map->cap * 2 : 16;
-        map->keys = (char **)ds_xrealloc(map->keys, map->cap * sizeof(char *));
-        map->values = (DsValue *)ds_xrealloc(map->values, map->cap * sizeof(DsValue));
+    if (old) {
+        ds_value_free((DsValue *)old);
+        free(old);
     }
-    map->keys[map->len] = ds_str_dup_range(key.data, key.len);
-    map->values[map->len] = value;
-    map->len++;
     return true;
 }
 
+size_t ds_map_len(const DsMap *map) {
+    return map->impl ? hm_len(ds_map_impl_const(map)) : 0;
+}
+
 void ds_map_clear(DsMap *map) {
-    for (size_t i = 0; i < map->len; i++) {
-        free(map->keys[i]);
-        ds_value_free(&map->values[i]);
+    hm_iter it;
+    void *raw = NULL;
+    if (!map->impl) return;
+    if (hm_iter_init(ds_map_impl(map), &it) == HM_OK) {
+        while (hm_iter_next_len(ds_map_impl(map), &it, NULL, NULL, &raw) == HM_OK) {
+            ds_value_free((DsValue *)raw);
+            free(raw);
+        }
     }
-    map->len = 0;
+    hm_clear(ds_map_impl(map));
 }
 
 void ds_map_free(DsMap *map) {
+    if (!map->impl) return;
     ds_map_clear(map);
-    free(map->keys);
-    free(map->values);
-    ds_map_init(map);
+    hm_free(ds_map_impl(map));
+    free(map->impl);
+    map->impl = NULL;
 }

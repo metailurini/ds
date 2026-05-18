@@ -632,4 +632,16 @@ assert_contains "$ROOT/docs/milestones/v0.10.0-spec.md" 'Tests added' "v0.10 spe
 assert_contains "$ROOT/docs/milestones/v0.10.0-spec.md" 'tests/v0_10/run.sh' "v0.10 spec names test suite"
 assert_contains "$ROOT/README.md" 'v0.10.0` implementation and tests are complete' "README status is current for v0.10"
 
+# Map runtime architecture: language maps must use the owned hashmap through the
+# DsMap boundary, without leaking hashmap internals into frontend/lowering/VM/emitter code.
+assert_contains "$ROOT/Makefile" 'libs/hashmap/hashmap.c' "owned hashmap is linked into ds"
+assert_contains "$ROOT/src/runtime.c" '#include "hashmap.h"' "DsMap runtime wrapper uses hashmap implementation"
+assert_contains "$ROOT/src/runtime.c" 'hm_put_len' "DsMap set uses hashmap insertion"
+assert_contains "$ROOT/src/runtime.c" 'hm_get_len' "DsMap get uses hashmap lookup"
+if grep -R -nE '#include[[:space:]]+[<"]hashmap\.h|\bhm_[a-z]' "$ROOT/src" "$ROOT/include" | grep -v 'src/runtime.c' >/dev/null; then
+  grep -R -nE '#include[[:space:]]+[<"]hashmap\.h|\bhm_[a-z]' "$ROOT/src" "$ROOT/include" | grep -v 'src/runtime.c' >&2 || true
+  fail "hashmap internals should stay behind the DsMap runtime wrapper"
+fi
+pass "hashmap internals stay behind the DsMap runtime wrapper"
+
 echo "v0.10.0 tests passed: $pass_count checks"

@@ -100,7 +100,7 @@ Current implementation directories:
 - `include/` — public internal C declarations for the early implementation;
 - `src/` — source loading, diagnostics, lexer, parser, AST printer, shared lowering, bytecode/VM runtime, Bash emitter, and CLI entrypoint;
 - `examples/` — small scripts used for manual frontend smoke checks;
-- `libs/hashmap/` — temporary staging location for the owned hashmap code that should later be absorbed into `src/core` behind `DsMap`.
+- `libs/hashmap/` — temporary staging location for the owned hashmap code currently wrapped behind `DsMap`; it should later be absorbed into `src/core`.
 
 Important planning files:
 
