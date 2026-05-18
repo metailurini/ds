@@ -143,6 +143,24 @@ static bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
 }
 
 static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
+
+static bool collection_element_supported_in_bash(const DsLowerExpr *expr) {
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_IDENT:
+        case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INT:
+        case DS_LOWER_EXPR_BOOL:
+        case DS_LOWER_EXPR_FIELD:
+        case DS_LOWER_EXPR_INDEX:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool is_name_char(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+}
 static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span);
 static void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr);
 
@@ -343,9 +361,12 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
             DsLowerExpr *out = expr_new(DS_LOWER_EXPR_ARRAY, expr->span);
             for (size_t i = 0; i < expr->as.array.elements.len; i++) {
                 SymKind elem_kind = SYM_UNKNOWN;
-                lower_expr_vec_push(&out->as.array.elements, lower_expr(lower, expr->as.array.elements.items[i], &elem_kind));
+                DsLowerExpr *element = lower_expr(lower, expr->as.array.elements.items[i], &elem_kind);
+                lower_expr_vec_push(&out->as.array.elements, element);
                 if (elem_kind == SYM_ARRAY || elem_kind == SYM_MAP) {
                     ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "nested collections are deferred in v0.10.0");
+                } else if (!collection_element_supported_in_bash(element)) {
+                    ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
                 }
             }
             *kind_out = SYM_ARRAY;
@@ -369,6 +390,8 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
                 lowered.value = lower_expr(lower, entry->value, &value_kind);
                 if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
                     ds_diag_error(lower->diag, entry->span, "nested collections are deferred in v0.10.0");
+                } else if (!collection_element_supported_in_bash(lowered.value)) {
+                    ds_diag_error(lower->diag, entry->value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
                 }
                 lower_map_entry_vec_push(&out->as.map.entries, lowered);
             }
@@ -408,7 +431,9 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
 
 static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
     if (word.len >= 2 && word.data[0] == '$') {
-        DsStr name = {word.data + 1, word.len - 1};
+        size_t name_len = 0;
+        while (1 + name_len < word.len && is_name_char(word.data[1 + name_len])) name_len++;
+        DsStr name = {word.data + 1, name_len};
         Symbol *sym = scope_find(lower->scope, name);
         if (!sym) {
             if (find_function(lower->program, name)) {
@@ -421,6 +446,17 @@ static bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
         if (sym->kind == SYM_FUNCTION) {
             ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
             return false;
+        }
+        if (name_len + 1 < word.len) {
+            char suffix = word.data[name_len + 1];
+            if ((sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) && (suffix == '[' || suffix == '.')) {
+                ds_diag_error(lower->diag, span, "collection access command arguments are deferred in v0.10.0; bind the indexed value to a variable first");
+                return false;
+            }
+            if (suffix != '.' || sym->kind != SYM_COMMAND_RESULT) {
+                ds_diag_error(lower->diag, span, "unsupported command variable suffix in v0.10.0");
+                return false;
+            }
         }
         if (sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) {
             ds_diag_error(lower->diag, span, "collection `%.*s` cannot be passed directly as a command argument in v0.10.0; index it first", (int)name.len, name.data);
@@ -870,6 +906,8 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             out->as.push_stmt.value = lower_expr(lower, stmt->as.push_stmt.value, &value_kind);
             if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
                 ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "pushing collection values is deferred in v0.10.0");
+            } else if (!collection_element_supported_in_bash(out->as.push_stmt.value)) {
+                ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
             }
             return out;
         }

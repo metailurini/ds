@@ -59,6 +59,8 @@ typedef enum {
     DS_TOK_FOR,
     DS_TOK_IN,
     DS_TOK_WHILE,
+    DS_TOK_BREAK,
+    DS_TOK_CONTINUE,
     DS_TOK_COLON,
     DS_TOK_COMMA,
     DS_TOK_EQUAL,

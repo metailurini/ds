@@ -848,6 +848,18 @@ static DsStmt *parse_stmt(Parser *p) {
         consume_statement_end(p);
         return NULL;
     }
+    if (advance_if(p, DS_TOK_BREAK)) {
+        ds_diag_error(p->diag, previous(p)->span, "`break` is deferred in v0.10.0 loop control");
+        while (!is_stmt_end(p)) advance(p);
+        consume_statement_end(p);
+        return NULL;
+    }
+    if (advance_if(p, DS_TOK_CONTINUE)) {
+        ds_diag_error(p->diag, previous(p)->span, "`continue` is deferred in v0.10.0 loop control");
+        while (!is_stmt_end(p)) advance(p);
+        consume_statement_end(p);
+        return NULL;
+    }
     if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_DOT)) return parse_push_stmt(p);
     if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_LPAREN)) return parse_call_stmt(p);
     if (at(p, DS_TOK_ELSE)) {

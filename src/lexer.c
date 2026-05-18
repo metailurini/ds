@@ -39,6 +39,8 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 3 && strncmp(text, "for", 3) == 0) return DS_TOK_FOR;
     if (len == 2 && strncmp(text, "in", 2) == 0) return DS_TOK_IN;
     if (len == 5 && strncmp(text, "while", 5) == 0) return DS_TOK_WHILE;
+    if (len == 5 && strncmp(text, "break", 5) == 0) return DS_TOK_BREAK;
+    if (len == 8 && strncmp(text, "continue", 8) == 0) return DS_TOK_CONTINUE;
     return DS_TOK_IDENT;
 }
 
@@ -79,6 +81,8 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_FOR: return "FOR";
         case DS_TOK_IN: return "IN";
         case DS_TOK_WHILE: return "WHILE";
+        case DS_TOK_BREAK: return "BREAK";
+        case DS_TOK_CONTINUE: return "CONTINUE";
         case DS_TOK_COLON: return "COLON";
         case DS_TOK_COMMA: return "COMMA";
         case DS_TOK_EQUAL: return "EQUAL";

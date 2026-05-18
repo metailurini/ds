@@ -213,6 +213,8 @@ let first = services[0]
 let api = ports.api
 for service in services { echo "{service}" }
 while true {}
+break
+continue
 DS
 
 write_fixture "$FIX/ast_syntax.ds" <<'DS'
@@ -229,9 +231,19 @@ let first = services[0]
 echo "{first}"
 DS
 
+write_fixture "$FIX/dynamic_access.ds" <<'DS'
+let services = ["api", "web"]
+let idx = 1
+let service = services[idx]
+let ports = { api: 3000, web: 5173 }
+let key = "api"
+let port = ports[key]
+echo "{service}:{port}"
+DS
+
 # Lexer, AST, bytecode, and check smoke coverage.
 run_ok tokens_collections "$DS" tokens "$FIX/tokens_syntax.ds"
-for token in LBRACKET RBRACKET LBRACE RBRACE COMMA COLON DOT FOR IN; do
+for token in LBRACKET RBRACKET LBRACE RBRACE COMMA COLON DOT FOR IN BREAK CONTINUE; do
   assert_contains "$TMP/tokens_collections.out" "$token" "lexer emits $token"
 done
 assert_not_contains "$TMP/tokens_collections.out" '0x' "tokens pointer-free"
@@ -264,6 +276,8 @@ assert_vm_bash_parity v0_10_maps_basic "$FIX/maps_basic.ds" 0 ""
 assert_same_text $'3000:5173\n' "$TMP/v0_10_maps_basic_vm.out" "map field/bracket access output"
 assert_vm_bash_parity v0_10_maps_quoted "$FIX/maps_quoted.ds" 0 ""
 assert_same_text $'api:web value\n' "$TMP/v0_10_maps_quoted_vm.out" "quoted map key output"
+assert_vm_bash_parity v0_10_dynamic_access "$FIX/dynamic_access.ds" 0 ""
+assert_same_text $'web:3000\n' "$TMP/v0_10_dynamic_access_vm.out" "dynamic index and map key output"
 assert_vm_bash_parity v0_10_loop_scope "$FIX/loop_scope.ds" 0 ""
 assert_vm_bash_parity v0_10_copy_semantics "$FIX/copy_semantics.ds" 0 ""
 assert_same_text $'copied=a\noriginal=a\noriginal=b\n' "$TMP/v0_10_copy_semantics_vm.out" "collection assignment is value-copy"
@@ -421,6 +435,24 @@ service.push("web")
 DS
 assert_diag push_non_array "$FIX/bad_push_non_array.ds" '`push` requires an array variable in v0.10.0'
 
+write_fixture "$FIX/bad_push_no_arg.ds" <<'DS'
+let services = ["api"]
+services.push()
+DS
+assert_diag push_no_arg "$FIX/bad_push_no_arg.ds" 'expected value argument for `push`'
+
+write_fixture "$FIX/bad_push_too_many_args.ds" <<'DS'
+let services = ["api"]
+services.push("web", "worker")
+DS
+assert_diag push_too_many_args "$FIX/bad_push_too_many_args.ds" '`push` accepts exactly one argument in v0.10.0'
+
+write_fixture "$FIX/bad_unknown_method.ds" <<'DS'
+let services = ["api"]
+services.missing("web")
+DS
+assert_diag unknown_method "$FIX/bad_unknown_method.ds" 'only `push` collection method is supported in v0.10.0'
+
 write_fixture "$FIX/bad_push_literal.ds" <<'DS'
 ["api"].push("web")
 DS
@@ -515,11 +547,46 @@ show(services)
 DS
 assert_diag collection_function_arg "$FIX/bad_collection_function_arg.ds" 'passing collection values to functions is deferred in v0.10.0'
 
+write_fixture "$FIX/bad_array_expression_element.ds" <<'DS'
+let values = ["a" == "a", !false]
+DS
+assert_diag array_expression_element "$FIX/bad_array_expression_element.ds" 'collection element expressions must be scalar Bash-emittable values in v0.10.0'
+
+write_fixture "$FIX/bad_map_expression_value.ds" <<'DS'
+let values = { ok: "a" == "a" }
+DS
+assert_diag map_expression_value "$FIX/bad_map_expression_value.ds" 'collection element expressions must be scalar Bash-emittable values in v0.10.0'
+
+write_fixture "$FIX/bad_push_expression_value.ds" <<'DS'
+let values = []
+values.push(!false)
+DS
+assert_diag push_expression_value "$FIX/bad_push_expression_value.ds" 'collection element expressions must be scalar Bash-emittable values in v0.10.0'
+
 write_fixture "$FIX/bad_collection_command_arg.ds" <<'DS'
 let services = ["api"]
 echo $services
 DS
 assert_diag collection_command_arg "$FIX/bad_collection_command_arg.ds" 'cannot be passed directly as a command argument in v0.10.0'
+
+write_fixture "$FIX/bad_collection_access_command_arg.ds" <<'DS'
+let services = ["api"]
+let ports = { api: 3000 }
+echo $services[0]
+echo $ports.api
+echo $ports["api"]
+DS
+assert_diag collection_access_command_arg "$FIX/bad_collection_access_command_arg.ds" 'collection access command arguments are deferred in v0.10.0; bind the indexed value to a variable first'
+
+write_fixture "$FIX/bad_break.ds" <<'DS'
+break
+DS
+assert_diag break_deferred "$FIX/bad_break.ds" '`break` is deferred in v0.10.0 loop control'
+
+write_fixture "$FIX/bad_continue.ds" <<'DS'
+continue
+DS
+assert_diag continue_deferred "$FIX/bad_continue.ds" '`continue` is deferred in v0.10.0 loop control'
 
 write_fixture "$FIX/bad_nested_array.ds" <<'DS'
 let nested = [["api"]]

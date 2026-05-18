@@ -326,19 +326,22 @@ let web_port = ports["web"]
 #   echo "{name} runs on {port}"
 # }
 
-# Empty map literals, nested maps, nested arrays, and computed non-string keys
-# are deferred. Bash emission uses Bash associative arrays for maps and emits a
-# Bash 4+ guard only for scripts that use maps. Missing keys fail with an
-# explicit runtime error in emitted Bash.
+# Empty map literals, nested maps, nested arrays, computed non-string keys, and
+# element/value expressions that cannot yet be assigned inside emitted Bash
+# collections are deferred. Bind complex scalar expressions first. Bash emission
+# uses Bash associative arrays for maps and emits a Bash 4+ guard only for
+# scripts that use maps. Missing keys fail with an explicit runtime error in
+# emitted Bash.
 
 
 # -----------------------------------------------------------------------------
 # 17. Loops [v0.10.0] [partially implemented]
 # -----------------------------------------------------------------------------
 
-# `for item in array` is implemented. `while` remains deferred because mutable
-# reassignment / update syntax is not implemented yet. Passing whole arrays or
-# maps to functions is deferred in v0.10.0; pass scalar elements instead.
+# `for item in array` is implemented. `while`, `break`, and `continue` remain
+# deferred because mutable reassignment / update syntax and loop-control
+# semantics are not implemented yet. Passing whole arrays or maps to functions
+# is deferred in v0.10.0; pass scalar elements instead.
 
 # let i = 0
 #
