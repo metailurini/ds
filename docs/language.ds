@@ -423,7 +423,7 @@ for file in glob("*.txt") {
   echo $file
 }
 
-# Recursive `**` globbing is deferred until VM/Bash parity is defined.
+# Recursive `**` globbing is rejected until VM/Bash parity is defined.
 # for file in glob("src/**/*.c") {
 #   echo $file
 # }

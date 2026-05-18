@@ -216,6 +216,27 @@ static bool collection_element_supported_in_bash(const DsLowerExpr *expr) {
     }
 }
 
+static bool text_contains_recursive_glob(DsStr text) {
+    if (text.len < 2) return false;
+    for (size_t i = 0; i + 1 < text.len; i++) {
+        if (text.data[i] == '*' && text.data[i + 1] == '*') return true;
+    }
+    return false;
+}
+
+static void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg) {
+    if (!(str_eq(helper_name, "glob") || str_eq(helper_name, "glob!"))) return;
+    if (!arg || arg->kind != DS_EXPR_STRING) return;
+    DsStr decoded = {0};
+    if (decode_string_text(arg->as.text, &decoded)) {
+        if (text_contains_recursive_glob(decoded)) {
+            ds_diag_error(lower->diag, arg->span,
+                          "recursive `**` glob patterns are deferred in v0.11.0");
+        }
+        free(decoded.data);
+    }
+}
+
 static bool is_name_char(char c) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
 }
@@ -443,6 +464,7 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
                         free(decoded.data);
                     }
                 }
+                if (expr->as.call.args.len > 0) validate_glob_pattern_arg(lower, expr->as.call.name, expr->as.call.args.items[0]);
                 *kind_out = ret;
                 return out;
             }
@@ -798,6 +820,7 @@ static DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
             free(decoded.data);
         }
     }
+    if (stdlib && stmt->as.call_stmt.args.len > 0) validate_glob_pattern_arg(lower, stmt->as.call_stmt.name, stmt->as.call_stmt.args.items[0]);
     return out;
 }
 

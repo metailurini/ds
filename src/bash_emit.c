@@ -25,6 +25,7 @@ typedef struct {
     SymbolVec symbols;
     EmitBuf out;
     int function_depth;
+    size_t temp_counter;
 } BashEmitter;
 
 static void buf_reserve(EmitBuf *buf, size_t need) {
@@ -730,7 +731,8 @@ static void emit_stdlib_helpers(BashEmitter *e) {
         "__ds_stdlib_env_get() { local n=\"$1\"; if [[ ${!n+x} ]]; then printf '%s' \"${!n}\"; elif [[ $# -ge 2 ]]; then printf '%s' \"$2\"; fi; }\n"
         "__ds_stdlib_env_set() { export \"$1=$2\"; }\n"
         "__ds_stdlib_env_unset() { unset \"$1\"; }\n"
-        "__ds_stdlib_glob() { compgen -G \"$1\" | sort; }\n"
+        "__ds_stdlib_reject_recursive_glob() { [[ \"$1\" != *'**'* ]] || __ds_error \"recursive '**' glob patterns are deferred in v0.11.0\"; }\n"
+        "__ds_stdlib_glob() { __ds_stdlib_reject_recursive_glob \"$1\"; { compgen -G \"$1\" || true; } | sort; }\n"
         "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
         "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\n' \"$line\"; done <\"$1\"; }\n\n");
 }
@@ -998,12 +1000,18 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent);
-                buf_append(&e->out, "mapfile -t ");
-                emit_var_name(&e->out, stmt->as.let_stmt.name);
-                buf_append(&e->out, " < <(");
+                size_t temp_id = e->temp_counter++;
+                buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
+                emit_indent(&e->out, indent);
                 emit_stdlib_helper_name(&e->out, stmt->as.let_stmt.value->as.call.name);
                 if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
-                buf_append(&e->out, ")");
+                buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "mapfile -t ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
+                emit_indent(&e->out, indent);
+                buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"", temp_id);
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -A ");
                 else buf_append(&e->out, "declare -A ");
@@ -1055,6 +1063,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 ds_diag_error(e->diag, stmt->span, "Bash emission only supports looping over named arrays in v0.10.0");
                 return false;
             }
+            size_t temp_id = 0;
             if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) {
                 buf_append(&e->out, "for ");
                 emit_var_name(&e->out, stmt->as.for_stmt.name);
@@ -1063,6 +1072,13 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_var_name(&e->out, stmt->as.for_stmt.iterable->as.text);
                 buf_append(&e->out, "[@]}\"; do\n");
             } else {
+                temp_id = e->temp_counter++;
+                buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
+                emit_indent(&e->out, indent);
+                emit_stdlib_helper_name(&e->out, stmt->as.for_stmt.iterable->as.call.name);
+                if (!emit_call_args(e, &stmt->as.for_stmt.iterable->as.call.args, &e->out)) return false;
+                buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
+                emit_indent(&e->out, indent);
                 buf_append(&e->out, "while IFS= read -r ");
                 emit_var_name(&e->out, stmt->as.for_stmt.name);
                 buf_append(&e->out, "; do\n");
@@ -1075,10 +1091,9 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) buf_append(&e->out, "done\n\n");
             else {
-                buf_append(&e->out, "done < <(");
-                emit_stdlib_helper_name(&e->out, stmt->as.for_stmt.iterable->as.call.name);
-                if (!emit_call_args(e, &stmt->as.for_stmt.iterable->as.call.args, &e->out)) { symbols_truncate(&e->symbols, mark); return false; }
-                buf_append(&e->out, ")\n\n");
+                buf_appendf(&e->out, "done <\"$__ds_iter_%zu\"\n", temp_id);
+                emit_indent(&e->out, indent);
+                buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"\n\n", temp_id);
             }
             return true;
         }
