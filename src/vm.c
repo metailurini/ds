@@ -1,10 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "ds.h"
+#include "vm_internal.h"
 
 #include <errno.h>
 #include <fcntl.h>
-#include <glob.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,78 +12,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
-typedef enum {
-    OP_LOAD_CONST,
-    OP_LOAD_VAR,
-    OP_STORE_VAR,
-    OP_NOT,
-    OP_COMPARE,
-    OP_INTERPOLATE,
-    OP_RUN_CAPTURE,
-    OP_GET_FIELD,
-    OP_JUMP,
-    OP_JUMP_IF_FALSE,
-    OP_PUSH_SCOPE,
-    OP_POP_SCOPE,
-    OP_RUN_CMD,
-    OP_CALL,
-    OP_STDLIB_CALL,
-    OP_ARRAY_LITERAL,
-    OP_MAP_LITERAL,
-    OP_GET_INDEX,
-    OP_PUSH_ARRAY,
-    OP_FOR_ARRAY,
-    OP_RETURN_FUNC,
-    OP_RETURN,
-    OP_NOP
-} OpCode;
-
-typedef struct {
-    char *name;
-    DsValue default_value;
-    bool has_default;
-} FnParamMeta;
-
-typedef struct {
-    char *name;
-    FnParamMeta *params;
-    size_t param_count;
-    size_t required_count;
-    size_t target;
-} FnMeta;
-
-typedef struct {
-    OpCode op;
-    DsSpan span;
-    int dst;
-    int a;
-    int b;
-    int target;
-    char *name;
-    char *cmp;
-    char *field;
-    int *args;
-    size_t arg_count;
-    DsStr *words;
-    size_t word_count;
-    DsRedirect redirect;
-    size_t loop_index;
-    bool loop_active;
-} Instr;
-
-typedef struct {
-    DsValue *consts;
-    size_t const_len;
-    size_t const_cap;
-    Instr *instrs;
-    size_t instr_len;
-    size_t instr_cap;
-    int next_reg;
-    FnMeta *functions;
-    size_t function_len;
-    size_t function_cap;
-} Program;
 
 static void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
 
@@ -729,23 +656,6 @@ bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDia
     ds_lower_program_free(lowered);
     return ok;
 }
-
-typedef struct VmScope VmScope;
-struct VmScope {
-    DsMap vars;
-    VmScope *parent;
-};
-
-typedef struct {
-    Program *program;
-    DsValue *regs;
-    VmScope *scope;
-    DsDiag *diag;
-    const DsSource *source;
-    size_t *return_ips;
-    size_t return_len;
-    size_t return_cap;
-} Vm;
 
 static bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
 
@@ -1471,169 +1381,6 @@ static bool ensure_regs(Vm *vm) {
     return true;
 }
 
-static bool vm_string_arg(Vm *vm, Instr *ins, size_t index, const char **out, size_t *len) {
-    if (index >= ins->arg_count) return false;
-    DsValue *v = &vm->regs[ins->args[index]];
-    if (v->kind != DS_VALUE_STRING) {
-        ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` expects string arguments", ins->name ? ins->name : "<helper>");
-        return false;
-    }
-    *out = v->as.string.data ? v->as.string.data : "";
-    *len = v->as.string.len;
-    if (memchr(*out, '\0', *len)) {
-        ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` does not support embedded NUL bytes", ins->name ? ins->name : "<helper>");
-        return false;
-    }
-    return true;
-}
-
-static char *vm_string_arg_dup(Vm *vm, Instr *ins, size_t index) {
-    const char *s = NULL; size_t len = 0;
-    if (!vm_string_arg(vm, ins, index, &s, &len)) return NULL;
-    return ds_str_dup_range(s, len);
-}
-
-static bool vm_valid_env_name(const char *name) {
-    if (!name || !name[0]) return false;
-    unsigned char c = (unsigned char)name[0];
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
-    for (size_t i = 1; name[i]; i++) {
-        c = (unsigned char)name[i];
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
-    }
-    return true;
-}
-
-static bool vm_require_env_name(Vm *vm, Instr *ins, const char *name) {
-    if (vm_valid_env_name(name)) return true;
-    ds_diag_error(vm->diag, ins->span, "invalid environment variable name `%s` in v0.11.0", name ? name : "");
-    return false;
-}
-
-static bool value_string_from_owned_cstr(DsValue *out, char *text) {
-    DsString s;
-    ds_string_init(&s);
-    if (!ds_string_from_cstr(&s, text ? text : "")) { free(text); return false; }
-    free(text);
-    *out = ds_value_string_take(&s);
-    return true;
-}
-
-static int cmp_cstr_ptr(const void *a, const void *b) {
-    const char *const *sa = (const char *const *)a;
-    const char *const *sb = (const char *const *)b;
-    return strcmp(*sa, *sb);
-}
-
-static bool array_push_string(DsValue *array, const char *data, size_t len) {
-    DsString s;
-    ds_string_from_range(&s, data ? data : "", len);
-    DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
-    *item = ds_value_string_take(&s);
-    return ds_array_push(&array->as.array, item);
-}
-
-static bool is_executable_file(const char *path) {
-    struct stat st;
-    return path && stat(path, &st) == 0 && !S_ISDIR(st.st_mode) && access(path, X_OK) == 0;
-}
-
-static bool read_path_to_string_msg(Vm *vm, Instr *ins, const char *path, const char *what, DsValue *out) {
-    FILE *fp = fopen(path, "rb");
-    if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to read %s `%s`: %s", what, path, strerror(errno)); return false; }
-    DsString s;
-    ds_string_init(&s);
-    char buf[4096];
-    size_t n = 0;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        if (memchr(buf, '\0', n)) { ds_diag_error(vm->diag, ins->span, "%s `%s` contains embedded NUL bytes", what, path); fclose(fp); ds_string_free(&s); return false; }
-        ds_string_append_range(&s, buf, n);
-    }
-    if (ferror(fp)) { ds_diag_error(vm->diag, ins->span, "failed to read %s `%s`: %s", what, path, strerror(errno)); fclose(fp); ds_string_free(&s); return false; }
-    fclose(fp);
-    *out = ds_value_string_take(&s);
-    return true;
-}
-
-static bool read_path_to_string(Vm *vm, Instr *ins, const char *path, DsValue *out) {
-    return read_path_to_string_msg(vm, ins, path, "file", out);
-}
-
-static bool write_string_to_path(Vm *vm, Instr *ins, const char *path, const char *text, size_t len, bool append) {
-    FILE *fp = fopen(path, append ? "ab" : "wb");
-    const char *op = append ? "append" : "write";
-    if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to %s file `%s`: %s", op, path, strerror(errno)); return false; }
-    if (len && fwrite(text, 1, len, fp) != len) { ds_diag_error(vm->diag, ins->span, "failed to %s file `%s`: %s", op, path, strerror(errno)); fclose(fp); return false; }
-    if (fclose(fp) != 0) { ds_diag_error(vm->diag, ins->span, "failed to %s file `%s`: %s", op, path, strerror(errno)); return false; }
-    return true;
-}
-
-static char *path_join_parts(Vm *vm, Instr *ins) {
-    DsString s;
-    ds_string_init(&s);
-    for (size_t i = 0; i < ins->arg_count; i++) {
-        const char *part = NULL; size_t len = 0;
-        if (!vm_string_arg(vm, ins, i, &part, &len)) { ds_string_free(&s); return NULL; }
-        if (i == 0) ds_string_append_range(&s, part, len);
-        else {
-            while (s.len > 0 && s.data[s.len - 1] == '/') s.len--;
-            while (len > 0 && *part == '/') { part++; len--; }
-            ds_string_append_char(&s, '/');
-            ds_string_append_range(&s, part, len);
-        }
-    }
-    char *out = ds_str_dup_range(s.data ? s.data : "", s.len);
-    ds_string_free(&s);
-    return out;
-}
-
-static bool vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
-    *out = ds_value_null();
-    const char *name = ins->name ? ins->name : "";
-    DsStr helper_name = {(char *)name, strlen(name)};
-    const DsStdlibHelper *helper = ds_stdlib_lookup(helper_name);
-    if (!helper) {
-        ds_diag_error(vm->diag, ins->span, "unknown standard-library helper `%s`", name);
-        return false;
-    }
-    if (strcmp(name, "file.exists") == 0 || strcmp(name, "file.is_file") == 0 || strcmp(name, "dir.exists") == 0) {
-        char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false;
-        struct stat st;
-        bool ok = stat(path, &st) == 0;
-        bool result = false;
-        if (!ok && errno != ENOENT && errno != ENOTDIR) { ds_diag_error(vm->diag, ins->span, "failed to stat `%s`: %s", path, strerror(errno)); free(path); return false; }
-        if (strcmp(name, "file.exists") == 0) result = ok;
-        else if (strcmp(name, "file.is_file") == 0) result = ok && S_ISREG(st.st_mode);
-        else result = ok && S_ISDIR(st.st_mode);
-        free(path); *out = ds_value_bool(result); return true;
-    }
-    if (strcmp(name, "file.read") == 0) { char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false; bool ok = read_path_to_string(vm, ins, path, out); free(path); return ok; }
-    if (strcmp(name, "file.write") == 0 || strcmp(name, "file.append") == 0) { char *path = vm_string_arg_dup(vm, ins, 0); const char *txt = NULL; size_t len = 0; if (!path || !vm_string_arg(vm, ins, 1, &txt, &len)) { free(path); return false; } bool ok = write_string_to_path(vm, ins, path, txt, len, strcmp(name, "file.append") == 0); free(path); return ok; }
-    if (strcmp(name, "path.cwd") == 0) { char *cwd = getcwd(NULL, 0); if (!cwd) { ds_diag_error(vm->diag, ins->span, "failed to get current directory: %s", strerror(errno)); return false; } return value_string_from_owned_cstr(out, cwd); }
-    if (strcmp(name, "path.join") == 0) { char *joined = path_join_parts(vm, ins); if (!joined) return false; return value_string_from_owned_cstr(out, joined); }
-    if (strcmp(name, "path.basename") == 0 || strcmp(name, "path.dirname") == 0 || strcmp(name, "path.ext") == 0) {
-        char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false; char *res = NULL;
-        if (strcmp(name, "path.basename") == 0) { char *slash = strrchr(path, '/'); res = ds_str_dup_range(slash ? slash + 1 : path, strlen(slash ? slash + 1 : path)); }
-        else if (strcmp(name, "path.dirname") == 0) { char *slash = strrchr(path, '/'); if (!slash) res = ds_str_dup_range(".", 1); else if (slash == path) res = ds_str_dup_range("/", 1); else res = ds_str_dup_range(path, (size_t)(slash - path)); }
-        else { char *base = strrchr(path, '/'); base = base ? base + 1 : path; char *dot = strrchr(base, '.'); if (!dot || dot == base) res = ds_str_dup_range("", 0); else res = ds_str_dup_range(dot, strlen(dot)); }
-        free(path); return value_string_from_owned_cstr(out, res);
-    }
-    if (strcmp(name, "cmd.exists") == 0 || strcmp(name, "cmd.require") == 0) {
-        char *cmd = vm_string_arg_dup(vm, ins, 0); if (!cmd) return false;
-        char *path = getenv("PATH"); bool found = false;
-        if (strchr(cmd, '/')) found = is_executable_file(cmd);
-        else if (path) { char *copy = strdup(path); for (char *save = NULL, *dir = strtok_r(copy, ":", &save); dir; dir = strtok_r(NULL, ":", &save)) { DsString full; ds_string_init(&full); ds_string_append_cstr(&full, *dir ? dir : "."); ds_string_append_char(&full, '/'); ds_string_append_cstr(&full, cmd); if (is_executable_file(full.data)) found = true; ds_string_free(&full); if (found) break; } free(copy); }
-        if (!found && strcmp(name, "cmd.require") == 0) { ds_diag_error(vm->diag, ins->span, "required command `%s` was not found on PATH", cmd); free(cmd); return false; }
-        free(cmd); *out = strcmp(name, "cmd.exists") == 0 ? ds_value_bool(found) : ds_value_null(); return true;
-    }
-    if (strcmp(name, "env.get") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); if (!key) return false; if (!vm_require_env_name(vm, ins, key)) { free(key); return false; } char *val = getenv(key); if (!val && ins->arg_count == 2) { const char *def = NULL; size_t len = 0; if (!vm_string_arg(vm, ins, 1, &def, &len)) { free(key); return false; } DsString s; ds_string_from_range(&s, def, len); *out = ds_value_string_take(&s); free(key); return true; } DsString s; ds_string_from_cstr(&s, val ? val : ""); *out = ds_value_string_take(&s); free(key); return true; }
-    if (strcmp(name, "env.set") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); char *val = vm_string_arg_dup(vm, ins, 1); if (!key || !val) { free(key); free(val); return false; } if (!vm_require_env_name(vm, ins, key)) { free(key); free(val); return false; } if (setenv(key, val, 1) != 0) { ds_diag_error(vm->diag, ins->span, "failed to set environment `%s`: %s", key, strerror(errno)); free(key); free(val); return false; } free(key); free(val); return true; }
-    if (strcmp(name, "env.unset") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); if (!key) return false; if (!vm_require_env_name(vm, ins, key)) { free(key); return false; } if (unsetenv(key) != 0) { ds_diag_error(vm->diag, ins->span, "failed to unset environment `%s`: %s", key, strerror(errno)); free(key); return false; } free(key); return true; }
-    if (strcmp(name, "glob") == 0 || strcmp(name, "glob!") == 0) { char *pat = vm_string_arg_dup(vm, ins, 0); if (!pat) return false; if (strstr(pat, "**")) { ds_diag_error(vm->diag, ins->span, "recursive `**` glob patterns are deferred in v0.11.0"); free(pat); return false; } glob_t g; memset(&g, 0, sizeof(g)); int grc = glob(pat, 0, NULL, &g); DsValue arr = ds_value_null(); arr.kind = DS_VALUE_ARRAY; ds_array_init(&arr.as.array); if (grc == GLOB_NOMATCH) { if (strcmp(name, "glob!") == 0) { ds_diag_error(vm->diag, ins->span, "required glob `%s` had no matches", pat); free(pat); globfree(&g); ds_value_free(&arr); return false; } } else if (grc != 0) { ds_diag_error(vm->diag, ins->span, "failed to evaluate glob `%s`", pat); free(pat); globfree(&g); ds_value_free(&arr); return false; } else { qsort(g.gl_pathv, g.gl_pathc, sizeof(char *), cmp_cstr_ptr); for (size_t i = 0; i < g.gl_pathc; i++) array_push_string(&arr, g.gl_pathv[i], strlen(g.gl_pathv[i])); } free(pat); globfree(&g); *out = arr; return true; }
-    if (strcmp(name, "lines") == 0) { char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false; DsValue text = ds_value_null(); if (!read_path_to_string_msg(vm, ins, path, "lines from", &text)) { free(path); return false; } free(path); DsValue arr = ds_value_null(); arr.kind = DS_VALUE_ARRAY; ds_array_init(&arr.as.array); size_t start = 0; for (size_t i = 0; i < text.as.string.len; i++) { if (text.as.string.data[i] == '\n') { size_t end = i > start && text.as.string.data[i - 1] == '\r' ? i - 1 : i; array_push_string(&arr, text.as.string.data + start, end - start); start = i + 1; } } if (start < text.as.string.len) array_push_string(&arr, text.as.string.data + start, text.as.string.len - start); ds_value_free(&text); *out = arr; return true; }
-    ds_diag_error(vm->diag, ins->span, "unknown standard-library helper `%s`", name);
-    return false;
-}
 
 static void set_reg(Vm *vm, int reg, DsValue value) {
     ds_value_free(&vm->regs[reg]);
@@ -1750,7 +1497,7 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
             }
             case OP_STDLIB_CALL: {
                 DsValue value = ds_value_null();
-                if (!vm_stdlib_call(&vm, ins, &value)) { rc = 1; goto done; }
+                if (!ds_vm_stdlib_call(&vm, ins, &value)) { rc = 1; goto done; }
                 set_reg(&vm, ins->dst, value);
                 ip++;
                 break;

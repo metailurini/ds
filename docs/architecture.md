@@ -74,7 +74,31 @@ Runtime-backed features must still obey the Bash emission rule:
 
 For example, `file.exists("x")` may call `stat` in VM mode, but emitted Bash should use Bash syntax such as `[[ -e "x" ]]` or an embedded Bash helper.
 
-See `docs/runtime.md` for the detailed runtime plan, including strings, arrays, maps, process execution, regex concerns, and the hashmap reuse strategy.
+See `docs/runtime.md` for the detailed runtime plan, including strings, arrays, maps, process execution, regex concerns, standard-library helper metadata, and the absorbed hashmap runtime boundary.
+
+## Current backend/refactor boundaries
+
+The current implementation keeps the shared public/internal declarations in
+`include/ds.h`, but the v0.12.0 cleanup started splitting the largest backend
+implementation details into smaller internal modules:
+
+- `src/stdlib.c` owns the table of supported standard-library helpers: public
+  helper name, Bash helper name, arity, return kind, statement-only status,
+  string-argument rules, iterable status, and validation flags.
+- `src/lower.c`, `src/vm.c`/`src/vm_stdlib.c`, and `src/bash_emit.c` consume that
+  table rather than each maintaining independent helper arity/name lists.
+- `src/vm_internal.h` contains bytecode/VM-private structs shared only by VM
+  implementation files. It is not part of the public user-facing API.
+- `src/vm_stdlib.c` owns VM execution for `file.*`, `dir.*`, `path.*`, `cmd.*`,
+  `env.*`, `glob`, `glob!`, and `lines`; `src/vm.c` remains responsible for
+  bytecode construction, bytecode dumping, scopes, script-arg binding, command
+  execution, and the main interpreter loop.
+- `src/bash_helpers.c` owns the emitted Bash helper bodies for command-result,
+  collection, and stdlib helpers; `src/bash_emit.c` remains responsible for
+  dependency analysis, expression/statement rendering, and artifact writing.
+
+This is deliberately a behavior-preserving split. Emitted Bash still remains
+standalone and must not depend on `ds` or on the C runtime.
 
 ## CLI commands
 

@@ -86,6 +86,51 @@ DsRegex           regex wrapper, later
 
 Not every type needs to exist in `v0.1.0`. This list defines the intended foundation.
 
+## Current value-kind contract
+
+The v0.12.0 cleanup keeps the user-facing language surface unchanged, but makes
+the internal value model explicit. Lowering and runtime currently reason about
+these kinds:
+
+```txt
+null              internal absence / statement-only placeholder
+bool              conditions and helper predicates
+int               parsed literals, script args/options, command-result code
+string            interpolation, command words, file/path/env/cmd helpers
+command-result    captured `run` stdout/stderr/code/ok/failed fields
+array             array literals, stdlib iterables, array `for` loops
+map               map literals and string-key lookup
+function          callable user declarations during lowering
+unknown/error     conservative recovery after a reported diagnostic
+```
+
+`src/stdlib.c` is the source of truth for standard-library helper return kinds,
+arity, statement-only status, iterable status, and validation flags. Lowering
+maps those metadata return kinds into its local symbol/value-kind model; the VM
+dispatch path validates the helper through the same metadata before executing
+runtime behavior; Bash emission uses the metadata helper names when rendering
+calls. The lowered representation remains the shared backend contract between VM
+execution and standalone Bash emission.
+
+Statement-only helpers such as `file.write`, `file.append`, `cmd.require`,
+`env.set`, and `env.unset` are not values. Value-returning helpers are rejected
+as bare statements unless the language explicitly documents that statement form.
+Collection literals still keep the conservative Bash-emission rule: elements
+must be expressions the Bash backend can assign without changing VM/Bash parity.
+
+## Standard-library runtime boundary
+
+VM stdlib execution now lives in `src/vm_stdlib.c`, behind the VM-private
+`ds_vm_stdlib_call()` entrypoint declared in `src/vm_internal.h`. That keeps the
+file/path/env/cmd/glob/lines runtime implementations separate from the main
+bytecode compiler/interpreter loop in `src/vm.c` while preserving the same spans,
+ownership rules, and fail-fast diagnostics.
+
+Standalone Bash helper bodies live in `src/bash_helpers.c`; `src/bash_emit.c`
+still decides which helpers are needed and where to emit them. This keeps helper
+body review separate from expression/statement rendering while preserving the
+reserved `__ds_` helper prefix and standalone-script requirement.
+
 ## `DsStr`
 
 `DsStr` is a borrowed string view.
