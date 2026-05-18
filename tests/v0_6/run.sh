@@ -105,7 +105,7 @@ declare -A graph_errors=(
   [duplicate_across_imports_main.ds]='duplicate variable `dup`'
   [imported_script_main.ds]='imported files cannot declare `script` blocks in v0.6.0'
   [unknown_in_import_main.ds]='unknown command variable `missing`'
-  [future_syntax_main.ds]='expected expression'
+  [future_syntax_main.ds]='nested collections are deferred in v0.10.0'
 )
 for file in "${!graph_errors[@]}"; do
   base="${file%.ds}"

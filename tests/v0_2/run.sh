@@ -394,13 +394,18 @@ Hello, Danh!
 EOF_EXPECT
 assert_same "$TMP/interp_punctuation.expected" "$TMP/run_interp_punctuation.out" "interpolation next to punctuation preserves text"
 
-cat >"$TMP/future_syntax.ds" <<'EOF_DS'
+cat >"$TMP/array_syntax.ds" <<'EOF_DS'
 let xs = [1, 2]
+let first = xs[0]
+echo "{first}"
 EOF_DS
-run_fail future_syntax_rejected "$DS" emit bash "$TMP/future_syntax.ds" -o "$TMP/future_syntax.sh"
-assert_contains "$TMP/future_syntax_rejected.err" 'expected expression' "future array syntax rejected before arrays"
-[ ! -e "$TMP/future_syntax.sh" ] || fail "future syntax should not write output"
-pass "future syntax leaves no output file"
+run_ok array_syntax_supported "$DS" emit bash "$TMP/array_syntax.ds" -o "$TMP/array_syntax.sh"
+run_ok array_syntax_bash_syntax bash -n "$TMP/array_syntax.sh"
+run_ok array_syntax_bash bash "$TMP/array_syntax.sh"
+cat >"$TMP/array_syntax.expected" <<'EOF_EXPECT'
+1
+EOF_EXPECT
+assert_same "$TMP/array_syntax.expected" "$TMP/array_syntax_bash.out" "array syntax is supported after v0.10"
 
 test -f "$ROOT/docs/language.ds" || fail "docs/language.ds should exist"
 pass "syntax catalog exists"

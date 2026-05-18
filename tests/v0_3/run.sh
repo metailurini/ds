@@ -556,11 +556,13 @@ DS
 run_fail vm_failing_branch "$DS" run "$TMP/failing_branch.ds"
 assert_not_contains "$TMP/vm_failing_branch.out" 'after' "VM stops after failing command in branch"
 
-cat >"$TMP/future_syntax.ds" <<'DS'
+cat >"$TMP/array_syntax.ds" <<'DS'
 let xs = [1, 2]
+let first = xs[0]
+echo "{first}"
 DS
-run_fail future_syntax_rejected "$DS" run "$TMP/future_syntax.ds"
-assert_contains "$TMP/future_syntax_rejected.err" 'expected expression' "future array syntax remains rejected"
+run_ok array_syntax_supported "$DS" run "$TMP/array_syntax.ds"
+assert_same_text $'1\n' "$TMP/array_syntax_supported.out" "array syntax is supported after v0.10"
 
 # VM/Bash parity across supported success and failure cases.
 parity_ok parity_empty "tests/v0_3/fixtures/empty.ds"

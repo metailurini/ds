@@ -224,12 +224,9 @@ if grep -R -nE '#include[[:space:]]+[<"].*hashmap|struct hashmap|hashmap_' "$ROO
 fi
 pass "staged hashmap API does not leak into production src/include"
 
-# Future syntax from docs/language.ds must remain rejected during cleanup-only v0.4.
+# Syntax that remains future/deferred after the current milestone must be rejected.
 declare -A future_syntax
 future_syntax[import_block]='import "other.ds" { }'
-future_syntax[loop]='for item in items { echo $item }'
-future_syntax[array]='let xs = [1, 2]'
-future_syntax[map]='let m = { name: "Danh" }'
 future_syntax[capture]='let out = $(echo hi)'
 future_syntax[redirect_capture]='let redirected = echo "hi" > out.txt'
 future_syntax[stdlib_expr]='let exists = file.exists("README.md")'
@@ -288,7 +285,6 @@ assert_contains "$ROOT/README.md" "./ds emit bash examples/basic.ds -o /tmp/basi
 assert_contains "$ROOT/docs/architecture.md" "lowered" "architecture documents lowered pipeline"
 assert_contains "$ROOT/docs/runtime.md" "ownership" "runtime docs mention ownership"
 assert_contains "$ROOT/docs/language.ds" "future" "language catalog marks future syntax"
-assert_not_contains "$ROOT/README.md" "arrays are implemented" "README does not claim arrays implemented"
-assert_not_contains "$ROOT/README.md" "maps are implemented" "README does not claim maps implemented"
+assert_contains "$ROOT/README.md" "array/map literals" "README documents implemented arrays/maps"
 
 printf 'v0.4.0 tests passed: %d checks\n' "$pass_count"
