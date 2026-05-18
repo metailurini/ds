@@ -726,11 +726,14 @@ static void emit_stdlib_helpers(BashEmitter *e) {
         "__ds_stdlib_path_basename() { local p=\"$1\"; printf '%s' \"${p##*/}\"; }\n"
         "__ds_stdlib_path_dirname() { local p=\"$1\"; if [[ \"$p\" != */* ]]; then printf .; elif [[ \"${p%/*}\" == \"\" ]]; then printf /; else printf '%s' \"${p%/*}\"; fi; }\n"
         "__ds_stdlib_path_ext() { local b=\"${1##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then printf ''; else printf '%s' \".${b##*.}\"; fi; }\n"
-        "__ds_stdlib_cmd_exists() { if [[ \"$1\" == */* ]]; then [[ -x \"$1\" ]]; else command -v -- \"$1\" >/dev/null 2>&1; fi && printf '%s' true || printf '%s' false; }\n"
-        "__ds_stdlib_cmd_require() { if [[ \"$1\" == */* ]]; then [[ -x \"$1\" ]]; else command -v -- \"$1\" >/dev/null 2>&1; fi || __ds_error \"required command '$1' was not found\"; }\n"
-        "__ds_stdlib_env_get() { local n=\"$1\"; if [[ ${!n+x} ]]; then printf '%s' \"${!n}\"; elif [[ $# -ge 2 ]]; then printf '%s' \"$2\"; fi; }\n"
-        "__ds_stdlib_env_set() { export \"$1=$2\"; }\n"
-        "__ds_stdlib_env_unset() { unset \"$1\"; }\n"
+        "__ds_stdlib_cmd_found() { local c=\"$1\" d; if [[ \"$c\" == */* ]]; then [[ -x \"$c\" ]] && return 0 || return 1; fi; IFS=: read -r -a __ds_path_parts <<<\"${PATH:-}\"; for d in \"${__ds_path_parts[@]}\"; do [[ -z \"$d\" ]] && d=.; [[ -x \"$d/$c\" && ! -d \"$d/$c\" ]] && return 0; done; return 1; }\n"
+        "__ds_stdlib_cmd_exists() { __ds_stdlib_cmd_found \"$1\" && printf '%s' true || printf '%s' false; }\n"
+        "__ds_stdlib_cmd_require() { __ds_stdlib_cmd_found \"$1\" || __ds_error \"required command '$1' was not found\"; }\n"
+        "__ds_stdlib_env_valid() { [[ \"$1\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || __ds_error \"invalid environment variable name '$1' in v0.11.0\"; }\n"
+        "__ds_stdlib_env_get() { local n=\"$1\"; __ds_stdlib_env_valid \"$n\"; if [[ ${!n+x} ]]; then printf '%s' \"${!n}\"; elif [[ $# -ge 2 ]]; then printf '%s' \"$2\"; fi; }\n"
+        "__ds_stdlib_env_set() { __ds_stdlib_env_valid \"$1\"; export \"$1=$2\"; }\n"
+        "__ds_stdlib_env_unset() { __ds_stdlib_env_valid \"$1\"; unset \"$1\"; }\n"
+        "__ds_stdlib_capture() { local __ds_var=\"$1\" __ds_data __ds_status; shift; set +e; __ds_data=\"$(\"$@\"; printf x)\"; __ds_status=$?; set -e; if (( __ds_status != 0 )); then exit \"$__ds_status\"; fi; __ds_data=\"${__ds_data%x}\"; printf -v \"$__ds_var\" '%s' \"$__ds_data\"; }\n"
         "__ds_stdlib_reject_recursive_glob() { [[ \"$1\" != *'**'* ]] || __ds_error \"recursive '**' glob patterns are deferred in v0.11.0\"; }\n"
         "__ds_stdlib_glob() { __ds_stdlib_reject_recursive_glob \"$1\"; { compgen -G \"$1\" || true; } | sort; }\n"
         "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
@@ -1012,6 +1015,16 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"", temp_id);
+            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && is_stdlib_call_name(stmt->as.let_stmt.value->as.call.name)) {
+                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "=\"\"\n");
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "__ds_stdlib_capture ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, " ");
+                emit_stdlib_helper_name(&e->out, stmt->as.let_stmt.value->as.call.name);
+                if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -A ");
                 else buf_append(&e->out, "declare -A ");

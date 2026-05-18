@@ -229,7 +229,7 @@ declare -A future_syntax
 future_syntax[import_block]='import "other.ds" { }'
 future_syntax[capture]='let out = $(echo hi)'
 future_syntax[redirect_capture]='let redirected = echo "hi" > out.txt'
-future_syntax[stdlib_expr]='let exists = file.exists("README.md")'
+future_syntax[env_direct]='let home = env.HOME'
 for name in "${!future_syntax[@]}"; do
   printf '%s\n' "${future_syntax[$name]}" >"$TMP/future_$name.ds"
   run_fail "future_$name" "$DS" check "$TMP/future_$name.ds"

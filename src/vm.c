@@ -1493,6 +1493,23 @@ static char *vm_string_arg_dup(Vm *vm, Instr *ins, size_t index) {
     return ds_str_dup_range(s, len);
 }
 
+static bool vm_valid_env_name(const char *name) {
+    if (!name || !name[0]) return false;
+    unsigned char c = (unsigned char)name[0];
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
+    for (size_t i = 1; name[i]; i++) {
+        c = (unsigned char)name[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
+    }
+    return true;
+}
+
+static bool vm_require_env_name(Vm *vm, Instr *ins, const char *name) {
+    if (vm_valid_env_name(name)) return true;
+    ds_diag_error(vm->diag, ins->span, "invalid environment variable name `%s` in v0.11.0", name ? name : "");
+    return false;
+}
+
 static bool value_string_from_owned_cstr(DsValue *out, char *text) {
     DsString s;
     ds_string_init(&s);
@@ -1516,21 +1533,25 @@ static bool array_push_string(DsValue *array, const char *data, size_t len) {
     return ds_array_push(&array->as.array, item);
 }
 
-static bool read_path_to_string(Vm *vm, Instr *ins, const char *path, DsValue *out) {
+static bool read_path_to_string_msg(Vm *vm, Instr *ins, const char *path, const char *what, DsValue *out) {
     FILE *fp = fopen(path, "rb");
-    if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to read file `%s`: %s", path, strerror(errno)); return false; }
+    if (!fp) { ds_diag_error(vm->diag, ins->span, "failed to read %s `%s`: %s", what, path, strerror(errno)); return false; }
     DsString s;
     ds_string_init(&s);
     char buf[4096];
     size_t n = 0;
     while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        if (memchr(buf, '\0', n)) { ds_diag_error(vm->diag, ins->span, "file `%s` contains embedded NUL bytes", path); fclose(fp); ds_string_free(&s); return false; }
+        if (memchr(buf, '\0', n)) { ds_diag_error(vm->diag, ins->span, "%s `%s` contains embedded NUL bytes", what, path); fclose(fp); ds_string_free(&s); return false; }
         ds_string_append_range(&s, buf, n);
     }
-    if (ferror(fp)) { ds_diag_error(vm->diag, ins->span, "failed to read file `%s`: %s", path, strerror(errno)); fclose(fp); ds_string_free(&s); return false; }
+    if (ferror(fp)) { ds_diag_error(vm->diag, ins->span, "failed to read %s `%s`: %s", what, path, strerror(errno)); fclose(fp); ds_string_free(&s); return false; }
     fclose(fp);
     *out = ds_value_string_take(&s);
     return true;
+}
+
+static bool read_path_to_string(Vm *vm, Instr *ins, const char *path, DsValue *out) {
+    return read_path_to_string_msg(vm, ins, path, "file", out);
 }
 
 static bool write_string_to_path(Vm *vm, Instr *ins, const char *path, const char *text, size_t len, bool append) {
@@ -1593,11 +1614,11 @@ static bool vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
         if (!found && strcmp(name, "cmd.require") == 0) { ds_diag_error(vm->diag, ins->span, "required command `%s` was not found on PATH", cmd); free(cmd); return false; }
         free(cmd); *out = strcmp(name, "cmd.exists") == 0 ? ds_value_bool(found) : ds_value_null(); return true;
     }
-    if (strcmp(name, "env.get") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); if (!key) return false; char *val = getenv(key); if (!val && ins->arg_count == 2) { const char *def = NULL; size_t len = 0; if (!vm_string_arg(vm, ins, 1, &def, &len)) { free(key); return false; } DsString s; ds_string_from_range(&s, def, len); *out = ds_value_string_take(&s); free(key); return true; } DsString s; ds_string_from_cstr(&s, val ? val : ""); *out = ds_value_string_take(&s); free(key); return true; }
-    if (strcmp(name, "env.set") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); char *val = vm_string_arg_dup(vm, ins, 1); if (!key || !val) { free(key); free(val); return false; } if (setenv(key, val, 1) != 0) { ds_diag_error(vm->diag, ins->span, "failed to set environment `%s`: %s", key, strerror(errno)); free(key); free(val); return false; } free(key); free(val); return true; }
-    if (strcmp(name, "env.unset") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); if (!key) return false; if (unsetenv(key) != 0) { ds_diag_error(vm->diag, ins->span, "failed to unset environment `%s`: %s", key, strerror(errno)); free(key); return false; } free(key); return true; }
+    if (strcmp(name, "env.get") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); if (!key) return false; if (!vm_require_env_name(vm, ins, key)) { free(key); return false; } char *val = getenv(key); if (!val && ins->arg_count == 2) { const char *def = NULL; size_t len = 0; if (!vm_string_arg(vm, ins, 1, &def, &len)) { free(key); return false; } DsString s; ds_string_from_range(&s, def, len); *out = ds_value_string_take(&s); free(key); return true; } DsString s; ds_string_from_cstr(&s, val ? val : ""); *out = ds_value_string_take(&s); free(key); return true; }
+    if (strcmp(name, "env.set") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); char *val = vm_string_arg_dup(vm, ins, 1); if (!key || !val) { free(key); free(val); return false; } if (!vm_require_env_name(vm, ins, key)) { free(key); free(val); return false; } if (setenv(key, val, 1) != 0) { ds_diag_error(vm->diag, ins->span, "failed to set environment `%s`: %s", key, strerror(errno)); free(key); free(val); return false; } free(key); free(val); return true; }
+    if (strcmp(name, "env.unset") == 0) { char *key = vm_string_arg_dup(vm, ins, 0); if (!key) return false; if (!vm_require_env_name(vm, ins, key)) { free(key); return false; } if (unsetenv(key) != 0) { ds_diag_error(vm->diag, ins->span, "failed to unset environment `%s`: %s", key, strerror(errno)); free(key); return false; } free(key); return true; }
     if (strcmp(name, "glob") == 0 || strcmp(name, "glob!") == 0) { char *pat = vm_string_arg_dup(vm, ins, 0); if (!pat) return false; if (strstr(pat, "**")) { ds_diag_error(vm->diag, ins->span, "recursive `**` glob patterns are deferred in v0.11.0"); free(pat); return false; } glob_t g; memset(&g, 0, sizeof(g)); int grc = glob(pat, 0, NULL, &g); DsValue arr = ds_value_null(); arr.kind = DS_VALUE_ARRAY; ds_array_init(&arr.as.array); if (grc == GLOB_NOMATCH) { if (strcmp(name, "glob!") == 0) { ds_diag_error(vm->diag, ins->span, "required glob `%s` had no matches", pat); free(pat); globfree(&g); ds_value_free(&arr); return false; } } else if (grc != 0) { ds_diag_error(vm->diag, ins->span, "failed to evaluate glob `%s`", pat); free(pat); globfree(&g); ds_value_free(&arr); return false; } else { qsort(g.gl_pathv, g.gl_pathc, sizeof(char *), cmp_cstr_ptr); for (size_t i = 0; i < g.gl_pathc; i++) array_push_string(&arr, g.gl_pathv[i], strlen(g.gl_pathv[i])); } free(pat); globfree(&g); *out = arr; return true; }
-    if (strcmp(name, "lines") == 0) { char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false; DsValue text = ds_value_null(); if (!read_path_to_string(vm, ins, path, &text)) { free(path); return false; } free(path); DsValue arr = ds_value_null(); arr.kind = DS_VALUE_ARRAY; ds_array_init(&arr.as.array); size_t start = 0; for (size_t i = 0; i < text.as.string.len; i++) { if (text.as.string.data[i] == '\n') { size_t end = i > start && text.as.string.data[i - 1] == '\r' ? i - 1 : i; array_push_string(&arr, text.as.string.data + start, end - start); start = i + 1; } } if (start < text.as.string.len) array_push_string(&arr, text.as.string.data + start, text.as.string.len - start); ds_value_free(&text); *out = arr; return true; }
+    if (strcmp(name, "lines") == 0) { char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false; DsValue text = ds_value_null(); if (!read_path_to_string_msg(vm, ins, path, "lines from", &text)) { free(path); return false; } free(path); DsValue arr = ds_value_null(); arr.kind = DS_VALUE_ARRAY; ds_array_init(&arr.as.array); size_t start = 0; for (size_t i = 0; i < text.as.string.len; i++) { if (text.as.string.data[i] == '\n') { size_t end = i > start && text.as.string.data[i - 1] == '\r' ? i - 1 : i; array_push_string(&arr, text.as.string.data + start, end - start); start = i + 1; } } if (start < text.as.string.len) array_push_string(&arr, text.as.string.data + start, text.as.string.len - start); ds_value_free(&text); *out = arr; return true; }
     ds_diag_error(vm->diag, ins->span, "unknown standard-library helper `%s`", name);
     return false;
 }
