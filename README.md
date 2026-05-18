@@ -138,9 +138,9 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass.
+Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass; `v0.11.0` implementation is complete without tests for the scoped shell-oriented standard library pass.
 
-The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, the `v0.8.0` command-model/process-wrapper cleanup, the scoped `v0.9.0` user-defined functions pass, and the initial `v0.10.0` collection/array-loop implementation:
+The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, the `v0.8.0` command-model/process-wrapper cleanup, the scoped `v0.9.0` user-defined functions pass, the initial `v0.10.0` collection/array-loop implementation, and the initial `v0.11.0` shell-oriented standard library implementation:
 
 Local imports use simple quoted paths resolved relative to the importing file:
 
@@ -193,6 +193,8 @@ let api_port = ports.api
 
 `v0.10.0` deliberately defers map iteration, `while`, `break`/`continue`, ranges, index assignment, empty map literals, nested collections, passing whole collection values to functions or commands, direct collection access in command arguments, and collection element expressions that cannot yet be emitted into Bash assignments. Bind/index scalar values first.
 
+`v0.11.0` adds the first standard-library helpers: `file.exists`, `file.is_file`, `file.read`, `file.write`, `file.append`, `dir.exists`, `path.cwd`, `path.join`, `path.basename`, `path.dirname`, `path.ext`, `cmd.exists`, `cmd.require`, `env.get`, `env.set`, `env.unset`, `glob`, `glob!`, and `lines`. The implementation deliberately defers direct `env.NAME` access, recursive `**` glob parity, binary file APIs, directory mutation/listing, and streaming `lines`.
+
 ```sh
 make
 ./ds tokens examples/basic.ds
@@ -209,6 +211,7 @@ make
 ./ds examples/redirection.ds
 ./ds examples/functions.ds
 ./ds examples/collections.ds
+./ds examples/stdlib.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
 ./ds emit bash examples/args.ds -o /tmp/args.sh
 ./ds emit bash examples/import-main.ds -o /tmp/import-main.sh
@@ -216,6 +219,7 @@ make
 ./ds emit bash examples/redirection.ds -o /tmp/redirection.sh
 ./ds emit bash examples/functions.ds -o /tmp/functions.sh
 ./ds emit bash examples/collections.ds -o /tmp/collections.sh
+./ds emit bash examples/stdlib.ds -o /tmp/stdlib.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
 bash /tmp/args.sh api --target production --retries 5 --force
@@ -225,9 +229,10 @@ bash /tmp/command-result.sh
 bash /tmp/redirection.sh
 bash /tmp/functions.sh
 bash /tmp/collections.sh
+bash /tmp/stdlib.sh
 ```
 
-The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, plain command redirections, top-level function declarations/calls, array/map literals, array/map access, array `push`, and array `for` loops. The VM also maintains runtime block scopes for lowered blocks, function invocations, and loop iterations. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast. The v0.8.0 cleanup centralizes lowered command ownership and command-result field metadata without changing that language surface. The v0.9.0 implementation supports untyped function parameters, trailing literal defaults, calls before declaration, imported function declarations through the existing composition path, and local function variables; typed parameters, return values, and recursive calls remain deferred. The v0.10.0 implementation uses value-copy collection assignment semantics, emits a Bash 4+ guard when maps require associative arrays, gives explicit Bash runtime failures for missing map keys and out-of-range array indexes, reserves `break`/`continue` for future loop control, rejects collection element expressions that cannot emit to Bash with parity, and deliberately keeps collection function arguments, map iteration, and `while` loops deferred until call-boundary/reassignment semantics are designed.
+The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings, integers, booleans, simple interpolation, comparisons, `if`/`else`, nested blocks, simple command statements, captured `run` commands, command-result fields, plain command redirections, top-level function declarations/calls, array/map literals, array/map access, array `push`, array `for` loops, and scoped shell-oriented stdlib helpers. The VM also maintains runtime block scopes for lowered blocks, function invocations, and loop iterations. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast. The v0.8.0 cleanup centralizes lowered command ownership and command-result field metadata without changing that language surface. The v0.9.0 implementation supports untyped function parameters, trailing literal defaults, calls before declaration, imported function declarations through the existing composition path, and local function variables; typed parameters, return values, and recursive calls remain deferred. The v0.10.0 implementation uses value-copy collection assignment semantics, emits a Bash 4+ guard when maps require associative arrays, gives explicit Bash runtime failures for missing map keys and out-of-range array indexes, reserves `break`/`continue` for future loop control, rejects collection element expressions that cannot emit to Bash with parity, and deliberately keeps collection function arguments, map iteration, and `while` loops deferred until call-boundary/reassignment semantics are designed. The v0.11.0 implementation lowers stdlib helper calls through the shared pipeline, executes them in the VM, and emits standalone Bash helpers when needed.
 
 Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
 

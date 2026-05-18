@@ -33,6 +33,25 @@ static DsStr copy_token_text(const DsToken *token) {
     return s;
 }
 
+static DsStr copy_dotted_name(const DsToken *left, const DsToken *right) {
+    DsStr s;
+    s.len = left->text.len + 1 + right->text.len;
+    s.data = (char *)ds_xcalloc(s.len + 1, 1);
+    memcpy(s.data, left->text.data, left->text.len);
+    s.data[left->text.len] = '.';
+    memcpy(s.data + left->text.len + 1, right->text.data, right->text.len);
+    return s;
+}
+
+static DsStr copy_bang_name(const DsToken *name) {
+    DsStr s;
+    s.len = name->text.len + 1;
+    s.data = (char *)ds_xcalloc(s.len + 1, 1);
+    memcpy(s.data, name->text.data, name->text.len);
+    s.data[name->text.len] = '!';
+    return s;
+}
+
 static void stmt_vec_push(DsStmtVec *vec, DsStmt *stmt) {
     if (vec->len == vec->cap) {
         vec->cap = vec->cap ? vec->cap * 2 : 16;
@@ -362,6 +381,17 @@ static DsExpr *parse_primary(Parser *p) {
 
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
+    if (expr && expr->kind == DS_EXPR_IDENT && strncmp(expr->as.text.data, "glob", expr->as.text.len) == 0 && expr->as.text.len == 4 && advance_if(p, DS_TOK_BANG)) {
+        DsToken *bang = previous(p);
+        if (expect(p, DS_TOK_LPAREN, "expected `(` after `glob!`")) {
+            DsExpr *call = new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, bang->span.end, expr->span.source});
+            DsToken tmp = {.text = expr->as.text, .span = expr->span};
+            call->as.call.name = copy_bang_name(&tmp);
+            parse_call_args(p, &call->as.call.args);
+            if (expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = previous(p)->span.end;
+            expr = call;
+        }
+    }
     while (expr && expr->kind == DS_EXPR_IDENT && advance_if(p, DS_TOK_LPAREN)) {
         DsToken *open = previous(p);
         DsExpr *call = new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, open->span.end, expr->span.source});
@@ -395,6 +425,16 @@ static DsExpr *parse_postfix(Parser *p) {
         field_expr->as.field.object = expr;
         field_expr->as.field.field = copy_token_text(field);
         expr = field_expr;
+        if (field_expr->as.field.object && field_expr->as.field.object->kind == DS_EXPR_IDENT && advance_if(p, DS_TOK_LPAREN)) {
+            DsToken *open = previous(p);
+            DsExpr *call = new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, open->span.end, dot->span.source});
+            DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
+            DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+            call->as.call.name = copy_dotted_name(&left, &right);
+            parse_call_args(p, &call->as.call.args);
+            if (expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = previous(p)->span.end;
+            expr = call;
+        }
     }
     return expr;
 }
@@ -624,6 +664,24 @@ static DsStmt *parse_call_stmt(Parser *p) {
     stmt->span.end = previous(p)->span.end;
     if (!is_stmt_end(p)) {
         ds_diag_error(p->diag, peek(p)->span, "expected end of function call statement");
+        while (!is_stmt_end(p)) advance(p);
+    }
+    consume_statement_end(p);
+    return stmt;
+}
+
+static DsStmt *parse_member_call_stmt(Parser *p) {
+    DsToken *object = advance(p);
+    expect(p, DS_TOK_DOT, "expected `.` after namespace name");
+    DsToken *member = advance(p);
+    if (!expect(p, DS_TOK_LPAREN, "expected `(` after helper name")) return NULL;
+    DsStmt *stmt = new_stmt(DS_STMT_CALL, (DsSpan){object->span.start, previous(p)->span.end, object->span.source});
+    stmt->as.call_stmt.name = copy_dotted_name(object, member);
+    parse_call_args(p, &stmt->as.call_stmt.args);
+    if (!expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) return stmt;
+    stmt->span.end = previous(p)->span.end;
+    if (!is_stmt_end(p)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected end of helper call statement");
         while (!is_stmt_end(p)) advance(p);
     }
     consume_statement_end(p);
@@ -860,7 +918,12 @@ static DsStmt *parse_stmt(Parser *p) {
         consume_statement_end(p);
         return NULL;
     }
-    if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_DOT)) return parse_push_stmt(p);
+    if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_DOT)) {
+        if (p->pos + 3 < p->tokens->len && p->tokens->items[p->pos + 2].kind == DS_TOK_IDENT &&
+            p->tokens->items[p->pos + 2].text.len == 4 && memcmp(p->tokens->items[p->pos + 2].text.data, "push", 4) == 0 &&
+            p->tokens->items[p->pos + 3].kind == DS_TOK_LPAREN) return parse_push_stmt(p);
+        return parse_member_call_stmt(p);
+    }
     if (at(p, DS_TOK_IDENT) && next_at(p, DS_TOK_LPAREN)) return parse_call_stmt(p);
     if (at(p, DS_TOK_ELSE)) {
         ds_diag_error(p->diag, peek(p)->span, "unexpected `else` without matching `if`");

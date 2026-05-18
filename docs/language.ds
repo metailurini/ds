@@ -51,9 +51,10 @@ count = count + 1
 count += 1
 count -= 1
 
-# Environment variables use an explicit env namespace.
-env.NODE_ENV = "production"
-env.PATH += "./node_modules/.bin"
+# Environment variables use an explicit env namespace. Direct assignment syntax
+# is planned but deferred in v0.11.0; use `env.get` / `env.set` below today.
+# env.NODE_ENV = "production"
+# env.PATH += "./node_modules/.bin"
 
 
 # -----------------------------------------------------------------------------
@@ -355,13 +356,10 @@ for service in services {
 }
 
 # Ranges and stdlib-backed iteration are later-version syntax.
+# `lines` is implemented in v0.11.0; ranges remain deferred.
 #
 # for n in 1..10 {
 #   echo "{n}"
-# }
-#
-# for line in lines("README.md") {
-#   echo $line
 # }
 
 
@@ -405,16 +403,30 @@ cmd.require("npm")
 
 
 # -----------------------------------------------------------------------------
-# 20. Globbing and line iteration [v0.11.0] [stable]
+# 20. Standard library: environment [v0.11.0] [stable]
+# -----------------------------------------------------------------------------
+
+let target = env.get("TARGET", "staging")
+env.set("NODE_ENV", "production")
+env.unset("DEBUG")
+
+# Direct `env.NAME` assignment remains deferred in v0.11.0.
+# env.NODE_ENV = "production"
+# env.PATH += "./node_modules/.bin"
+
+
+# -----------------------------------------------------------------------------
+# 21. Globbing and line iteration [v0.11.0] [stable]
 # -----------------------------------------------------------------------------
 
 for file in glob("*.txt") {
   echo $file
 }
 
-for file in glob("src/**/*.c") {
-  echo $file
-}
+# Recursive `**` globbing is deferred until VM/Bash parity is defined.
+# for file in glob("src/**/*.c") {
+#   echo $file
+# }
 
 # glob! means the pattern must match at least one file.
 for file in glob!("*.ds") {
@@ -427,7 +439,7 @@ for line in lines("input.txt") {
 
 
 # -----------------------------------------------------------------------------
-# 21. Failure, exit, and strict mode [v0.3.0+] [stable]
+# 22. Failure, exit, and strict mode [v0.3.0+] [stable]
 # -----------------------------------------------------------------------------
 
 strict
@@ -441,7 +453,7 @@ exit 1
 
 
 # -----------------------------------------------------------------------------
-# 22. Defer / cleanup [v0.11.0+] [candidate]
+# 23. Defer / cleanup [v0.11.0+] [candidate]
 # -----------------------------------------------------------------------------
 
 let tmp = temp.dir()

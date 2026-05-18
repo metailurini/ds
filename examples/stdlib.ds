@@ -1,0 +1,26 @@
+file.write("/tmp/ds-stdlib-example.txt", "api\nweb")
+file.append("/tmp/ds-stdlib-example.txt", "\nworker")
+
+if file.exists("/tmp/ds-stdlib-example.txt") {
+  echo "example file exists"
+}
+
+let cwd = path.cwd()
+let log_path = path.join(cwd, "ds.log")
+let log_name = path.basename(log_path)
+echo "log={log_name}"
+
+cmd.require("sh")
+env.set("DS_EXAMPLE_TARGET", "staging")
+let target = env.get("DS_EXAMPLE_TARGET", "dev")
+echo "target={target}"
+env.unset("DS_EXAMPLE_TARGET")
+
+for line in lines("/tmp/ds-stdlib-example.txt") {
+  echo $line
+}
+
+let matches = glob("/tmp/ds-stdlib-example*.txt")
+for match in matches {
+  echo $match
+}
