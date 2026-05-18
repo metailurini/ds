@@ -1,5 +1,5 @@
 #include "ds.h"
-#include "hashmap.h"
+#include "runtime/hashmap.h"
 
 #include <stdlib.h>
 #include <stdio.h>

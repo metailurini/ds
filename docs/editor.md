@@ -17,7 +17,6 @@ The expected project-side `clangd` flags are:
 -Wextra
 -Wpedantic
 -Iinclude
--Ilibs/hashmap
 ```
 
 If the editor was already open before this file existed, restart the LSP client

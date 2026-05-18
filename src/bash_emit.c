@@ -125,24 +125,14 @@ static void emit_fn_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
-static bool is_stdlib_call_name(DsStr name) {
-    const char *known[] = {"file.exists","file.is_file","file.read","file.write","file.append","dir.exists","path.cwd","path.join","path.basename","path.dirname","path.ext","cmd.exists","cmd.require","env.get","env.set","env.unset","glob","glob!","lines"};
-    for (size_t i = 0; i < sizeof(known) / sizeof(known[0]); i++) if (str_eq(name, known[i])) return true;
-    return false;
+static void emit_stdlib_helper_name(EmitBuf *out, DsStr name) {
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    if (helper) buf_append(out, helper->bash_name);
 }
 
 static bool stdlib_returns_array(DsStr name) {
-    return str_eq(name, "glob") || str_eq(name, "glob!") || str_eq(name, "lines");
-}
-
-static void emit_stdlib_helper_name(EmitBuf *out, DsStr name) {
-    buf_append(out, "__ds_stdlib_");
-    for (size_t i = 0; i < name.len; i++) {
-        char c = name.data[i];
-        if (c == '.') buf_append(out, "_");
-        else if (c == '!') buf_append(out, "_required");
-        else buf_append_len(out, &c, 1);
-    }
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    return helper && helper->return_kind == DS_STDLIB_RETURN_ARRAY;
 }
 
 static const char *script_basename(const DsSource *source) {
@@ -444,7 +434,7 @@ static bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_CALL:
-            if (!is_stdlib_call_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name)) {
+            if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name)) {
                 ds_diag_error(e->diag, expr->span, "unsupported standard-library value expression for Bash emission in v0.11.0");
                 return false;
             }
@@ -551,7 +541,7 @@ static bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out
         buf_append(out, expr->as.boolean ? "true" : "false");
         return true;
     }
-    if (expr->kind == DS_LOWER_EXPR_CALL && is_stdlib_call_name(expr->as.call.name)) {
+    if (expr->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(expr->as.call.name)) {
         buf_append(out, "[[ ");
         if (!emit_value_expr(e, expr, out)) return false;
         buf_append(out, " == true ]]");
@@ -759,7 +749,7 @@ static bool expr_uses_run(const DsLowerExpr *expr) {
 static bool expr_uses_stdlib(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
-        case DS_LOWER_EXPR_CALL: return is_stdlib_call_name(expr->as.call.name);
+        case DS_LOWER_EXPR_CALL: return ds_stdlib_is_name(expr->as.call.name);
         case DS_LOWER_EXPR_FIELD: return expr_uses_stdlib(expr->as.field.object);
         case DS_LOWER_EXPR_INDEX: return expr_uses_stdlib(expr->as.index.object) || expr_uses_stdlib(expr->as.index.index);
         case DS_LOWER_EXPR_ARRAY:
@@ -832,7 +822,7 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_BLOCK:
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_stdlib(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
-        case DS_LOWER_STMT_CALL: return is_stdlib_call_name(stmt->as.call_stmt.name);
+        case DS_LOWER_STMT_CALL: return ds_stdlib_is_name(stmt->as.call_stmt.name);
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_stdlib(stmt->as.for_stmt.iterable) || stmt_uses_stdlib(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_PUSH: return expr_uses_stdlib(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_CMD: return false;
@@ -1013,7 +1003,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"", temp_id);
-            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && is_stdlib_call_name(stmt->as.let_stmt.value->as.call.name)) {
+            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(stmt->as.let_stmt.value->as.call.name)) {
                 if (e->function_depth > 0) buf_append(&e->out, "local ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=\"\"\n");
@@ -1054,7 +1044,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
 
         case DS_LOWER_STMT_CALL:
             emit_indent(&e->out, indent);
-            if (is_stdlib_call_name(stmt->as.call_stmt.name)) emit_stdlib_helper_name(&e->out, stmt->as.call_stmt.name);
+            if (ds_stdlib_is_name(stmt->as.call_stmt.name)) emit_stdlib_helper_name(&e->out, stmt->as.call_stmt.name);
             else emit_fn_name(&e->out, stmt->as.call_stmt.name);
             if (!emit_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
             buf_append(&e->out, "\n\n");

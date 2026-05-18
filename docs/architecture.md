@@ -658,16 +658,15 @@ src/
     test_runner.c
     repl.c
 
-libs/
-  hashmap/
-    hashmap.c
-    hashmap.h
-    LICENSE
+src/runtime/
+  hashmap.c
+  hashmap.h
+  hashmap.LICENSE
 
 docs/language.ds
 ```
 
-`libs/hashmap/` is a temporary staging location for the owned hashmap code. It is okay at the beginning, but the long-term architecture should absorb the useful implementation into `src/core/` behind the `DsMap` API so maps feel like a native part of the `ds` runtime, not a separate library subtree.
+The owned hashmap implementation is absorbed into `src/runtime/` and is private to the `DsMap` bridge in `src/runtime.c`. Other compiler, VM, and emitter code should use `DsMap` only, so maps feel like a native part of the `ds` runtime rather than a separate library subtree.
 
 This layout is only a starting point. The actual implementation may evolve.
 

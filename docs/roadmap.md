@@ -154,8 +154,8 @@ bash file.sh
 - Implement `DsValue` for the first runtime values: `null`, `bool`, `int`, and `string`.
 - Implement minimal `DsStr` and `DsString` support for borrowed string views and owned dynamic strings.
 - Implement minimal `DsArray` support where needed for internal compiler/runtime lists.
-- Implement `DsMap` as the project-owned map wrapper, temporarily backed by `libs/hashmap` where appropriate.
-- Document that `libs/hashmap` is a staging location and that the implementation must later be absorbed into `src/core` as normal `ds` runtime code.
+- Implement `DsMap` as the project-owned map wrapper, with raw hashmap details hidden behind the runtime boundary.
+- Keep map implementation code under a project-owned runtime/core path instead of exposing a separate library subtree to the rest of the codebase.
 - Implement basic process execution for command statements.
 - Execute `let`, basic expressions, `if/else`, and simple command statements in VM mode.
 - Add bytecode dump output for debugging.
@@ -194,8 +194,8 @@ ds bytecode file.ds
 
 - Review and clean AST/HIR boundaries.
 - Review and clean runtime ownership rules for strings, arrays, maps, and values.
-- Review the `DsMap` wrapper over `libs/hashmap` and remove direct hashmap dependency leaks from unrelated code.
-- Decide which pieces of the staged hashmap implementation should be absorbed into `src/core`.
+- Review the `DsMap` wrapper over the absorbed hashmap implementation and remove direct hashmap dependency leaks from unrelated code.
+- Keep the absorbed hashmap implementation private to the runtime/core boundary.
 - Start the absorption if the `DsMap` API and ownership rules are stable enough; otherwise record the exact remaining blockers.
 - Standardize source location and diagnostic APIs.
 - Standardize golden test fixture layout.

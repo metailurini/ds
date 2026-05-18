@@ -50,10 +50,6 @@ static bool is_env_name_text(DsStr name) {
     return true;
 }
 
-static bool is_stdlib_namespace(DsStr name) {
-    return str_eq(name, "file") || str_eq(name, "dir") || str_eq(name, "path") || str_eq(name, "cmd") || str_eq(name, "env");
-}
-
 static bool split_member_name(DsStr name, DsStr *ns, DsStr *member) {
     for (size_t i = 0; i < name.len; i++) {
         if (name.data[i] == '.') {
@@ -67,34 +63,18 @@ static bool split_member_name(DsStr name, DsStr *ns, DsStr *member) {
     return false;
 }
 
-static bool is_stdlib_name(DsStr name) {
-    DsStr ns = {0}, member = {0};
-    if (split_member_name(name, &ns, &member)) return is_stdlib_namespace(ns);
-    return str_eq(name, "glob") || str_eq(name, "glob!") || str_eq(name, "lines");
-}
-
-static bool stdlib_is_statement_only(DsStr name) {
-    return str_eq(name, "file.write") || str_eq(name, "file.append") || str_eq(name, "cmd.require") ||
-           str_eq(name, "env.set") || str_eq(name, "env.unset");
-}
-
-static bool stdlib_return_kind(DsStr name, SymKind *kind) {
-    if (str_eq(name, "file.exists") || str_eq(name, "file.is_file") || str_eq(name, "dir.exists") || str_eq(name, "cmd.exists")) { *kind = SYM_BOOL; return true; }
-    if (str_eq(name, "file.read") || str_eq(name, "path.cwd") || str_eq(name, "path.join") || str_eq(name, "path.basename") || str_eq(name, "path.dirname") || str_eq(name, "path.ext") || str_eq(name, "env.get")) { *kind = SYM_STRING; return true; }
-    if (str_eq(name, "glob") || str_eq(name, "glob!") || str_eq(name, "lines")) { *kind = SYM_ARRAY; return true; }
-    if (stdlib_is_statement_only(name)) { *kind = SYM_UNKNOWN; return true; }
+static bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind) {
+    if (!helper) return false;
+    switch (helper->return_kind) {
+        case DS_STDLIB_RETURN_BOOL: *kind = SYM_BOOL; return true;
+        case DS_STDLIB_RETURN_INT: *kind = SYM_INT; return true;
+        case DS_STDLIB_RETURN_STRING: *kind = SYM_STRING; return true;
+        case DS_STDLIB_RETURN_ARRAY: *kind = SYM_ARRAY; return true;
+        case DS_STDLIB_RETURN_MAP: *kind = SYM_MAP; return true;
+        case DS_STDLIB_RETURN_COMMAND_RESULT: *kind = SYM_COMMAND_RESULT; return true;
+        case DS_STDLIB_RETURN_STATEMENT_ONLY: *kind = SYM_UNKNOWN; return true;
+    }
     return false;
-}
-
-static bool stdlib_arity_ok(DsStr name, size_t argc, size_t *min, size_t *max) {
-    *min = *max = 0;
-    if (str_eq(name, "path.cwd")) { *min = *max = 0; }
-    else if (str_eq(name, "path.join")) { *min = 1; *max = (size_t)-1; }
-    else if (str_eq(name, "file.write") || str_eq(name, "file.append") || str_eq(name, "env.set")) { *min = *max = 2; }
-    else if (str_eq(name, "env.get")) { *min = 1; *max = 2; }
-    else if (str_eq(name, "file.exists") || str_eq(name, "file.is_file") || str_eq(name, "file.read") || str_eq(name, "dir.exists") || str_eq(name, "path.basename") || str_eq(name, "path.dirname") || str_eq(name, "path.ext") || str_eq(name, "cmd.exists") || str_eq(name, "cmd.require") || str_eq(name, "env.unset") || str_eq(name, "glob") || str_eq(name, "glob!") || str_eq(name, "lines")) { *min = *max = 1; }
-    else return false;
-    return argc >= *min && (*max == (size_t)-1 || argc <= *max);
 }
 
 static DsStr str_clone(DsStr s) {
@@ -440,24 +420,24 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
             for (size_t i = 0; i < expr->as.call.args.len; i++) {
                 SymKind arg_kind = SYM_UNKNOWN;
                 lower_expr_vec_push(&out->as.call.args, lower_expr(lower, expr->as.call.args.items[i], &arg_kind));
-                if (is_stdlib_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+                if (ds_stdlib_is_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
                     ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library helper `%.*s` expects string arguments in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
                 } else if (arg_kind != SYM_STRING && arg_kind != SYM_INT && arg_kind != SYM_BOOL && arg_kind != SYM_UNKNOWN) {
                     ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library arguments must be scalar values in v0.11.0");
                 }
             }
-            if (is_stdlib_name(expr->as.call.name)) {
+            const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(expr->as.call.name);
+            if (stdlib_helper) {
                 SymKind ret = SYM_UNKNOWN;
-                size_t min = 0, max = 0;
-                if (!stdlib_return_kind(expr->as.call.name, &ret)) {
+                if (!stdlib_return_kind(stdlib_helper, &ret)) {
                     ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
-                } else if (!stdlib_arity_ok(expr->as.call.name, expr->as.call.args.len, &min, &max)) {
-                    if (min == max) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, min, expr->as.call.args.len);
-                    else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, min, max, expr->as.call.args.len);
-                } else if (stdlib_is_statement_only(expr->as.call.name)) {
+                } else if (!ds_stdlib_arity_ok(stdlib_helper, expr->as.call.args.len)) {
+                    if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
+                    else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, stdlib_helper->max_arity, expr->as.call.args.len);
+                } else if (stdlib_helper->statement_only) {
                     ds_diag_error(lower->diag, expr->span, "helper `%.*s` is statement-only in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
                 }
-                if ((str_eq(expr->as.call.name, "env.get") || str_eq(expr->as.call.name, "env.set") || str_eq(expr->as.call.name, "env.unset")) && expr->as.call.args.len > 0 && expr->as.call.args.items[0]->kind == DS_EXPR_STRING) {
+                if (stdlib_helper->validates_env_name && expr->as.call.args.len > 0 && expr->as.call.args.items[0]->kind == DS_EXPR_STRING) {
                     DsStr decoded = {0};
                     if (decode_string_text(expr->as.call.args.items[0]->as.text, &decoded)) {
                         if (!is_env_name_text(decoded)) ds_diag_error(lower->diag, expr->as.call.args.items[0]->span, "invalid environment variable name `%.*s` in v0.11.0", (int)decoded.len, decoded.data);
@@ -466,6 +446,11 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
                 }
                 if (expr->as.call.args.len > 0) validate_glob_pattern_arg(lower, expr->as.call.name, expr->as.call.args.items[0]);
                 *kind_out = ret;
+                return out;
+            }
+            DsStr ns = {0}, member = {0};
+            if (split_member_name(expr->as.call.name, &ns, &member) && ds_stdlib_is_namespace(ns)) {
+                ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
                 return out;
             }
             ds_diag_error(lower->diag, expr->span, "function calls do not produce values in v0.9.0");
@@ -779,22 +764,22 @@ static bool expr_is_literal_default(const DsExpr *expr) {
 static DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CALL, stmt->span);
     out->as.call_stmt.name = str_clone(stmt->as.call_stmt.name);
-    bool stdlib = is_stdlib_name(stmt->as.call_stmt.name);
+    const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(stmt->as.call_stmt.name);
+    bool stdlib = stdlib_helper != NULL;
     DsLowerFn *fn = stdlib ? NULL : find_function(lower->program, stmt->as.call_stmt.name);
-    if (stdlib) {
+    if (stdlib_helper) {
         SymKind ret = SYM_UNKNOWN;
-        size_t min = 0, max = 0;
-        if (!stdlib_return_kind(stmt->as.call_stmt.name, &ret)) {
+        if (!stdlib_return_kind(stdlib_helper, &ret)) {
             ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
-        } else if (!stdlib_arity_ok(stmt->as.call_stmt.name, stmt->as.call_stmt.args.len, &min, &max)) {
-            if (min == max) ds_diag_error(lower->diag, stmt->span, "helper `%.*s` expects %zu arguments but got %zu", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data, min, stmt->as.call_stmt.args.len);
-            else ds_diag_error(lower->diag, stmt->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data, min, max, stmt->as.call_stmt.args.len);
-        } else if (!stdlib_is_statement_only(stmt->as.call_stmt.name)) {
+        } else if (!ds_stdlib_arity_ok(stdlib_helper, stmt->as.call_stmt.args.len)) {
+            if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, stmt->span, "helper `%.*s` expects %zu arguments but got %zu", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data, stdlib_helper->min_arity, stmt->as.call_stmt.args.len);
+            else ds_diag_error(lower->diag, stmt->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data, stdlib_helper->min_arity, stdlib_helper->max_arity, stmt->as.call_stmt.args.len);
+        } else if (!stdlib_helper->statement_only) {
             ds_diag_error(lower->diag, stmt->span, "helper `%.*s` returns a value in v0.11.0; assign it with `let` or use it in an expression", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
         }
     } else if (!fn) {
         DsStr ns = {0}, member = {0};
-        if (split_member_name(stmt->as.call_stmt.name, &ns, &member) && is_stdlib_namespace(ns)) ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+        if (split_member_name(stmt->as.call_stmt.name, &ns, &member) && ds_stdlib_is_namespace(ns)) ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
         else if (split_member_name(stmt->as.call_stmt.name, &ns, &member)) ds_diag_error(lower->diag, stmt->span, "only `push` collection method is supported in v0.10.0");
         else ds_diag_error(lower->diag, stmt->span, "unknown function `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
     } else if (stmt->as.call_stmt.args.len < fn->required_count || stmt->as.call_stmt.args.len > fn->params.len) {
@@ -816,7 +801,7 @@ static DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
                           "passing collection values to functions is deferred in v0.10.0; index or bind scalar values instead");
         }
     }
-    if (stdlib && (str_eq(stmt->as.call_stmt.name, "env.set") || str_eq(stmt->as.call_stmt.name, "env.unset")) && stmt->as.call_stmt.args.len > 0 && stmt->as.call_stmt.args.items[0]->kind == DS_EXPR_STRING) {
+    if (stdlib_helper && stdlib_helper->validates_env_name && stmt->as.call_stmt.args.len > 0 && stmt->as.call_stmt.args.items[0]->kind == DS_EXPR_STRING) {
         DsStr decoded = {0};
         if (decode_string_text(stmt->as.call_stmt.args.items[0]->as.text, &decoded)) {
             if (!is_env_name_text(decoded)) ds_diag_error(lower->diag, stmt->as.call_stmt.args.items[0]->span, "invalid environment variable name `%.*s` in v0.11.0", (int)decoded.len, decoded.data);
@@ -849,7 +834,7 @@ static DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_sc
 
 static void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
     if (stmt->kind != DS_STMT_FN) return;
-    if (is_stdlib_name(stmt->as.fn_stmt.name) || is_stdlib_namespace(stmt->as.fn_stmt.name)) {
+    if (ds_stdlib_is_name(stmt->as.fn_stmt.name) || ds_stdlib_is_namespace(stmt->as.fn_stmt.name)) {
         ds_diag_error(lower->diag, stmt->span,
                       "function `%.*s` conflicts with a v0.11.0 standard-library helper name",
                       (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);

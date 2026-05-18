@@ -1590,6 +1590,12 @@ static char *path_join_parts(Vm *vm, Instr *ins) {
 static bool vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     *out = ds_value_null();
     const char *name = ins->name ? ins->name : "";
+    DsStr helper_name = {(char *)name, strlen(name)};
+    const DsStdlibHelper *helper = ds_stdlib_lookup(helper_name);
+    if (!helper) {
+        ds_diag_error(vm->diag, ins->span, "unknown standard-library helper `%s`", name);
+        return false;
+    }
     if (strcmp(name, "file.exists") == 0 || strcmp(name, "file.is_file") == 0 || strcmp(name, "dir.exists") == 0) {
         char *path = vm_string_arg_dup(vm, ins, 0); if (!path) return false;
         struct stat st;

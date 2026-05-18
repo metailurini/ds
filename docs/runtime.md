@@ -183,9 +183,9 @@ Use it for:
 - generated symbol mapping;
 - runtime map values later.
 
-The project currently keeps the owned hashmap support code under `libs/hashmap/` as a temporary staging location. That is acceptable while `ds` is still docs-first and architecture-first, but it must not stay as a separate-feeling library forever.
+The owned hashmap support code has been absorbed into `src/runtime/hashmap.c` and `src/runtime/hashmap.h`. It remains a private implementation detail of `DsMap`; parser, lowering, VM, Bash emission, and public internal headers should not include the raw hashmap header or call `hm_*` APIs directly.
 
-Internal code should depend on `DsMap`, not directly on the hashmap API. Later, once the runtime shape is clearer, the hashmap implementation should be absorbed into `src/core/` as normal `ds` runtime code.
+Internal code should depend on `DsMap`, not directly on the hashmap API. `src/runtime.c` is the bridge that translates the project-owned `DsMap` operations into raw hashmap operations and owns value cleanup rules.
 
 Suggested shape:
 
@@ -224,8 +224,8 @@ They are intentionally small and internal-only:
 - `DsArray` is a minimal growable pointer vector used for runtime/compiler
   lists in this milestone.
 - `DsMap` is the project-owned map wrapper used for VM variable storage. It
-  copies keys, owns stored `DsValue` values, and does not expose the staged
-  `libs/hashmap` API to the rest of the codebase.
+  copies keys, owns stored `DsValue` values, and does not expose the private
+  raw hashmap API to the rest of the codebase.
 
 The VM stores variables in a small runtime scope stack. The root scope holds
 top-level declarations. Each lowered block pushes a child scope and pops it
@@ -263,11 +263,11 @@ ownership rules explicit enough for future features to reuse safely:
   frees all keys and values while keeping capacity for reuse; `ds_map_free()`
   clears and releases storage.
 
-The staged `libs/hashmap` code is now used behind the `DsMap` runtime wrapper.
+The absorbed hashmap code is now used behind the `DsMap` runtime wrapper.
 Normal frontend, lowering, VM, and Bash-emitter code should still depend only on
-`DsMap` and its small API, not on the staged hashmap API directly. Full
-absorption into `src/core/` is still deferred until a cleanup milestone, but the
-runtime no longer carries a separate linear-search map implementation.
+`DsMap` and its small API, not on the raw hashmap API directly. `src/runtime.c`
+is the bridge between `DsMap` ownership rules and the private implementation in
+`src/runtime/hashmap.c`.
 
 
 ## Implemented v0.5.0 argv binding
@@ -283,11 +283,10 @@ The emitted Bash path does not use the C runtime. It emits a standalone Bash arg
 parser from the same lowered contract and binds parsed values to the existing
 `__ds_` variable namespace before the emitted body.
 
-## Hashmap absorption plan
+## Hashmap absorption
 
-The hashmap support code from the owned `hashmap` project is included in this repository under `libs/hashmap/` for now.
-
-This directory is a temporary integration stage, not the long-term architecture.
+The hashmap support code from the owned `hashmap` project is included in this
+repository under `src/runtime/` as normal project-owned runtime code.
 
 Observed useful properties:
 
@@ -304,67 +303,47 @@ Observed useful properties:
 - MIT license;
 - blackbox tests passed during review.
 
-Current temporary shape:
+Current absorbed shape:
 
 ```txt
-libs/hashmap/
+src/runtime/
   hashmap.c
   hashmap.h
-  LICENSE
+  hashmap.LICENSE
 
-src/core/
-  ds_map.c
-  ds_map.h
+src/runtime.c      # DsMap bridge and value ownership rules
 ```
 
-Long-term absorbed shape:
+Possible later split if runtime files continue to grow:
 
 ```txt
 src/core/
   map.c
-  map.h
-  map_internal.h      # only if needed
+  map_internal.h
 ```
 
-The exact filenames may change, but the long-term result should feel like `ds` owns the map implementation directly, not like the runtime depends on a separate library subtree.
-
-The transition should happen in stages:
-
-- keep `libs/hashmap/` while the project is being bootstrapped;
-- create `src/core/ds_map.*` as the only API used by the rest of `ds`;
-- add tests around `DsMap` behavior, ownership, iteration, deletion, and error cases;
-- migrate useful hashmap implementation pieces into `src/core/`;
-- rename symbols and files to match `ds` runtime naming;
-- remove direct references to `libs/hashmap/` from normal runtime code;
-- keep license/attribution notes if required by the original files;
-- delete `libs/hashmap/` once the absorbed `DsMap` implementation is complete.
-
-During the temporary stage, the intended layering is:
+The intended layering is:
 
 ```txt
 ds frontend / semantic / VM / emitter
-  -> src/core/ds_map.*
-    -> libs/hashmap/*
+  -> DsMap API in include/ds.h
+    -> src/runtime.c
+      -> src/runtime/hashmap.*
 ```
 
-After absorption, the intended layering is:
-
-```txt
-ds frontend / semantic / VM / emitter
-  -> src/core/map.*
-```
-
-`ds` should wrap the current `libs/hashmap` code with `DsMap` so the rest of the codebase is protected during the transition.
+`ds` wraps raw hashmap operations with `DsMap` so the rest of the codebase is
+protected from implementation naming, allocation, key-copying, and value-freeing
+details.
 
 Reasons to wrap it:
 
 - consistent `ds` ownership rules;
-- easier absorption into the `ds` runtime later;
+- easier future movement between `src/runtime/` and `src/core/` if needed;
 - simpler API for `ds` internals;
 - integration with `DsStr`, `DsArena`, and diagnostics;
 - avoiding hashmap-library naming leakage throughout the project.
 
-The hashmap code is already included under `libs/hashmap/`. Keep its license and original project files intact while it is staged there. When absorbing it into `src/core/`, do the move intentionally in a cleanup version so tests can prove that behavior did not change.
+The original license text is preserved in `src/runtime/hashmap.LICENSE`.
 
 ## `DsArena`
 
