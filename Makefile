@@ -5,8 +5,10 @@ CPPFLAGS ?= -Iinclude
 SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/lower.c src/command.c src/runtime.c src/vm.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
 BIN := ds
+TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10
+TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
-.PHONY: all clean check smoke test test-v0-4 test-v0-5 test-v0-6 test-v0-7 test-v0-8 test-v0-9 test-v0-10 asan ubsan
+.PHONY: all clean check smoke test $(TEST_TARGETS) asan ubsan
 
 all: $(BIN)
 
@@ -24,37 +26,13 @@ check: $(BIN)
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
 
 test: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_1/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_2/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_3/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_4/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_5/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_6/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_7/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_8/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_9/run.sh
-	DS_SKIP_BUILD=1 ./tests/v0_10/run.sh
+	@for version in $(TEST_VERSIONS); do \
+		dir=$$(printf '%s' "$$version" | tr '-' '_'); \
+		DS_SKIP_BUILD=1 ./tests/v$$dir/run.sh || exit $$?; \
+	done
 
-test-v0-4: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_4/run.sh
-
-test-v0-5: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_5/run.sh
-
-test-v0-6: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_6/run.sh
-
-test-v0-7: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_7/run.sh
-
-test-v0-8: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_8/run.sh
-
-test-v0-9: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_9/run.sh
-
-test-v0-10: $(BIN)
-	DS_SKIP_BUILD=1 ./tests/v0_10/run.sh
+$(TEST_TARGETS): $(BIN)
+	DS_SKIP_BUILD=1 ./tests/v$(subst -,_,$(patsubst test-v%,%,$@))/run.sh
 
 asan:
 	$(MAKE) clean
