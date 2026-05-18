@@ -129,6 +129,14 @@ Important files:
 - `docs/milestones/v0.7.0-test-plan.md`
 - `docs/milestones/v0.8.0-spec.md`
 - `docs/milestones/v0.8.0-test-plan.md`
+- `docs/milestones/v0.9.0-spec.md`
+- `docs/milestones/v0.9.0-test-plan.md`
+- `docs/milestones/v0.10.0-spec.md`
+- `docs/milestones/v0.10.0-test-plan.md`
+- `docs/milestones/v0.11.0-spec.md`
+- `docs/milestones/v0.11.0-test-plan.md`
+- `docs/milestones/v0.12.0-spec.md`
+- `docs/milestones/v0.12.0-test-plan.md`
 
 ## Editor / LSP setup
 
@@ -138,7 +146,7 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass; `v0.11.0` implementation and tests are complete for the scoped shell-oriented standard library pass.
+Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass; `v0.11.0` implementation and tests are complete for the scoped shell-oriented standard library pass; `v0.12.0` now has a planned cleanup milestone spec and test plan for standard-library/type consistency.
 
 The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, the `v0.8.0` command-model/process-wrapper cleanup, the scoped `v0.9.0` user-defined functions pass, the initial `v0.10.0` collection/array-loop implementation, and the initial `v0.11.0` shell-oriented standard library implementation:
 
