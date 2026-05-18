@@ -606,16 +606,16 @@ Parity tests should compare:
 
 Debug commands are not just nice-to-have. They are part of making the language easy to develop.
 
-Planned debug commands:
+Implemented and planned debug commands:
 
 ```sh
 ds tokens file.ds
 ds ast file.ds
 ds hir file.ds
 ds bytecode file.ds
-ds imports file.ds
 ds run --trace-cmd file.ds
 ds run --trace-vm file.ds
+ds imports file.ds
 ```
 
 These commands should make it easy to understand where a bug lives:
@@ -627,6 +627,14 @@ These commands should make it easy to understand where a bug lives:
 - bytecode generation;
 - VM execution;
 - Bash emission.
+
+As of `v0.13.0`, `ds hir` prints the composed lowered program, `ds bytecode`
+includes script/function/constant/instruction metadata with source markers, and
+`ds run --trace-cmd` / `ds run --trace-vm` emit deterministic trace lines to
+stderr without changing script stdout or normal execution semantics. Emitted
+Bash remains standalone and supports command tracing with `DS_TRACE_CMD=1` plus
+source-located command failure messages for plain command statements. `ds
+imports` remains a future debug command.
 
 ## Suggested C project layout
 

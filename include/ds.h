@@ -529,6 +529,7 @@ void ds_ast_free(DsAst *ast);
 DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag);
 bool ds_lower_validate(const DsAst *ast, DsDiag *diag);
 void ds_lower_program_free(DsLowerProgram *program);
+bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out);
 
 /* Shared command helpers. */
 void ds_word_vec_init(DsWordVec *vec);
@@ -586,11 +587,17 @@ void ds_map_clear(DsMap *map);
 void ds_map_free(DsMap *map);
 
 /* Bytecode and VM backend. */
+typedef struct {
+    bool trace_cmd;
+    bool trace_vm;
+} DsVmOptions;
+
 bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag);
 bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *program, FILE *out, DsDiag *diag);
 int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag);
 int ds_vm_run_program(const DsSource *source, const DsLowerProgram *program, DsDiag *diag);
 int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag);
+int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag, DsVmOptions options);
 
 /* Utility allocation helpers. These abort on allocation failure. */
 char *ds_str_dup_range(const char *data, size_t len);

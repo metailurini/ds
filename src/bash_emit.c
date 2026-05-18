@@ -160,6 +160,16 @@ static void bash_single_quote(EmitBuf *out, const char *data, size_t len) {
     buf_append(out, "'");
 }
 
+static void emit_source_loc(EmitBuf *out, const DsSource *fallback, DsSpan span) {
+    const DsSource *source = span.source ? span.source : fallback;
+    const char *path = source && source->path ? source->path : "<source>";
+    char buf[64];
+    bash_single_quote(out, path, strlen(path));
+    buf_append(out, ":");
+    snprintf(buf, sizeof(buf), "%d:%d", span.start.line, span.start.column);
+    buf_append(out, buf);
+}
+
 static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
     buf_append(&e->out, "__ds_usage() {\n");
     buf_append(&e->out, "  cat <<'__DS_USAGE__'\n");
@@ -641,6 +651,8 @@ static bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *o
 }
 
 static bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span) {
+    buf_append(out, " ");
+    emit_source_loc(out, e->source, span);
     for (size_t i = 0; i < words->len; i++) {
         buf_append(out, " ");
         if (!emit_command_word(e, words->items[i], out)) return false;
@@ -659,6 +671,10 @@ static void emit_collection_helpers(BashEmitter *e) {
 
 static void emit_stdlib_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_stdlib_helpers_source());
+}
+
+static void emit_debug_helpers(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_debug_helpers_source());
 }
 
 static bool expr_uses_run(const DsLowerExpr *expr) {
@@ -743,6 +759,29 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_run(stmt->as.for_stmt.iterable) || stmt_uses_run(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_PUSH: return expr_uses_run(stmt->as.push_stmt.value);
     }
+    return false;
+}
+
+static bool stmt_has_command(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_CMD: return true;
+        case DS_LOWER_STMT_LET: return stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN;
+        case DS_LOWER_STMT_IF: return stmt_has_command(stmt->as.if_stmt.then_branch) || stmt_has_command(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_has_command(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY: return stmt_has_command(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_PUSH:
+            return false;
+    }
+    return false;
+}
+
+static bool program_has_command(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (stmt_has_command(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_has_command(program->statements.items[i])) return true;
     return false;
 }
 
@@ -967,12 +1006,22 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
 
         case DS_LOWER_STMT_CMD:
             emit_indent(&e->out, indent);
+            buf_append(&e->out, "__ds_trace_cmd ");
+            emit_source_loc(&e->out, e->source, stmt->span);
+            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
+                buf_append(&e->out, " ");
+                if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
+            }
+            buf_append(&e->out, "\n");
+            emit_indent(&e->out, indent);
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
                 if (i > 0) buf_append(&e->out, " ");
                 if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
             }
             if (!emit_redirect(e, &stmt->as.cmd_stmt.redirect, &e->out, stmt->span)) return false;
-            buf_append(&e->out, "\n\n");
+            buf_append(&e->out, " || __ds_fail ");
+            emit_source_loc(&e->out, e->source, stmt->span);
+            buf_append(&e->out, " \"$?\"\n\n");
             return true;
 
         case DS_LOWER_STMT_CALL:
@@ -1065,6 +1114,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_map_guard = program_uses_map_literal(lowered);
     bool needs_collection_helpers = program_uses_collection_index(lowered);
     bool needs_stdlib = program_uses_stdlib(lowered);
+    bool needs_debug = program_has_command(lowered);
     if (needs_map_guard || needs_stdlib) {
         buf_append(&e.out, "if (( BASH_VERSINFO[0] < 4 )); then\n");
         if (needs_map_guard) buf_append(&e.out, "  echo \"${0##*/}: error: v0.10.0 maps require Bash 4 or newer\" >&2\n");
@@ -1085,6 +1135,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     }
 
     emit_script_args(&e, lowered);
+    if (needs_debug) emit_debug_helpers(&e);
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
     if (needs_collection_helpers) emit_collection_helpers(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);

@@ -90,6 +90,7 @@ typedef struct {
     VmScope *scope;
     DsDiag *diag;
     const DsSource *source;
+    DsVmOptions options;
     size_t *return_ips;
     size_t return_len;
     size_t return_cap;

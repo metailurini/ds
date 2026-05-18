@@ -476,6 +476,31 @@ static const char *op_name(OpCode op) {
     return "NOP";
 }
 
+static void print_trace_escaped(FILE *out, const char *data) {
+    fputc('"', out);
+    for (const char *p = data ? data : ""; *p; p++) {
+        if (*p == '\\' || *p == '"') fputc('\\', out);
+        if (*p == '\n') fputs("\\n", out);
+        else if (*p == '\t') fputs("\\t", out);
+        else fputc(*p, out);
+    }
+    fputc('"', out);
+}
+
+static const char *span_path(const DsSource *fallback, DsSpan span) {
+    const DsSource *source = span.source ? span.source : fallback;
+    return source && source->path ? source->path : "<source>";
+}
+
+static void trace_vm_instr(Vm *vm, size_t ip, const Instr *ins) {
+    if (!vm->options.trace_vm) return;
+    fprintf(stderr, "trace: vm ip=%zu op=%s", ip, op_name(ins->op));
+    if (ins->dst >= 0) fprintf(stderr, " dst=r%d", ins->dst);
+    if (ins->name) fprintf(stderr, " name=%s", ins->name);
+    if (ins->target >= 0) fprintf(stderr, " target=%d", ins->target);
+    fprintf(stderr, " @ %s:%d:%d\n", span_path(vm->source, ins->span), ins->span.start.line, ins->span.start.column);
+}
+
 static void print_escaped(FILE *out, const char *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         char c = data[i];
@@ -1192,6 +1217,17 @@ static void process_spec_free(VmProcessSpec *spec) {
     argv_free(&spec->argv);
 }
 
+static void trace_command_spec(Vm *vm, const VmProcessSpec *spec) {
+    if (!vm->options.trace_cmd || spec->argv.len == 0) return;
+    fprintf(stderr, "trace: cmd %s:%d:%d:", span_path(vm->source, spec->span), spec->span.start.line, spec->span.start.column);
+    for (size_t i = 0; i < spec->argv.len; i++) {
+        fputc(' ', stderr);
+        print_trace_escaped(stderr, spec->argv.items[i]);
+    }
+    if (spec->redirect.kind != DS_REDIRECT_NONE) fputs(" <redirect>", stderr);
+    fputc('\n', stderr);
+}
+
 static bool fd_set_cloexec(int fd) {
     int flags = fcntl(fd, F_GETFD);
     if (flags < 0) return false;
@@ -1244,6 +1280,8 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     FILE *err_fp = NULL;
     int exec_error_pipe[2] = {-1, -1};
     spec->exec_error_fd = -1;
+
+    trace_command_spec(vm, spec);
 
     if (!spec->capture && spec->redirect.kind != DS_REDIRECT_NONE) {
         if (!open_redirect_target(vm, &spec->redirect, &redirect_fd)) return false;
@@ -1327,6 +1365,9 @@ static int run_command(Vm *vm, Instr *ins) {
     VmProcessResult result;
     bool ok = process_execute(vm, &spec, &result);
     int code = ok ? result.code : 1;
+    if (ok && code != 0 && !vm->diag->has_error) {
+        ds_diag_error(vm->diag, ins->span, "command `%s` failed with exit %d", spec.argv.len > 0 ? spec.argv.items[0] : "<command>", code);
+    }
     process_result_free(&result);
     process_spec_free(&spec);
     return code;
@@ -1387,7 +1428,7 @@ static void set_reg(Vm *vm, int reg, DsValue value) {
     vm->regs[reg] = value;
 }
 
-int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag) {
+int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag, DsVmOptions options) {
     (void)source;
     Program p;
     if (!compile_program(lowered, &p, diag)) {
@@ -1398,6 +1439,7 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
     vm.program = &p;
     vm.diag = diag;
     vm.source = source;
+    vm.options = options;
     vm.scope = scope_new(NULL);
     ensure_regs(&vm);
 
@@ -1408,6 +1450,7 @@ int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered
     size_t ip = 0;
     while (ip < p.instr_len) {
         Instr *ins = &p.instrs[ip];
+        trace_vm_instr(&vm, ip, ins);
         switch (ins->op) {
             case OP_LOAD_CONST:
                 set_reg(&vm, ins->dst, ds_value_copy(&p.consts[ins->a]));
@@ -1588,6 +1631,11 @@ done:
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;
+}
+
+int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag) {
+    DsVmOptions options = {0};
+    return ds_vm_run_program_args_options(source, lowered, argc, argv, diag, options);
 }
 
 int ds_vm_run_program(const DsSource *source, const DsLowerProgram *lowered, DsDiag *diag) {

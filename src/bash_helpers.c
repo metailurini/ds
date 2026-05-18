@@ -1,16 +1,37 @@
 #include "bash_helpers.h"
 
+const char *ds_bash_debug_helpers_source(void) {
+    return
+        "__ds_trace_cmd() {\n"
+        "  [[ \"${DS_TRACE_CMD:-}\" == 1 ]] || return 0\n"
+        "  local __ds_loc=$1\n"
+        "  shift\n"
+        "  printf 'trace: cmd %s:' \"$__ds_loc\" >&2\n"
+        "  local __ds_arg\n"
+        "  for __ds_arg in \"$@\"; do printf ' %q' \"$__ds_arg\" >&2; done\n"
+        "  printf '\\n' >&2\n"
+        "}\n"
+        "__ds_fail() {\n"
+        "  local __ds_loc=$1 __ds_code=$2\n"
+        "  echo \"${0##*/}: error: command failed at $__ds_loc with exit $__ds_code\" >&2\n"
+        "  exit \"$__ds_code\"\n"
+        "}\n\n";
+}
+
 const char *ds_bash_command_result_helpers_source(void) {
     return
         "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_capture() {\n"
         "  local __ds_prefix=$1\n"
         "  shift\n"
+        "  local __ds_loc=$1\n"
+        "  shift\n"
         "  local __ds_tmpdir\n"
         "  __ds_tmpdir=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n"
         "  local __ds_stdout=\"$__ds_tmpdir/stdout\"\n"
         "  local __ds_stderr=\"$__ds_tmpdir/stderr\"\n"
         "  set +e\n"
+        "  __ds_trace_cmd \"$__ds_loc\" \"$@\"\n"
         "  \"$@\" >\"$__ds_stdout\" 2>\"$__ds_stderr\"\n"
         "  local __ds_code=$?\n"
         "  set -e\n"

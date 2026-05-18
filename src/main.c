@@ -40,9 +40,11 @@ static void usage(FILE *out) {
     fputs("Usage:\n", out);
     fputs("  ds <file.ds> [args...]\n", out);
     fputs("  ds run <file.ds> [args...]\n", out);
+    fputs("  ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]\n", out);
     fputs("  ds tokens <file.ds>\n", out);
     fputs("  ds ast <file.ds>\n", out);
     fputs("  ds check <file.ds>\n", out);
+    fputs("  ds hir <file.ds>\n", out);
     fputs("  ds bytecode <file.ds>\n", out);
     fputs("  ds emit bash <file.ds> -o <file.sh>\n", out);
 }
@@ -326,7 +328,7 @@ static bool cli_load_lower(const char *path, CliProgram *program) {
 static bool is_direct_script_arg(const char *arg) {
     return strcmp(arg, "run") != 0 && strcmp(arg, "tokens") != 0 &&
            strcmp(arg, "ast") != 0 && strcmp(arg, "check") != 0 &&
-           strcmp(arg, "bytecode") != 0 && strcmp(arg, "emit") != 0;
+           strcmp(arg, "hir") != 0 && strcmp(arg, "bytecode") != 0 && strcmp(arg, "emit") != 0;
 }
 
 static bool looks_like_script_path(const char *arg) {
@@ -361,9 +363,18 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "run") == 0) {
-        if (argc < 3) return usage_error("expected `ds run <file.ds> [args...]`");
+        if (argc < 3) return usage_error("expected `ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]`");
+        DsVmOptions options = {0};
+        int path_index = 2;
+        while (path_index < argc && strncmp(argv[path_index], "--", 2) == 0) {
+            if (strcmp(argv[path_index], "--trace-cmd") == 0) options.trace_cmd = true;
+            else if (strcmp(argv[path_index], "--trace-vm") == 0) options.trace_vm = true;
+            else return usage_error("unknown `ds run` trace flag");
+            path_index++;
+        }
+        if (path_index >= argc) return usage_error("expected script path after `ds run` flags");
         CliProgram program;
-        int rc = cli_load_lower(argv[2], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 3, argv + 3, &program.diag) : 1;
+        int rc = cli_load_lower(argv[path_index], &program) ? ds_vm_run_program_args_options(&program.source, program.lowered, argc - path_index - 1, argv + path_index + 1, &program.diag, options) : 1;
         cli_program_free(&program);
         return rc;
     }
@@ -392,6 +403,13 @@ int main(int argc, char **argv) {
 
     if (strcmp(cmd, "check") == 0) {
         int rc = cli_load_lower(path, &program) ? 0 : 1;
+        cli_program_free(&program);
+        return rc;
+    }
+
+    if (strcmp(cmd, "hir") == 0) {
+        int rc = cli_load_lower(path, &program) ? 0 : 1;
+        if (rc == 0 && !ds_hir_dump_program(program.lowered, stdout)) rc = 1;
         cli_program_free(&program);
         return rc;
     }

@@ -131,6 +131,15 @@ still decides which helpers are needed and where to emit them. This keeps helper
 body review separate from expression/statement rendering while preserving the
 reserved `__ds_` helper prefix and standalone-script requirement.
 
+`v0.13.0` adds debugging/tracing runtime surfaces without adding source-language
+syntax. The VM can trace command execution and instruction execution to stderr
+through `DsVmOptions`; traces are intentionally observational and must not change
+script stdout, exit status, captured-command behavior, or plain-command
+fail-fast semantics. The Bash backend emits small standalone `__ds_` debug
+helpers only for command-using scripts so `DS_TRACE_CMD=1 bash script.sh` can
+trace expanded command argv and plain command failures can include embedded
+source markers without requiring `ds` at Bash runtime.
+
 ## `DsStr`
 
 `DsStr` is a borrowed string view.
