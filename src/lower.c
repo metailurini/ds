@@ -497,6 +497,9 @@ static DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
                 memset(&lowered, 0, sizeof(lowered));
                 lowered.key = map_key_decode(entry);
                 lowered.span = entry->span;
+                if (lowered.key.len == 0) {
+                    ds_diag_error(lower->diag, entry->span, "empty map keys are deferred in v0.10.0 because emitted Bash cannot represent them safely");
+                }
                 if (map_has_duplicate_key(&out->as.map.entries, lowered.key)) {
                     ds_diag_error(lower->diag, entry->span, "duplicate map key `%.*s`", (int)lowered.key.len, lowered.key.data);
                 }

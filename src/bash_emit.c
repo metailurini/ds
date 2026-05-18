@@ -474,11 +474,7 @@ static bool emit_map_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, 
     for (size_t i = 0; i < entries->len; i++) {
         if (i) buf_append(out, " ");
         buf_append(out, "[");
-        for (size_t j = 0; j < entries->items[i].key.len; j++) {
-            char c = entries->items[i].key.data[j];
-            if (c == ']' || c == '\\' || c == '"' || c == '$' || c == '`') buf_append(out, "\\");
-            buf_append_len(out, &c, 1);
-        }
+        bash_single_quote(out, entries->items[i].key.data, entries->items[i].key.len);
         buf_append(out, "]=");
         if (!emit_value_expr(e, entries->items[i].value, out)) return false;
     }

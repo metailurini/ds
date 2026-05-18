@@ -112,6 +112,19 @@ let web = labels["web service"]
 echo "{api}:{web}"
 DS
 
+write_fixture "$FIX/maps_special_keys.ds" <<'DS'
+let labels = {
+  "api's service": "api",
+  "web]service": "web",
+  "price$HOME": "literal"
+}
+
+let api = labels["api's service"]
+let web = labels["web]service"]
+let price = labels["price$HOME"]
+echo "{api}:{web}:{price}"
+DS
+
 write_fixture "$FIX/loop_scope.ds" <<'DS'
 let services = ["api", "web"]
 
@@ -276,6 +289,8 @@ assert_vm_bash_parity v0_10_maps_basic "$FIX/maps_basic.ds" 0 ""
 assert_same_text $'3000:5173\n' "$TMP/v0_10_maps_basic_vm.out" "map field/bracket access output"
 assert_vm_bash_parity v0_10_maps_quoted "$FIX/maps_quoted.ds" 0 ""
 assert_same_text $'api:web value\n' "$TMP/v0_10_maps_quoted_vm.out" "quoted map key output"
+assert_vm_bash_parity v0_10_maps_special_keys "$FIX/maps_special_keys.ds" 0 ""
+assert_same_text $'api:web:literal\n' "$TMP/v0_10_maps_special_keys_vm.out" "special quoted map keys preserve VM/Bash parity"
 assert_vm_bash_parity v0_10_dynamic_access "$FIX/dynamic_access.ds" 0 ""
 assert_same_text $'web:3000\n' "$TMP/v0_10_dynamic_access_vm.out" "dynamic index and map key output"
 assert_vm_bash_parity v0_10_loop_scope "$FIX/loop_scope.ds" 0 ""
@@ -490,6 +505,11 @@ write_fixture "$FIX/bad_empty_map.ds" <<'DS'
 let ports = {}
 DS
 assert_diag empty_map "$FIX/bad_empty_map.ds" 'empty map literals are deferred in v0.10.0'
+
+write_fixture "$FIX/bad_empty_map_key.ds" <<'DS'
+let ports = { "": 3000 }
+DS
+assert_diag empty_map_key "$FIX/bad_empty_map_key.ds" 'empty map keys are deferred in v0.10.0 because emitted Bash cannot represent them safely'
 
 write_fixture "$FIX/bad_loop_non_array.ds" <<'DS'
 let service = "api"

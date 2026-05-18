@@ -327,12 +327,12 @@ let web_port = ports["web"]
 #   echo "{name} runs on {port}"
 # }
 
-# Empty map literals, nested maps, nested arrays, computed non-string keys, and
-# element/value expressions that cannot yet be assigned inside emitted Bash
-# collections are deferred. Bind complex scalar expressions first. Bash emission
-# uses Bash associative arrays for maps and emits a Bash 4+ guard only for
-# scripts that use maps. Missing keys fail with an explicit runtime error in
-# emitted Bash.
+# Empty map literals, empty map keys, nested maps, nested arrays, computed
+# non-string keys, and element/value expressions that cannot yet be assigned
+# inside emitted Bash collections are deferred. Bind complex scalar expressions
+# first. Bash emission uses Bash associative arrays for maps and emits a Bash 4+
+# guard only for scripts that use maps. Missing keys fail with an explicit
+# runtime error in emitted Bash.
 
 
 # -----------------------------------------------------------------------------

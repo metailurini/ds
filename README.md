@@ -199,7 +199,7 @@ let ports = { api: 3000, web: 5173 }
 let api_port = ports.api
 ```
 
-`v0.10.0` deliberately defers map iteration, `while`, `break`/`continue`, ranges, index assignment, empty map literals, nested collections, passing whole collection values to functions or commands, direct collection access in command arguments, and collection element expressions that cannot yet be emitted into Bash assignments. Bind/index scalar values first.
+`v0.10.0` deliberately defers map iteration, `while`, `break`/`continue`, ranges, index assignment, empty map literals, empty map keys, nested collections, passing whole collection values to functions or commands, direct collection access in command arguments, and collection element expressions that cannot yet be emitted into Bash assignments. Bind/index scalar values first.
 
 `v0.11.0` adds the first standard-library helpers: `file.exists`, `file.is_file`, `file.read`, `file.write`, `file.append`, `dir.exists`, `path.cwd`, `path.join`, `path.basename`, `path.dirname`, `path.ext`, `cmd.exists`, `cmd.require`, `env.get`, `env.set`, `env.unset`, `glob`, `glob!`, and `lines`. The implementation deliberately rejects direct `env.NAME` access, recursive `**` glob patterns, and embedded NUL bytes in text file helpers while deferring binary file APIs, directory mutation/listing, and streaming `lines`.
 
