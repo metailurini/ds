@@ -85,7 +85,7 @@ implementation details into smaller internal modules:
 - `src/stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
-- `src/lower.c`, the split `src/vm_*.c` VM modules, and `src/bash_emit.c`
+- `src/lower.c`, the split `src/vm_*.c` VM modules, and the split `src/bash_*.c`
   consume that table rather than each maintaining independent helper
   arity/name lists.
 - `src/vm_internal.h` contains bytecode/VM-private structs shared only by VM
@@ -99,9 +99,15 @@ implementation details into smaller internal modules:
   test execution setup.
 - `src/vm_stdlib.c` owns VM execution for `file.*`, `dir.*`, `path.*`, `cmd.*`,
   `env.*`, `glob`, `glob!`, and `lines`.
-- `src/bash_helpers.c` owns the emitted Bash helper bodies for command-result,
-  collection, and stdlib helpers; `src/bash_emit.c` remains responsible for
-  dependency analysis, expression/statement rendering, and artifact writing.
+- Bash emission responsibilities are split by component: `src/bash_emit.c` owns
+  the public entrypoint, script-argument prelude, helper selection, and artifact
+  writing; `src/bash_deps.c` owns helper dependency analysis;
+  `src/bash_expr.c` owns expression and condition rendering;
+  `src/bash_command.c` owns command words, redirections, and captured `run`
+  argument rendering; `src/bash_stmt.c` owns statement/function rendering;
+  `src/bash_quote.c` owns shared quoting, interpolation, buffer, and symbol
+  utilities; and `src/bash_helpers.c` owns the emitted Bash helper bodies for
+  command-result, collection, debug, and stdlib helpers.
 
 This is deliberately a behavior-preserving split. Emitted Bash still remains
 standalone and must not depend on `ds` or on the C runtime.

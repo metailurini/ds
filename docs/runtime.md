@@ -132,10 +132,15 @@ file/path/env/cmd/glob/lines runtime implementations and other VM subsystems
 separate while preserving the same spans, ownership rules, and fail-fast
 diagnostics.
 
-Standalone Bash helper bodies live in `src/bash_helpers.c`; `src/bash_emit.c`
-still decides which helpers are needed and where to emit them. This keeps helper
-body review separate from expression/statement rendering while preserving the
-reserved `__ds_` helper prefix and standalone-script requirement.
+Standalone Bash emission is split into focused backend components:
+`src/bash_emit.c` owns the public entrypoint, script-argument prelude, helper
+selection, and artifact writing; `src/bash_deps.c` decides which embedded helper
+bodies are needed; `src/bash_expr.c`, `src/bash_command.c`, and
+`src/bash_stmt.c` render expressions, commands, and statements respectively;
+`src/bash_quote.c` owns shared quoting/interpolation and emitter utilities; and
+`src/bash_helpers.c` owns the embedded helper body strings. This keeps helper
+body review separate from rendering logic while preserving the reserved `__ds_`
+helper prefix and standalone-script requirement.
 
 `v0.13.0` adds debugging/tracing runtime surfaces without adding source-language
 syntax. The VM can trace command execution and instruction execution to stderr
