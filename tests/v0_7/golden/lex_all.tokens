@@ -3,7 +3,7 @@
 1:12  EQUAL          "="
 1:14  RUN            "run"
 1:18  IDENT          "npm"
-1:22  IDENT          "test"
+1:22  TEST           "test"
 1:26  NEWLINE        "\n"
 2:1  IDENT          "echo"
 2:6  IDENT          "result"

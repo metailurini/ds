@@ -78,9 +78,24 @@ See `docs/runtime.md` for the detailed runtime plan, including strings, arrays, 
 
 ## Current backend/refactor boundaries
 
-The current implementation keeps the shared public/internal declarations in
-`include/ds.h`, but the v0.12.0 cleanup started splitting the largest backend
-implementation details into smaller internal modules:
+The current implementation keeps `include/ds.h` as a small compatibility
+façade while the real declarations live in focused internal headers under
+`src/`. Implementation files include the narrowest practical header instead of
+the umbrella where possible:
+
+- `src/ds_common.h` owns source spans, diagnostics, source loading, and
+  allocation helpers.
+- `src/ds_command.h` owns command words, redirections, captured/plain command
+  metadata, and command-result field descriptors.
+- `src/ds_ast.h` owns parser AST nodes and script/function/test declaration
+  shapes.
+- `src/frontend.h` owns token, lexer, parser, and AST-debug entrypoints.
+- `src/ds_hir.h` owns the lowered HIR contract consumed by VM, Bash emission,
+  formatter/checker support, and debug output.
+- `src/ds_runtime.h` owns runtime values, strings, arrays, and `DsMap`.
+- `src/ds_stdlib.h` owns standard-library helper metadata.
+- `src/backend.h` owns formatter/checker, Bash emission, bytecode, and VM
+  entrypoints.
 
 - `src/stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
@@ -117,8 +132,10 @@ implementation details into smaller internal modules:
   utilities; and `src/bash_helpers.c` owns the emitted Bash helper bodies for
   command-result, collection, debug, and stdlib helpers.
 
-This is deliberately a behavior-preserving split. Emitted Bash still remains
-standalone and must not depend on `ds` or on the C runtime.
+This is deliberately a behavior-preserving split. `include/ds.h` still
+re-exports the grouped headers for existing unit harnesses, but new internal
+code should prefer the focused `src/*.h` boundary it actually needs. Emitted
+Bash still remains standalone and must not depend on `ds` or on the C runtime.
 
 ## CLI commands
 

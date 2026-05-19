@@ -1,7 +1,7 @@
 #ifndef DS_PARSER_INTERNAL_H
 #define DS_PARSER_INTERNAL_H
 
-#include "ds.h"
+#include "frontend.h"
 
 #include <stdlib.h>
 #include <string.h>

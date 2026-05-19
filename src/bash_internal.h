@@ -1,7 +1,8 @@
 #ifndef DS_BASH_INTERNAL_H
 #define DS_BASH_INTERNAL_H
 
-#include "ds.h"
+#include "backend.h"
+#include "ds_stdlib.h"
 
 #include <stdbool.h>
 #include <stddef.h>

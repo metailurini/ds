@@ -1,7 +1,9 @@
 #ifndef DS_LOWER_INTERNAL_H
 #define DS_LOWER_INTERNAL_H
 
-#include "ds.h"
+#include "ds_hir.h"
+#include "ds_runtime.h"
+#include "ds_stdlib.h"
 
 #include <stdbool.h>
 #include <stddef.h>

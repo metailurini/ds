@@ -243,6 +243,26 @@ Early project preference:
 - avoid complex generic machinery;
 - prefer explicit typed vectors if that is easier to debug in C.
 
+
+## Internal header boundaries
+
+The implementation no longer keeps every project type in one monolithic header.
+`include/ds.h` is a thin façade, while internal code should include the focused
+header for the layer it touches:
+
+- `src/ds_common.h`: sources, spans, diagnostics, allocation helpers;
+- `src/ds_command.h`: command words, redirections, command-result fields;
+- `src/ds_ast.h`: AST nodes and script/function/test declaration shapes;
+- `src/frontend.h`: lexer/parser token and frontend entrypoints;
+- `src/ds_hir.h`: lowered HIR program, expressions, statements, functions, tests;
+- `src/ds_runtime.h`: runtime values, strings, arrays, maps;
+- `src/ds_stdlib.h`: standard-library metadata;
+- `src/backend.h`: formatter/checker, Bash emitter, bytecode, and VM entrypoints.
+
+This is a behavior-preserving boundary split. It reduces accidental coupling
+without making runtime maps, VM bytecode internals, parser cursors, or Bash
+emitter internals part of the user-facing language contract.
+
 ## `DsMap`
 
 `DsMap` is the internal hashmap abstraction.
@@ -270,7 +290,7 @@ command-mode parsing isolated from expression and statement parsing while
 preserving the single shared frontend used by checking, VM execution, test
 running, and Bash emission.
 
-Internal code should depend on `DsMap`, not directly on the hashmap API. `src/runtime.c` is the bridge that translates the project-owned `DsMap` operations into raw hashmap operations and owns value cleanup rules.
+Internal code should depend on `DsMap`, not directly on the hashmap API. `src/runtime.c` is the bridge that translates the project-owned `DsMap` operations into raw hashmap operations and owns value cleanup rules. Runtime declarations now live in `src/ds_runtime.h`; `include/ds.h` remains a compatibility façade that re-exports the focused internal headers for existing tool/unit harnesses.
 
 Suggested shape:
 
