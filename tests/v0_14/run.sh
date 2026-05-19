@@ -185,6 +185,28 @@ assert_nonzero_status nested_function
 assert_contains "$TMP/nested_function.err" "$FIX/nested_function.ds:" 'nested test in function has file diagnostic'
 assert_contains "$TMP/nested_function.err" ': error:' 'nested test in function has error diagnostic'
 
+write_fixture "$FIX/nested_if.ds" <<'DS'
+if true {
+  test "inside if" {
+    assert true
+  }
+}
+DS
+capture_status nested_if "$DS" check "$FIX/nested_if.ds"
+assert_nonzero_status nested_if
+assert_diag_span "$TMP/nested_if.err" "$FIX/nested_if.ds" '`test` declarations are only allowed at top level in v0.14.0' 'nested test in if'
+
+write_fixture "$FIX/nested_loop.ds" <<'DS'
+for item in ["one"] {
+  test "inside loop" {
+    assert true
+  }
+}
+DS
+capture_status nested_loop "$DS" check "$FIX/nested_loop.ds"
+assert_nonzero_status nested_loop
+assert_diag_span "$TMP/nested_loop.err" "$FIX/nested_loop.ds" '`test` declarations are only allowed at top level in v0.14.0' 'nested test in loop'
+
 write_fixture "$FIX/nested_test.ds" <<'DS'
 test "outer" {
   test "inner" {
@@ -213,6 +235,63 @@ assert_diag_span "$TMP/duplicate_check.err" "$FIX/duplicate.ds" 'duplicate test 
 capture_status duplicate_test "$DS" test "$FIX/duplicate.ds"
 assert_nonzero_status duplicate_test
 assert_same_text '' "$TMP/duplicate_test.out" 'duplicate tests do not execute'
+
+write_fixture "$FIX/duplicate_function.ds" <<'DS'
+fn helper() {
+  echo "first"
+}
+
+fn helper() {
+  echo "second"
+}
+
+test "never" {
+  assert true
+}
+DS
+capture_status duplicate_function "$DS" test "$FIX/duplicate_function.ds"
+assert_nonzero_status duplicate_function
+assert_diag_span "$TMP/duplicate_function.err" "$FIX/duplicate_function.ds" 'duplicate function `helper`' 'duplicate functions still fail before tests'
+assert_same_text '' "$TMP/duplicate_function.out" 'duplicate functions run no tests'
+
+write_fixture "$FIX/test_keyword_function.ds" <<'DS'
+fn test() {
+  echo "reserved"
+}
+
+test "never" {
+  assert true
+}
+DS
+capture_status test_keyword_function "$DS" check "$FIX/test_keyword_function.ds"
+assert_nonzero_status test_keyword_function
+assert_diag_span "$TMP/test_keyword_function.err" "$FIX/test_keyword_function.ds" 'expected function name after `fn`' 'test keyword cannot be function name'
+
+write_fixture "$FIX/fail_exit_user_functions.ds" <<'DS'
+fn fail() {
+  echo "user fail"
+}
+
+fn exit() {
+  echo "user exit"
+}
+
+test "test helpers take precedence over user functions" {
+  fail "boom"
+}
+
+test "exit helper takes precedence over user function" {
+  exit 0
+  assert false
+}
+DS
+capture_status fail_exit_user_functions "$DS" test "$FIX/fail_exit_user_functions.ds"
+assert_nonzero_status fail_exit_user_functions
+assert_contains "$TMP/fail_exit_user_functions.out" 'fail test helpers take precedence over user functions' 'fail helper wins over user function'
+assert_contains "$TMP/fail_exit_user_functions.out" 'ok   exit helper takes precedence over user function' 'exit helper wins over user function'
+assert_not_contains "$TMP/fail_exit_user_functions.out" 'user fail' 'test fail helper does not call user fail function'
+assert_not_contains "$TMP/fail_exit_user_functions.out" 'user exit' 'test exit helper does not call user exit function'
+assert_test_summary "$TMP/fail_exit_user_functions.out" 2 1 1 'test helper/user function collision summary'
 
 write_fixture "$FIX/dup_lib.ds" <<'DS'
 test "shared" {
