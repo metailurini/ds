@@ -98,6 +98,30 @@ typedef struct {
     size_t return_cap;
 } Vm;
 
+void program_free(Program *p);
+bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag);
+bool decode_string_text(DsStr text, DsString *out);
+
+const char *op_name(OpCode op);
+const char *span_path(const DsSource *fallback, DsSpan span);
+void trace_vm_instr(Vm *vm, size_t ip, const Instr *ins);
+
+int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **argv);
+
+VmScope *scope_new(VmScope *parent);
+void scope_free_chain(VmScope *scope);
+void vm_push_scope(Vm *vm);
+void vm_pop_scope(Vm *vm);
+bool vm_pop_return(Vm *vm, size_t *out);
+bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip);
+bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span);
+DsValue *lookup_var_ref(Vm *vm, const char *name);
+
+bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span);
+int run_command(Vm *vm, Instr *ins);
+int run_capture(Vm *vm, Instr *ins, DsValue *out_value);
+bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
+
 bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out);
 
 #endif

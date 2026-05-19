@@ -1,0 +1,547 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include "vm_internal.h"
+
+#include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+static void print_trace_escaped(FILE *out, const char *data) {
+    fputc('"', out);
+    for (const char *p = data ? data : ""; *p; p++) {
+        if (*p == '\\' || *p == '"') fputc('\\', out);
+        if (*p == '\n') fputs("\\n", out);
+        else if (*p == '\t') fputs("\\t", out);
+        else fputc(*p, out);
+    }
+    fputc('"', out);
+}
+
+bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span) {
+    ds_string_init(out);
+    for (size_t i = 0; i < input->len; i++) {
+        char c = input->data[i];
+        if (c == '{') {
+            size_t start = i + 1;
+            size_t j = start;
+            if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+                j++;
+                while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                if (j < input->len && (input->data[j] == '}' || input->data[j] == '.')) {
+                    char *name = ds_str_dup_range(input->data + start, j - start);
+                    DsValue value;
+                    if (!lookup_var(vm, name, &value, span)) {
+                        free(name);
+                        ds_string_free(out);
+                        return false;
+                    }
+                    if (input->data[j] == '.') {
+                        size_t field_start = ++j;
+                        if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+                            j++;
+                            while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                        }
+                        if (j >= input->len || input->data[j] != '}') {
+                            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            ds_value_free(&value);
+                            free(name);
+                            ds_string_free(out);
+                            return false;
+                        }
+                        char *field = ds_str_dup_range(input->data + field_start, j - field_start);
+                        DsValue field_value = ds_value_null();
+                        bool ok = command_result_field(vm, &value, field, span, &field_value);
+                        free(field);
+                        ds_value_free(&value);
+                        if (!ok) {
+                            free(name);
+                            ds_string_free(out);
+                            return false;
+                        }
+                        value = field_value;
+                    }
+                    DsString rendered;
+                    ds_value_to_string(&value, &rendered);
+                    ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
+                    ds_string_free(&rendered);
+                    ds_value_free(&value);
+                    free(name);
+                    i = j;
+                    continue;
+                }
+            }
+            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+            ds_string_free(out);
+            return false;
+        }
+        ds_string_append_char(out, c);
+    }
+    return true;
+}
+
+static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
+    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
+        DsString decoded;
+        if (!decode_string_text(word, &decoded)) return false;
+        DsString rendered;
+        bool ok = interpolate_string(vm, &decoded, &rendered, span);
+        ds_string_free(&decoded);
+        if (!ok) return false;
+        *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+        ds_string_free(&rendered);
+        return true;
+    }
+    if (word.len >= 2 && word.data[0] == '$') {
+        char *name = ds_str_dup_range(word.data + 1, word.len - 1);
+        DsValue value;
+        if (!lookup_var(vm, name, &value, span)) {
+            free(name);
+            return false;
+        }
+        DsString rendered;
+        ds_value_to_string(&value, &rendered);
+        *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+        ds_string_free(&rendered);
+        ds_value_free(&value);
+        free(name);
+        return true;
+    }
+    for (size_t i = 1; i + 1 < word.len; i++) {
+        if (word.data[i] == '.') {
+            char *name = ds_str_dup_range(word.data, i);
+            char *field = ds_str_dup_range(word.data + i + 1, word.len - i - 1);
+            DsValue value;
+            if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
+            DsValue field_value = ds_value_null();
+            bool ok = command_result_field(vm, &value, field, span, &field_value);
+            if (!ok) {
+                ds_value_free(&value);
+                free(name); free(field);
+                return false;
+            }
+            DsString rendered;
+            ds_value_to_string(&field_value, &rendered);
+            *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+            ds_string_free(&rendered);
+            ds_value_free(&field_value);
+            ds_value_free(&value);
+            free(name); free(field);
+            return !vm->diag->has_error;
+        }
+    }
+    *out = ds_str_dup_range(word.data, word.len);
+    return true;
+}
+
+static bool render_redirect_target(Vm *vm, const DsRedirect *redirect, char **out) {
+    DsString decoded;
+    if (!decode_string_text(redirect->target, &decoded)) {
+        ds_diag_error(vm->diag, redirect->target_span, "invalid redirection target");
+        return false;
+    }
+    DsString rendered;
+    bool ok = interpolate_string(vm, &decoded, &rendered, redirect->target_span);
+    ds_string_free(&decoded);
+    if (!ok) return false;
+    *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+    ds_string_free(&rendered);
+    return true;
+}
+
+typedef struct {
+    char **items;
+    size_t len;
+} VmArgv;
+
+typedef struct {
+    DsString stdout_text;
+    DsString stderr_text;
+    int code;
+} VmProcessResult;
+
+typedef struct {
+    VmArgv argv;
+    DsRedirect redirect;
+    DsSpan span;
+    bool capture;
+    int exec_error_fd;
+} VmProcessSpec;
+
+static void argv_free(VmArgv *argv) {
+    for (size_t i = 0; i < argv->len; i++) free(argv->items[i]);
+    free(argv->items);
+    argv->items = NULL;
+    argv->len = 0;
+}
+
+static bool argv_build(Vm *vm, Instr *ins, VmArgv *argv) {
+    argv->items = NULL;
+    argv->len = 0;
+    if (ins->word_count == 0) return false;
+    argv->items = (char **)ds_xcalloc(ins->word_count + 1, sizeof(char *));
+    argv->len = ins->word_count;
+    for (size_t i = 0; i < ins->word_count; i++) {
+        if (!word_to_arg(vm, ins->words[i], ins->span, &argv->items[i])) {
+            argv->len = i;
+            argv_free(argv);
+            return false;
+        }
+    }
+    return true;
+}
+
+static int process_status_code(int status) {
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return 1;
+}
+
+static void process_result_init(VmProcessResult *result) {
+    ds_string_init(&result->stdout_text);
+    ds_string_init(&result->stderr_text);
+    result->code = 0;
+}
+
+static void process_result_free(VmProcessResult *result) {
+    ds_string_free(&result->stdout_text);
+    ds_string_free(&result->stderr_text);
+    result->code = 0;
+}
+
+static bool read_file_into_string(FILE *fp, DsString *out) {
+    ds_string_init(out);
+    fflush(fp);
+    if (fseek(fp, 0, SEEK_SET) != 0) return false;
+    char buf[4096];
+    size_t n = 0;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) ds_string_append_range(out, buf, n);
+    return ferror(fp) == 0;
+}
+
+static bool open_redirect_target(Vm *vm, const DsRedirect *redirect, int *out_fd) {
+    *out_fd = -1;
+    char *redirect_path = NULL;
+    if (!render_redirect_target(vm, redirect, &redirect_path)) return false;
+
+    int flags = O_CREAT | O_WRONLY;
+    if (redirect->kind == DS_REDIRECT_OUT_APPEND || redirect->kind == DS_REDIRECT_ERR_APPEND || redirect->kind == DS_REDIRECT_ALL_APPEND) flags |= O_APPEND;
+    else flags |= O_TRUNC;
+
+    int fd = open(redirect_path, flags, 0666);
+    if (fd < 0) {
+        ds_diag_error(vm->diag, redirect->target_span, "failed to open redirection target `%s`: %s", redirect_path, strerror(errno));
+        free(redirect_path);
+        return false;
+    }
+    free(redirect_path);
+    *out_fd = fd;
+    return true;
+}
+
+static bool process_spec_from_instr(Vm *vm, Instr *ins, bool capture, VmProcessSpec *spec) {
+    memset(spec, 0, sizeof(*spec));
+    spec->span = ins->span;
+    spec->redirect = ins->redirect;
+    spec->capture = capture;
+    return argv_build(vm, ins, &spec->argv);
+}
+
+static bool parse_exit_code_arg(const char *text, int *out) {
+    if (!text || !*text) return false;
+    char *end = NULL;
+    errno = 0;
+    long value = strtol(text, &end, 10);
+    if (errno != 0 || !end || *end != '\0' || value < 0 || value > 255) return false;
+    *out = (int)value;
+    return true;
+}
+
+static void append_test_helper_message(DsString *out, const VmProcessSpec *spec, size_t first_arg) {
+    ds_string_init(out);
+    for (size_t i = first_arg; i < spec->argv.len; i++) {
+        if (i > first_arg) ds_string_append_char(out, ' ');
+        ds_string_append_cstr(out, spec->argv.items[i]);
+    }
+}
+
+static bool run_test_helper_command(Vm *vm, const VmProcessSpec *spec, int *out_code) {
+    *out_code = 0;
+    if (!vm->options.test_mode || spec->capture || spec->argv.len == 0) return false;
+    const char *name = spec->argv.items[0];
+    if (strcmp(name, "fail") != 0 && strcmp(name, "exit") != 0) return false;
+
+    const char *test_name = vm->options.test_name.data ? vm->options.test_name.data : "<test>";
+    int test_name_len = (int)vm->options.test_name.len;
+    if (test_name_len <= 0) test_name_len = (int)strlen(test_name);
+
+    if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `%s` does not support redirection", test_name_len, test_name, name);
+        *out_code = 1;
+        return true;
+    }
+
+    if (strcmp(name, "fail") == 0) {
+        DsString message;
+        append_test_helper_message(&message, spec, 1);
+        if (message.len > 0) {
+            ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail: %.*s", test_name_len, test_name, (int)message.len, message.data);
+        } else {
+            ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail", test_name_len, test_name);
+        }
+        ds_string_free(&message);
+        *out_code = 1;
+        return true;
+    }
+
+    if (spec->argv.len != 2) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` expects exactly one integer code", test_name_len, test_name);
+        *out_code = 1;
+        return true;
+    }
+    int code = 0;
+    if (!parse_exit_code_arg(spec->argv.items[1], &code)) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` code must be an integer from 0 to 255", test_name_len, test_name);
+        *out_code = 1;
+        return true;
+    }
+    vm->test_done = true;
+    if (code != 0) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: exit %d", test_name_len, test_name, code);
+    }
+    *out_code = code;
+    return true;
+}
+
+static void process_spec_free(VmProcessSpec *spec) {
+    argv_free(&spec->argv);
+}
+
+static void trace_command_spec(Vm *vm, const VmProcessSpec *spec) {
+    if (!vm->options.trace_cmd || spec->argv.len == 0) return;
+    fprintf(stderr, "trace: cmd %s:%d:%d:", span_path(vm->source, spec->span), spec->span.start.line, spec->span.start.column);
+    for (size_t i = 0; i < spec->argv.len; i++) {
+        fputc(' ', stderr);
+        print_trace_escaped(stderr, spec->argv.items[i]);
+    }
+    if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        char *redirect_path = NULL;
+        const char *op = NULL;
+        switch (spec->redirect.kind) {
+            case DS_REDIRECT_OUT: op = ">"; break;
+            case DS_REDIRECT_OUT_APPEND: op = ">>"; break;
+            case DS_REDIRECT_ERR: op = "2>"; break;
+            case DS_REDIRECT_ERR_APPEND: op = "2>>"; break;
+            case DS_REDIRECT_ALL: op = "&>"; break;
+            case DS_REDIRECT_ALL_APPEND: op = "&>>"; break;
+            case DS_REDIRECT_NONE: break;
+        }
+        if (op && render_redirect_target(vm, &spec->redirect, &redirect_path)) {
+            fputc(' ', stderr);
+            fputs(op, stderr);
+            fputc(' ', stderr);
+            print_trace_escaped(stderr, redirect_path);
+            free(redirect_path);
+        } else {
+            fputs(" <redirect>", stderr);
+        }
+    }
+    fputc('\n', stderr);
+}
+
+static bool fd_set_cloexec(int fd) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags < 0) return false;
+    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+}
+
+static bool process_exec_error_pipe(Vm *vm, const VmProcessSpec *spec, int pipe_fds[2]) {
+    pipe_fds[0] = -1;
+    pipe_fds[1] = -1;
+    if (pipe(pipe_fds) != 0) {
+        ds_diag_error(vm->diag, spec->span, "failed to prepare command `%s`: %s", spec->argv.items[0], strerror(errno));
+        return false;
+    }
+    if (!fd_set_cloexec(pipe_fds[1])) {
+        ds_diag_error(vm->diag, spec->span, "failed to prepare command `%s`: %s", spec->argv.items[0], strerror(errno));
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        pipe_fds[0] = -1;
+        pipe_fds[1] = -1;
+        return false;
+    }
+    return true;
+}
+
+static void process_child_exec(const VmProcessSpec *spec, int redirect_fd, FILE *out_fp, FILE *err_fp) {
+    if (spec->capture) {
+        dup2(fileno(out_fp), STDOUT_FILENO);
+        dup2(fileno(err_fp), STDERR_FILENO);
+    } else if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        if (spec->redirect.kind == DS_REDIRECT_OUT || spec->redirect.kind == DS_REDIRECT_OUT_APPEND) dup2(redirect_fd, STDOUT_FILENO);
+        else if (spec->redirect.kind == DS_REDIRECT_ERR || spec->redirect.kind == DS_REDIRECT_ERR_APPEND) dup2(redirect_fd, STDERR_FILENO);
+        else { dup2(redirect_fd, STDOUT_FILENO); dup2(redirect_fd, STDERR_FILENO); }
+    }
+    if (redirect_fd >= 0) close(redirect_fd);
+    execvp(spec->argv.items[0], spec->argv.items);
+    int exec_errno = errno;
+    if (spec->exec_error_fd >= 0) {
+        ssize_t ignored = write(spec->exec_error_fd, &exec_errno, sizeof(exec_errno));
+        (void)ignored;
+        close(spec->exec_error_fd);
+    }
+    if (spec->capture) fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(exec_errno));
+    _exit(127);
+}
+
+static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result) {
+    process_result_init(result);
+    int redirect_fd = -1;
+    FILE *out_fp = NULL;
+    FILE *err_fp = NULL;
+    int exec_error_pipe[2] = {-1, -1};
+    spec->exec_error_fd = -1;
+
+    trace_command_spec(vm, spec);
+
+    if (!spec->capture && spec->redirect.kind != DS_REDIRECT_NONE) {
+        if (!open_redirect_target(vm, &spec->redirect, &redirect_fd)) return false;
+    }
+
+    if (spec->capture) {
+        out_fp = tmpfile();
+        err_fp = tmpfile();
+        if (!out_fp || !err_fp) {
+            ds_diag_error(vm->diag, spec->span, "failed to create command capture temporary files: %s", strerror(errno));
+            if (out_fp) fclose(out_fp);
+            if (err_fp) fclose(err_fp);
+            return false;
+        }
+    }
+
+    if (!process_exec_error_pipe(vm, spec, exec_error_pipe)) {
+        if (redirect_fd >= 0) close(redirect_fd);
+        if (out_fp) fclose(out_fp);
+        if (err_fp) fclose(err_fp);
+        return false;
+    }
+    spec->exec_error_fd = exec_error_pipe[1];
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(errno));
+        if (redirect_fd >= 0) close(redirect_fd);
+        if (out_fp) fclose(out_fp);
+        if (err_fp) fclose(err_fp);
+        close(exec_error_pipe[0]);
+        close(exec_error_pipe[1]);
+        spec->exec_error_fd = -1;
+        return false;
+    }
+
+    if (pid == 0) {
+        close(exec_error_pipe[0]);
+        process_child_exec(spec, redirect_fd, out_fp, err_fp);
+    }
+
+    close(exec_error_pipe[1]);
+    spec->exec_error_fd = -1;
+    if (redirect_fd >= 0) close(redirect_fd);
+    int exec_errno = 0;
+    ssize_t exec_error_len = read(exec_error_pipe[0], &exec_errno, sizeof(exec_errno));
+    close(exec_error_pipe[0]);
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            ds_diag_error(vm->diag, spec->span, "failed waiting for command `%s`: %s", spec->argv.items[0], strerror(errno));
+            if (out_fp) fclose(out_fp);
+            if (err_fp) fclose(err_fp);
+            return false;
+        }
+    }
+    result->code = process_status_code(status);
+
+    if (!spec->capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
+        ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(exec_errno));
+        return true;
+    }
+
+    if (spec->capture) {
+        if (!read_file_into_string(out_fp, &result->stdout_text) || !read_file_into_string(err_fp, &result->stderr_text)) {
+            ds_diag_error(vm->diag, spec->span, "failed to read command capture output");
+            fclose(out_fp);
+            fclose(err_fp);
+            return false;
+        }
+        fclose(out_fp);
+        fclose(err_fp);
+    }
+    return true;
+}
+
+int run_command(Vm *vm, Instr *ins) {
+    if (ins->word_count == 0) return 0;
+    VmProcessSpec spec;
+    if (!process_spec_from_instr(vm, ins, false, &spec)) return 1;
+    int helper_code = 0;
+    if (run_test_helper_command(vm, &spec, &helper_code)) {
+        process_spec_free(&spec);
+        return helper_code;
+    }
+    VmProcessResult result;
+    bool ok = process_execute(vm, &spec, &result);
+    int code = ok ? result.code : 1;
+    if (ok && code != 0 && !vm->diag->has_error) {
+        ds_diag_error(vm->diag, ins->span, "command `%s` failed with exit %d", spec.argv.len > 0 ? spec.argv.items[0] : "<command>", code);
+    }
+    process_result_free(&result);
+    process_spec_free(&spec);
+    return code;
+}
+
+int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
+    *out_value = ds_value_null();
+    if (ins->word_count == 0) return 1;
+    VmProcessSpec spec;
+    if (!process_spec_from_instr(vm, ins, true, &spec)) return 1;
+    VmProcessResult result;
+    bool ok = process_execute(vm, &spec, &result);
+    process_spec_free(&spec);
+    if (!ok) {
+        process_result_free(&result);
+        return 1;
+    }
+    *out_value = ds_value_command_result_take(&result.stdout_text, &result.stderr_text, result.code);
+    return 0;
+}
+
+bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out) {
+    if (value->kind == DS_VALUE_MAP) {
+        DsStr key = {(char *)field, strlen(field)};
+        DsValue *found = ds_map_get((DsMap *)&value->as.map, key);
+        if (!found) {
+            ds_diag_error(vm->diag, span, "missing map key `%s`", field);
+            return false;
+        }
+        *out = ds_value_copy(found);
+        return true;
+    }
+    if (value->kind != DS_VALUE_COMMAND_RESULT) {
+        ds_diag_error(vm->diag, span, "field access is only supported on command results and maps in v0.10.0");
+        return false;
+    }
+    DsStr field_view = {(char *)field, strlen(field)};
+    const DsCommandResultField *desc = ds_command_result_field_lookup(field_view);
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_STRING && strcmp(desc->name, "stdout") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len); out->kind = DS_VALUE_STRING; return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_STRING && strcmp(desc->name, "stderr") == 0) { ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len); out->kind = DS_VALUE_STRING; return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_INT) { *out = ds_value_int(value->as.command_result.code); return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "ok") == 0) { *out = ds_value_bool(value->as.command_result.code == 0); return true; }
+    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "failed") == 0) { *out = ds_value_bool(value->as.command_result.code != 0); return true; }
+    ds_diag_error(vm->diag, span, "unknown command result field `%s`", field);
+    return false;
+}

@@ -121,10 +121,16 @@ must be expressions the Bash backend can assign without changing VM/Bash parity.
 ## Standard-library runtime boundary
 
 VM stdlib execution now lives in `src/vm_stdlib.c`, behind the VM-private
-`ds_vm_stdlib_call()` entrypoint declared in `src/vm_internal.h`. That keeps the
-file/path/env/cmd/glob/lines runtime implementations separate from the main
-bytecode compiler/interpreter loop in `src/vm.c` while preserving the same spans,
-ownership rules, and fail-fast diagnostics.
+`ds_vm_stdlib_call()` entrypoint declared in `src/vm_internal.h`. The rest of the
+VM is split into focused private components: `src/vm_compile.c` for HIR to
+bytecode construction, `src/vm_dump.c` for bytecode/debug output,
+`src/vm_args.c` for script argument binding, `src/vm_scope.c` for scopes and
+function calls, `src/vm_process.c` for command interpolation/redirection and
+subprocess execution, `src/vm_test.c` for VM-backed test execution setup, and
+`src/vm.c` for the main interpreter loop and public VM entrypoints. This keeps
+file/path/env/cmd/glob/lines runtime implementations and other VM subsystems
+separate while preserving the same spans, ownership rules, and fail-fast
+diagnostics.
 
 Standalone Bash helper bodies live in `src/bash_helpers.c`; `src/bash_emit.c`
 still decides which helpers are needed and where to emit them. This keeps helper

@@ -85,14 +85,20 @@ implementation details into smaller internal modules:
 - `src/stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
-- `src/lower.c`, `src/vm.c`/`src/vm_stdlib.c`, and `src/bash_emit.c` consume that
-  table rather than each maintaining independent helper arity/name lists.
+- `src/lower.c`, the split `src/vm_*.c` VM modules, and `src/bash_emit.c`
+  consume that table rather than each maintaining independent helper
+  arity/name lists.
 - `src/vm_internal.h` contains bytecode/VM-private structs shared only by VM
   implementation files. It is not part of the public user-facing API.
+- VM responsibilities are split by component: `src/vm.c` owns the main
+  interpreter loop and public VM entrypoints, `src/vm_compile.c` owns HIR to
+  bytecode construction, `src/vm_dump.c` owns bytecode/debug output,
+  `src/vm_args.c` owns script argument binding, `src/vm_scope.c` owns VM
+  scopes/function calls, `src/vm_process.c` owns command interpolation,
+  redirection, and subprocess execution, and `src/vm_test.c` owns VM-backed
+  test execution setup.
 - `src/vm_stdlib.c` owns VM execution for `file.*`, `dir.*`, `path.*`, `cmd.*`,
-  `env.*`, `glob`, `glob!`, and `lines`; `src/vm.c` remains responsible for
-  bytecode construction, bytecode dumping, scopes, script-arg binding, command
-  execution, and the main interpreter loop.
+  `env.*`, `glob`, `glob!`, and `lines`.
 - `src/bash_helpers.c` owns the emitted Bash helper bodies for command-result,
   collection, and stdlib helpers; `src/bash_emit.c` remains responsible for
   dependency analysis, expression/statement rendering, and artifact writing.

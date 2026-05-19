@@ -1,0 +1,231 @@
+#include "vm_internal.h"
+
+#include <stdio.h>
+#include <string.h>
+
+const char *op_name(OpCode op) {
+    switch (op) {
+        case OP_LOAD_CONST: return "LOAD_CONST";
+        case OP_LOAD_VAR: return "LOAD_VAR";
+        case OP_STORE_VAR: return "STORE_VAR";
+        case OP_NOT: return "NOT";
+        case OP_COMPARE: return "COMPARE";
+        case OP_INTERPOLATE: return "INTERPOLATE";
+        case OP_RUN_CAPTURE: return "RUN_CAPTURE";
+        case OP_GET_FIELD: return "GET_FIELD";
+        case OP_JUMP: return "JUMP";
+        case OP_JUMP_IF_FALSE: return "JUMP_IF_FALSE";
+        case OP_PUSH_SCOPE: return "PUSH_SCOPE";
+        case OP_POP_SCOPE: return "POP_SCOPE";
+        case OP_RUN_CMD: return "RUN_CMD";
+        case OP_CALL: return "CALL";
+        case OP_STDLIB_CALL: return "STDLIB_CALL";
+        case OP_ARRAY_LITERAL: return "ARRAY_LITERAL";
+        case OP_MAP_LITERAL: return "MAP_LITERAL";
+        case OP_GET_INDEX: return "GET_INDEX";
+        case OP_PUSH_ARRAY: return "PUSH_ARRAY";
+        case OP_FOR_ARRAY: return "FOR_ARRAY";
+        case OP_ASSERT: return "ASSERT";
+        case OP_RETURN_FUNC: return "RETURN_FUNC";
+        case OP_RETURN: return "RETURN";
+        case OP_NOP: return "NOP";
+    }
+    return "NOP";
+}
+
+const char *span_path(const DsSource *fallback, DsSpan span) {
+    const DsSource *source = span.source ? span.source : fallback;
+    return source && source->path ? source->path : "<source>";
+}
+
+void trace_vm_instr(Vm *vm, size_t ip, const Instr *ins) {
+    if (!vm->options.trace_vm) return;
+    fprintf(stderr, "trace: vm ip=%zu op=%s", ip, op_name(ins->op));
+    if (ins->dst >= 0) fprintf(stderr, " dst=r%d", ins->dst);
+    if (ins->name) fprintf(stderr, " name=%s", ins->name);
+    if (ins->target >= 0) fprintf(stderr, " target=%d", ins->target);
+    fprintf(stderr, " @ %s:%d:%d\n", span_path(vm->source, ins->span), ins->span.start.line, ins->span.start.column);
+}
+
+static void print_escaped(FILE *out, const char *data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        char c = data[i];
+        if (c == '\\') fputs("\\\\", out);
+        else if (c == '"') fputs("\\\"", out);
+        else if (c == '\n') fputs("\\n", out);
+        else if (c == '\t') fputs("\\t", out);
+        else fputc(c, out);
+    }
+}
+
+static void print_value_literal(FILE *out, const DsValue *v) {
+    switch (v->kind) {
+        case DS_VALUE_NULL:
+            fputs("null", out);
+            break;
+        case DS_VALUE_BOOL:
+            fprintf(out, "bool %s", v->as.boolean ? "true" : "false");
+            break;
+        case DS_VALUE_INT:
+            fprintf(out, "int %lld", (long long)v->as.integer);
+            break;
+        case DS_VALUE_STRING:
+            fputs("string \"", out);
+            print_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
+            fputc('"', out);
+            break;
+        case DS_VALUE_COMMAND_RESULT:
+            fputs("command_result", out);
+            break;
+        case DS_VALUE_ARRAY:
+            fprintf(out, "array[%zu]", v->as.array.len);
+            break;
+        case DS_VALUE_MAP:
+            fprintf(out, "map[%zu]", ds_map_len(&v->as.map));
+            break;
+    }
+}
+
+bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowered, FILE *out, DsDiag *diag) {
+    Program p;
+    if (!compile_program(lowered, &p, diag)) {
+        return false;
+    }
+
+    fputs("args:\n", out);
+    if (!lowered->has_script || lowered->script_decls.len == 0) {
+        fputs("  <none>\n", out);
+    } else {
+        for (size_t i = 0; i < lowered->script_decls.len; i++) {
+            const DsLowerScriptDecl *decl = &lowered->script_decls.items[i];
+            const char *kind = decl->kind == DS_SCRIPT_DECL_ARG ? "arg" : (decl->kind == DS_SCRIPT_DECL_OPTION ? "option" : "flag");
+            const char *type = decl->type == DS_SCRIPT_TYPE_STRING ? "string" : (decl->type == DS_SCRIPT_TYPE_INT ? "int" : "bool");
+            fprintf(out, "  %s %.*s: %s", kind, (int)decl->name.len, decl->name.data, type);
+            if (decl->has_default) {
+                if (decl->type == DS_SCRIPT_TYPE_STRING) {
+                    fputs(" = \"", out);
+                    print_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+                    fputc('"', out);
+                } else if (decl->type == DS_SCRIPT_TYPE_INT) {
+                    fprintf(out, " = %lld", (long long)decl->default_int);
+                } else {
+                    fprintf(out, " = %s", decl->default_bool ? "true" : "false");
+                }
+            }
+            { const DsSource *span_source = decl->span.source ? decl->span.source : source; fprintf(out, "    # %s:%d:%d\n", span_source && span_source->path ? span_source->path : "<source>", decl->span.start.line, decl->span.start.column); }
+        }
+    }
+
+    fputs("\nfunctions:\n", out);
+    if (p.function_len == 0) {
+        fputs("  <none>\n", out);
+    } else {
+        for (size_t i = 0; i < p.function_len; i++) {
+            FnMeta *fn = &p.functions[i];
+            fprintf(out, "  fn%zu %s(required=%zu, params=%zu)\n", i, fn->name, fn->required_count, fn->param_count);
+            for (size_t j = 0; j < fn->param_count; j++) {
+                FnParamMeta *param = &fn->params[j];
+                fprintf(out, "    param %zu %s", j, param->name);
+                if (param->has_default) {
+                    fputs(" = ", out);
+                    print_value_literal(out, &param->default_value);
+                }
+                fputc('\n', out);
+            }
+        }
+    }
+
+    fputs("\nconstants:\n", out);
+    for (size_t i = 0; i < p.const_len; i++) {
+        fprintf(out, "  %zu: ", i);
+        DsValue *v = &p.consts[i];
+        print_value_literal(out, v);
+        fputc('\n', out);
+    }
+    fputs("\ninstructions:\n", out);
+    for (size_t i = 0; i < p.instr_len; i++) {
+        Instr *ins = &p.instrs[i];
+        fprintf(out, "  %04zu %-14s", i, op_name(ins->op));
+        switch (ins->op) {
+            case OP_LOAD_CONST: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
+            case OP_LOAD_VAR: fprintf(out, " r%d, %s", ins->dst, ins->name); break;
+            case OP_STORE_VAR: fprintf(out, " %s, r%d", ins->name, ins->a); break;
+            case OP_NOT: fprintf(out, " r%d, r%d", ins->dst, ins->a); break;
+            case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
+            case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
+            case OP_RUN_CAPTURE:
+                fprintf(out, " r%d, [", ins->dst);
+                for (size_t j = 0; j < ins->word_count; j++) {
+                    if (j) fputs(", ", out);
+                    fputc('"', out);
+                    print_escaped(out, ins->words[j].data, ins->words[j].len);
+                    fputc('"', out);
+                }
+                fputc(']', out);
+                break;
+            case OP_GET_FIELD: fprintf(out, " r%d, r%d.%s", ins->dst, ins->a, ins->field); break;
+            case OP_JUMP: fprintf(out, " %d", ins->target); break;
+            case OP_JUMP_IF_FALSE: fprintf(out, " r%d, %d", ins->a, ins->target); break;
+            case OP_PUSH_SCOPE: break;
+            case OP_POP_SCOPE: break;
+            case OP_RUN_CMD:
+                fputs(" [", out);
+                for (size_t j = 0; j < ins->word_count; j++) {
+                    if (j) fputs(", ", out);
+                    fputc('"', out);
+                    print_escaped(out, ins->words[j].data, ins->words[j].len);
+                    fputc('"', out);
+                }
+                fputc(']', out);
+                if (ins->redirect.kind != DS_REDIRECT_NONE) {
+                    static const char *names[] = {"", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
+                    fprintf(out, " %s \"", names[ins->redirect.kind]);
+                    print_escaped(out, ins->redirect.target.data, ins->redirect.target.len);
+                    fputc('"', out);
+                }
+                break;
+            case OP_CALL:
+                fprintf(out, " fn%d(", ins->target);
+                for (size_t j = 0; j < ins->arg_count; j++) {
+                    if (j) fputs(", ", out);
+                    fprintf(out, "r%d", ins->args[j]);
+                }
+                fputc(')', out);
+                break;
+            case OP_STDLIB_CALL:
+                fprintf(out, " r%d, %s(", ins->dst, ins->name ? ins->name : "<helper>");
+                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                fputc(')', out);
+                break;
+            case OP_ARRAY_LITERAL:
+                fprintf(out, " r%d, [", ins->dst);
+                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                fputc(']', out);
+                break;
+            case OP_MAP_LITERAL:
+                fprintf(out, " r%d, {", ins->dst);
+                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "%.*s: r%d", (int)ins->words[j].len, ins->words[j].data, ins->args[j]); }
+                fputc('}', out);
+                break;
+            case OP_GET_INDEX: fprintf(out, " r%d, r%d[r%d]", ins->dst, ins->a, ins->b); break;
+            case OP_PUSH_ARRAY: fprintf(out, " %s, r%d", ins->name, ins->a); break;
+            case OP_FOR_ARRAY: fprintf(out, " %s in r%d -> %d", ins->name, ins->a, ins->target); break;
+            case OP_ASSERT: fprintf(out, " r%d", ins->a); break;
+            case OP_RETURN_FUNC: break;
+            case OP_RETURN: fprintf(out, " %d", ins->target); break;
+            case OP_NOP: break;
+        }
+        { const DsSource *span_source = ins->span.source ? ins->span.source : source; fprintf(out, "    # %s:%d:%d\n", span_source && span_source->path ? span_source->path : "<source>", ins->span.start.line, ins->span.start.column); }
+    }
+    program_free(&p);
+    return true;
+}
+
+bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag) {
+    DsLowerProgram *lowered = ds_lower_program(ast, diag);
+    if (!lowered) return false;
+    bool ok = ds_bytecode_dump_program(source, lowered, out, diag);
+    ds_lower_program_free(lowered);
+    return ok;
+}
+
