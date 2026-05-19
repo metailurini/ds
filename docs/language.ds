@@ -512,6 +512,13 @@ test "array indexing" {
   assert xs[1] == "b"
 }
 
+test "explicit failure helpers" {
+  if false {
+    fail "unreachable branch"
+  }
+  exit 0
+}
+
 
 # -----------------------------------------------------------------------------
 # 26. Formatter and checker expectations [v0.15.0] [candidate]

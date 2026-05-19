@@ -1235,6 +1235,72 @@ static bool process_spec_from_instr(Vm *vm, Instr *ins, bool capture, VmProcessS
     return argv_build(vm, ins, &spec->argv);
 }
 
+static bool parse_exit_code_arg(const char *text, int *out) {
+    if (!text || !*text) return false;
+    char *end = NULL;
+    errno = 0;
+    long value = strtol(text, &end, 10);
+    if (errno != 0 || !end || *end != '\0' || value < 0 || value > 255) return false;
+    *out = (int)value;
+    return true;
+}
+
+static void append_test_helper_message(DsString *out, const VmProcessSpec *spec, size_t first_arg) {
+    ds_string_init(out);
+    for (size_t i = first_arg; i < spec->argv.len; i++) {
+        if (i > first_arg) ds_string_append_char(out, ' ');
+        ds_string_append_cstr(out, spec->argv.items[i]);
+    }
+}
+
+static bool run_test_helper_command(Vm *vm, const VmProcessSpec *spec, int *out_code) {
+    *out_code = 0;
+    if (!vm->options.test_mode || spec->capture || spec->argv.len == 0) return false;
+    const char *name = spec->argv.items[0];
+    if (strcmp(name, "fail") != 0 && strcmp(name, "exit") != 0) return false;
+
+    const char *test_name = vm->options.test_name.data ? vm->options.test_name.data : "<test>";
+    int test_name_len = (int)vm->options.test_name.len;
+    if (test_name_len <= 0) test_name_len = (int)strlen(test_name);
+
+    if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `%s` does not support redirection", test_name_len, test_name, name);
+        *out_code = 1;
+        return true;
+    }
+
+    if (strcmp(name, "fail") == 0) {
+        DsString message;
+        append_test_helper_message(&message, spec, 1);
+        if (message.len > 0) {
+            ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail: %.*s", test_name_len, test_name, (int)message.len, message.data);
+        } else {
+            ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail", test_name_len, test_name);
+        }
+        ds_string_free(&message);
+        *out_code = 1;
+        return true;
+    }
+
+    if (spec->argv.len != 2) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` expects exactly one integer code", test_name_len, test_name);
+        *out_code = 1;
+        return true;
+    }
+    int code = 0;
+    if (!parse_exit_code_arg(spec->argv.items[1], &code)) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` code must be an integer from 0 to 255", test_name_len, test_name);
+        *out_code = 1;
+        return true;
+    }
+    vm->test_done = true;
+    if (code != 0) {
+        ds_diag_error(vm->diag, spec->span, "test `%.*s`: exit %d", test_name_len, test_name, code);
+    }
+    *out_code = code;
+    return true;
+}
+
 static void process_spec_free(VmProcessSpec *spec) {
     argv_free(&spec->argv);
 }
@@ -1405,6 +1471,11 @@ static int run_command(Vm *vm, Instr *ins) {
     if (ins->word_count == 0) return 0;
     VmProcessSpec spec;
     if (!process_spec_from_instr(vm, ins, false, &spec)) return 1;
+    int helper_code = 0;
+    if (run_test_helper_command(vm, &spec, &helper_code)) {
+        process_spec_free(&spec);
+        return helper_code;
+    }
     VmProcessResult result;
     bool ok = process_execute(vm, &spec, &result);
     int code = ok ? result.code : 1;
@@ -1572,6 +1643,7 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 break;
             case OP_RUN_CMD:
                 rc = run_command(&vm, ins);
+                if (vm.test_done) goto done;
                 if (rc != 0) goto done;
                 ip++;
                 break;
@@ -1654,7 +1726,18 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
             case OP_ASSERT: {
                 bool truth = false;
                 ds_value_truthy(&vm.regs[ins->a], &truth);
-                if (!truth) { ds_diag_error(diag, ins->span, "assertion failed"); rc = 1; goto done; }
+                if (!truth) {
+                    if (vm.options.test_mode) {
+                        const char *test_name = vm.options.test_name.data ? vm.options.test_name.data : "<test>";
+                        int test_name_len = (int)vm.options.test_name.len;
+                        if (test_name_len <= 0) test_name_len = (int)strlen(test_name);
+                        ds_diag_error(diag, ins->span, "test `%.*s`: assertion failed", test_name_len, test_name);
+                    } else {
+                        ds_diag_error(diag, ins->span, "assertion failed");
+                    }
+                    rc = 1;
+                    goto done;
+                }
                 ip++;
                 break;
             }
@@ -1692,6 +1775,8 @@ int ds_vm_run_test(const DsSource *source, const DsLowerProgram *lowered, const 
     view.statements.cap = 1;
     view.statements.items = (DsLowerStmt **)&test->body;
     DsVmOptions options = {0};
+    options.test_mode = true;
+    options.test_name = test->name;
     return ds_vm_run_program_args_options(source, &view, 0, NULL, diag, options);
 }
 

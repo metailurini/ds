@@ -611,6 +611,8 @@ void ds_map_free(DsMap *map);
 typedef struct {
     bool trace_cmd;
     bool trace_vm;
+    bool test_mode;
+    DsStr test_name;
 } DsVmOptions;
 
 bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag);

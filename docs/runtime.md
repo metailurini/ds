@@ -600,7 +600,7 @@ Diagnostics should be usable from:
 - process execution;
 - test runner.
 
-The v0.14.0 test runner uses the normal composed parse/lower pipeline and the VM backend. Test blocks are lowered as test metadata rather than production statements, so normal `ds run`, direct execution, and normal standalone Bash emission do not execute assertions or print test summaries.
+The v0.14.0 test runner uses the normal composed parse/lower pipeline and the VM backend. Test blocks are lowered as test metadata rather than production statements, so normal `ds run`, direct execution, and normal standalone Bash emission do not execute assertions or print test summaries. Inside `ds test`, `assert expr` uses the VM truthiness rules, `fail "message"` fails the active test, `exit 0` stops the active test as a pass, and `exit nonzero` fails the active test. Command output from tests streams normally before each `ok`/`fail` line; the runner does not capture or hide it in this milestone.
 
 ## Testing strategy
 

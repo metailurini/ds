@@ -92,6 +92,7 @@ typedef struct {
     DsDiag *diag;
     const DsSource *source;
     DsVmOptions options;
+    bool test_done;
     size_t *return_ips;
     size_t return_len;
     size_t return_cap;
