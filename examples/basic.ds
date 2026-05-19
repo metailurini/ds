@@ -1,6 +1,5 @@
 # v0.1.0 frontend smoke example
 let name = "Danh"
-let ok = true
 
 if name == "Danh" {
   echo "hello"

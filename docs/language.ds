@@ -521,7 +521,7 @@ test "explicit failure helpers" {
 
 
 # -----------------------------------------------------------------------------
-# 26. Formatter and checker expectations [v0.15.0] [candidate]
+# 26. Formatter and checker expectations [v0.15.0] [implemented]
 # -----------------------------------------------------------------------------
 
 # Formatter style:

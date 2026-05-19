@@ -422,6 +422,9 @@ capture_status duplicate_check "$DS" check "$FIX/duplicate_hard_error.ds"
 assert_nonzero_status duplicate_check
 assert_contains "$TMP/duplicate_check.err" 'duplicate variable `x`' 'duplicate declaration remains a hard error'
 assert_not_contains "$TMP/duplicate_check.err" 'warning:' 'duplicate declaration is not downgraded to warning'
+capture_status no_warnings_hard_error "$DS" check --no-warnings "$FIX/duplicate_hard_error.ds"
+assert_nonzero_status no_warnings_hard_error
+assert_contains "$TMP/no_warnings_hard_error.err" 'duplicate variable `x`' 'no-warnings still reports hard errors'
 
 # File loading, malformed source, unsupported syntax, strings, paths.
 capture_status missing_fmt "$DS" fmt "$FIX/does-not-exist.ds"
