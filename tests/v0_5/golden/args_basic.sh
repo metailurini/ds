@@ -70,13 +70,24 @@ done
 __ds_app="${__ds_positionals[0]}"
 [[ ${#__ds_positionals[@]} -eq 1 ]] || __ds_error 'unexpected extra positional argument `'"${__ds_positionals[1]}"'`'
 
+__ds_trace_quote() {
+  local __ds_q=$1
+  __ds_q=${__ds_q//\\/\\\\}
+  __ds_q=${__ds_q//\"/\\\"}
+  printf '"%s"' "$__ds_q"
+}
 __ds_trace_cmd() {
   [[ "${DS_TRACE_CMD:-}" == 1 ]] || return 0
   local __ds_loc=$1
   shift
   printf 'trace: cmd %s:' "$__ds_loc" >&2
   local __ds_arg
-  for __ds_arg in "$@"; do printf ' %q' "$__ds_arg" >&2; done
+  for __ds_arg in "$@"; do
+    case "$__ds_arg" in
+      '>'|'>>'|'2>'|'2>>'|'&>'|'&>>') printf ' %s' "$__ds_arg" >&2 ;;
+      *) printf ' ' >&2; __ds_trace_quote "$__ds_arg" >&2 ;;
+    esac
+  done
   printf '\n' >&2
 }
 __ds_fail() {

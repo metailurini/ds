@@ -27,6 +27,7 @@ typedef enum {
     OP_GET_INDEX,
     OP_PUSH_ARRAY,
     OP_FOR_ARRAY,
+    OP_ASSERT,
     OP_RETURN_FUNC,
     OP_RETURN,
     OP_NOP

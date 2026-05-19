@@ -637,6 +637,14 @@ static void lower_fn_vec_push(DsLowerFnVec *vec, DsLowerFn fn) {
     vec->items[vec->len++] = fn;
 }
 
+static void lower_test_vec_push(DsLowerTestVec *vec, DsLowerTest test) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 8;
+        vec->items = (DsLowerTest *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerTest));
+    }
+    vec->items[vec->len++] = test;
+}
+
 static void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl) {
     if (vec->len == vec->cap) {
         vec->cap = vec->cap ? vec->cap * 2 : 8;
@@ -928,6 +936,8 @@ static bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t 
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_PUSH:
             return false;
+        case DS_LOWER_STMT_ASSERT:
+            return false;
     }
     return false;
 }
@@ -1044,6 +1054,14 @@ static DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             return out;
         }
+        case DS_STMT_ASSERT: {
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSERT, stmt->span);
+            SymKind cond_kind = SYM_UNKNOWN;
+            out->as.assert_stmt.condition = lower_expr(lower, stmt->as.assert_stmt.condition, &cond_kind);
+            return out;
+        }
+        case DS_STMT_TEST:
+            return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
         case DS_STMT_BLOCK:
             return lower_block(lower, stmt, true);
         case DS_STMT_IMPORT:
@@ -1140,8 +1158,28 @@ static void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.push_stmt.name.data);
             lower_expr_free(stmt->as.push_stmt.value);
             break;
+        case DS_LOWER_STMT_ASSERT:
+            lower_expr_free(stmt->as.assert_stmt.condition);
+            break;
     }
     free(stmt);
+}
+
+static void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
+    if (stmt->kind != DS_STMT_TEST) return;
+    for (size_t i = 0; i < program->tests.len; i++) {
+        if (program->tests.items[i].name.len == stmt->as.test_stmt.name.len &&
+            memcmp(program->tests.items[i].name.data, stmt->as.test_stmt.name.data, stmt->as.test_stmt.name.len) == 0) {
+            ds_diag_error(lower->diag, stmt->span, "duplicate test `%.*s`", (int)stmt->as.test_stmt.name.len, stmt->as.test_stmt.name.data);
+            return;
+        }
+    }
+    DsLowerTest test;
+    memset(&test, 0, sizeof(test));
+    test.name = str_clone(stmt->as.test_stmt.name);
+    test.span = stmt->span;
+    test.body = lower_block(lower, stmt->as.test_stmt.body, true);
+    lower_test_vec_push(&program->tests, test);
 }
 
 DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
@@ -1162,9 +1200,10 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
             if (fn) lower_function_body(&lower, fn, ast->statements.items[i]);
         }
     }
+    for (size_t i = 0; i < ast->statements.len; i++) collect_test(&lower, ast->statements.items[i], program);
     reject_recursive_functions(&lower);
     for (size_t i = 0; i < ast->statements.len; i++) {
-        if (ast->statements.items[i]->kind != DS_STMT_FN) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
+        if (ast->statements.items[i]->kind != DS_STMT_FN && ast->statements.items[i]->kind != DS_STMT_TEST) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
     }
     scope_free(&root);
     if (diag->has_error) {
@@ -1198,6 +1237,11 @@ void ds_lower_program_free(DsLowerProgram *program) {
         lower_stmt_free(program->functions.items[i].body);
     }
     free(program->functions.items);
+    for (size_t i = 0; i < program->tests.len; i++) {
+        free(program->tests.items[i].name.data);
+        lower_stmt_free(program->tests.items[i].body);
+    }
+    free(program->tests.items);
     for (size_t i = 0; i < program->statements.len; i++) lower_stmt_free(program->statements.items[i]);
     free(program->statements.items);
     free(program);

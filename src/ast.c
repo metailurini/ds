@@ -148,6 +148,14 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fprintf(out, "PushStmt %.*s\n", (int)stmt->as.push_stmt.name.len, stmt->as.push_stmt.name.data);
             print_expr(stmt->as.push_stmt.value, out, level + 1);
             break;
+        case DS_STMT_TEST:
+            fprintf(out, "TestStmt \"%.*s\"\n", (int)stmt->as.test_stmt.name.len, stmt->as.test_stmt.name.data);
+            print_stmt(stmt->as.test_stmt.body, out, level + 1);
+            break;
+        case DS_STMT_ASSERT:
+            fputs("AssertStmt\n", out);
+            print_expr(stmt->as.assert_stmt.condition, out, level + 1);
+            break;
     }
 }
 
@@ -293,6 +301,13 @@ static void free_stmt(DsStmt *stmt) {
         case DS_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);
             free_expr(stmt->as.push_stmt.value);
+            break;
+        case DS_STMT_TEST:
+            free(stmt->as.test_stmt.name.data);
+            free_stmt(stmt->as.test_stmt.body);
+            break;
+        case DS_STMT_ASSERT:
+            free_expr(stmt->as.assert_stmt.condition);
             break;
     }
     free(stmt);

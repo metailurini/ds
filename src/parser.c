@@ -7,12 +7,14 @@ typedef struct {
     const DsTokenVec *tokens;
     size_t pos;
     DsDiag *diag;
+    int test_depth;
 } Parser;
 
 static DsToken *peek(Parser *p) { return &p->tokens->items[p->pos]; }
 static DsToken *previous(Parser *p) { return &p->tokens->items[p->pos - 1]; }
 static bool at(Parser *p, DsTokenKind kind) { return peek(p)->kind == kind; }
 static bool next_at(Parser *p, DsTokenKind kind) { return p->pos + 1 < p->tokens->len && p->tokens->items[p->pos + 1].kind == kind; }
+static bool peek2_at(Parser *p, DsTokenKind kind) { return p->pos + 2 < p->tokens->len && p->tokens->items[p->pos + 2].kind == kind; }
 static bool at_end(Parser *p) { return at(p, DS_TOK_EOF); }
 
 static bool advance_if(Parser *p, DsTokenKind kind) {
@@ -138,6 +140,30 @@ static bool is_identifier_like(DsTokenKind kind) {
     return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_IMPORT || kind == DS_TOK_ARG ||
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
            kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN || kind == DS_TOK_FN;
+}
+
+static bool decode_string_literal(DsStr literal, DsStr *out) {
+    out->data = NULL;
+    out->len = 0;
+    if (literal.len < 2 || literal.data[0] != '"' || literal.data[literal.len - 1] != '"') return false;
+    char *buf = (char *)ds_xcalloc(literal.len, 1);
+    size_t len = 0;
+    for (size_t i = 1; i + 1 < literal.len; i++) {
+        char c = literal.data[i];
+        if (c == '\\' && i + 1 < literal.len - 1) {
+            char escaped = literal.data[++i];
+            if (escaped == 'n') c = '\n';
+            else if (escaped == 't') c = '\t';
+            else if (escaped == '"') c = '"';
+            else if (escaped == '\\') c = '\\';
+            else c = escaped;
+        }
+        buf[len++] = c;
+    }
+    buf[len] = '\0';
+    out->data = buf;
+    out->len = len;
+    return true;
 }
 
 static bool is_redirect_token(DsTokenKind kind) {
@@ -788,6 +814,52 @@ static DsStmt *parse_fn(Parser *p, bool top_level) {
     return stmt;
 }
 
+static DsStmt *parse_assert(Parser *p) {
+    DsToken *start = previous(p);
+    if (p->test_depth <= 0) {
+        ds_diag_error(p->diag, start->span, "`assert` is only allowed inside a test block in v0.14.0");
+    }
+    if (is_stmt_end(p)) {
+        ds_diag_error(p->diag, start->span, "expected expression after `assert`");
+        consume_statement_end(p);
+        return NULL;
+    }
+    DsExpr *condition = parse_expr(p);
+    DsStmt *stmt = new_stmt(DS_STMT_ASSERT, (DsSpan){start->span.start, condition ? condition->span.end : start->span.end, start->span.source});
+    stmt->as.assert_stmt.condition = condition;
+    if (!is_stmt_end(p)) {
+        ds_diag_error(p->diag, peek(p)->span, "expected end of assert statement");
+        while (!is_stmt_end(p)) advance(p);
+    }
+    consume_statement_end(p);
+    return stmt;
+}
+
+static DsStmt *parse_test(Parser *p, bool top_level) {
+    DsToken *start = previous(p);
+    if (!top_level) ds_diag_error(p->diag, start->span, "`test` declarations are only allowed at top level in v0.14.0");
+    if (!expect(p, DS_TOK_STRING, "expected string literal test name after `test`")) return NULL;
+    DsToken *name = previous(p);
+    DsStr decoded;
+    if (!decode_string_literal(name->text, &decoded)) {
+        ds_diag_error(p->diag, name->span, "invalid test name string literal");
+        return NULL;
+    }
+    if (decoded.len == 0) ds_diag_error(p->diag, name->span, "test name cannot be empty");
+    if (!expect(p, DS_TOK_LBRACE, "expected `{` after test name")) {
+        free(decoded.data);
+        return NULL;
+    }
+    p->test_depth++;
+    DsStmt *body = parse_block(p);
+    p->test_depth--;
+    DsStmt *stmt = new_stmt(DS_STMT_TEST, (DsSpan){start->span.start, body ? body->span.end : previous(p)->span.end, start->span.source});
+    stmt->as.test_stmt.name = decoded;
+    stmt->as.test_stmt.body = body;
+    consume_statement_end(p);
+    return stmt;
+}
+
 static DsStmt *parse_cmd(Parser *p) {
     DsToken *start = peek(p);
     DsStmt *stmt = new_stmt(DS_STMT_CMD, start->span);
@@ -882,6 +954,11 @@ static DsStmt *parse_cmd(Parser *p) {
 static DsStmt *parse_stmt(Parser *p) {
     if (advance_if(p, DS_TOK_IMPORT)) return parse_import_stmt(p, false, false);
     if (advance_if(p, DS_TOK_FN)) return parse_fn(p, false);
+    if (at(p, DS_TOK_TEST) && next_at(p, DS_TOK_STRING) && peek2_at(p, DS_TOK_LBRACE)) {
+        advance(p);
+        return parse_test(p, false);
+    }
+    if (advance_if(p, DS_TOK_ASSERT)) return parse_assert(p);
     if (at(p, DS_TOK_SCRIPT)) {
         ds_diag_error(p->diag, peek(p)->span, "`script` block is only allowed at top level before executable statements");
         advance(p);
@@ -939,7 +1016,7 @@ static DsStmt *parse_stmt(Parser *p) {
 }
 
 DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
-    Parser p = {tokens, 0, diag};
+    Parser p = {tokens, 0, diag, 0};
     DsAst *ast = (DsAst *)ds_xcalloc(1, sizeof(DsAst));
     bool after_executable = false;
     if (tokens->len > 0) ast->span.start = tokens->items[0].span.start;
@@ -959,6 +1036,14 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
         if (advance_if(&p, DS_TOK_FN)) {
             DsStmt *stmt = parse_fn(&p, true);
             if (stmt) stmt_vec_push(&ast->statements, stmt);
+            skip_newlines(&p);
+            continue;
+        }
+        if (at(&p, DS_TOK_TEST) && next_at(&p, DS_TOK_STRING)) {
+            advance(&p);
+            DsStmt *stmt = parse_test(&p, true);
+            if (stmt) stmt_vec_push(&ast->statements, stmt);
+            after_executable = true;
             skip_newlines(&p);
             continue;
         }

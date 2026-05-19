@@ -61,6 +61,8 @@ typedef enum {
     DS_TOK_WHILE,
     DS_TOK_BREAK,
     DS_TOK_CONTINUE,
+    DS_TOK_TEST,
+    DS_TOK_ASSERT,
     DS_TOK_COLON,
     DS_TOK_COMMA,
     DS_TOK_EQUAL,
@@ -177,7 +179,9 @@ typedef enum {
     DS_STMT_FN,
     DS_STMT_CALL,
     DS_STMT_FOR,
-    DS_STMT_PUSH
+    DS_STMT_PUSH,
+    DS_STMT_TEST,
+    DS_STMT_ASSERT
 } DsStmtKind;
 
 typedef struct DsStmt DsStmt;
@@ -275,6 +279,8 @@ struct DsStmt {
         struct { DsStr name; DsExprVec args; } call_stmt;
         struct { DsStr key_name; DsStr value_name; bool has_value_name; DsExpr *iterable; DsStmt *body; } for_stmt;
         struct { DsStr name; DsExpr *value; } push_stmt;
+        struct { DsStr name; DsStmt *body; } test_stmt;
+        struct { DsExpr *condition; } assert_stmt;
     } as;
 };
 
@@ -362,7 +368,8 @@ typedef enum {
     DS_LOWER_STMT_CMD,
     DS_LOWER_STMT_CALL,
     DS_LOWER_STMT_FOR_ARRAY,
-    DS_LOWER_STMT_PUSH
+    DS_LOWER_STMT_PUSH,
+    DS_LOWER_STMT_ASSERT
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
@@ -400,6 +407,18 @@ typedef struct {
     size_t cap;
 } DsLowerFnVec;
 
+typedef struct {
+    DsStr name;
+    DsLowerStmt *body;
+    DsSpan span;
+} DsLowerTest;
+
+typedef struct {
+    DsLowerTest *items;
+    size_t len;
+    size_t cap;
+} DsLowerTestVec;
+
 struct DsLowerStmt {
     DsLowerStmtKind kind;
     DsSpan span;
@@ -410,6 +429,7 @@ struct DsLowerStmt {
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
         struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; } for_stmt;
         struct { DsStr name; DsLowerExpr *value; } push_stmt;
+        struct { DsLowerExpr *condition; } assert_stmt;
         DsCommand cmd_stmt;
     } as;
 };
@@ -418,6 +438,7 @@ typedef struct {
     bool has_script;
     DsLowerScriptDeclVec script_decls;
     DsLowerFnVec functions;
+    DsLowerTestVec tests;
     DsLowerStmtVec statements;
     DsSpan span;
 } DsLowerProgram;
@@ -598,6 +619,7 @@ int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag);
 int ds_vm_run_program(const DsSource *source, const DsLowerProgram *program, DsDiag *diag);
 int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag);
 int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag, DsVmOptions options);
+int ds_vm_run_test(const DsSource *source, const DsLowerProgram *program, const DsLowerTest *test, DsDiag *diag);
 
 /* Utility allocation helpers. These abort on allocation failure. */
 char *ds_str_dup_range(const char *data, size_t len);

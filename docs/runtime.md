@@ -600,6 +600,8 @@ Diagnostics should be usable from:
 - process execution;
 - test runner.
 
+The v0.14.0 test runner uses the normal composed parse/lower pipeline and the VM backend. Test blocks are lowered as test metadata rather than production statements, so normal `ds run`, direct execution, and normal standalone Bash emission do not execute assertions or print test summaries.
+
 ## Testing strategy
 
 Runtime primitives must have direct C tests.

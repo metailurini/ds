@@ -784,6 +784,7 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CALL: return false;
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_run(stmt->as.for_stmt.iterable) || stmt_uses_run(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_PUSH: return expr_uses_run(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return expr_uses_run(stmt->as.assert_stmt.condition);
     }
     return false;
 }
@@ -800,6 +801,7 @@ static bool stmt_has_command(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_FOR_ARRAY: return stmt_has_command(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_CALL:
         case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_ASSERT:
             return false;
     }
     return false;
@@ -823,6 +825,7 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CALL: return ds_stdlib_is_name(stmt->as.call_stmt.name);
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_stdlib(stmt->as.for_stmt.iterable) || stmt_uses_stdlib(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_PUSH: return expr_uses_stdlib(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return expr_uses_stdlib(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_CMD: return false;
     }
     return false;
@@ -839,6 +842,7 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_collection_index(stmt->as.for_stmt.iterable) || stmt_uses_collection_index(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_PUSH: return expr_uses_collection_index(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return expr_uses_collection_index(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
             return false;
@@ -857,6 +861,7 @@ static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_map_literal(stmt->as.for_stmt.iterable) || stmt_uses_map_literal(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_PUSH: return expr_uses_map_literal(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return expr_uses_map_literal(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
             return false;
@@ -1125,6 +1130,9 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
 
         case DS_LOWER_STMT_BLOCK:
             return emit_block_body(e, stmt, indent);
+        case DS_LOWER_STMT_ASSERT:
+            ds_diag_error(e->diag, stmt->span, "assert statements are only emitted by the test runner in v0.14.0");
+            return false;
     }
     return true;
 }

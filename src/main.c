@@ -41,6 +41,7 @@ static void usage(FILE *out) {
     fputs("  ds <file.ds> [args...]\n", out);
     fputs("  ds run <file.ds> [args...]\n", out);
     fputs("  ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]\n", out);
+    fputs("  ds test <file.ds>\n", out);
     fputs("  ds tokens <file.ds>\n", out);
     fputs("  ds ast <file.ds>\n", out);
     fputs("  ds check <file.ds>\n", out);
@@ -327,8 +328,38 @@ static bool cli_load_lower(const char *path, CliProgram *program) {
 
 static bool is_direct_script_arg(const char *arg) {
     return strcmp(arg, "run") != 0 && strcmp(arg, "tokens") != 0 &&
-           strcmp(arg, "ast") != 0 && strcmp(arg, "check") != 0 &&
+           strcmp(arg, "ast") != 0 && strcmp(arg, "check") != 0 && strcmp(arg, "test") != 0 &&
            strcmp(arg, "hir") != 0 && strcmp(arg, "bytecode") != 0 && strcmp(arg, "emit") != 0;
+}
+
+static int cli_run_tests(const char *path) {
+    CliProgram program;
+    if (!cli_load_lower(path, &program)) {
+        cli_program_free(&program);
+        return 1;
+    }
+    if (program.lowered->tests.len == 0) {
+        fprintf(stderr, "error: no tests found in `%s`\n", path);
+        cli_program_free(&program);
+        return 1;
+    }
+    size_t passed = 0;
+    size_t failed = 0;
+    for (size_t i = 0; i < program.lowered->tests.len; i++) {
+        DsLowerTest *test = &program.lowered->tests.items[i];
+        program.diag.has_error = false;
+        int rc = ds_vm_run_test(&program.source, program.lowered, test, &program.diag);
+        if (rc == 0 && !program.diag.has_error) {
+            fprintf(stdout, "ok   %.*s\n", (int)test->name.len, test->name.data);
+            passed++;
+        } else {
+            fprintf(stdout, "fail %.*s\n", (int)test->name.len, test->name.data);
+            failed++;
+        }
+    }
+    fprintf(stdout, "\n%zu tests, %zu passed, %zu failed\n", passed + failed, passed, failed);
+    cli_program_free(&program);
+    return failed == 0 ? 0 : 1;
 }
 
 static bool looks_like_script_path(const char *arg) {
@@ -381,6 +412,11 @@ int main(int argc, char **argv) {
         int rc = cli_load_lower(argv[path_index], &program) ? ds_vm_run_program_args_options(&program.source, program.lowered, argc - path_index - 1, argv + path_index + 1, &program.diag, options) : 1;
         cli_program_free(&program);
         return rc;
+    }
+
+    if (strcmp(argv[1], "test") == 0) {
+        if (argc != 3) return usage_error("expected `ds test <file.ds>`");
+        return cli_run_tests(argv[2]);
     }
 
     if (argc != 3) {

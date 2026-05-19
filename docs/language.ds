@@ -499,7 +499,7 @@ let match = regex.match("v1.2.3", /v(\d+)\.(\d+)\.(\d+)/)
 
 
 # -----------------------------------------------------------------------------
-# 25. Tests [v0.14.0] [candidate]
+# 25. Tests [v0.14.0] [implemented]
 # -----------------------------------------------------------------------------
 
 test "string interpolation" {
@@ -507,9 +507,9 @@ test "string interpolation" {
   assert "Hello {name}" == "Hello Danh"
 }
 
-test "array length" {
+test "array indexing" {
   let xs = ["a", "b"]
-  assert xs.len() == 2
+  assert xs[1] == "b"
 }
 
 

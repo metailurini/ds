@@ -415,6 +415,15 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_BLOCK:
             compile_scoped_block(p, stmt);
             break;
+        case DS_LOWER_STMT_ASSERT: {
+            int cond = compile_expr(p, stmt->as.assert_stmt.condition);
+            Instr ins = {0};
+            ins.op = OP_ASSERT;
+            ins.span = stmt->span;
+            ins.a = cond;
+            emit_instr(p, ins);
+            break;
+        }
     }
 }
 
@@ -469,6 +478,7 @@ static const char *op_name(OpCode op) {
         case OP_GET_INDEX: return "GET_INDEX";
         case OP_PUSH_ARRAY: return "PUSH_ARRAY";
         case OP_FOR_ARRAY: return "FOR_ARRAY";
+        case OP_ASSERT: return "ASSERT";
         case OP_RETURN_FUNC: return "RETURN_FUNC";
         case OP_RETURN: return "RETURN";
         case OP_NOP: return "NOP";
@@ -664,6 +674,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_GET_INDEX: fprintf(out, " r%d, r%d[r%d]", ins->dst, ins->a, ins->b); break;
             case OP_PUSH_ARRAY: fprintf(out, " %s, r%d", ins->name, ins->a); break;
             case OP_FOR_ARRAY: fprintf(out, " %s in r%d -> %d", ins->name, ins->a, ins->target); break;
+            case OP_ASSERT: fprintf(out, " r%d", ins->a); break;
             case OP_RETURN_FUNC: break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
@@ -1640,6 +1651,13 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 ip++;
                 break;
             }
+            case OP_ASSERT: {
+                bool truth = false;
+                ds_value_truthy(&vm.regs[ins->a], &truth);
+                if (!truth) { ds_diag_error(diag, ins->span, "assertion failed"); rc = 1; goto done; }
+                ip++;
+                break;
+            }
             case OP_RETURN_FUNC: {
                 size_t return_ip = 0;
                 vm_pop_scope(&vm);
@@ -1663,6 +1681,18 @@ done:
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;
+}
+
+int ds_vm_run_test(const DsSource *source, const DsLowerProgram *lowered, const DsLowerTest *test, DsDiag *diag) {
+    DsLowerProgram view;
+    memset(&view, 0, sizeof(view));
+    view.functions = lowered->functions;
+    view.span = test->span;
+    view.statements.len = 1;
+    view.statements.cap = 1;
+    view.statements.items = (DsLowerStmt **)&test->body;
+    DsVmOptions options = {0};
+    return ds_vm_run_program_args_options(source, &view, 0, NULL, diag, options);
 }
 
 int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag) {

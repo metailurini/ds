@@ -624,9 +624,11 @@ test "target defaults to staging" {
 **Expected outputs:**
 
 ```sh
-ds test
 ds test path/to/file.ds
 ```
+
+Directory/no-argument discovery may be added later; the initial implementation
+requires an explicit file path.
 
 - Test runner docs.
 - Self-test examples.

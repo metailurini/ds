@@ -203,6 +203,10 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             fputs("Block", out); print_span(out, stmt->span); fputc('\n', out);
             dump_block(out, stmt, level + 1);
             break;
+        case DS_LOWER_STMT_ASSERT:
+            fputs("Assert", out); print_span(out, stmt->span); fputc('\n', out);
+            dump_expr(out, stmt->as.assert_stmt.condition, level + 1);
+            break;
     }
 }
 
@@ -239,6 +243,14 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
         fputc(')', out); print_span(out, fn->span); fputc('\n', out);
         indent(out, 2); fputs("Body\n", out);
         dump_block(out, fn->body, 3);
+    }
+    if (program->tests.len > 0) {
+        indent(out, 1); fputs("Tests\n", out);
+        for (size_t i = 0; i < program->tests.len; i++) {
+            const DsLowerTest *test = &program->tests.items[i];
+            indent(out, 2); fputs("Test ", out); print_str(out, test->name); print_span(out, test->span); fputc('\n', out);
+            dump_block(out, test->body, 3);
+        }
     }
     indent(out, 1); fputs("Statements\n", out);
     for (size_t i = 0; i < program->statements.len; i++) dump_stmt(out, program->statements.items[i], 2);

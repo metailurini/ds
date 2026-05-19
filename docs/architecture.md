@@ -114,7 +114,7 @@ ds ast ./script.ds
 ds hir ./script.ds
 ds bytecode ./script.ds
 ds fmt ./script.ds
-ds test [path]
+ds test ./script.ds
 ds repl
 ds debug ./script.ds
 ```
@@ -634,7 +634,7 @@ includes script/function/constant/instruction metadata with source markers, and
 stderr without changing script stdout or normal execution semantics. Emitted
 Bash remains standalone and supports command tracing with `DS_TRACE_CMD=1` plus
 source-located command failure messages for plain command statements. `ds
-imports` remains a future debug command.
+imports` remains a future debug command. As of `v0.14.0`, `ds test <file.ds>` uses the same composed parse/lower path and VM execution machinery for test blocks while normal VM execution and normal Bash emission skip those test declarations.
 
 ## Suggested C project layout
 
