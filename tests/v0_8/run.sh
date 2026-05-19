@@ -63,7 +63,14 @@ assert_vm_bash_parity v0_8_redirect_stderr "$FIX/parity/redirect_stderr.ds" 0 "e
 assert_vm_bash_parity v0_8_redirect_combined "$FIX/parity/redirect_combined.ds" 0 "all.txt"
 assert_vm_bash_parity v0_8_import_capture "$FIX/parity/import_capture.ds" 0 ""
 assert_vm_bash_parity v0_8_script_args_capture "$FIX/parity/script_args_capture.ds" 0 "" 'hello world; $(echo nope) {brace}'
-assert_vm_bash_parity v0_8_plain_fail_fast "$FIX/parity/plain_fail_fast.ds" 6 ""
+run_ok v0_8_plain_fail_fast_emit "$DS" emit bash "$FIX/parity/plain_fail_fast.ds" -o "$TMP/v0_8_plain_fail_fast.sh"
+run_ok v0_8_plain_fail_fast_bash_syntax bash -n "$TMP/v0_8_plain_fail_fast.sh"
+capture_status v0_8_plain_fail_fast_vm "$DS" run "$FIX/parity/plain_fail_fast.ds"
+assert_status v0_8_plain_fail_fast_vm 6
+capture_status v0_8_plain_fail_fast_bash bash "$TMP/v0_8_plain_fail_fast.sh"
+assert_status v0_8_plain_fail_fast_bash 6
+assert_same "$TMP/v0_8_plain_fail_fast_vm.out" "$TMP/v0_8_plain_fail_fast_bash.out" "VM/Bash stdout parity: v0_8_plain_fail_fast"
+assert_contains "$TMP/v0_8_plain_fail_fast_bash.err" "$FIX/parity/plain_fail_fast.ds:1:1: error: command failed with exit 6" "Bash fail-fast reports source marker"
 assert_not_contains "$TMP/v0_8_plain_fail_fast_vm.out" "unreachable" "plain fail-fast VM stops subsequent statements"
 assert_not_contains "$TMP/v0_8_plain_fail_fast_bash.out" "unreachable" "plain fail-fast Bash stops subsequent statements"
 

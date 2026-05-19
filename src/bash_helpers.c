@@ -13,7 +13,7 @@ const char *ds_bash_debug_helpers_source(void) {
         "}\n"
         "__ds_fail() {\n"
         "  local __ds_loc=$1 __ds_code=$2\n"
-        "  echo \"${0##*/}: error: command failed at $__ds_loc with exit $__ds_code\" >&2\n"
+        "  echo \"$__ds_loc: error: command failed with exit $__ds_code\" >&2\n"
         "  exit \"$__ds_code\"\n"
         "}\n\n";
 }

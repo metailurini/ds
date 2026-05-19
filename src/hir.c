@@ -49,6 +49,27 @@ static void print_escaped(FILE *out, const char *data, size_t len) {
 static void dump_expr(FILE *out, const DsLowerExpr *expr, int level);
 static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level);
 
+static void print_literal_expr(FILE *out, const DsLowerExpr *expr) {
+    if (!expr) {
+        fputs("<default>", out);
+        return;
+    }
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING:
+            print_str(out, expr->as.text);
+            break;
+        case DS_LOWER_EXPR_INT:
+            print_str(out, expr->as.text);
+            break;
+        case DS_LOWER_EXPR_BOOL:
+            fputs(expr->as.boolean ? "true" : "false", out);
+            break;
+        default:
+            fputs("<default>", out);
+            break;
+    }
+}
+
 static void dump_word_vec(FILE *out, const DsWordVec *words) {
     fputc('[', out);
     for (size_t i = 0; i < words->len; i++) {
@@ -210,7 +231,10 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
         for (size_t j = 0; j < fn->params.len; j++) {
             if (j) fputs(", ", out);
             print_str(out, fn->params.items[j].name);
-            if (fn->params.items[j].has_default) fputs(" = <default>", out);
+            if (fn->params.items[j].has_default) {
+                fputs(" = ", out);
+                print_literal_expr(out, fn->params.items[j].default_value);
+            }
         }
         fputc(')', out); print_span(out, fn->span); fputc('\n', out);
         indent(out, 2); fputs("Body\n", out);

@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+__ds_trace_cmd() {
+  [[ "${DS_TRACE_CMD:-}" == 1 ]] || return 0
+  local __ds_loc=$1
+  shift
+  printf 'trace: cmd %s:' "$__ds_loc" >&2
+  local __ds_arg
+  for __ds_arg in "$@"; do printf ' %q' "$__ds_arg" >&2; done
+  printf '\n' >&2
+}
+__ds_fail() {
+  local __ds_loc=$1 __ds_code=$2
+  echo "$__ds_loc: error: command failed with exit $__ds_code" >&2
+  exit "$__ds_code"
+}
+
 # ds: tests/v0_2/fixtures/mixed.ds:1
 __ds_name="Danh"
 
@@ -11,26 +26,31 @@ __ds_count=3
 __ds_enabled=true
 
 # ds: tests/v0_2/fixtures/mixed.ds:4
-echo "Deploying ${__ds_name}"
+__ds_trace_cmd 'tests/v0_2/fixtures/mixed.ds':4:1 echo "Deploying ${__ds_name}"
+echo "Deploying ${__ds_name}" || __ds_fail 'tests/v0_2/fixtures/mixed.ds':4:1 "$?"
 
 # ds: tests/v0_2/fixtures/mixed.ds:5
 if [[ "$__ds_name" == "Danh" ]]; then
   # ds: tests/v0_2/fixtures/mixed.ds:6
-  echo "matched"
+  __ds_trace_cmd 'tests/v0_2/fixtures/mixed.ds':6:3 echo "matched"
+  echo "matched" || __ds_fail 'tests/v0_2/fixtures/mixed.ds':6:3 "$?"
 
   # ds: tests/v0_2/fixtures/mixed.ds:7
   if ! [[ "$__ds_count" < 3 ]]; then
     # ds: tests/v0_2/fixtures/mixed.ds:8
-    echo "$__ds_name"
+    __ds_trace_cmd 'tests/v0_2/fixtures/mixed.ds':8:5 echo "$__ds_name"
+    echo "$__ds_name" || __ds_fail 'tests/v0_2/fixtures/mixed.ds':8:5 "$?"
 
   fi
 
 else
   # ds: tests/v0_2/fixtures/mixed.ds:11
-  echo "no"
+  __ds_trace_cmd 'tests/v0_2/fixtures/mixed.ds':11:3 echo "no"
+  echo "no" || __ds_fail 'tests/v0_2/fixtures/mixed.ds':11:3 "$?"
 
 fi
 
 # ds: tests/v0_2/fixtures/mixed.ds:13
-echo "done"
+__ds_trace_cmd 'tests/v0_2/fixtures/mixed.ds':13:1 echo "done"
+echo "done" || __ds_fail 'tests/v0_2/fixtures/mixed.ds':13:1 "$?"
 

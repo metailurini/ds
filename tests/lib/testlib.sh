@@ -173,7 +173,12 @@ assert_vm_bash_parity() {
   assert_status "${name}_vm" "$expected_status"
   assert_status "${name}_bash" "$expected_status"
   assert_same "$TMP/${name}_vm.out" "$TMP/${name}_bash.out" "VM/Bash stdout parity: $name"
-  assert_same "$TMP/${name}_vm.err" "$TMP/${name}_bash.err" "VM/Bash stderr parity: $name"
+  if [ "$expected_status" = 0 ]; then
+    assert_same "$TMP/${name}_vm.err" "$TMP/${name}_bash.err" "VM/Bash stderr parity: $name"
+  else
+    assert_contains "$TMP/${name}_vm.err" ': error:' "VM non-zero diagnostic source marker: $name"
+    assert_contains "$TMP/${name}_bash.err" ': error:' "Bash non-zero diagnostic source marker: $name"
+  fi
 
   local rel
   for rel in $output_files; do

@@ -70,20 +70,39 @@ done
 __ds_app="${__ds_positionals[0]}"
 [[ ${#__ds_positionals[@]} -eq 1 ]] || __ds_error 'unexpected extra positional argument `'"${__ds_positionals[1]}"'`'
 
+__ds_trace_cmd() {
+  [[ "${DS_TRACE_CMD:-}" == 1 ]] || return 0
+  local __ds_loc=$1
+  shift
+  printf 'trace: cmd %s:' "$__ds_loc" >&2
+  local __ds_arg
+  for __ds_arg in "$@"; do printf ' %q' "$__ds_arg" >&2; done
+  printf '\n' >&2
+}
+__ds_fail() {
+  local __ds_loc=$1 __ds_code=$2
+  echo "$__ds_loc: error: command failed with exit $__ds_code" >&2
+  exit "$__ds_code"
+}
+
 # ds: tests/v0_5/fixtures/args_basic.ds:8
-echo "Deploying ${__ds_app} to ${__ds_target}"
+__ds_trace_cmd 'tests/v0_5/fixtures/args_basic.ds':8:1 echo "Deploying ${__ds_app} to ${__ds_target}"
+echo "Deploying ${__ds_app} to ${__ds_target}" || __ds_fail 'tests/v0_5/fixtures/args_basic.ds':8:1 "$?"
 
 # ds: tests/v0_5/fixtures/args_basic.ds:9
-echo "retries=${__ds_retries}"
+__ds_trace_cmd 'tests/v0_5/fixtures/args_basic.ds':9:1 echo "retries=${__ds_retries}"
+echo "retries=${__ds_retries}" || __ds_fail 'tests/v0_5/fixtures/args_basic.ds':9:1 "$?"
 
 # ds: tests/v0_5/fixtures/args_basic.ds:11
 if [[ "$__ds_force" == true ]]; then
   # ds: tests/v0_5/fixtures/args_basic.ds:12
-  echo "force enabled"
+  __ds_trace_cmd 'tests/v0_5/fixtures/args_basic.ds':12:3 echo "force enabled"
+  echo "force enabled" || __ds_fail 'tests/v0_5/fixtures/args_basic.ds':12:3 "$?"
 
 else
   # ds: tests/v0_5/fixtures/args_basic.ds:14
-  echo "force disabled"
+  __ds_trace_cmd 'tests/v0_5/fixtures/args_basic.ds':14:3 echo "force disabled"
+  echo "force disabled" || __ds_fail 'tests/v0_5/fixtures/args_basic.ds':14:3 "$?"
 
 fi
 

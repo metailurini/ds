@@ -130,7 +130,7 @@ assert_contains "$TMP/usage_ast_missing.err" "error: expected a command and <fil
 run_fail usage_check_missing "$DS" check
 assert_contains "$TMP/usage_check_missing.err" "error: expected a command and <file.ds>" "check missing input usage"
 run_fail usage_run_missing "$DS" run
-assert_contains "$TMP/usage_run_missing.err" 'error: expected `ds run <file.ds> [args...]`' "run missing input usage"
+assert_contains "$TMP/usage_run_missing.err" 'error: expected `ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]`' "run missing input usage"
 run_fail usage_bytecode_missing "$DS" bytecode
 assert_contains "$TMP/usage_bytecode_missing.err" "error: expected a command and <file.ds>" "bytecode missing input usage"
 run_fail usage_emit_missing_input "$DS" emit bash
@@ -267,7 +267,7 @@ assert_not_contains "$TMP/pipeline_bytecode.out" "0x" "bytecode has no pointer a
 run_ok help_output "$DS" --help
 for line in \
   "ds <file.ds> [args...]" \
-  "ds run <file.ds> [args...]" \
+  "ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]" \
   "ds tokens <file.ds>" \
   "ds ast <file.ds>" \
   "ds check <file.ds>" \

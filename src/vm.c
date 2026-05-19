@@ -764,6 +764,16 @@ static int find_decl_by_option(const DsLowerProgram *program, const char *name) 
     return -1;
 }
 
+static DsSpan script_error_span(const DsLowerProgram *program) {
+    if (program && program->script_decls.len > 0) return program->script_decls.items[0].span;
+    DsSpan span;
+    memset(&span, 0, sizeof(span));
+    span.start.line = 1;
+    span.start.column = 1;
+    span.end = span.start;
+    return span;
+}
+
 static bool set_var_from_decl(Vm *vm, const DsLowerScriptDecl *decl, const char *text, DsSpan span) {
     DsValue value = ds_value_null();
     if (decl->type == DS_SCRIPT_TYPE_STRING) {
@@ -835,13 +845,13 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
         if (!end_options && strncmp(arg, "--", 2) == 0) {
             int idx = find_decl_by_option(program, arg + 2);
             if (idx < 0) {
-                fprintf(stderr, "%s:1:1: error: unknown option `%s`\n", vm->source && vm->source->path ? vm->source->path : script_basename(vm->source), arg);
+                ds_diag_error(vm->diag, script_error_span(program), "unknown option `%s`", arg);
                 free(seen);
                 return 1;
             }
             if (seen[idx]) {
                 const DsLowerScriptDecl *decl = &program->script_decls.items[idx];
-                fprintf(stderr, "%s:%d:%d: error: duplicate option `%s`\n", span_path(vm->source, decl->span), decl->span.start.line, decl->span.start.column, arg);
+                ds_diag_error(vm->diag, decl->span, "duplicate option `%s`", arg);
                 free(seen);
                 return 1;
             }
@@ -851,7 +861,7 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
                 ds_map_set(&vm->scope->vars, decl->name, ds_value_bool(true));
             } else {
                 if (i + 1 >= argc || strncmp(argv[i + 1], "--", 2) == 0) {
-                    fprintf(stderr, "%s:%d:%d: error: option `%s` requires a value\n", span_path(vm->source, decl->span), decl->span.start.line, decl->span.start.column, arg);
+                    ds_diag_error(vm->diag, decl->span, "option `%s` requires a value", arg);
                     free(seen);
                     return 1;
                 }
@@ -865,7 +875,7 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
         }
         while (next_arg < program->script_decls.len && program->script_decls.items[next_arg].kind != DS_SCRIPT_DECL_ARG) next_arg++;
         if (next_arg >= program->script_decls.len) {
-            fprintf(stderr, "%s:1:1: error: unexpected extra positional argument `%s`\n", vm->source && vm->source->path ? vm->source->path : script_basename(vm->source), arg);
+            ds_diag_error(vm->diag, script_error_span(program), "unexpected extra positional argument `%s`", arg);
             free(seen);
             return 1;
         }
@@ -880,7 +890,7 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_ARG && !seen[i]) {
-            fprintf(stderr, "%s:%d:%d: error: missing required argument `%.*s`\n", span_path(vm->source, decl->span), decl->span.start.line, decl->span.start.column, (int)decl->name.len, decl->name.data);
+            ds_diag_error(vm->diag, decl->span, "missing required argument `%.*s`", (int)decl->name.len, decl->name.data);
             free(seen);
             return 1;
         }

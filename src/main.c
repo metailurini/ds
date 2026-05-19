@@ -369,7 +369,11 @@ int main(int argc, char **argv) {
         while (path_index < argc && strncmp(argv[path_index], "--", 2) == 0) {
             if (strcmp(argv[path_index], "--trace-cmd") == 0) options.trace_cmd = true;
             else if (strcmp(argv[path_index], "--trace-vm") == 0) options.trace_vm = true;
-            else return usage_error("unknown `ds run` trace flag");
+            else {
+                char message[256];
+                snprintf(message, sizeof(message), "unknown run flag `%s`", argv[path_index]);
+                return usage_error(message);
+            }
             path_index++;
         }
         if (path_index >= argc) return usage_error("expected script path after `ds run` flags");

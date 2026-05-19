@@ -219,7 +219,7 @@ run_ok old_bash bash "$TMP/old_basic.sh"
 assert_same "$TMP/old_run.out" "$TMP/old_direct.out" "old direct/run stdout parity"
 assert_same "$TMP/old_run.out" "$TMP/old_bash.out" "old VM/Bash stdout parity"
 run_fail run_no_file "$DS" run
-assert_contains "$TMP/run_no_file.err" 'expected `ds run <file.ds> [args...]`' "run no file usage"
+assert_contains "$TMP/run_no_file.err" 'expected `ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]`' "run no file usage"
 run_fail bytecode_no_file "$DS" bytecode
 assert_contains "$TMP/bytecode_no_file.err" 'expected a command and <file.ds>' "bytecode no file usage"
 run_fail emit_no_output "$DS" emit bash "$FIX/args_basic.ds"
