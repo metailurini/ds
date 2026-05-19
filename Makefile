@@ -2,8 +2,9 @@ CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -g
 CPPFLAGS ?= -Iinclude
 
-SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/lower.c src/hir.c src/format.c src/checker.c src/command.c src/runtime.c src/runtime/hashmap.c src/stdlib.c src/vm.c src/vm_args.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/vm_test.c src/bash_helpers.c src/bash_quote.c src/bash_expr.c src/bash_command.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
+SRC := src/main.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/lower.c src/lower_symbols.c src/lower_expr.c src/lower_stmt.c src/lower_stdlib.c src/lower_functions.c src/lower_tests.c src/lower_free.c src/hir.c src/format.c src/checker.c src/command.c src/runtime.c src/runtime/hashmap.c src/stdlib.c src/vm.c src/vm_args.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/vm_test.c src/bash_helpers.c src/bash_quote.c src/bash_expr.c src/bash_command.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
+PRIVATE_HEADERS := $(wildcard src/*.h src/runtime/*.h)
 BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
@@ -15,7 +16,7 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) -o $@
 
-build/%.o: src/%.c include/ds.h | build
+build/%.o: src/%.c include/ds.h $(PRIVATE_HEADERS) | build
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 

@@ -112,6 +112,17 @@ runtime behavior; Bash emission uses the metadata helper names when rendering
 calls. The lowered representation remains the shared backend contract between VM
 execution and standalone Bash emission.
 
+The lowerer is split into focused private components rather than one semantic
+god file. `src/lower_expr.c` owns expression-level value-kind checks, command
+result field validation, collection literal rules, and command-word validation;
+`src/lower_stmt.c` owns statement/block lowering; `src/lower_functions.c` owns
+function signatures, defaults, body lowering, and recursion rejection;
+`src/lower_tests.c` owns test metadata collection; `src/lower_stdlib.c` owns
+script declarations and string/default decoding; `src/lower_symbols.c` owns
+scopes and shared vector/name utilities; and `src/lower_free.c` owns lowered HIR
+cleanup. `src/lower_internal.h` is the private boundary between those lowering
+components.
+
 Statement-only helpers such as `file.write`, `file.append`, `cmd.require`,
 `env.set`, and `env.unset` are not values. Value-returning helpers are rejected
 as bare statements unless the language explicitly documents that statement form.

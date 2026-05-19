@@ -85,9 +85,17 @@ implementation details into smaller internal modules:
 - `src/stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
-- `src/lower.c`, the split `src/vm_*.c` VM modules, and the split `src/bash_*.c`
-  consume that table rather than each maintaining independent helper
-  arity/name lists.
+- Lowering responsibilities are split by component: `src/lower.c` owns the
+  orchestration entrypoints, `src/lower_expr.c` owns expression lowering and
+  command-word validation, `src/lower_stmt.c` owns statement/block lowering,
+  `src/lower_symbols.c` owns scope/name/vector utilities,
+  `src/lower_stdlib.c` owns script declarations and literal decoding,
+  `src/lower_functions.c` owns function collection/defaults/recursion checks,
+  `src/lower_tests.c` owns test collection, and `src/lower_free.c` owns HIR
+  cleanup. These modules consume `src/stdlib.c` metadata rather than each
+  maintaining independent helper arity/name lists.
+- `src/lower_internal.h` contains lowerer-private symbol/value-kind structs and
+  prototypes. It is not part of the public user-facing API.
 - `src/vm_internal.h` contains bytecode/VM-private structs shared only by VM
   implementation files. It is not part of the public user-facing API.
 - VM responsibilities are split by component: `src/vm.c` owns the main
@@ -683,6 +691,14 @@ src/
   ir/
     hir.c
     lower.c
+    lower_expr.c
+    lower_stmt.c
+    lower_symbols.c
+    lower_stdlib.c
+    lower_functions.c
+    lower_tests.c
+    lower_free.c
+    lower_internal.h
 
   bytecode/
     bc.c

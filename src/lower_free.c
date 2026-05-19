@@ -1,0 +1,122 @@
+#include "lower_internal.h"
+
+#include <stdlib.h>
+
+void lower_expr_free(DsLowerExpr *expr) {
+    if (!expr) return;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_IDENT:
+        case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INT:
+            free(expr->as.text.data);
+            break;
+        case DS_LOWER_EXPR_RUN:
+            ds_command_free(&expr->as.run);
+            break;
+        case DS_LOWER_EXPR_FIELD:
+            lower_expr_free(expr->as.field.object);
+            free(expr->as.field.field.data);
+            break;
+        case DS_LOWER_EXPR_UNARY:
+            free(expr->as.unary.op.data);
+            lower_expr_free(expr->as.unary.right);
+            break;
+        case DS_LOWER_EXPR_BINARY:
+            lower_expr_free(expr->as.binary.left);
+            free(expr->as.binary.op.data);
+            lower_expr_free(expr->as.binary.right);
+            break;
+        case DS_LOWER_EXPR_CALL:
+            free(expr->as.call.name.data);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) lower_expr_free(expr->as.call.args.items[i]);
+            free(expr->as.call.args.items);
+            break;
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) lower_expr_free(expr->as.array.elements.items[i]);
+            free(expr->as.array.elements.items);
+            break;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                free(expr->as.map.entries.items[i].key.data);
+                lower_expr_free(expr->as.map.entries.items[i].value);
+            }
+            free(expr->as.map.entries.items);
+            break;
+        case DS_LOWER_EXPR_INDEX:
+            lower_expr_free(expr->as.index.object);
+            lower_expr_free(expr->as.index.index);
+            free(expr->as.index.map_key.data);
+            break;
+        case DS_LOWER_EXPR_BOOL:
+        case DS_LOWER_EXPR_ERROR:
+            break;
+    }
+    free(expr);
+}
+
+void lower_stmt_free(DsLowerStmt *stmt) {
+    if (!stmt) return;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET:
+            free(stmt->as.let_stmt.name.data);
+            lower_expr_free(stmt->as.let_stmt.value);
+            break;
+        case DS_LOWER_STMT_IF:
+            lower_expr_free(stmt->as.if_stmt.condition);
+            lower_stmt_free(stmt->as.if_stmt.then_branch);
+            lower_stmt_free(stmt->as.if_stmt.else_branch);
+            break;
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) lower_stmt_free(stmt->as.block_stmt.statements.items[i]);
+            free(stmt->as.block_stmt.statements.items);
+            break;
+        case DS_LOWER_STMT_CMD:
+            ds_command_free(&stmt->as.cmd_stmt);
+            break;
+        case DS_LOWER_STMT_CALL:
+            free(stmt->as.call_stmt.name.data);
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) lower_expr_free(stmt->as.call_stmt.args.items[i]);
+            free(stmt->as.call_stmt.args.items);
+            break;
+        case DS_LOWER_STMT_FOR_ARRAY:
+            free(stmt->as.for_stmt.name.data);
+            lower_expr_free(stmt->as.for_stmt.iterable);
+            lower_stmt_free(stmt->as.for_stmt.body);
+            break;
+        case DS_LOWER_STMT_PUSH:
+            free(stmt->as.push_stmt.name.data);
+            lower_expr_free(stmt->as.push_stmt.value);
+            break;
+        case DS_LOWER_STMT_ASSERT:
+            lower_expr_free(stmt->as.assert_stmt.condition);
+            break;
+    }
+    free(stmt);
+}
+
+void ds_lower_program_free(DsLowerProgram *program) {
+    if (!program) return;
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        free(program->script_decls.items[i].name.data);
+        free(program->script_decls.items[i].default_text.data);
+    }
+    free(program->script_decls.items);
+    for (size_t i = 0; i < program->functions.len; i++) {
+        free(program->functions.items[i].name.data);
+        for (size_t j = 0; j < program->functions.items[i].params.len; j++) {
+            free(program->functions.items[i].params.items[j].name.data);
+            lower_expr_free(program->functions.items[i].params.items[j].default_value);
+        }
+        free(program->functions.items[i].params.items);
+        lower_stmt_free(program->functions.items[i].body);
+    }
+    free(program->functions.items);
+    for (size_t i = 0; i < program->tests.len; i++) {
+        free(program->tests.items[i].name.data);
+        lower_stmt_free(program->tests.items[i].body);
+    }
+    free(program->tests.items);
+    for (size_t i = 0; i < program->statements.len; i++) lower_stmt_free(program->statements.items[i]);
+    free(program->statements.items);
+    free(program);
+}
