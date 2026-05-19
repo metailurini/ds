@@ -45,6 +45,7 @@ static void usage(FILE *out) {
     fputs("  ds tokens <file.ds>\n", out);
     fputs("  ds ast <file.ds>\n", out);
     fputs("  ds check <file.ds>\n", out);
+    fputs("  ds fmt [--check] <file.ds>\n", out);
     fputs("  ds hir <file.ds>\n", out);
     fputs("  ds bytecode <file.ds>\n", out);
     fputs("  ds emit bash <file.ds> -o <file.sh>\n", out);
@@ -329,6 +330,7 @@ static bool cli_load_lower(const char *path, CliProgram *program) {
 static bool is_direct_script_arg(const char *arg) {
     return strcmp(arg, "run") != 0 && strcmp(arg, "tokens") != 0 &&
            strcmp(arg, "ast") != 0 && strcmp(arg, "check") != 0 && strcmp(arg, "test") != 0 &&
+           strcmp(arg, "fmt") != 0 &&
            strcmp(arg, "hir") != 0 && strcmp(arg, "bytecode") != 0 && strcmp(arg, "emit") != 0;
 }
 
@@ -365,6 +367,51 @@ static int cli_run_tests(const char *path) {
 static bool looks_like_script_path(const char *arg) {
     size_t len = strlen(arg);
     return strstr(arg, "/") != NULL || (len >= 3 && strcmp(arg + len - 3, ".ds") == 0);
+}
+
+static int cli_format(int argc, char **argv) {
+    bool check = false;
+    const char *path = NULL;
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--check") == 0) {
+            check = true;
+        } else if (strncmp(argv[i], "--", 2) == 0 || strcmp(argv[i], "-w") == 0) {
+            char message[256];
+            snprintf(message, sizeof(message), "unknown fmt flag `%s`", argv[i]);
+            return usage_error(message);
+        } else if (!path) {
+            path = argv[i];
+        } else {
+            return usage_error("expected `ds fmt [--check] <file.ds>`");
+        }
+    }
+    if (!path) return usage_error("expected `ds fmt [--check] <file.ds>`");
+
+    CliProgram program;
+    if (!cli_load_parse(path, &program)) {
+        cli_program_free(&program);
+        return 1;
+    }
+    DsString formatted;
+    bool ok = ds_format_source(&program.source, program.ast, &formatted, &program.diag);
+    if (!ok) {
+        cli_program_free(&program);
+        return 1;
+    }
+    int rc = 0;
+    if (check) {
+        bool differs = formatted.len != program.source.len;
+        if (!differs && memcmp(formatted.data, program.source.data, formatted.len) != 0) differs = true;
+        if (differs) {
+            fprintf(stderr, "%s: needs formatting\n", path);
+            rc = 1;
+        }
+    } else if (formatted.len > 0) {
+        fwrite(formatted.data, 1, formatted.len, stdout);
+    }
+    ds_string_free(&formatted);
+    cli_program_free(&program);
+    return rc;
 }
 
 int main(int argc, char **argv) {
@@ -419,6 +466,10 @@ int main(int argc, char **argv) {
         return cli_run_tests(argv[2]);
     }
 
+    if (strcmp(argv[1], "fmt") == 0) {
+        return cli_format(argc, argv);
+    }
+
     if (argc != 3) {
         return usage_error("expected a command and <file.ds>");
     }
@@ -443,6 +494,7 @@ int main(int argc, char **argv) {
 
     if (strcmp(cmd, "check") == 0) {
         int rc = cli_load_lower(path, &program) ? 0 : 1;
+        if (rc == 0) ds_check_warnings_ast(program.ast, stderr);
         cli_program_free(&program);
         return rc;
     }

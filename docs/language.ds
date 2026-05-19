@@ -530,6 +530,11 @@ test "explicit failure helpers" {
 # - one blank line between top-level declarations;
 # - spaces around binary operators;
 # - no trailing whitespace.
+#
+# The first formatter rejects files containing comments because the current
+# lexer/parser pipeline does not retain trivia safely enough to preserve them.
+# Comment-preserving formatting is deferred rather than silently dropping user
+# comments.
 
 
 # -----------------------------------------------------------------------------

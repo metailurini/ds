@@ -552,6 +552,10 @@ bool ds_lower_validate(const DsAst *ast, DsDiag *diag);
 void ds_lower_program_free(DsLowerProgram *program);
 bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out);
 
+/* Formatter and conservative checker warnings. */
+bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, DsDiag *diag);
+bool ds_check_warnings_ast(const DsAst *ast, FILE *out);
+
 /* Shared command helpers. */
 void ds_word_vec_init(DsWordVec *vec);
 bool ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src);
