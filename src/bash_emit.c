@@ -650,6 +650,32 @@ static bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *o
     return true;
 }
 
+static const char *trace_redirect_op(DsRedirectKind kind) {
+    switch (kind) {
+        case DS_REDIRECT_OUT: return ">";
+        case DS_REDIRECT_OUT_APPEND: return ">>";
+        case DS_REDIRECT_ERR: return "2>";
+        case DS_REDIRECT_ERR_APPEND: return "2>>";
+        case DS_REDIRECT_ALL: return "&>";
+        case DS_REDIRECT_ALL_APPEND: return "&>>";
+        case DS_REDIRECT_NONE: return NULL;
+    }
+    return NULL;
+}
+
+static bool emit_trace_redirect_args(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out) {
+    const char *op = trace_redirect_op(redirect->kind);
+    if (!op) return true;
+    DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = redirect->target_span};
+    fake.as.text = redirect->target;
+    buf_append(out, " ");
+    buf_append(out, "\"");
+    buf_append(out, op);
+    buf_append(out, "\"");
+    buf_append(out, " ");
+    return emit_interpolated_string(e, &fake, out);
+}
+
 static bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span) {
     buf_append(out, " ");
     emit_source_loc(out, e->source, span);
@@ -1012,6 +1038,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, " ");
                 if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
             }
+            if (!emit_trace_redirect_args(e, &stmt->as.cmd_stmt.redirect, &e->out)) return false;
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
             for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {

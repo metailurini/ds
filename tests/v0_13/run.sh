@@ -432,6 +432,14 @@ assert_contains "$TMP/bash_plain_trace.err" 'trace: cmd' 'Bash trace emits comma
 assert_contains "$TMP/bash_plain_trace.err" "$FIX/plain_trace.ds:2:1" 'Bash trace source span'
 assert_contains "$TMP/bash_plain_trace.err" 'fake-ok' 'Bash trace command name'
 assert_not_contains "$TMP/plain_trace.sh" ' ds ' 'emitted Bash does not invoke ds command'
+capture_status bash_plain_trace_empty env PATH="$FAKEBIN:$PATH" DS_TRACE_CMD= bash "$TMP/plain_trace.sh"
+assert_status bash_plain_trace_empty 0
+assert_same "$TMP/bash_plain_default.out" "$TMP/bash_plain_trace_empty.out" 'Bash empty trace preserves stdout'
+assert_not_contains "$TMP/bash_plain_trace_empty.err" 'trace: cmd' 'Bash empty DS_TRACE_CMD does not trace'
+capture_status bash_plain_trace_zero env PATH="$FAKEBIN:$PATH" DS_TRACE_CMD=0 bash "$TMP/plain_trace.sh"
+assert_status bash_plain_trace_zero 0
+assert_same "$TMP/bash_plain_default.out" "$TMP/bash_plain_trace_zero.out" 'Bash zero trace preserves stdout'
+assert_not_contains "$TMP/bash_plain_trace_zero.err" 'trace: cmd' 'Bash DS_TRACE_CMD=0 does not trace'
 
 run_ok emit_captured_trace "$DS" emit bash "$FIX/captured_trace.ds" -o "$TMP/captured_trace.sh"
 run_ok bash_captured_syntax bash -n "$TMP/captured_trace.sh"
@@ -495,6 +503,23 @@ assert_status combined_trace 0
 assert_contains "$TMP/combined_trace.err" 'trace: vm ip=' 'combined trace includes VM lines'
 assert_contains "$TMP/combined_trace.err" 'trace: cmd' 'combined trace includes command lines'
 assert_same "$TMP/plain_trace.out" "$TMP/combined_trace.out" 'combined trace preserves stdout'
+capture_status combined_trace_reversed env PATH="$FAKEBIN:$PATH" "$DS" run --trace-vm --trace-cmd "$FIX/plain_trace.ds"
+assert_status combined_trace_reversed 0
+assert_contains "$TMP/combined_trace_reversed.err" 'trace: vm ip=' 'combined trace reversed includes VM lines'
+assert_contains "$TMP/combined_trace_reversed.err" 'trace: cmd' 'combined trace reversed includes command lines'
+assert_same "$TMP/plain_trace.out" "$TMP/combined_trace_reversed.out" 'combined trace reversed preserves stdout'
+capture_status duplicate_trace_flag env PATH="$FAKEBIN:$PATH" "$DS" run --trace-cmd --trace-cmd "$FIX/plain_trace.ds"
+assert_status duplicate_trace_flag 0
+assert_line_count 1 "$TMP/duplicate_trace_flag.err" '^trace: cmd ' 'duplicate trace flag is idempotent'
+
+write_fixture "$FIX/special_trace.ds" <<'DS'
+fake-ok "space arg" "dollar $HOME" "star *" "" "slash \\"
+DS
+capture_status special_trace env PATH="$FAKEBIN:$PATH" "$DS" run --trace-cmd "$FIX/special_trace.ds"
+assert_status special_trace 0
+for text in '"space arg"' '"dollar $HOME"' '"star *"' '""' '"slash \\"'; do
+  assert_contains "$TMP/special_trace.err" "$text" "trace renders special arg $text"
+done
 
 write_fixture "$FIX/vm_trace_flow.ds" <<'DS'
 fn show(x) {
@@ -567,6 +592,70 @@ DS
 capture_status cmd_require_missing "$DS" run "$FIX/cmd_require_missing.ds"
 assert_nonzero_status cmd_require_missing
 assert_diag_span "$TMP/cmd_require_missing.err" "$FIX/cmd_require_missing.ds" 'required command `definitely_missing_cmd_zzz` was not found on PATH' 'cmd.require source diagnostic'
+write_fixture "$FIX/file_write_missing.ds" <<'DS'
+file.write("missing-dir/out.txt", "x")
+DS
+capture_status file_write_missing bash -c "cd '$TMP' && '$DS' run '$FIX/file_write_missing.ds'"
+assert_nonzero_status file_write_missing
+assert_diag_span "$TMP/file_write_missing.err" "$FIX/file_write_missing.ds" 'failed to write file `missing-dir/out.txt`' 'file.write source diagnostic'
+write_fixture "$FIX/file_append_missing.ds" <<'DS'
+file.append("missing-dir/out.txt", "x")
+DS
+capture_status file_append_missing bash -c "cd '$TMP' && '$DS' run '$FIX/file_append_missing.ds'"
+assert_nonzero_status file_append_missing
+assert_diag_span "$TMP/file_append_missing.err" "$FIX/file_append_missing.ds" 'failed to append file `missing-dir/out.txt`' 'file.append source diagnostic'
+
+write_fixture "$FIX/missing_import_root.ds" <<'DS'
+import "./missing_imported.ds"
+DS
+capture_status missing_import_diag "$DS" run "$FIX/missing_import_root.ds"
+assert_nonzero_status missing_import_diag
+assert_diag_span "$TMP/missing_import_diag.err" "$FIX/missing_import_root.ds" 'failed to open imported file' 'missing import source diagnostic'
+write_fixture "$FIX/import_cycle_a.ds" <<'DS'
+import "./import_cycle_b.ds"
+DS
+write_fixture "$FIX/import_cycle_b.ds" <<'DS'
+import "./import_cycle_a.ds"
+DS
+capture_status import_cycle_diag "$DS" run "$FIX/import_cycle_a.ds"
+assert_nonzero_status import_cycle_diag
+assert_diag_span "$TMP/import_cycle_diag.err" "$FIX/import_cycle_b.ds" 'import cycle detected' 'import cycle source diagnostic'
+write_fixture "$FIX/imported_fail.ds" <<'DS'
+fn fail_imported() {
+  fake-fail-now
+}
+DS
+write_fixture "$FIX/imported_fail_root.ds" <<'DS'
+import "./imported_fail.ds"
+fail_imported()
+DS
+capture_status imported_runtime_fail env PATH="$FAKEBIN:$PATH" "$DS" run "$FIX/imported_fail_root.ds"
+assert_status imported_runtime_fail 9
+assert_diag_span "$TMP/imported_runtime_fail.err" "$FIX/imported_fail.ds" 'command `fake-fail-now` failed with exit 9' 'imported runtime failure source diagnostic'
+
+write_fixture "$FIX/helper_collision.ds" <<'DS'
+fn __ds_trace_cmd() {
+  echo "user helper"
+}
+
+__ds_trace_cmd()
+DS
+run_ok helper_collision_emit "$DS" emit bash "$FIX/helper_collision.ds" -o "$TMP/helper_collision.sh"
+run_ok helper_collision_syntax bash -n "$TMP/helper_collision.sh"
+capture_status helper_collision_bash env DS_TRACE_CMD=1 bash "$TMP/helper_collision.sh"
+assert_status helper_collision_bash 0
+assert_contains "$TMP/helper_collision_bash.out" 'user helper' 'user __ds_ function does not collide with Bash helpers'
+
+run_ok emit_cwd_trace "$DS" emit bash "$FIX/redir_trace.ds" -o "$TMP/redir_trace.sh"
+run_ok bash_cwd_trace_syntax bash -n "$TMP/redir_trace.sh"
+mkdir -p "$TMP/bash_cwd_trace"
+capture_status bash_cwd_trace bash -c "cd '$TMP/bash_cwd_trace' && PATH='$FAKEBIN':\$PATH DS_TRACE_CMD=1 bash '$TMP/redir_trace.sh'"
+assert_status bash_cwd_trace 0
+assert_contains "$TMP/bash_cwd_trace.err" '> "out.txt"' 'Bash trace from different cwd shows relative stdout redirection'
+assert_contains "$TMP/bash_cwd_trace.err" '&> "all.txt"' 'Bash trace from different cwd shows relative combined redirection'
+[ -f "$TMP/bash_cwd_trace/out.txt" ] || fail 'Bash different cwd redirection created out.txt'
+[ -f "$TMP/bash_cwd_trace/all.txt" ] || fail 'Bash different cwd redirection created all.txt'
+pass 'Bash different cwd redirection artifacts created'
 
 # Regression coverage proving old normal execution and Bash emission remain quiet/compatible.
 run_ok old_check "$DS" check examples/basic.ds
