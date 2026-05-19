@@ -554,7 +554,7 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out);
 
 /* Formatter and conservative checker warnings. */
 bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, DsDiag *diag);
-bool ds_check_warnings_ast(const DsAst *ast, FILE *out);
+size_t ds_check_warnings_ast(const DsAst *ast, FILE *out);
 
 /* Shared command helpers. */
 void ds_word_vec_init(DsWordVec *vec);

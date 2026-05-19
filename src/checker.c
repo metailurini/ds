@@ -21,6 +21,7 @@ typedef struct {
     size_t cap;
     FILE *out;
     size_t warnings;
+    bool in_test;
 } Checker;
 
 static bool str_eq(DsStr a, const char *b) {
@@ -61,12 +62,36 @@ static void print_source_line(FILE *out, const DsSource *source, int wanted_line
     fputs("^\n", out);
 }
 
-static void warning(Checker *c, DsSpan span, const char *kind, DsStr name) {
+static void warning_name(Checker *c, DsSpan span, const char *kind, DsStr name) {
     char location[1024];
     ds_diag_format_location(span.source, span, location, sizeof(location));
     fprintf(c->out, "%s: warning: unused %s `%.*s`\n", location, kind, (int)name.len, name.data);
     print_source_line(c->out, span.source, span.start.line, span.start.column);
     c->warnings++;
+}
+
+static void warning_text(Checker *c, DsSpan span, const char *message) {
+    char location[1024];
+    ds_diag_format_location(span.source, span, location, sizeof(location));
+    fprintf(c->out, "%s: warning: %s\n", location, message);
+    print_source_line(c->out, span.source, span.start.line, span.start.column);
+    c->warnings++;
+}
+
+static const Symbol *find_visible_symbol(const Checker *c, DsStr name) {
+    for (size_t i = c->len; i > 0; i--) {
+        const Symbol *sym = &c->items[i - 1];
+        if (dsstr_eq(sym->name, name)) return sym;
+    }
+    return NULL;
+}
+
+static void warn_if_shadowing(Checker *c, DsStr name, DsSpan span) {
+    const Symbol *shadowed = find_visible_symbol(c, name);
+    if (!shadowed) return;
+    char message[256];
+    snprintf(message, sizeof(message), "declaration `%.*s` shadows an outer declaration", (int)name.len, name.data);
+    warning_text(c, span, message);
 }
 
 static void use_name(Checker *c, DsStr name) {
@@ -160,17 +185,31 @@ static void finish_scope(Checker *c, size_t base) {
     for (size_t i = base; i < c->len; i++) {
         Symbol *sym = &c->items[i];
         if (!sym->used) {
-            if (sym->kind == SYM_PARAM) warning(c, sym->span, "parameter", sym->name);
-            else if (sym->kind == SYM_LET) warning(c, sym->span, "variable", sym->name);
+            if (sym->kind == SYM_PARAM) warning_name(c, sym->span, "parameter", sym->name);
+            else if (sym->kind == SYM_LET) warning_name(c, sym->span, "variable", sym->name);
         }
     }
     c->len = base;
 }
 
+static bool is_test_terminal_command(const DsStmt *stmt) {
+    if (!stmt || stmt->kind != DS_STMT_CMD || stmt->as.cmd_stmt.words.len == 0) return false;
+    DsStr first = stmt->as.cmd_stmt.words.items[0].text;
+    return str_eq(first, "fail") || str_eq(first, "exit");
+}
+
 static void check_block(Checker *c, const DsStmt *block, size_t depth) {
     if (!block || block->kind != DS_STMT_BLOCK) return;
     size_t base = c->len;
-    for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) check_stmt(c, block->as.block_stmt.statements.items[i], depth + 1);
+    bool unreachable = false;
+    for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) {
+        DsStmt *stmt = block->as.block_stmt.statements.items[i];
+        if (unreachable) {
+            warning_text(c, stmt->span, "unreachable statement after test-only `fail` or `exit`");
+        }
+        check_stmt(c, stmt, depth + 1);
+        if (c->in_test && is_test_terminal_command(stmt)) unreachable = true;
+    }
     finish_scope(c, base);
 }
 
@@ -179,7 +218,10 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
     switch (stmt->kind) {
         case DS_STMT_LET:
             check_expr(c, stmt->as.let_stmt.value);
-            if (!str_eq(stmt->as.let_stmt.name, "_")) symbol_push(c, stmt->as.let_stmt.name, stmt->span, SYM_LET, depth);
+            if (!str_eq(stmt->as.let_stmt.name, "_")) {
+                warn_if_shadowing(c, stmt->as.let_stmt.name, stmt->span);
+                symbol_push(c, stmt->as.let_stmt.name, stmt->span, SYM_LET, depth);
+            }
             break;
         case DS_STMT_IF:
             check_expr(c, stmt->as.if_stmt.condition);
@@ -200,7 +242,10 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
                 DsFnParam *param = &stmt->as.fn_stmt.params.items[i];
                 if (param->default_value) check_expr(c, param->default_value);
-                if (!str_eq(param->name, "_")) symbol_push(c, param->name, param->span, SYM_PARAM, depth + 1);
+                if (!str_eq(param->name, "_")) {
+                    warn_if_shadowing(c, param->name, param->span);
+                    symbol_push(c, param->name, param->span, SYM_PARAM, depth + 1);
+                }
             }
             check_block(c, stmt->as.fn_stmt.body, depth + 1);
             finish_scope(c, base);
@@ -212,8 +257,12 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
         case DS_STMT_FOR: {
             check_expr(c, stmt->as.for_stmt.iterable);
             size_t base = c->len;
+            warn_if_shadowing(c, stmt->as.for_stmt.key_name, stmt->span);
             symbol_push(c, stmt->as.for_stmt.key_name, stmt->span, SYM_LOOP, depth + 1);
-            if (stmt->as.for_stmt.has_value_name) symbol_push(c, stmt->as.for_stmt.value_name, stmt->span, SYM_LOOP, depth + 1);
+            if (stmt->as.for_stmt.has_value_name) {
+                warn_if_shadowing(c, stmt->as.for_stmt.value_name, stmt->span);
+                symbol_push(c, stmt->as.for_stmt.value_name, stmt->span, SYM_LOOP, depth + 1);
+            }
             check_block(c, stmt->as.for_stmt.body, depth + 1);
             c->len = base;
             break;
@@ -222,16 +271,20 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             use_name(c, stmt->as.push_stmt.name);
             check_expr(c, stmt->as.push_stmt.value);
             break;
-        case DS_STMT_TEST:
+        case DS_STMT_TEST: {
+            bool was_in_test = c->in_test;
+            c->in_test = true;
             check_block(c, stmt->as.test_stmt.body, depth + 1);
+            c->in_test = was_in_test;
             break;
+        }
         case DS_STMT_ASSERT:
             check_expr(c, stmt->as.assert_stmt.condition);
             break;
     }
 }
 
-bool ds_check_warnings_ast(const DsAst *ast, FILE *out) {
+size_t ds_check_warnings_ast(const DsAst *ast, FILE *out) {
     Checker c = {0};
     c.out = out ? out : stderr;
     size_t base = c.len;
@@ -239,11 +292,13 @@ bool ds_check_warnings_ast(const DsAst *ast, FILE *out) {
         for (size_t i = 0; i < ast->script.declarations.len; i++) {
             const DsScriptDecl *decl = &ast->script.declarations.items[i];
             if (decl->default_value) check_expr(&c, decl->default_value);
+            warn_if_shadowing(&c, decl->name, decl->span);
             symbol_push(&c, decl->name, decl->span, SYM_SCRIPT, 0);
         }
     }
     for (size_t i = 0; i < ast->statements.len; i++) check_stmt(&c, ast->statements.items[i], 0);
     finish_scope(&c, base);
+    size_t warnings = c.warnings;
     free(c.items);
-    return true;
+    return warnings;
 }

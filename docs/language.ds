@@ -535,6 +535,14 @@ test "explicit failure helpers" {
 # lexer/parser pipeline does not retain trivia safely enough to preserve them.
 # Comment-preserving formatting is deferred rather than silently dropping user
 # comments.
+#
+# Formatter/checker CLI behavior:
+# - `ds fmt file.ds` prints formatted source to stdout;
+# - `ds fmt --check file.ds` reports whether the file is already formatted;
+# - `ds fmt --write file.ds` and `ds fmt -w file.ds` update the file in place;
+# - `ds check file.ds` keeps warnings non-fatal by default;
+# - `ds check --warnings-as-errors file.ds` exits non-zero when warnings exist;
+# - `ds check --no-warnings file.ds` suppresses the warning layer.
 
 
 # -----------------------------------------------------------------------------

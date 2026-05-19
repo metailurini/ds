@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef PATH_MAX
@@ -44,8 +45,8 @@ static void usage(FILE *out) {
     fputs("  ds test <file.ds>\n", out);
     fputs("  ds tokens <file.ds>\n", out);
     fputs("  ds ast <file.ds>\n", out);
-    fputs("  ds check <file.ds>\n", out);
-    fputs("  ds fmt [--check] <file.ds>\n", out);
+    fputs("  ds check <file.ds> [--warnings-as-errors] [--no-warnings]\n", out);
+    fputs("  ds fmt <file.ds> [--check] [--write|-w]\n", out);
     fputs("  ds hir <file.ds>\n", out);
     fputs("  ds bytecode <file.ds>\n", out);
     fputs("  ds emit bash <file.ds> -o <file.sh>\n", out);
@@ -369,23 +370,55 @@ static bool looks_like_script_path(const char *arg) {
     return strstr(arg, "/") != NULL || (len >= 3 && strcmp(arg + len - 3, ".ds") == 0);
 }
 
+static bool write_formatted_file(const char *path, const DsString *formatted) {
+    struct stat st;
+    mode_t mode = 0644;
+    if (stat(path, &st) == 0) mode = st.st_mode & 0777;
+
+    size_t path_len = strlen(path);
+    char *tmp = (char *)ds_xcalloc(path_len + 32, 1);
+    snprintf(tmp, path_len + 32, "%s.tmp.%ld", path, (long)getpid());
+    FILE *out = fopen(tmp, "wb");
+    if (!out) {
+        fprintf(stderr, "error: failed to write `%s`: %s\n", tmp, strerror(errno));
+        free(tmp);
+        return false;
+    }
+    bool ok = formatted->len == 0 || fwrite(formatted->data, 1, formatted->len, out) == formatted->len;
+    if (fclose(out) != 0) ok = false;
+    if (ok && chmod(tmp, mode) != 0) ok = false;
+    if (ok && rename(tmp, path) != 0) ok = false;
+    if (!ok) {
+        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(errno));
+        unlink(tmp);
+        free(tmp);
+        return false;
+    }
+    free(tmp);
+    return true;
+}
+
 static int cli_format(int argc, char **argv) {
     bool check = false;
+    bool write = false;
     const char *path = NULL;
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--check") == 0) {
             check = true;
-        } else if (strncmp(argv[i], "--", 2) == 0 || strcmp(argv[i], "-w") == 0) {
+        } else if (strcmp(argv[i], "--write") == 0 || strcmp(argv[i], "-w") == 0) {
+            write = true;
+        } else if (strncmp(argv[i], "--", 2) == 0) {
             char message[256];
             snprintf(message, sizeof(message), "unknown fmt flag `%s`", argv[i]);
             return usage_error(message);
         } else if (!path) {
             path = argv[i];
         } else {
-            return usage_error("expected `ds fmt [--check] <file.ds>`");
+            return usage_error("expected `ds fmt [--check] [--write|-w] <file.ds>`");
         }
     }
-    if (!path) return usage_error("expected `ds fmt [--check] <file.ds>`");
+    if (!path) return usage_error("expected `ds fmt [--check] [--write|-w] <file.ds>`");
+    if (check && write) return usage_error("`ds fmt --check --write` is invalid");
 
     CliProgram program;
     if (!cli_load_parse(path, &program)) {
@@ -406,10 +439,44 @@ static int cli_format(int argc, char **argv) {
             fprintf(stderr, "%s: needs formatting\n", path);
             rc = 1;
         }
+    } else if (write) {
+        if (!write_formatted_file(path, &formatted)) rc = 1;
     } else if (formatted.len > 0) {
         fwrite(formatted.data, 1, formatted.len, stdout);
     }
     ds_string_free(&formatted);
+    cli_program_free(&program);
+    return rc;
+}
+
+static int cli_check(int argc, char **argv) {
+    bool warnings_as_errors = false;
+    bool no_warnings = false;
+    const char *path = NULL;
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "--warnings-as-errors") == 0) {
+            warnings_as_errors = true;
+        } else if (strcmp(argv[i], "--no-warnings") == 0) {
+            no_warnings = true;
+        } else if (strncmp(argv[i], "--", 2) == 0) {
+            char message[256];
+            snprintf(message, sizeof(message), "unknown check flag `%s`", argv[i]);
+            return usage_error(message);
+        } else if (!path) {
+            path = argv[i];
+        } else {
+            return usage_error("expected `ds check [--warnings-as-errors] [--no-warnings] <file.ds>`");
+        }
+    }
+    if (!path) return usage_error("expected `ds check [--warnings-as-errors] [--no-warnings] <file.ds>`");
+    if (warnings_as_errors && no_warnings) return usage_error("`ds check --warnings-as-errors --no-warnings` is invalid");
+
+    CliProgram program;
+    int rc = cli_load_lower(path, &program) ? 0 : 1;
+    if (rc == 0 && !no_warnings) {
+        size_t warnings = ds_check_warnings_ast(program.ast, stderr);
+        if (warnings_as_errors && warnings > 0) rc = 1;
+    }
     cli_program_free(&program);
     return rc;
 }
@@ -470,6 +537,10 @@ int main(int argc, char **argv) {
         return cli_format(argc, argv);
     }
 
+    if (strcmp(argv[1], "check") == 0) {
+        return cli_check(argc, argv);
+    }
+
     if (argc != 3) {
         return usage_error("expected a command and <file.ds>");
     }
@@ -488,13 +559,6 @@ int main(int argc, char **argv) {
     if (strcmp(cmd, "ast") == 0) {
         int rc = cli_load_parse(path, &program) ? 0 : 1;
         if (rc == 0) ds_ast_print(program.ast, stdout);
-        cli_program_free(&program);
-        return rc;
-    }
-
-    if (strcmp(cmd, "check") == 0) {
-        int rc = cli_load_lower(path, &program) ? 0 : 1;
-        if (rc == 0) ds_check_warnings_ast(program.ast, stderr);
         cli_program_free(&program);
         return rc;
     }
