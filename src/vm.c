@@ -835,12 +835,13 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
         if (!end_options && strncmp(arg, "--", 2) == 0) {
             int idx = find_decl_by_option(program, arg + 2);
             if (idx < 0) {
-                fprintf(stderr, "%s: error: unknown option `%s`\n", script_basename(vm->source), arg);
+                fprintf(stderr, "%s:1:1: error: unknown option `%s`\n", vm->source && vm->source->path ? vm->source->path : script_basename(vm->source), arg);
                 free(seen);
                 return 1;
             }
             if (seen[idx]) {
-                fprintf(stderr, "%s: error: duplicate option `%s`\n", script_basename(vm->source), arg);
+                const DsLowerScriptDecl *decl = &program->script_decls.items[idx];
+                fprintf(stderr, "%s:%d:%d: error: duplicate option `%s`\n", span_path(vm->source, decl->span), decl->span.start.line, decl->span.start.column, arg);
                 free(seen);
                 return 1;
             }
@@ -850,7 +851,7 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
                 ds_map_set(&vm->scope->vars, decl->name, ds_value_bool(true));
             } else {
                 if (i + 1 >= argc || strncmp(argv[i + 1], "--", 2) == 0) {
-                    fprintf(stderr, "%s: error: option `%s` requires a value\n", script_basename(vm->source), arg);
+                    fprintf(stderr, "%s:%d:%d: error: option `%s` requires a value\n", span_path(vm->source, decl->span), decl->span.start.line, decl->span.start.column, arg);
                     free(seen);
                     return 1;
                 }
@@ -864,7 +865,7 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
         }
         while (next_arg < program->script_decls.len && program->script_decls.items[next_arg].kind != DS_SCRIPT_DECL_ARG) next_arg++;
         if (next_arg >= program->script_decls.len) {
-            fprintf(stderr, "%s: error: unexpected extra positional argument `%s`\n", script_basename(vm->source), arg);
+            fprintf(stderr, "%s:1:1: error: unexpected extra positional argument `%s`\n", vm->source && vm->source->path ? vm->source->path : script_basename(vm->source), arg);
             free(seen);
             return 1;
         }
@@ -879,7 +880,7 @@ static int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, cha
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_ARG && !seen[i]) {
-            fprintf(stderr, "%s: error: missing required argument `%.*s`\n", script_basename(vm->source), (int)decl->name.len, decl->name.data);
+            fprintf(stderr, "%s:%d:%d: error: missing required argument `%.*s`\n", span_path(vm->source, decl->span), decl->span.start.line, decl->span.start.column, (int)decl->name.len, decl->name.data);
             free(seen);
             return 1;
         }
@@ -1224,7 +1225,28 @@ static void trace_command_spec(Vm *vm, const VmProcessSpec *spec) {
         fputc(' ', stderr);
         print_trace_escaped(stderr, spec->argv.items[i]);
     }
-    if (spec->redirect.kind != DS_REDIRECT_NONE) fputs(" <redirect>", stderr);
+    if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        char *redirect_path = NULL;
+        const char *op = NULL;
+        switch (spec->redirect.kind) {
+            case DS_REDIRECT_OUT: op = ">"; break;
+            case DS_REDIRECT_OUT_APPEND: op = ">>"; break;
+            case DS_REDIRECT_ERR: op = "2>"; break;
+            case DS_REDIRECT_ERR_APPEND: op = "2>>"; break;
+            case DS_REDIRECT_ALL: op = "&>"; break;
+            case DS_REDIRECT_ALL_APPEND: op = "&>>"; break;
+            case DS_REDIRECT_NONE: break;
+        }
+        if (op && render_redirect_target(vm, &spec->redirect, &redirect_path)) {
+            fputc(' ', stderr);
+            fputs(op, stderr);
+            fputc(' ', stderr);
+            print_trace_escaped(stderr, redirect_path);
+            free(redirect_path);
+        } else {
+            fputs(" <redirect>", stderr);
+        }
+    }
     fputc('\n', stderr);
 }
 

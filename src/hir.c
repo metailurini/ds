@@ -60,6 +60,29 @@ static void dump_word_vec(FILE *out, const DsWordVec *words) {
     fputc(']', out);
 }
 
+static const char *redirect_op(DsRedirectKind kind) {
+    switch (kind) {
+        case DS_REDIRECT_OUT: return ">";
+        case DS_REDIRECT_OUT_APPEND: return ">>";
+        case DS_REDIRECT_ERR: return "2>";
+        case DS_REDIRECT_ERR_APPEND: return "2>>";
+        case DS_REDIRECT_ALL: return "&>";
+        case DS_REDIRECT_ALL_APPEND: return "&>>";
+        case DS_REDIRECT_NONE: return NULL;
+    }
+    return NULL;
+}
+
+static void dump_redirect(FILE *out, const DsRedirect *redirect) {
+    const char *op = redirect_op(redirect->kind);
+    if (!op) return;
+    fprintf(out, " Redirect %s ", op);
+    fputc('"', out);
+    print_escaped(out, redirect->target.data ? redirect->target.data : "", redirect->target.len);
+    fputc('"', out);
+    print_span(out, redirect->target_span);
+}
+
 static void dump_expr_vec(FILE *out, const DsLowerExprVec *args, int level) {
     if (args->len == 0) return;
     fputc('\n', out);
@@ -130,7 +153,7 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.let_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_CMD:
-            fputs("Command ", out); dump_word_vec(out, &stmt->as.cmd_stmt.words); print_span(out, stmt->span); fputc('\n', out);
+            fputs("Command ", out); dump_word_vec(out, &stmt->as.cmd_stmt.words); dump_redirect(out, &stmt->as.cmd_stmt.redirect); print_span(out, stmt->span); fputc('\n', out);
             break;
         case DS_LOWER_STMT_CALL:
             fputs("CallStmt ", out); print_str(out, stmt->as.call_stmt.name); print_span(out, stmt->span); dump_expr_vec(out, &stmt->as.call_stmt.args, level); if (stmt->as.call_stmt.args.len == 0) fputc('\n', out); break;

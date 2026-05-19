@@ -950,7 +950,7 @@ static bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 }
                 buf_append(&e->out, "__ds_capture ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
-                if (!emit_capture_words(e, &stmt->as.let_stmt.value->as.run.words, &e->out, stmt->span)) return false;
+                if (!emit_capture_words(e, &stmt->as.let_stmt.value->as.run.words, &e->out, stmt->as.let_stmt.value->span)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -a ");
                 else buf_append(&e->out, "declare -a ");
