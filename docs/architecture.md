@@ -255,7 +255,24 @@ Recommended approach:
 
 This should keep expression parsing simple while making statement parsing explicit.
 
-The parser should support command-mode parsing.
+The parser is split by grammar area so command-mode and expression-mode syntax can
+evolve without turning one frontend file into another god module:
+
+- `src/parser.c` owns the public `ds_parse` entrypoint and top-level declaration
+  loop;
+- `src/parser_internal.h` owns the private parser cursor, allocation, vector, and
+  token-copy helpers shared across parser components;
+- `src/parse_expr.c` owns Pratt expression parsing, calls, indexing, fields,
+  arrays, maps, and literals;
+- `src/parse_command.c` owns shell-like command words, redirection suffixes, and
+  captured `run` expressions;
+- `src/parse_script.c` owns `script { arg/option/flag ... }` declarations;
+- `src/parse_function.c` owns function declarations and test declarations;
+- `src/parse_stmt.c` owns statement/block parsing and dispatch.
+
+The parser should support command-mode parsing, but command parsing should remain
+isolated in `src/parse_command.c` because shell-like syntax has different token
+joining and redirection rules from normal expressions.
 
 ## Command mode vs expression mode
 

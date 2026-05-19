@@ -261,6 +261,15 @@ Use it for:
 
 The owned hashmap support code has been absorbed into `src/runtime/hashmap.c` and `src/runtime/hashmap.h`. It remains a private implementation detail of `DsMap`; parser, lowering, VM, Bash emission, and public internal headers should not include the raw hashmap header or call `hm_*` APIs directly.
 
+The frontend parser is componentized by grammar area. `src/parser.c` now owns only
+the public parse entrypoint/top-level loop, with shared private cursor helpers in
+`src/parser_internal.h`; expression, command, script, function/test, and general
+statement parsing live in `src/parse_expr.c`, `src/parse_command.c`,
+`src/parse_script.c`, `src/parse_function.c`, and `src/parse_stmt.c`. This keeps
+command-mode parsing isolated from expression and statement parsing while
+preserving the single shared frontend used by checking, VM execution, test
+running, and Bash emission.
+
 Internal code should depend on `DsMap`, not directly on the hashmap API. `src/runtime.c` is the bridge that translates the project-owned `DsMap` operations into raw hashmap operations and owns value cleanup rules.
 
 Suggested shape:
