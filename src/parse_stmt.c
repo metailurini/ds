@@ -256,5 +256,12 @@ DsStmt *parse_stmt(Parser *p) {
         parser_advance(p);
         return NULL;
     }
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 6 &&
+        memcmp(parser_peek(p)->text.data, "return", 6) == 0) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "function return values are deferred in v0.9.0");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+        parser_consume_statement_end(p);
+        return NULL;
+    }
     return parse_cmd(p);
 }
