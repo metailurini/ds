@@ -100,7 +100,12 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
             DsToken *pipe = parser_advance(p);
             command->span.end = pipe->span.end;
             if (parser_at(p, DS_TOK_PIPE)) {
-                ds_diag_error(p->diag, parser_peek(p)->span, "logical OR `||` is not supported in v0.18.0");
+                DsToken *next_pipe = parser_peek(p);
+                if (pipe->span.end.offset == next_pipe->span.start.offset) {
+                    ds_diag_error(p->diag, next_pipe->span, "logical OR `||` is not supported in v0.18.0");
+                } else {
+                    ds_diag_error(p->diag, next_pipe->span, "missing command between pipeline separators");
+                }
                 while (!parser_is_stmt_end(p)) parser_advance(p);
                 break;
             }

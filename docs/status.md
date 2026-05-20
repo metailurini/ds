@@ -1,7 +1,7 @@
 # Current Status
 
-This document is the user-facing snapshot for the implementation after the
-`v0.18.0` pipeline implementation pass after the `v0.17.0` implementation and test pass. It is
+This document is the user-facing snapshot for the implementation and test pass
+after `v0.18.0` pipelines. It is
 not a replacement for the roadmap or language catalog; it summarizes what users
 can rely on today and what is still deliberately deferred.
 
