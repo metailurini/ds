@@ -464,7 +464,7 @@ fn pipe() {
 }
 pipe()
 DS
-assert_diag pipeline_function "$FIX/bad_pipeline.ds" 'pipelines are not supported in v0.7.0'
+run_ok pipeline_function_now_supported "$DS" check "$FIX/bad_pipeline.ds"
 
 write_fixture "$FIX/bad_duplicate_top.ds" <<'DS'
 fn same() {}

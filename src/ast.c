@@ -29,9 +29,13 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             break;
         case DS_EXPR_RUN:
             fputs("RunExpr\n", out);
-            for (size_t i = 0; i < expr->as.run.words.len; i++) {
+            for (size_t s = 0; s < expr->as.run.stages.len; s++) {
                 indent(out, level + 1);
-                fprintf(out, "Word %.*s\n", (int)expr->as.run.words.items[i].text.len, expr->as.run.words.items[i].text.data);
+                fprintf(out, "Stage %zu\n", s);
+                for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) {
+                    indent(out, level + 2);
+                    fprintf(out, "Word %.*s\n", (int)expr->as.run.stages.items[s].words.items[i].text.len, expr->as.run.stages.items[s].words.items[i].text.data);
+                }
             }
             break;
         case DS_EXPR_FIELD:
@@ -113,10 +117,14 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             break;
         case DS_STMT_CMD:
             fputs("CmdStmt\n", out);
-            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
+            for (size_t s = 0; s < stmt->as.cmd_stmt.stages.len; s++) {
                 indent(out, level + 1);
-                fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.words.items[i].text.len,
-                        stmt->as.cmd_stmt.words.items[i].text.data);
+                fprintf(out, "Stage %zu\n", s);
+                for (size_t i = 0; i < stmt->as.cmd_stmt.stages.items[s].words.len; i++) {
+                    indent(out, level + 2);
+                    fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.stages.items[s].words.items[i].text.len,
+                            stmt->as.cmd_stmt.stages.items[s].words.items[i].text.data);
+                }
             }
             if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
                 static const char *names[] = {"none", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
@@ -248,8 +256,7 @@ static void free_expr(DsExpr *expr) {
             free(expr->as.text.data);
             break;
         case DS_EXPR_RUN:
-            for (size_t i = 0; i < expr->as.run.words.len; i++) free(expr->as.run.words.items[i].text.data);
-            free(expr->as.run.words.items);
+            ds_command_free(&expr->as.run);
             break;
         case DS_EXPR_FIELD:
             free_expr(expr->as.field.object);
@@ -317,11 +324,7 @@ static void free_stmt(DsStmt *stmt) {
             free(stmt->as.import_stmt.path.data);
             break;
         case DS_STMT_CMD:
-            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
-                free(stmt->as.cmd_stmt.words.items[i].text.data);
-            }
-            free(stmt->as.cmd_stmt.words.items);
-            free(stmt->as.cmd_stmt.redirect.target.data);
+            ds_command_free(&stmt->as.cmd_stmt);
             break;
         case DS_STMT_FN:
             free(stmt->as.fn_stmt.name.data);

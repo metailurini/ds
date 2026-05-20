@@ -3,6 +3,25 @@
 #include <stdio.h>
 #include <string.h>
 
+static void print_escaped(FILE *out, const char *data, size_t len);
+
+static void print_instr_command(FILE *out, const Instr *ins) {
+    size_t word = 0;
+    size_t stages = ins->stage_count ? ins->stage_count : 1;
+    fputs(" [", out);
+    for (size_t s = 0; s < stages; s++) {
+        if (s) fputs(" |", out);
+        size_t count = ins->stage_count ? ins->stage_word_counts[s] : ins->word_count;
+        for (size_t j = 0; j < count; j++, word++) {
+            if (j || s) fputs(", ", out);
+            fputc('"', out);
+            print_escaped(out, ins->words[word].data, ins->words[word].len);
+            fputc('"', out);
+        }
+    }
+    fputc(']', out);
+}
+
 const char *op_name(OpCode op) {
     switch (op) {
         case OP_LOAD_CONST: return "LOAD_CONST";
@@ -157,14 +176,8 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
             case OP_RUN_CAPTURE:
-                fprintf(out, " r%d, [", ins->dst);
-                for (size_t j = 0; j < ins->word_count; j++) {
-                    if (j) fputs(", ", out);
-                    fputc('"', out);
-                    print_escaped(out, ins->words[j].data, ins->words[j].len);
-                    fputc('"', out);
-                }
-                fputc(']', out);
+                fprintf(out, " r%d,", ins->dst);
+                print_instr_command(out, ins);
                 break;
             case OP_GET_FIELD: fprintf(out, " r%d, r%d.%s", ins->dst, ins->a, ins->field); break;
             case OP_JUMP: fprintf(out, " %d", ins->target); break;
@@ -173,14 +186,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_PUSH_SCOPE: break;
             case OP_POP_SCOPE: break;
             case OP_RUN_CMD:
-                fputs(" [", out);
-                for (size_t j = 0; j < ins->word_count; j++) {
-                    if (j) fputs(", ", out);
-                    fputc('"', out);
-                    print_escaped(out, ins->words[j].data, ins->words[j].len);
-                    fputc('"', out);
-                }
-                fputc(']', out);
+                print_instr_command(out, ins);
                 if (ins->redirect.kind != DS_REDIRECT_NONE) {
                     static const char *names[] = {"", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
                     fprintf(out, " %s \"", names[ins->redirect.kind]);

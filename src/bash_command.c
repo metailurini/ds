@@ -1,5 +1,7 @@
 #include "bash_internal.h"
 
+#include <stdlib.h>
+
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
     DsStr word = command_word.text;
     DsSpan span = command_word.span;
@@ -93,4 +95,43 @@ bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, Ds
     }
     (void)span;
     return true;
+}
+
+static bool emit_stage_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out) {
+    for (size_t i = 0; i < words->len; i++) {
+        if (i > 0) buf_append(out, " ");
+        if (!emit_command_word(e, words->items[i], out)) return false;
+    }
+    return true;
+}
+
+bool emit_command_pipeline(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
+    if (!emit_command_pipeline_stages(e, command, out)) return false;
+    return emit_redirect(e, &command->redirect, out, span);
+}
+
+bool emit_command_pipeline_stages(BashEmitter *e, const DsCommand *command, EmitBuf *out) {
+    for (size_t s = 0; s < command->stages.len; s++) {
+        if (s > 0) buf_append(out, " | ");
+        if (!emit_stage_words(e, &command->stages.items[s].words, out)) return false;
+    }
+    return true;
+}
+
+bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
+    if (command->stages.len > 1) {
+        EmitBuf cmd = {0};
+        DsCommand copy;
+        ds_command_clone(&copy, command);
+        ds_redirect_free(&copy.redirect);
+        if (!emit_command_pipeline(e, &copy, &cmd, span)) { ds_command_free(&copy); free(cmd.data); return false; }
+        ds_command_free(&copy);
+        buf_append(out, " ");
+        emit_source_loc(out, e->source, span);
+        buf_append(out, " ");
+        bash_single_quote(out, cmd.data ? cmd.data : "", cmd.len);
+        free(cmd.data);
+        return true;
+    }
+    return emit_capture_words(e, &command->stages.items[0].words, out, span);
 }

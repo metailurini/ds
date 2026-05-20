@@ -1,7 +1,7 @@
 # Current Status
 
 This document is the user-facing snapshot for the implementation after the
-`v0.17.0` control-flow implementation and test pass. It is
+`v0.18.0` pipeline implementation pass after the `v0.17.0` implementation and test pass. It is
 not a replacement for the roadmap or language catalog; it summarizes what users
 can rely on today and what is still deliberately deferred.
 
@@ -35,15 +35,18 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented through
-`v0.17.0`:
+`v0.18.0`:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
   binary expressions, field access, indexing, and supported calls;
 - `if`/`else` blocks and nested block scopes;
 - shell-native command statements;
+- shell-native plain command pipelines such as `cat log | grep ERROR | sort`;
 - captured command results with `run` expressions and `stdout`, `stderr`,
   `code`, `ok`, and `failed` fields;
+- captured `run` pipelines with pipefail-style status in the same
+  command-result fields;
 - readable redirections for plain command statements: `|>`, `|>>`, `!>`,
   `!>>`, `&>`, and `&>>`;
 - top-level `fn` declarations with positional parameters and trailing literal
@@ -117,6 +120,7 @@ The current examples are the public tour of implemented behavior:
 - `examples/functions.ds`
 - `examples/collections.ds`
 - `examples/control-flow.ds`
+- `examples/pipeline.ds`
 - `examples/stdlib.ds`
 - `examples/vm.ds`
 - `examples/bad.ds` for an intentionally invalid diagnostic example
@@ -169,9 +173,13 @@ while internal code should prefer focused headers.
 `continue`, scalar reassignment, and expression-style `case`, with VM/Bash
 parity and clear interaction with existing block and loop scopes.
 
+`v0.18.0` adds linear command pipelines for plain command statements and
+captured `run` expressions. Pipeline status uses Bash `pipefail` semantics: if
+any stage fails, the pipeline status is the rightmost failing stage.
+
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 and array-loop lowering model remain the safe pieces to build on. The next
-planned feature wave is `v0.18.0` pipelines. It should still keep function
-return values, map iteration, nested collections, formatter trivia preservation,
-and warning suppression out of scope unless their own milestones explicitly pull
-them in.
+planned feature wave is `v0.19.0` strings/formatted output. Function return
+values, map iteration, nested collections, formatter trivia preservation,
+warning suppression, logical shell operators, and advanced pipeline forms remain
+out of scope unless their own milestones explicitly pull them in.

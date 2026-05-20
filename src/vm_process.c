@@ -180,20 +180,24 @@ static void argv_free(VmArgv *argv) {
     argv->len = 0;
 }
 
-static bool argv_build(Vm *vm, Instr *ins, VmArgv *argv) {
+static bool argv_build_range(Vm *vm, Instr *ins, size_t first_word, size_t word_count, VmArgv *argv) {
     argv->items = NULL;
     argv->len = 0;
-    if (ins->word_count == 0) return false;
-    argv->items = (char **)ds_xcalloc(ins->word_count + 1, sizeof(char *));
-    argv->len = ins->word_count;
-    for (size_t i = 0; i < ins->word_count; i++) {
-        if (!word_to_arg(vm, ins->words[i], ins->span, &argv->items[i])) {
+    if (word_count == 0) return false;
+    argv->items = (char **)ds_xcalloc(word_count + 1, sizeof(char *));
+    argv->len = word_count;
+    for (size_t i = 0; i < word_count; i++) {
+        if (!word_to_arg(vm, ins->words[first_word + i], ins->span, &argv->items[i])) {
             argv->len = i;
             argv_free(argv);
             return false;
         }
     }
     return true;
+}
+
+static bool argv_build(Vm *vm, Instr *ins, VmArgv *argv) {
+    return argv_build_range(vm, ins, 0, ins->word_count, argv);
 }
 
 static int process_status_code(int status) {
@@ -250,6 +254,16 @@ static bool process_spec_from_instr(Vm *vm, Instr *ins, bool capture, VmProcessS
     spec->redirect = ins->redirect;
     spec->capture = capture;
     return argv_build(vm, ins, &spec->argv);
+}
+
+static bool process_spec_from_stage(Vm *vm, Instr *ins, size_t stage_index, bool capture, VmProcessSpec *spec) {
+    memset(spec, 0, sizeof(*spec));
+    spec->span = ins->span;
+    ds_redirect_init(&spec->redirect);
+    spec->capture = capture;
+    size_t first = 0;
+    for (size_t i = 0; i < stage_index; i++) first += ins->stage_word_counts[i];
+    return argv_build_range(vm, ins, first, ins->stage_word_counts[stage_index], &spec->argv);
 }
 
 static bool parse_exit_code_arg(const char *text, int *out) {
@@ -484,8 +498,167 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     return true;
 }
 
+static int pipefail_status(const int *codes, size_t len) {
+    int code = 0;
+    for (size_t i = 0; i < len; i++) if (codes[i] != 0) code = codes[i];
+    return code;
+}
+
+static void close_pipe_array(int (*pipes)[2], size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (pipes[i][0] >= 0) close(pipes[i][0]);
+        if (pipes[i][1] >= 0) close(pipes[i][1]);
+        pipes[i][0] = pipes[i][1] = -1;
+    }
+}
+
+static void pipeline_child_exec(VmProcessSpec *specs, size_t stage_count, size_t idx, int (*pipes)[2], int redirect_fd, FILE *out_fp, FILE *err_fp) {
+    VmProcessSpec *spec = &specs[idx];
+    if (idx > 0) dup2(pipes[idx - 1][0], STDIN_FILENO);
+    if (idx + 1 < stage_count) {
+        dup2(pipes[idx][1], STDOUT_FILENO);
+    } else if (spec->capture) {
+        dup2(fileno(out_fp), STDOUT_FILENO);
+    } else if (spec->redirect.kind == DS_REDIRECT_OUT || spec->redirect.kind == DS_REDIRECT_OUT_APPEND ||
+               spec->redirect.kind == DS_REDIRECT_ALL || spec->redirect.kind == DS_REDIRECT_ALL_APPEND) {
+        dup2(redirect_fd, STDOUT_FILENO);
+    }
+    if (spec->capture) {
+        dup2(fileno(err_fp), STDERR_FILENO);
+    } else if (spec->redirect.kind == DS_REDIRECT_ERR || spec->redirect.kind == DS_REDIRECT_ERR_APPEND ||
+               spec->redirect.kind == DS_REDIRECT_ALL || spec->redirect.kind == DS_REDIRECT_ALL_APPEND) {
+        dup2(redirect_fd, STDERR_FILENO);
+    }
+    close_pipe_array(pipes, stage_count > 0 ? stage_count - 1 : 0);
+    if (redirect_fd >= 0) close(redirect_fd);
+    execvp(spec->argv.items[0], spec->argv.items);
+    int exec_errno = errno;
+    if (spec->exec_error_fd >= 0) {
+        ssize_t ignored = write(spec->exec_error_fd, &exec_errno, sizeof(exec_errno));
+        (void)ignored;
+        close(spec->exec_error_fd);
+    }
+    if (spec->capture) fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(exec_errno));
+    _exit(127);
+}
+
+static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcessResult *result) {
+    process_result_init(result);
+    size_t n = ins->stage_count ? ins->stage_count : 1;
+    VmProcessSpec *specs = (VmProcessSpec *)ds_xcalloc(n, sizeof(VmProcessSpec));
+    pid_t *pids = (pid_t *)ds_xcalloc(n, sizeof(pid_t));
+    int *codes = (int *)ds_xcalloc(n, sizeof(int));
+    int (*pipes)[2] = (int (*)[2])ds_xcalloc(n > 1 ? n - 1 : 1, sizeof(int[2]));
+    int redirect_fd = -1;
+    FILE *out_fp = NULL;
+    FILE *err_fp = NULL;
+    int exec_error_pipe[2] = {-1, -1};
+    bool ok = true;
+
+    for (size_t i = 0; i + 1 < n; i++) pipes[i][0] = pipes[i][1] = -1;
+
+    for (size_t i = 0; i < n; i++) {
+        if (!process_spec_from_stage(vm, ins, i, capture, &specs[i])) { ok = false; goto cleanup; }
+        if (i + 1 == n) specs[i].redirect = ins->redirect;
+        else ds_redirect_init(&specs[i].redirect);
+        trace_command_spec(vm, &specs[i]);
+    }
+
+    if (!capture && ins->redirect.kind != DS_REDIRECT_NONE) {
+        if (!open_redirect_target(vm, &ins->redirect, &redirect_fd)) { ok = false; goto cleanup; }
+    }
+    if (capture) {
+        out_fp = tmpfile();
+        err_fp = tmpfile();
+        if (!out_fp || !err_fp) {
+            ds_diag_error(vm->diag, ins->span, "failed to create pipeline capture temporary files: %s", strerror(errno));
+            ok = false;
+            goto cleanup;
+        }
+    }
+    for (size_t i = 0; i + 1 < n; i++) {
+        if (pipe(pipes[i]) != 0) {
+            ds_diag_error(vm->diag, ins->span, "failed to create pipeline pipe: %s", strerror(errno));
+            ok = false;
+            goto cleanup;
+        }
+    }
+    if (pipe(exec_error_pipe) != 0 || !fd_set_cloexec(exec_error_pipe[1])) {
+        ds_diag_error(vm->diag, ins->span, "failed to prepare pipeline exec error pipe: %s", strerror(errno));
+        ok = false;
+        goto cleanup;
+    }
+    for (size_t i = 0; i < n; i++) specs[i].exec_error_fd = exec_error_pipe[1];
+
+    for (size_t i = 0; i < n; i++) {
+        pids[i] = fork();
+        if (pids[i] < 0) {
+            ds_diag_error(vm->diag, ins->span, "failed to launch pipeline stage `%s`: %s", specs[i].argv.len ? specs[i].argv.items[0] : "<stage>", strerror(errno));
+            ok = false;
+            goto cleanup;
+        }
+        if (pids[i] == 0) {
+            close(exec_error_pipe[0]);
+            pipeline_child_exec(specs, n, i, pipes, redirect_fd, out_fp, err_fp);
+        }
+    }
+
+    close(exec_error_pipe[1]); exec_error_pipe[1] = -1;
+    close_pipe_array(pipes, n > 1 ? n - 1 : 0);
+    if (redirect_fd >= 0) { close(redirect_fd); redirect_fd = -1; }
+
+    int exec_errno = 0;
+    ssize_t exec_error_len = read(exec_error_pipe[0], &exec_errno, sizeof(exec_errno));
+    close(exec_error_pipe[0]); exec_error_pipe[0] = -1;
+
+    for (size_t i = 0; i < n; i++) {
+        int status = 0;
+        while (waitpid(pids[i], &status, 0) < 0) {
+            if (errno != EINTR) {
+                ds_diag_error(vm->diag, ins->span, "failed waiting for pipeline stage `%s`: %s", specs[i].argv.len ? specs[i].argv.items[0] : "<stage>", strerror(errno));
+                ok = false;
+                goto cleanup;
+            }
+        }
+        codes[i] = process_status_code(status);
+    }
+    result->code = pipefail_status(codes, n);
+    if (!capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
+        ds_diag_error(vm->diag, ins->span, "failed to launch pipeline command: %s", strerror(exec_errno));
+    }
+    if (capture) {
+        if (!read_file_into_string(out_fp, &result->stdout_text) || !read_file_into_string(err_fp, &result->stderr_text)) {
+            ds_diag_error(vm->diag, ins->span, "failed to read pipeline capture output");
+            ok = false;
+            goto cleanup;
+        }
+    }
+
+cleanup:
+    if (exec_error_pipe[0] >= 0) close(exec_error_pipe[0]);
+    if (exec_error_pipe[1] >= 0) close(exec_error_pipe[1]);
+    close_pipe_array(pipes, n > 1 ? n - 1 : 0);
+    if (redirect_fd >= 0) close(redirect_fd);
+    if (!ok) {
+        for (size_t i = 0; i < n; i++) if (pids[i] > 0) waitpid(pids[i], NULL, 0);
+    }
+    if (out_fp) fclose(out_fp);
+    if (err_fp) fclose(err_fp);
+    for (size_t i = 0; i < n; i++) process_spec_free(&specs[i]);
+    free(specs); free(pids); free(codes); free(pipes);
+    return ok;
+}
+
 int run_command(Vm *vm, Instr *ins) {
     if (ins->word_count == 0) return 0;
+    if ((ins->stage_count ? ins->stage_count : 1) > 1) {
+        VmProcessResult result;
+        bool ok = process_execute_pipeline(vm, ins, false, &result);
+        int code = ok ? result.code : 1;
+        if (ok && code != 0 && !vm->diag->has_error) ds_diag_error(vm->diag, ins->span, "pipeline failed with exit %d", code);
+        process_result_free(&result);
+        return code;
+    }
     VmProcessSpec spec;
     if (!process_spec_from_instr(vm, ins, false, &spec)) return 1;
     int helper_code = 0;
@@ -507,6 +680,13 @@ int run_command(Vm *vm, Instr *ins) {
 int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
     *out_value = ds_value_null();
     if (ins->word_count == 0) return 1;
+    if ((ins->stage_count ? ins->stage_count : 1) > 1) {
+        VmProcessResult result;
+        bool ok = process_execute_pipeline(vm, ins, true, &result);
+        if (!ok) { process_result_free(&result); return 1; }
+        *out_value = ds_value_command_result_take(&result.stdout_text, &result.stderr_text, result.code);
+        return 0;
+    }
     VmProcessSpec spec;
     if (!process_spec_from_instr(vm, ins, true, &spec)) return 1;
     VmProcessResult result;

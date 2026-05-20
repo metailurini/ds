@@ -260,15 +260,16 @@ npm run build &>> "build.log"
 
 
 # -----------------------------------------------------------------------------
-# 13. Pipes [v0.18.0] [candidate]
+# 13. Pipes [v0.18.0] [implemented]
 # -----------------------------------------------------------------------------
 
 cat access.log | grep "ERROR" | sort | uniq
 
 let errors = run cat access.log | grep "ERROR"
 
-# v0.7.0 deliberately rejects pipelines in both plain commands and captured
-# `run` expressions. Pipelines are scheduled for v0.18.0.
+# Plain command pipelines are fail-fast. Captured `run` pipelines produce the
+# normal command-result fields and use pipefail-style status semantics.
+# Redirection suffixes apply to the whole plain pipeline.
 
 
 # -----------------------------------------------------------------------------

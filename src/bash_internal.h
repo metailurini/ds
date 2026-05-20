@@ -64,9 +64,13 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out);
 bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span);
 bool emit_trace_redirect_args(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out);
 bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span);
+bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span);
+bool emit_command_pipeline_stages(BashEmitter *e, const DsCommand *command, EmitBuf *out);
+bool emit_command_pipeline(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span);
 
 bool program_has_command(const DsLowerProgram *program);
 bool program_uses_run(const DsLowerProgram *program);
+bool program_uses_pipeline_run(const DsLowerProgram *program);
 bool program_uses_stdlib(const DsLowerProgram *program);
 bool program_uses_collection_index(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);

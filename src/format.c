@@ -95,6 +95,16 @@ static void format_words(Formatter *fmt, const DsWordVec *words) {
     }
 }
 
+static void format_redirect(Formatter *fmt, const DsRedirect *redirect);
+
+static void format_command(Formatter *fmt, const DsCommand *command) {
+    for (size_t s = 0; s < command->stages.len; s++) {
+        if (s) append_cstr(fmt, " | ");
+        format_words(fmt, &command->stages.items[s].words);
+    }
+    format_redirect(fmt, &command->redirect);
+}
+
 static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec) {
     if (!expr) return;
     int prec = expr_prec(expr);
@@ -111,7 +121,7 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             break;
         case DS_EXPR_RUN:
             append_cstr(fmt, "run ");
-            format_words(fmt, &expr->as.run.words);
+            format_command(fmt, &expr->as.run);
             break;
         case DS_EXPR_FIELD:
             format_expr_prec(fmt, expr->as.field.object, prec);
@@ -239,8 +249,7 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             append_cstr(fmt, "}\n");
             break;
         case DS_STMT_CMD:
-            format_words(fmt, &stmt->as.cmd_stmt.words);
-            format_redirect(fmt, &stmt->as.cmd_stmt.redirect);
+            format_command(fmt, &stmt->as.cmd_stmt);
             append_cstr(fmt, "\n");
             break;
         case DS_STMT_IMPORT:

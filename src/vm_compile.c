@@ -22,16 +22,35 @@ static void instr_free(Instr *ins) {
     free(ins->args);
     for (size_t i = 0; i < ins->word_count; i++) free(ins->words[i].data);
     free(ins->words);
+    free(ins->stage_word_counts);
     free(ins->redirect.target.data);
 }
 
-static void copy_words_to_instr(Instr *ins, const DsWordVec *words) {
-    ins->word_count = words->len;
+static void copy_command_to_instr(Instr *ins, const DsCommand *command) {
+    ins->stage_count = command->stages.len;
+    ins->stage_word_counts = (size_t *)ds_xcalloc(ins->stage_count ? ins->stage_count : 1, sizeof(size_t));
+    ins->word_count = 0;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        ins->stage_word_counts[s] = command->stages.items[s].words.len;
+        ins->word_count += command->stages.items[s].words.len;
+    }
     ins->words = (DsStr *)ds_xcalloc(ins->word_count ? ins->word_count : 1, sizeof(DsStr));
-    for (size_t i = 0; i < ins->word_count; i++) {
-        DsStr w = words->items[i].text;
-        ins->words[i].data = ds_str_dup_range(w.data, w.len);
-        ins->words[i].len = w.len;
+    size_t idx = 0;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        const DsWordVec *words = &command->stages.items[s].words;
+        for (size_t i = 0; i < words->len; i++) {
+            DsStr w = words->items[i].text;
+            ins->words[idx].data = ds_str_dup_range(w.data, w.len);
+            ins->words[idx].len = w.len;
+            idx++;
+        }
+    }
+    ins->redirect.kind = command->redirect.kind;
+    ins->redirect.op_span = command->redirect.op_span;
+    ins->redirect.target_span = command->redirect.target_span;
+    if (command->redirect.target.len > 0) {
+        ins->redirect.target.data = ds_str_dup_range(command->redirect.target.data, command->redirect.target.len);
+        ins->redirect.target.len = command->redirect.target.len;
     }
 }
 
@@ -238,7 +257,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.op = OP_RUN_CAPTURE;
             ins.span = expr->span;
             ins.dst = r;
-            copy_words_to_instr(&ins, &expr->as.run.words);
+            copy_command_to_instr(&ins, &expr->as.run);
             emit_instr(p, ins);
             return r;
         }
@@ -410,14 +429,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             Instr ins = {0};
             ins.op = OP_RUN_CMD;
             ins.span = stmt->span;
-            copy_words_to_instr(&ins, &stmt->as.cmd_stmt.words);
-            ins.redirect.kind = stmt->as.cmd_stmt.redirect.kind;
-            ins.redirect.op_span = stmt->as.cmd_stmt.redirect.op_span;
-            ins.redirect.target_span = stmt->as.cmd_stmt.redirect.target_span;
-            if (stmt->as.cmd_stmt.redirect.target.len > 0) {
-                ins.redirect.target.data = ds_str_dup_range(stmt->as.cmd_stmt.redirect.target.data, stmt->as.cmd_stmt.redirect.target.len);
-                ins.redirect.target.len = stmt->as.cmd_stmt.redirect.target.len;
-            }
+            copy_command_to_instr(&ins, &stmt->as.cmd_stmt);
             emit_instr(p, ins);
             break;
         }

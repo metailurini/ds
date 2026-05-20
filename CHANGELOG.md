@@ -1,3 +1,12 @@
+# v0.18.0 - Pipelines
+
+- Added linear command pipelines for plain command statements and captured `run` expressions.
+- Implemented VM pipe wiring with pipefail-style rightmost failing-stage status.
+- Emitted standalone Bash pipelines and captured pipeline command-result fields without calling `ds`.
+- Promoted command ownership to a pipeline-aware stage model shared by AST, HIR, formatter, checker, VM, and Bash emission.
+
+Deferred: logical `&&`/`||`, grouping/subshells, background pipelines, process substitution, here-documents/here-strings, per-stage redirection, pipeline expressions outside command syntax, structured per-stage status arrays, multiline pipeline continuation syntax, and Windows shell semantics remain out of scope.
+
 # Changelog
 
 # v0.17.0 - Control Flow Completion

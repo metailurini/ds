@@ -81,6 +81,16 @@ static void dump_word_vec(FILE *out, const DsWordVec *words) {
     fputc(']', out);
 }
 
+static void dump_redirect(FILE *out, const DsRedirect *redirect);
+
+static void dump_command(FILE *out, const DsCommand *command) {
+    for (size_t s = 0; s < command->stages.len; s++) {
+        if (s) fputs(" | ", out);
+        dump_word_vec(out, &command->stages.items[s].words);
+    }
+    dump_redirect(out, &command->redirect);
+}
+
 static const char *redirect_op(DsRedirectKind kind) {
     switch (kind) {
         case DS_REDIRECT_OUT: return ">";
@@ -125,7 +135,7 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
         case DS_LOWER_EXPR_BOOL:
             fprintf(out, "Bool %s", expr->as.boolean ? "true" : "false"); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_RUN:
-            fputs("Run ", out); dump_word_vec(out, &expr->as.run.words); print_span(out, expr->span); fputc('\n', out); break;
+            fputs("Run ", out); dump_command(out, &expr->as.run); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_FIELD:
             fputs("Field .", out); print_str(out, expr->as.field.field); print_span(out, expr->span); fputc('\n', out);
             dump_expr(out, expr->as.field.object, level + 1);
@@ -180,7 +190,7 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             break;
         }
         case DS_LOWER_STMT_CMD:
-            fputs("Command ", out); dump_word_vec(out, &stmt->as.cmd_stmt.words); dump_redirect(out, &stmt->as.cmd_stmt.redirect); print_span(out, stmt->span); fputc('\n', out);
+            fputs("Command ", out); dump_command(out, &stmt->as.cmd_stmt); print_span(out, stmt->span); fputc('\n', out);
             break;
         case DS_LOWER_STMT_CALL:
             fputs("CallStmt ", out); print_str(out, stmt->as.call_stmt.name); print_span(out, stmt->span); dump_expr_vec(out, &stmt->as.call_stmt.args, level); if (stmt->as.call_stmt.args.len == 0) fputc('\n', out); break;

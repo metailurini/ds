@@ -733,3 +733,26 @@ As of v0.7.0, the runtime has a command-result value used by the VM for `let res
 Captured VM commands do not treat non-zero exit status as fatal. The process result is bound to the destination variable so scripts can inspect `stdout`, `stderr`, `code`, `ok`, and `failed`. Plain command statements still stream normally and preserve fail-fast exit behavior; redirection opens the target file before child execution so open failures can report the source span of the redirection target.
 
 The `v0.8.0` cleanup keeps `DsCommandResult` as the user-visible runtime value for captured commands while tightening the internal process path. The VM now uses a small internal process spec/result wrapper shared by plain and captured commands. The spec keeps rendered argv, capture mode, command span, and redirection metadata together; the result carries normalized exit code plus captured buffers when capture is enabled. Command-result field metadata lives in one descriptor table; that table is used by lowering and by runtime field expansion so future fields cannot silently drift across VM and Bash paths.
+
+## v0.18.0 pipeline runtime
+
+`v0.18.0` adds linear command pipelines to the same VM/Bash parity contract as
+ordinary commands. The VM does not invoke a shell to interpret `|`; it expands
+each stage with the existing command-word rules, creates OS pipes between
+adjacent stages, forks every stage, wires stdin/stdout with `dup2`, closes
+unused file descriptors in parent and child paths, waits for all children, and
+computes Bash `pipefail`-style status by returning the rightmost non-zero stage
+status.
+
+Plain pipelines are fail-fast like plain commands. Redirection suffixes apply to
+the whole plain pipeline: stdout redirection targets the final stage stdout,
+stderr redirection captures stderr from every stage, and combined redirection
+captures final stdout plus every stage stderr. Captured `run` pipelines produce
+the existing command-result fields: final-stage stdout, all observed stage
+stderr, pipefail code, `ok`, and `failed`.
+
+Generated Bash emits normal Bash pipelines under `set -euo pipefail`. Captured
+pipeline emission is structured: the emitter writes the exact staged argv words
+directly into a Bash pipeline, redirects that pipeline into temporary capture
+files, and records stdout/stderr/code/ok/failed fields without using `eval` or
+depending on the `ds` binary.

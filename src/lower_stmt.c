@@ -182,16 +182,17 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         }
         case DS_STMT_CMD: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
-            ds_command_init(&out->as.cmd_stmt, DS_COMMAND_PLAIN, stmt->span);
-            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
-                validate_cmd_word(lower, stmt->as.cmd_stmt.words.items[i].text, stmt->as.cmd_stmt.words.items[i].span);
+            ds_command_clone(&out->as.cmd_stmt, &stmt->as.cmd_stmt);
+            for (size_t s = 0; s < stmt->as.cmd_stmt.stages.len; s++) {
+                if (stmt->as.cmd_stmt.stages.items[s].words.len == 0) ds_diag_error(lower->diag, stmt->as.cmd_stmt.stages.items[s].span, "empty pipeline stage");
+                for (size_t i = 0; i < stmt->as.cmd_stmt.stages.items[s].words.len; i++) {
+                    validate_cmd_word(lower, stmt->as.cmd_stmt.stages.items[s].words.items[i].text, stmt->as.cmd_stmt.stages.items[s].words.items[i].span);
+                }
             }
-            ds_word_vec_clone(&out->as.cmd_stmt.words, &stmt->as.cmd_stmt.words);
             if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
                 if (stmt->as.cmd_stmt.redirect.target.len == 0) {
                     ds_diag_error(lower->diag, stmt->as.cmd_stmt.redirect.op_span, "expected redirection target");
                 } else {
-                    ds_redirect_clone(&out->as.cmd_stmt.redirect, &stmt->as.cmd_stmt.redirect);
                     validate_interpolation(lower, stmt->as.cmd_stmt.redirect.target, stmt->as.cmd_stmt.redirect.target_span);
                 }
             }

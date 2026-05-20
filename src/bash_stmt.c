@@ -116,12 +116,102 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
     return ok;
 }
 
+static void emit_result_field_name(EmitBuf *out, DsStr name, const char *field) {
+    emit_var_name(out, name);
+    buf_append(out, "_");
+    buf_append(out, field);
+}
+
+static bool emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsCommand *command, DsSpan span, int indent) {
+    size_t id = e->temp_counter++;
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_tmpdir_%zu=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n", id);
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_stdout_%zu=\"$__ds_tmpdir_%zu/stdout\"\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_stderr_%zu=\"$__ds_tmpdir_%zu/stderr\"\n", id, id);
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "set +e\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "__ds_trace_cmd ");
+    emit_source_loc(&e->out, e->source, span);
+    for (size_t s = 0; s < command->stages.len; s++) {
+        if (s > 0) buf_append(&e->out, " \"|\"");
+        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
+            buf_append(&e->out, " ");
+            if (!emit_command_word(e, command->stages.items[s].words.items[i], &e->out)) return false;
+        }
+    }
+    buf_append(&e->out, "\n");
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "{ ");
+    if (!emit_command_pipeline_stages(e, command, &e->out)) return false;
+    buf_appendf(&e->out, " ; } >\"$__ds_stdout_%zu\" 2>\"$__ds_stderr_%zu\"\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_code_%zu=$?\n", id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "set -e\n");
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_data_%zu=$(cat \"$__ds_stdout_%zu\"; printf x)\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "stdout");
+    buf_append(&e->out, " '%s' ");
+    buf_appendf(&e->out, "\"${__ds_data_%zu%%x}\"\n", id);
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_data_%zu=$(cat \"$__ds_stderr_%zu\"; printf x)\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "stderr");
+    buf_append(&e->out, " '%s' ");
+    buf_appendf(&e->out, "\"${__ds_data_%zu%%x}\"\n", id);
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "code");
+    buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "if [[ $__ds_code_%zu -eq 0 ]]; then\n", id);
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "ok");
+    buf_append(&e->out, "=true\n");
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "failed");
+    buf_append(&e->out, "=false\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "else\n");
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "ok");
+    buf_append(&e->out, "=false\n");
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "failed");
+    buf_append(&e->out, "=true\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "fi\n");
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "rm -rf \"$__ds_tmpdir_%zu\"\n", id);
+    return true;
+}
+
 static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent) {
     if (value->kind == DS_LOWER_EXPR_RUN) {
+        if (value->as.run.stages.len > 1) {
+            if (!emit_capture_pipeline_assignment(e, name, &value->as.run, value->span, indent)) return false;
+            emit_type_assignment_for_expr(e, name, value, indent, false);
+            buf_append(&e->out, "\n");
+            return true;
+        }
         emit_indent(&e->out, indent);
         buf_append(&e->out, "__ds_capture ");
         emit_var_name(&e->out, name);
-        if (!emit_capture_words(e, &value->as.run.words, &e->out, value->span)) return false;
+        if (!emit_capture_command(e, &value->as.run, &e->out, value->span)) return false;
         buf_append(&e->out, "\n");
         emit_type_assignment_for_expr(e, name, value, indent, false);
         buf_append(&e->out, "\n");
@@ -211,9 +301,13 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     buf_append(&e->out, "_failed\n");
                     emit_indent(&e->out, indent);
                 }
-                buf_append(&e->out, "__ds_capture ");
-                emit_var_name(&e->out, stmt->as.let_stmt.name);
-                if (!emit_capture_words(e, &stmt->as.let_stmt.value->as.run.words, &e->out, stmt->as.let_stmt.value->span)) return false;
+                if (stmt->as.let_stmt.value->as.run.stages.len > 1) {
+                    if (!emit_capture_pipeline_assignment(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.value->as.run, stmt->as.let_stmt.value->span, indent)) return false;
+                } else {
+                    buf_append(&e->out, "__ds_capture ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    if (!emit_capture_command(e, &stmt->as.let_stmt.value->as.run, &e->out, stmt->as.let_stmt.value->span)) return false;
+                }
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -a ");
                 else buf_append(&e->out, "declare -a ");
@@ -292,18 +386,17 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             buf_append(&e->out, "__ds_trace_cmd ");
             emit_source_loc(&e->out, e->source, stmt->span);
-            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
-                buf_append(&e->out, " ");
-                if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
+            for (size_t s = 0; s < stmt->as.cmd_stmt.stages.len; s++) {
+                if (s > 0) buf_append(&e->out, " \"|\"");
+                for (size_t i = 0; i < stmt->as.cmd_stmt.stages.items[s].words.len; i++) {
+                    buf_append(&e->out, " ");
+                    if (!emit_command_word(e, stmt->as.cmd_stmt.stages.items[s].words.items[i], &e->out)) return false;
+                }
             }
             if (!emit_trace_redirect_args(e, &stmt->as.cmd_stmt.redirect, &e->out)) return false;
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
-            for (size_t i = 0; i < stmt->as.cmd_stmt.words.len; i++) {
-                if (i > 0) buf_append(&e->out, " ");
-                if (!emit_command_word(e, stmt->as.cmd_stmt.words.items[i], &e->out)) return false;
-            }
-            if (!emit_redirect(e, &stmt->as.cmd_stmt.redirect, &e->out, stmt->span)) return false;
+            if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
             buf_append(&e->out, " || __ds_fail ");
             emit_source_loc(&e->out, e->source, stmt->span);
             buf_append(&e->out, " \"$?\"\n\n");

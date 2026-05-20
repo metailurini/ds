@@ -14,8 +14,9 @@ Script
     Then
       BlockStmt
         CmdStmt
-          Word git
-          Word status
+          Stage 0
+            Word git
+            Word status
         IfStmt
           Condition
             BinaryExpr >=
@@ -24,10 +25,12 @@ Script
           Then
             BlockStmt
               CmdStmt
-                Word echo
-                Word "nested"
+                Stage 0
+                  Word echo
+                  Word "nested"
     Else
       BlockStmt
         CmdStmt
-          Word echo
-          Word "no"
+          Stage 0
+            Word echo
+            Word "no"

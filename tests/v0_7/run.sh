@@ -198,8 +198,6 @@ assert_same "$TMP/args_capture_vm.out" "$TMP/args_capture_bash.out" "script arg 
 declare -A diag_messages=(
   [run_missing_command.ds]='expected command after `run`'
   [run_with_redirection.ds]='captured `run` commands do not support redirection'
-  [run_with_pipeline.ds]='pipelines are not supported in v0.7.0'
-  [plain_pipe_unsupported.ds]='pipelines are not supported in v0.7.0'
   [unknown_field.ds]='unsupported command result field `missing`'
   [field_on_string.ds]='field access is only supported on command results'
   [field_missing_name.ds]='expected field name after `.`'
@@ -225,6 +223,11 @@ for file in "${!diag_messages[@]}"; do
   run_fail "emit_$base" "$DS" emit bash "$FIX/diagnostics/$file" -o "$TMP/$base.sh"
   assert_file_missing_or_empty "$TMP/$base.sh" "$base invalid emit leaves no artifact"
 done
+
+# Pipelines are now supported by v0.18.0; keep the old v0.7 diagnostics fixtures
+# as stale-regression coverage so older unsupported expectations do not linger.
+run_ok pipeline_plain_now_supported "$DS" check "$FIX/diagnostics/plain_pipe_unsupported.ds"
+run_ok pipeline_run_now_supported "$DS" check "$FIX/diagnostics/run_with_pipeline.ds"
 
 # Failed Bash emission must remove stale output artifacts from earlier successful emits.
 run_ok stale_emit_initial "$DS" emit bash examples/basic.ds -o "$TMP/stale_emit.sh"

@@ -216,17 +216,17 @@ DsLowerExpr *lower_bool_expr(const DsExpr *expr, SymKind *kind_out) {
 }
 
 DsLowerExpr *lower_run_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    if (expr->as.run.words.len == 0) {
+    if (expr->as.run.stages.len == 0) {
         ds_diag_error(lower->diag, expr->span, "expected command after `run`");
     }
-    for (size_t i = 0; i < expr->as.run.words.len; i++) validate_cmd_word(lower, expr->as.run.words.items[i].text, expr->as.run.words.items[i].span);
+    for (size_t s = 0; s < expr->as.run.stages.len; s++) {
+        if (expr->as.run.stages.items[s].words.len == 0) ds_diag_error(lower->diag, expr->as.run.stages.items[s].span, "empty pipeline stage");
+        for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) validate_cmd_word(lower, expr->as.run.stages.items[s].words.items[i].text, expr->as.run.stages.items[s].words.items[i].span);
+    }
+    if (expr->as.run.redirect.kind != DS_REDIRECT_NONE) ds_diag_error(lower->diag, expr->as.run.redirect.op_span, "captured `run` commands do not support redirection");
     *kind_out = SYM_COMMAND_RESULT;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_RUN, expr->span);
-    DsCommand command;
-    ds_command_init(&command, DS_COMMAND_CAPTURE, expr->span);
-    ds_word_vec_clone(&command.words, &expr->as.run.words);
-    ds_command_clone(&out->as.run, &command);
-    ds_command_free(&command);
+    ds_command_clone(&out->as.run, &expr->as.run);
     return out;
 }
 

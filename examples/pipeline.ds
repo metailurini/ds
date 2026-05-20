@@ -1,0 +1,7 @@
+let sorted = run printf "ERROR beta\nINFO skip\nERROR alpha\n" | grep "ERROR" | sort
+
+if sorted.ok {
+  echo "errors={sorted.stdout}"
+} else {
+  echo "pipeline failed code={sorted.code}"
+}

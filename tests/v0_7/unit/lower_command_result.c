@@ -62,8 +62,9 @@ static void test_run_and_fields_lower(void) {
     assert(let->kind == DS_LOWER_STMT_LET);
     assert(str_eq(let->as.let_stmt.name, "r"));
     assert(let->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN);
-    assert(let->as.let_stmt.value->as.run.words.len == 2);
-    assert(str_eq(let->as.let_stmt.value->as.run.words.items[0].text, "printf"));
+    assert(let->as.let_stmt.value->as.run.stages.len == 1);
+    assert(let->as.let_stmt.value->as.run.stages.items[0].words.len == 2);
+    assert(str_eq(let->as.let_stmt.value->as.run.stages.items[0].words.items[0].text, "printf"));
 
     DsLowerStmt *ifs = program->statements.items[1];
     assert(ifs->kind == DS_LOWER_STMT_IF);

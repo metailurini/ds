@@ -11,21 +11,25 @@ Script
       Default
         BoolExpr false
   CmdStmt
-    Word echo
-    Word "Deploying {app} to {target}"
+    Stage 0
+      Word echo
+      Word "Deploying {app} to {target}"
   CmdStmt
-    Word echo
-    Word "retries={retries}"
+    Stage 0
+      Word echo
+      Word "retries={retries}"
   IfStmt
     Condition
       IdentExpr force
     Then
       BlockStmt
         CmdStmt
-          Word echo
-          Word "force enabled"
+          Stage 0
+            Word echo
+            Word "force enabled"
     Else
       BlockStmt
         CmdStmt
-          Word echo
-          Word "force disabled"
+          Stage 0
+            Word echo
+            Word "force disabled"

@@ -46,7 +46,7 @@ struct DsExpr {
     union {
         DsStr text;
         bool boolean;
-        struct { DsWordVec words; } run;
+        DsCommand run;
         struct { DsExpr *object; DsStr field; } field;
         struct { DsStr op; DsExpr *right; } unary;
         struct { DsExpr *left; DsStr op; DsExpr *right; } binary;
@@ -175,7 +175,7 @@ struct DsStmt {
         struct { DsStr name; DsAssignOp op; DsExpr *value; } assign_stmt;
         struct { DsExpr *condition; DsStmt *then_branch; DsStmt *else_branch; } if_stmt;
         struct { DsStmtVec statements; } block_stmt;
-        struct { DsWordVec words; DsRedirect redirect; } cmd_stmt;
+        DsCommand cmd_stmt;
         struct { DsStr path; } import_stmt;
         struct { DsStr name; DsFnParamVec params; DsStmt *body; } fn_stmt;
         struct { DsStr name; DsExprVec args; } call_stmt;

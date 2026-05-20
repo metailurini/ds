@@ -140,6 +140,11 @@ static void check_words(Checker *c, const DsWordVec *words) {
     for (size_t i = 0; i < words->len; i++) scan_text_for_uses(c, words->items[i].text);
 }
 
+static void check_command(Checker *c, const DsCommand *command) {
+    for (size_t s = 0; s < command->stages.len; s++) check_words(c, &command->stages.items[s].words);
+    scan_text_for_uses(c, command->redirect.target);
+}
+
 static void check_expr(Checker *c, const DsExpr *expr) {
     if (!expr) return;
     switch (expr->kind) {
@@ -154,7 +159,7 @@ static void check_expr(Checker *c, const DsExpr *expr) {
         case DS_EXPR_ERROR:
             break;
         case DS_EXPR_RUN:
-            check_words(c, &expr->as.run.words);
+            check_command(c, &expr->as.run);
             break;
         case DS_EXPR_FIELD:
             check_expr(c, expr->as.field.object);
@@ -194,8 +199,8 @@ static void finish_scope(Checker *c, size_t base) {
 }
 
 static bool is_test_terminal_command(const DsStmt *stmt) {
-    if (!stmt || stmt->kind != DS_STMT_CMD || stmt->as.cmd_stmt.words.len == 0) return false;
-    DsStr first = stmt->as.cmd_stmt.words.items[0].text;
+    if (!stmt || stmt->kind != DS_STMT_CMD || stmt->as.cmd_stmt.stages.len != 1 || stmt->as.cmd_stmt.stages.items[0].words.len == 0) return false;
+    DsStr first = stmt->as.cmd_stmt.stages.items[0].words.items[0].text;
     return str_eq(first, "fail") || str_eq(first, "exit");
 }
 
@@ -237,8 +242,7 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             check_block(c, stmt, depth + 1);
             break;
         case DS_STMT_CMD:
-            check_words(c, &stmt->as.cmd_stmt.words);
-            scan_text_for_uses(c, stmt->as.cmd_stmt.redirect.target);
+            check_command(c, &stmt->as.cmd_stmt);
             break;
         case DS_STMT_IMPORT:
             break;

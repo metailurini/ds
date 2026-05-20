@@ -75,6 +75,8 @@ typedef struct {
     size_t arg_count;
     DsStr *words;
     size_t word_count;
+    size_t *stage_word_counts;
+    size_t stage_count;
     DsRedirect redirect;
     size_t loop_index;
     bool loop_active;

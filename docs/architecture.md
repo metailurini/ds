@@ -849,3 +849,18 @@ Command-result field knowledge is centralized behind one descriptor table for `s
 The VM command process path also has a small internal cleanup boundary around a VM-local process spec/result pair. The wrapper owns rendered argv, keeps the command span and redirection metadata together, opens redirection targets with source-located diagnostics, launches the child, normalizes wait status, and fills captured stdout/stderr only for `run` commands. Plain commands still stream and fail fast; captured commands still collect stdout/stderr and return inspectable status. Generated Bash remains standalone and keeps using `__ds_` helper names instead of depending on the C runtime.
 
 Command-heavy regression suites now share a VM/Bash parity helper from `tests/lib/testlib.sh` instead of carrying a version-local copy. The helper emits standalone Bash, validates it with `bash -n`, runs VM and Bash modes from isolated working directories, compares stdout/stderr/status, and optionally compares generated output files.
+
+## v0.18.0 pipeline command model
+
+`v0.18.0` promotes command representation from a single word vector to a small
+pipeline-aware model. A `DsCommand` now owns one or more stages, each stage owns
+the existing `DsWordVec`, and the redirect remains a whole-command suffix. The
+AST, HIR, formatter, checker, VM compiler, VM runtime, bytecode dumper, and Bash
+emitter traverse command stages through that shared model instead of exposing
+Bash-specific pipeline state through the frontend.
+
+The VM compiler flattens stage words into bytecode instruction storage while
+retaining per-stage word counts. The process runtime reconstructs argv vectors
+per stage, wires real OS pipes, and computes pipefail status. The Bash backend
+emits ordinary Bash pipelines for plain commands and a standalone capture helper
+for captured `run` pipelines.

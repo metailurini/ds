@@ -2,16 +2,19 @@ Script
   ImportStmt "./lib.ds"
   ImportStmt "./constants.ds"
   CmdStmt
-    Word echo
-    Word "Deploying {app} to {target}"
+    Stage 0
+      Word echo
+      Word "Deploying {app} to {target}"
   CmdStmt
-    Word echo
-    Word $retries
+    Stage 0
+      Word echo
+      Word $retries
   IfStmt
     Condition
       IdentExpr enabled
     Then
       BlockStmt
         CmdStmt
-          Word echo
-          Word "enabled"
+          Stage 0
+            Word echo
+            Word "enabled"

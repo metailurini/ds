@@ -141,8 +141,6 @@ declare -A diag_messages=(
   [run_missing_command.ds]='expected command after `run`'
   [run_with_stdout_redirect.ds]='captured `run` commands do not support redirection'
   [run_with_combined_redirect.ds]='captured `run` commands do not support redirection'
-  [pipeline_plain_command.ds]='pipelines are not supported in v0.7.0'
-  [pipeline_captured_command.ds]='pipelines are not supported in v0.7.0'
   [legacy_stdout_redirect.ds]='unsupported command operator'
   [duplicate_redirection.ds]='duplicate redirection suffix'
   [redirect_missing_target.ds]='expected string redirection target after `&>`'
@@ -172,6 +170,11 @@ for file in "${!diag_messages[@]}"; do
   done
 done
 
+# Pipelines are supported as of v0.18.0; these former diagnostics now remain as
+# stale-expectation coverage in older suites.
+run_ok pipeline_plain_now_supported "$DS" check "$FIX/diagnostics/pipeline_plain_command.ds"
+run_ok pipeline_captured_now_supported "$DS" check "$FIX/diagnostics/pipeline_captured_command.ds"
+
 # Runtime-only redirection-open diagnostics should not run the child and should include source locations.
 run_ok redirection_open_check "$DS" check "$FIX/diagnostics/redirection_open_missing_parent.ds"
 capture_status redirection_open_run "$DS" run "$FIX/diagnostics/redirection_open_missing_parent.ds"
@@ -193,6 +196,10 @@ assert_file_missing_or_empty "$TMP/stale.sh" "failed emit removes stale artifact
 # No new syntax was unlocked by cleanup.
 for file in "$FIX"/unsupported/*.ds; do
   base="$(basename "$file" .ds)"
+  if [ "$base" = pipeline ]; then
+    run_ok unsupported_pipeline_now_supported "$DS" check "$file"
+    continue
+  fi
   run_fail "unsupported_${base}_check" "$DS" check "$file"
   assert_contains "$TMP/unsupported_${base}_check.err" ': error:' "unsupported $base has diagnostic"
   run_fail "unsupported_${base}_emit" "$DS" emit bash "$file" -o "$TMP/unsupported_${base}.sh"
