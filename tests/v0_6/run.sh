@@ -187,7 +187,7 @@ if grep -R 'DS_STMT_IMPORT' "$ROOT/src/vm.c" "$ROOT/src/bash_emit.c" >/dev/null;
   fail "VM/Bash backends should not consume raw import AST nodes"
 fi
 pass "VM/Bash backends do not consume raw import AST nodes"
-assert_contains <(grep -R 'load_composed_file' "$ROOT/src" || true) 'src/main.c' "import composition lives in shared CLI pipeline"
+assert_contains <(grep -R 'load_composed_file' "$ROOT/src" || true) 'src/cli_program.c' "import composition lives in shared CLI program pipeline"
 if grep -R 'hashmap_' "$ROOT/src" "$ROOT/include" >/dev/null; then
   fail "staged hashmap API should not leak into production src/include"
 fi

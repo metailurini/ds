@@ -156,3 +156,9 @@ while internal code should prefer focused headers.
 `v0.17.0` is planned to resume feature work with control-flow completion:
 `while`, `break`, `continue`, and `case`, with VM/Bash parity and clear
 interaction with existing block and loop scopes.
+
+The cleaned CLI program boundary, existing block/function/test scoping rules,
+and array-loop lowering model are the safe pieces to build on. The next wave
+should still keep function return values, map iteration, nested collections,
+formatter trivia preservation, and warning suppression out of scope unless their
+own milestones explicitly pull them in.
