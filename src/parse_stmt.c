@@ -239,6 +239,24 @@ DsStmt *parse_stmt(Parser *p) {
         parser_consume_statement_end(p);
         return NULL;
     }
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 4 &&
+        memcmp(parser_peek(p)->text.data, "case", 4) == 0) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "`case` is deferred in v0.17.0 control-flow work");
+        parser_advance(p);
+        while (!parser_at_end(p) && !parser_at(p, DS_TOK_LBRACE) && !parser_is_stmt_end(p)) parser_advance(p);
+        if (parser_advance_if(p, DS_TOK_LBRACE)) {
+            int depth = 1;
+            while (!parser_at_end(p) && depth > 0) {
+                if (parser_advance_if(p, DS_TOK_LBRACE)) depth++;
+                else if (parser_advance_if(p, DS_TOK_RBRACE)) depth--;
+                else parser_advance(p);
+            }
+        } else {
+            while (!parser_is_stmt_end(p)) parser_advance(p);
+        }
+        parser_consume_statement_end(p);
+        return NULL;
+    }
     if (parser_at(p, DS_TOK_IDENT) && parser_next_at(p, DS_TOK_DOT)) {
         if (p->pos + 3 < p->tokens->len && p->tokens->items[p->pos + 2].kind == DS_TOK_IDENT &&
             p->tokens->items[p->pos + 2].text.len == 4 && memcmp(p->tokens->items[p->pos + 2].text.data, "push", 4) == 0 &&

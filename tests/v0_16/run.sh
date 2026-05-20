@@ -92,6 +92,8 @@ assert_matches Makefile '^TEST_VERSIONS := .*0-15 0-16($| )' 'v0.16 follows v0.1
 assert_contains Makefile 'src/cli_program.c' 'CLI program source is built normally'
 assert_contains Makefile 'asan:' 'asan target exists'
 assert_contains Makefile 'ubsan:' 'ubsan target exists'
+assert_contains Makefile 'ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test' 'asan target runs aggregate test suite'
+assert_contains Makefile 'DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 'ubsan target runs aggregate test suite'
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public umbrella does not expose raw hashmap'
 assert_contains src/runtime.c '#include "runtime/hashmap.h"' 'runtime bridge owns raw hashmap include'
@@ -308,6 +310,7 @@ for example in examples/*.ds; do
     args)
       capture_status "example_${base}_run" "$DS" run "$example" api --target prod --retries 3 --force ;;
     redirection|stdlib)
+      if [ "$base" = 'stdlib' ]; then rm -f /tmp/ds-stdlib-example.txt; fi
       capture_in_dir "example_${base}_run" "$TMP/example_${base}_vm_work" "$DS" run "$ROOT/$example" ;;
     *)
       capture_status "example_${base}_run" "$DS" run "$example" ;;
@@ -315,6 +318,18 @@ for example in examples/*.ds; do
   assert_status "example_${base}_run" 0
   run_ok "example_${base}_emit" "$DS" emit bash "$example" -o "$TMP/example_${base}.sh"
   assert_bash_standalone "$TMP/example_${base}.sh" "example $base emitted Bash"
+  case "$base" in
+    args)
+      capture_status "example_${base}_bash" bash "$TMP/example_${base}.sh" api --target prod --retries 3 --force ;;
+    redirection)
+      capture_in_dir "example_${base}_bash" "$TMP/example_${base}_bash_work" bash "$TMP/example_${base}.sh" ;;
+    stdlib)
+      rm -f /tmp/ds-stdlib-example.txt
+      capture_in_dir "example_${base}_bash" "$TMP/example_${base}_bash_work" bash "$TMP/example_${base}.sh" ;;
+    *)
+      capture_status "example_${base}_bash" bash "$TMP/example_${base}.sh" ;;
+  esac
+  assert_same_run_triplet "example_${base}_run" "example_${base}_bash" "example $base VM/Bash parity"
 done
 capture_status args_help "$DS" run examples/args.ds --help
 assert_status args_help 0
@@ -508,6 +523,27 @@ assert_nonzero_status test_control
 assert_contains "$TMP/test_control.out" 'fail fail message' 'fail message affects only active test'
 assert_contains "$TMP/test_control.out" 'ok   exit pass' 'exit 0 passes/stops active test'
 assert_contains "$TMP/test_control.out" 'fail exit fail' 'exit nonzero fails active test'
+write_fixture "$FIX/imported_tests_lib.ds" <<'DS'
+test "imported pass" {
+  assert true
+}
+DS
+write_fixture "$FIX/imported_tests_main.ds" <<'DS'
+import "./imported_tests_lib.ds"
+
+test "root pass" {
+  assert true
+}
+DS
+capture_status imported_tests "$DS" test "$FIX/imported_tests_main.ds"
+assert_status imported_tests 0
+assert_contains "$TMP/imported_tests.out" 'ok   imported pass' 'imported test block is discovered'
+assert_contains "$TMP/imported_tests.out" 'ok   root pass' 'root test block still runs with imported tests'
+run_ok imported_tests_emit "$DS" emit bash "$FIX/imported_tests_main.ds" -o "$TMP/imported_tests.sh"
+assert_bash_standalone "$TMP/imported_tests.sh" 'imported-tests emitted Bash'
+capture_status imported_tests_bash bash "$TMP/imported_tests.sh"
+assert_status imported_tests_bash 0
+assert_same_text '' "$TMP/imported_tests_bash.out" 'emitted Bash ignores imported test blocks'
 
 # Malformed and unsupported syntax diagnostics fail before execution/emission.
 for pair in \
@@ -532,7 +568,7 @@ unsupported_cases=(
   'while_loop|while true { echo "x" }|`while` loops are deferred'
   'break_stmt|break|`break` is deferred'
   'continue_stmt|continue|`continue` is deferred'
-  'case_stmt|case x { }|unexpected `}`'
+  'case_stmt|case x { }|`case` is deferred'
   'return_value|fn f() { return 1 }|function return values are deferred'
   'string_method|let x = "a".upper()|expected end of statement'
   'regex_matches|if "a" matches "a" { echo "yes" }|expected `{` after if condition'
