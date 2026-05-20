@@ -864,3 +864,16 @@ retaining per-stage word counts. The process runtime reconstructs argv vectors
 per stage, wires real OS pipes, and computes pipefail status. The Bash backend
 emits ordinary Bash pipelines for plain commands and a standalone capture helper
 for captured `run` pipelines.
+
+## v0.19.0 string helper boundary
+
+String methods lower through the same helper-call path as the shell-oriented
+standard library, with the receiver passed as the first helper argument. This
+keeps parser syntax (`value.trim()`) separate from backend implementation
+details while allowing the VM and Bash emitter to share arity, receiver, and
+return-kind metadata. Generated Bash emits helper functions only when the
+lowered program needs string helpers or interpolation trimming.
+
+Triple-quoted strings remain regular string literals in the AST/HIR; decode
+helpers in lowering, VM compilation, and Bash emission agree that the content is
+all bytes between the delimiters.

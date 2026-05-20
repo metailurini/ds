@@ -122,7 +122,7 @@ assert_contains README.md 'keeps comment-preserving formatting deferred' 'README
 
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.18.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.19.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 write_fixture "$FIX/usage_side_effect.ds" <<'DS'
 touch SHOULD_NOT_EXIST
@@ -566,7 +566,7 @@ done
 
 unsupported_cases=(
   'return_value|fn f() { return 1 }|function return values are deferred'
-  'string_method|let x = "a".upper()|expected end of statement'
+  'unknown_string_method|let x = "a".regex_replace("a", "b")|unknown string method'
   'regex_matches|if "a" matches "a" { echo "yes" }|expected `{` after if condition'
   'membership_in|if "a" in ["a"] { echo "yes" }|expected `{` after if condition'
   'direct_env|echo env.PATH|unknown command variable `env`'

@@ -125,6 +125,13 @@ void emit_source_loc(EmitBuf *out, const DsSource *fallback, DsSpan span) {
 }
 bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_data, size_t *out_len) {
     DsStr text = expr->as.text;
+    if (text.len >= 6 && memcmp(text.data, "\"\"\"", 3) == 0 && memcmp(text.data + text.len - 3, "\"\"\"", 3) == 0) {
+        size_t len = text.len - 6;
+        char *buf = ds_str_dup_range(text.data + 3, len);
+        *out_data = buf;
+        *out_len = len;
+        return true;
+    }
     if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') {
         ds_diag_error(diag, expr->span, "invalid string literal for Bash emission");
         return false;
@@ -150,6 +157,47 @@ bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_dat
     return true;
 }
 
+static bool emit_interpolation_var(BashEmitter *e, DsStr name, const char *field, size_t field_len, EmitBuf *out) {
+    (void)e;
+    buf_append(out, "${__ds_");
+    buf_append_len(out, name.data, name.len);
+    if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); }
+    buf_append(out, "}");
+    return true;
+}
+
+static bool emit_interpolation_var_quoted(BashEmitter *e, DsStr name, const char *field, size_t field_len, EmitBuf *out) {
+    buf_append(out, "\"");
+    emit_interpolation_var(e, name, field, field_len, out);
+    buf_append(out, "\"");
+    return true;
+}
+
+static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char *field, size_t field_len, const char *spec, size_t spec_len, EmitBuf *out) {
+    if (spec_len == 0) return emit_interpolation_var(e, name, field, field_len, out);
+    if (spec_len == 5 && memcmp(spec, "upper", 5) == 0) {
+        buf_append(out, "${__ds_"); buf_append_len(out, name.data, name.len); if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); } buf_append(out, "^^}"); return true;
+    }
+    if (spec_len == 5 && memcmp(spec, "lower", 5) == 0) {
+        buf_append(out, "${__ds_"); buf_append_len(out, name.data, name.len); if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); } buf_append(out, ",,}"); return true;
+    }
+    if (spec_len == 4 && memcmp(spec, "trim", 4) == 0) {
+        buf_append(out, "$(__ds_string_trim "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
+    }
+    buf_append(out, "$(printf '");
+    if (spec[0] == '<' || spec[0] == '>' || spec[0] == '^') {
+        if (spec[0] == '<') { buf_append(out, "%-"); buf_append_len(out, spec + 1, spec_len - 1); buf_append(out, "s' "); }
+        else { buf_append(out, "%"); buf_append_len(out, spec + 1, spec_len - 1); buf_append(out, "s' "); }
+        emit_interpolation_var_quoted(e, name, field, field_len, out);
+        buf_append(out, ")");
+        return true;
+    }
+    buf_append(out, "%"); buf_append_len(out, spec, spec_len); buf_append(out, "' ");
+    emit_interpolation_var_quoted(e, name, field, field_len, out);
+    buf_append(out, ")");
+    return true;
+}
+
 bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     char *decoded = NULL;
     size_t len = 0;
@@ -164,30 +212,34 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
             if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
                 j++;
                 while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
-                if (j < len && (decoded[j] == '}' || decoded[j] == '.')) {
+                if (j < len && (decoded[j] == '}' || decoded[j] == '.' || decoded[j] == ':')) {
                     DsStr name = {decoded + start, j - start};
                     if (!symbol_exists(&e->symbols, name)) {
                         ds_diag_error(e->diag, expr->span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
                         free(decoded);
                         return false;
                     }
-                    buf_append(out, "${__ds_");
-                    buf_append_len(out, name.data, name.len);
+                    const char *field = NULL; size_t field_len = 0;
                     if (decoded[j] == '.') {
                         size_t field_start = ++j;
                         if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
                             j++;
                             while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
                         }
-                        if (j >= len || decoded[j] != '}') {
-                            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
-                            free(decoded);
-                            return false;
-                        }
-                        buf_append(out, "_");
-                        buf_append_len(out, decoded + field_start, j - field_start);
+                        field = decoded + field_start; field_len = j - field_start;
                     }
-                    buf_append(out, "}");
+                    const char *spec = NULL; size_t spec_len = 0;
+                    if (j < len && decoded[j] == ':') {
+                        size_t spec_start = ++j;
+                        while (j < len && decoded[j] != '}') j++;
+                        spec = decoded + spec_start; spec_len = j - spec_start;
+                    }
+                    if (j >= len || decoded[j] != '}') {
+                        ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                        free(decoded);
+                        return false;
+                    }
+                    if (!emit_formatted_interpolation(e, name, field, field_len, spec, spec_len, out)) { free(decoded); return false; }
                     i = j;
                     continue;
                 }

@@ -1,0 +1,20 @@
+let raw = "  Hello, tool  "
+let name = raw.trim().lower().replace("hello", "hi")
+
+echo "normalized={name}"
+
+let result = run printf "api,web,worker\n"
+let services = result.stdout.trim().split(",")
+for service in services {
+  echo "service={service:upper}"
+}
+
+let port = 5432
+echo "port={port:05d}"
+echo "name={name:<16}done"
+
+let body = """
+line one
+line two
+"""
+echo "body={body:trim}"

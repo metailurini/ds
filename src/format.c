@@ -140,10 +140,22 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             format_expr_prec(fmt, expr->as.binary.right, prec + 1);
             break;
         case DS_EXPR_CALL:
-            append_str(fmt, expr->as.call.name);
-            append_cstr(fmt, "(");
-            format_expr_list(fmt, &expr->as.call.args);
-            append_cstr(fmt, ")");
+            if (expr->as.call.name.len > 7 && memcmp(expr->as.call.name.data, "string.", 7) == 0 && expr->as.call.args.len > 0) {
+                format_expr_prec(fmt, expr->as.call.args.items[0], prec);
+                append_cstr(fmt, ".");
+                append_str(fmt, (DsStr){expr->as.call.name.data + 7, expr->as.call.name.len - 7});
+                append_cstr(fmt, "(");
+                for (size_t i = 1; i < expr->as.call.args.len; i++) {
+                    if (i > 1) append_cstr(fmt, ", ");
+                    format_expr_prec(fmt, expr->as.call.args.items[i], 0);
+                }
+                append_cstr(fmt, ")");
+            } else {
+                append_str(fmt, expr->as.call.name);
+                append_cstr(fmt, "(");
+                format_expr_list(fmt, &expr->as.call.args);
+                append_cstr(fmt, ")");
+            }
             break;
         case DS_EXPR_ARRAY:
             append_cstr(fmt, "[");

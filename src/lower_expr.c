@@ -4,55 +4,88 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool is_supported_format_spec(DsStr spec, SymKind kind) {
+    if (spec.len == 0) return true;
+    if ((spec.len == 5 && memcmp(spec.data, "upper", 5) == 0) ||
+        (spec.len == 5 && memcmp(spec.data, "lower", 5) == 0) ||
+        (spec.len == 4 && memcmp(spec.data, "trim", 4) == 0)) return kind == SYM_STRING || kind == SYM_UNKNOWN;
+    size_t i = 0;
+    if (spec.data[0] == '<' || spec.data[0] == '>' || spec.data[0] == '^') {
+        i = 1;
+        if (i >= spec.len) return false;
+        while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
+        return i == spec.len && (kind == SYM_STRING || kind == SYM_UNKNOWN);
+    }
+    bool zero = false;
+    if (i < spec.len && spec.data[i] == '0') { zero = true; i++; }
+    size_t digits_start = i;
+    while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
+    if (i < spec.len && spec.data[i] == 'd') return i + 1 == spec.len && i > digits_start && (kind == SYM_INT || kind == SYM_UNKNOWN);
+    if (zero) return false;
+    if (i < spec.len && spec.data[i] == '.') {
+        i++;
+        size_t prec_start = i;
+        while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
+        return i < spec.len && spec.data[i] == 'f' && i + 1 == spec.len && i > prec_start && (kind == SYM_INT || kind == SYM_UNKNOWN);
+    }
+    return false;
+}
+
 bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
-    if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') return true;
-    for (size_t i = 1; i + 1 < text.len; i++) {
-        char c = text.data[i];
-        if (c == '\\') {
-            if (i + 1 < text.len - 1) i++;
-            continue;
-        }
+    DsStr decoded = {0};
+    if (!lower_decode_string_text(text, &decoded)) return true;
+    for (size_t i = 0; i < decoded.len; i++) {
+        char c = decoded.data[i];
         if (c != '{') continue;
         size_t start = i + 1;
         size_t j = start;
-        if (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || text.data[j] == '_')) {
+        if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
             j++;
-            while (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || (text.data[j] >= '0' && text.data[j] <= '9') || text.data[j] == '_')) j++;
-            if (j < text.len - 1 && (text.data[j] == '}' || text.data[j] == '.')) {
-                DsStr name = {text.data + start, j - start};
-                Symbol *sym = scope_find(lower->scope, name);
-                if (!sym) {
-                    ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+            while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
+            DsStr name = {decoded.data + start, j - start};
+            Symbol *sym = scope_find(lower->scope, name);
+            if (!sym) {
+                ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+                free(decoded.data);
+                return false;
+            }
+            SymKind value_kind = sym->kind;
+            if (j < decoded.len && decoded.data[j] == '.') {
+                size_t field_start = ++j;
+                if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
+                    j++;
+                    while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
+                }
+                DsStr field = {decoded.data + field_start, j - field_start};
+                if (sym->kind != SYM_COMMAND_RESULT) {
+                    ds_diag_error(lower->diag, span, "field interpolation is only supported on command results in v0.7.0");
+                    free(decoded.data);
                     return false;
                 }
-                if (text.data[j] == '.') {
-                    size_t field_start = ++j;
-                    if (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || text.data[j] == '_')) {
-                        j++;
-                        while (j < text.len - 1 && ((text.data[j] >= 'A' && text.data[j] <= 'Z') || (text.data[j] >= 'a' && text.data[j] <= 'z') || (text.data[j] >= '0' && text.data[j] <= '9') || text.data[j] == '_')) j++;
-                    }
-                    if (j >= text.len - 1 || text.data[j] != '}') {
-                        ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
-                        return false;
-                    }
-                    DsStr field = {text.data + field_start, j - field_start};
-                    SymKind field_kind = SYM_UNKNOWN;
-                    if (sym->kind != SYM_COMMAND_RESULT) {
-                        ds_diag_error(lower->diag, span, "field interpolation is only supported on command results in v0.7.0");
-                        return false;
-                    }
-                    if (!command_result_field_kind(field, &field_kind)) {
-                        ds_diag_error(lower->diag, span, "unknown command result field `%.*s`", (int)field.len, field.data);
-                        return false;
-                    }
+                if (!command_result_field_kind(field, &value_kind)) {
+                    ds_diag_error(lower->diag, span, "unknown command result field `%.*s`", (int)field.len, field.data);
+                    free(decoded.data);
+                    return false;
                 }
-                i = j;
-                continue;
             }
+            if (j < decoded.len && decoded.data[j] == ':') {
+                size_t spec_start = ++j;
+                while (j < decoded.len && decoded.data[j] != '}') j++;
+                if (j >= decoded.len) break;
+                DsStr spec = {decoded.data + spec_start, j - spec_start};
+                if (!is_supported_format_spec(spec, value_kind)) {
+                    ds_diag_error(lower->diag, span, "unsupported interpolation format specifier `%.*s`; supported: upper, lower, trim, <N, >N, ^N, Nd, 0Nd, .Pf, N.Pf", (int)spec.len, spec.data);
+                    free(decoded.data);
+                    return false;
+                }
+            }
+            if (j < decoded.len && decoded.data[j] == '}') { i = j; continue; }
         }
-        ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+        ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}`, `{name.field}`, or a supported `:specifier`");
+        free(decoded.data);
         return false;
     }
+    free(decoded.data);
     return true;
 }
 
@@ -291,13 +324,34 @@ DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     return out;
 }
 
+
+static bool is_string_helper_name(DsStr name) {
+    return lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") ||
+           lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.replace") ||
+           lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.split") ||
+           lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with");
+}
+
+static bool string_helper_arg_count_ok(DsStr name, size_t argc, size_t *expected) {
+    if (lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") || lower_str_eq(name, "string.lower")) { *expected = 1; return argc == 1; }
+    if (lower_str_eq(name, "string.replace")) { *expected = 3; return argc == 3; }
+    *expected = 2;
+    return argc == 2;
+}
+
 DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
     out->as.call.name = str_clone(expr->as.call.name);
     for (size_t i = 0; i < expr->as.call.args.len; i++) {
         SymKind arg_kind = SYM_UNKNOWN;
         lower_expr_vec_push(&out->as.call.args, lower_expr(lower, expr->as.call.args.items[i], &arg_kind));
-        if (ds_stdlib_is_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+        if (is_string_helper_name(expr->as.call.name)) {
+            if (i == 0 && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` requires a string receiver", (int)expr->as.call.name.len, expr->as.call.name.data);
+            } else if (i > 0 && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects string arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
+            }
+        } else if (ds_stdlib_is_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
             ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library helper `%.*s` expects string arguments in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
         } else if (arg_kind != SYM_STRING && arg_kind != SYM_INT && arg_kind != SYM_BOOL && arg_kind != SYM_UNKNOWN) {
             ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library arguments must be scalar values in v0.11.0");
@@ -309,10 +363,26 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         if (!stdlib_return_kind(stdlib_helper, &ret)) {
             ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
         } else if (!ds_stdlib_arity_ok(stdlib_helper, expr->as.call.args.len)) {
-            if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
+            if (is_string_helper_name(expr->as.call.name)) {
+                size_t expected = 0;
+                string_helper_arg_count_ok(expr->as.call.name, expr->as.call.args.len, &expected);
+                ds_diag_error(lower->diag, expr->span, "string method `%.*s` expects %zu arguments including receiver but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, expected, expr->as.call.args.len);
+            } else if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
             else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, stdlib_helper->max_arity, expr->as.call.args.len);
         } else if (stdlib_helper->statement_only) {
             ds_diag_error(lower->diag, expr->span, "helper `%.*s` is statement-only in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
+        }
+        if (is_string_helper_name(expr->as.call.name)) {
+            if ((lower_str_eq(expr->as.call.name, "string.split") || lower_str_eq(expr->as.call.name, "string.replace")) && expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
+                DsStr decoded = {0};
+                if (lower_decode_string_text(expr->as.call.args.items[1]->as.text, &decoded)) {
+                    if (decoded.len == 0) {
+                        if (lower_str_eq(expr->as.call.name, "string.split")) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "split with an empty separator is deferred in v0.19.0");
+                        else ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "replace with an empty source is deferred in v0.19.0");
+                    }
+                    free(decoded.data);
+                }
+            }
         }
         if (stdlib_helper->validates_env_name && expr->as.call.args.len > 0 && expr->as.call.args.items[0]->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
@@ -328,6 +398,10 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
     DsStr ns = {0}, member = {0};
     if (split_member_name(expr->as.call.name, &ns, &member) && ds_stdlib_is_namespace(ns)) {
         ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
+        return out;
+    }
+    if (split_member_name(expr->as.call.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
+        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with", (int)member.len, member.data);
         return out;
     }
     ds_diag_error(lower->diag, expr->span, "function calls do not produce values in v0.9.0");

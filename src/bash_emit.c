@@ -184,6 +184,7 @@ static void emit_collection_helpers(BashEmitter *e) {
 
 static void emit_stdlib_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_stdlib_helpers_source());
+    buf_append(&e->out, ds_bash_string_helpers_source());
 }
 
 static void emit_debug_helpers(BashEmitter *e) {

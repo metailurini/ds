@@ -23,6 +23,92 @@ static void print_trace_escaped(FILE *out, const char *data) {
     fputc('"', out);
 }
 
+static bool ascii_transform_string(const DsString *in, DsString *out, const char *spec) {
+    ds_string_init(out);
+    size_t a = 0, b = in->len;
+    if (strcmp(spec, "trim") == 0) {
+        while (a < b && (in->data[a] == ' ' || in->data[a] == '\t' || in->data[a] == '\n' || in->data[a] == '\r' || in->data[a] == '\v' || in->data[a] == '\f')) a++;
+        while (b > a && (in->data[b - 1] == ' ' || in->data[b - 1] == '\t' || in->data[b - 1] == '\n' || in->data[b - 1] == '\r' || in->data[b - 1] == '\v' || in->data[b - 1] == '\f')) b--;
+    }
+    ds_string_append_range(out, in->data ? in->data + a : "", b - a);
+    if (strcmp(spec, "upper") == 0 || strcmp(spec, "lower") == 0) {
+        for (size_t i = 0; i < out->len; i++) {
+            if (strcmp(spec, "upper") == 0 && out->data[i] >= 'a' && out->data[i] <= 'z') out->data[i] = (char)(out->data[i] - 'a' + 'A');
+            if (strcmp(spec, "lower") == 0 && out->data[i] >= 'A' && out->data[i] <= 'Z') out->data[i] = (char)(out->data[i] - 'A' + 'a');
+        }
+    }
+    return true;
+}
+
+static bool parse_positive_number(const char *s, size_t len, size_t *idx, int *out) {
+    int v = 0;
+    size_t start = *idx;
+    while (*idx < len && s[*idx] >= '0' && s[*idx] <= '9') {
+        v = v * 10 + (s[*idx] - '0');
+        if (v > 1024) return false;
+        (*idx)++;
+    }
+    if (*idx == start || v <= 0) return false;
+    *out = v;
+    return true;
+}
+
+static bool append_padded(DsString *out, const char *data, size_t len, int width, char align) {
+    if (width <= (int)len) return ds_string_append_range(out, data, len);
+    int pad = width - (int)len;
+    int left = 0, right = 0;
+    if (align == '<') right = pad;
+    else if (align == '>') left = pad;
+    else { left = pad / 2; right = pad - left; }
+    for (int i = 0; i < left; i++) ds_string_append_char(out, ' ');
+    ds_string_append_range(out, data, len);
+    for (int i = 0; i < right; i++) ds_string_append_char(out, ' ');
+    return true;
+}
+
+static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, size_t spec_len, DsString *out, DsSpan span) {
+    if (spec_len == 0) {
+        DsString rendered; ds_value_to_string(value, &rendered);
+        ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
+        ds_string_free(&rendered);
+        return true;
+    }
+    if ((spec_len == 5 && memcmp(spec, "upper", 5) == 0) || (spec_len == 5 && memcmp(spec, "lower", 5) == 0) || (spec_len == 4 && memcmp(spec, "trim", 4) == 0)) {
+        if (value->kind != DS_VALUE_STRING) { ds_diag_error(vm->diag, span, "string format specifier requires a string value"); return false; }
+        DsString rendered;
+        ascii_transform_string(&value->as.string, &rendered, spec_len == 5 && spec[0] == 'u' ? "upper" : (spec_len == 5 ? "lower" : "trim"));
+        ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
+        ds_string_free(&rendered);
+        return true;
+    }
+    if (spec[0] == '<' || spec[0] == '>' || spec[0] == '^') {
+        if (value->kind != DS_VALUE_STRING) { ds_diag_error(vm->diag, span, "width format specifier requires a string value"); return false; }
+        size_t idx = 1; int width = 0;
+        if (!parse_positive_number(spec, spec_len, &idx, &width) || idx != spec_len) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+        return append_padded(out, value->as.string.data ? value->as.string.data : "", value->as.string.len, width, spec[0]);
+    }
+    if (value->kind != DS_VALUE_INT) { ds_diag_error(vm->diag, span, "numeric format specifier requires an int value"); return false; }
+    size_t idx = 0; bool zero = false; int width = 0, prec = -1;
+    if (idx < spec_len && spec[idx] == '0') { zero = true; idx++; }
+    if (idx < spec_len && spec[idx] >= '0' && spec[idx] <= '9') { if (!parse_positive_number(spec, spec_len, &idx, &width)) return false; }
+    if (idx < spec_len && spec[idx] == '.') { idx++; if (!parse_positive_number(spec, spec_len, &idx, &prec)) return false; }
+    if (idx >= spec_len) return false;
+    char conv = spec[idx++];
+    if (idx != spec_len || !(conv == 'd' || conv == 'f')) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+    char fmt[32]; char buf[128];
+    if (conv == 'd') {
+        snprintf(fmt, sizeof(fmt), zero ? "%%0%dlld" : "%%%dlld", width > 0 ? width : 1);
+        snprintf(buf, sizeof(buf), fmt, (long long)value->as.integer);
+        return ds_string_append_cstr(out, buf);
+    }
+    if (prec < 0) prec = 6;
+    char ibuf[64]; snprintf(ibuf, sizeof(ibuf), "%lld", (long long)value->as.integer);
+    DsString tmp; ds_string_init(&tmp); ds_string_append_cstr(&tmp, ibuf); ds_string_append_char(&tmp, '.'); for (int i = 0; i < prec; i++) ds_string_append_char(&tmp, '0');
+    if (width > (int)tmp.len) append_padded(out, tmp.data, tmp.len, width, '>'); else ds_string_append_range(out, tmp.data, tmp.len);
+    ds_string_free(&tmp);
+    return true;
+}
+
 bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span) {
     ds_string_init(out);
     for (size_t i = 0; i < input->len; i++) {
@@ -33,52 +119,41 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
             if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
                 j++;
                 while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
-                if (j < input->len && (input->data[j] == '}' || input->data[j] == '.')) {
+                if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':')) {
                     char *name = ds_str_dup_range(input->data + start, j - start);
                     DsValue value;
-                    if (!lookup_var(vm, name, &value, span)) {
-                        free(name);
-                        ds_string_free(out);
-                        return false;
-                    }
+                    if (!lookup_var(vm, name, &value, span)) { free(name); ds_string_free(out); return false; }
                     if (input->data[j] == '.') {
                         size_t field_start = ++j;
                         if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
                             j++;
                             while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
                         }
-                        if (j >= input->len || input->data[j] != '}') {
-                            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
-                            ds_value_free(&value);
-                            free(name);
-                            ds_string_free(out);
-                            return false;
-                        }
                         char *field = ds_str_dup_range(input->data + field_start, j - field_start);
                         DsValue field_value = ds_value_null();
                         bool ok = command_result_field(vm, &value, field, span, &field_value);
-                        free(field);
-                        ds_value_free(&value);
-                        if (!ok) {
-                            free(name);
-                            ds_string_free(out);
-                            return false;
-                        }
+                        free(field); ds_value_free(&value);
+                        if (!ok) { free(name); ds_string_free(out); return false; }
                         value = field_value;
                     }
-                    DsString rendered;
-                    ds_value_to_string(&value, &rendered);
-                    ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
-                    ds_string_free(&rendered);
-                    ds_value_free(&value);
-                    free(name);
-                    i = j;
-                    continue;
+                    const char *spec = NULL; size_t spec_len = 0;
+                    if (j < input->len && input->data[j] == ':') {
+                        size_t spec_start = ++j;
+                        while (j < input->len && input->data[j] != '}') j++;
+                        spec = input->data + spec_start; spec_len = j - spec_start;
+                    }
+                    if (j >= input->len || input->data[j] != '}') {
+                        ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                        ds_value_free(&value); free(name); ds_string_free(out); return false;
+                    }
+                    bool ok = append_formatted_value(vm, &value, spec, spec_len, out, span);
+                    ds_value_free(&value); free(name);
+                    if (!ok) { ds_string_free(out); return false; }
+                    i = j; continue;
                 }
             }
             ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
-            ds_string_free(out);
-            return false;
+            ds_string_free(out); return false;
         }
         ds_string_append_char(out, c);
     }

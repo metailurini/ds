@@ -433,6 +433,75 @@ static bool stdlib_lines(Vm *vm, Instr *ins, DsValue *out) {
     return true;
 }
 
+
+
+static bool contains_bytes(const char *s, size_t len, const char *sub, size_t sub_len) {
+    if (sub_len == 0) return true;
+    if (sub_len > len) return false;
+    for (size_t i = 0; i + sub_len <= len; i++) if (memcmp(s + i, sub, sub_len) == 0) return true;
+    return false;
+}
+
+static bool ascii_trim_bounds(const char *s, size_t len, size_t *start, size_t *end) {
+    size_t a = 0, b = len;
+    while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\n' || s[a] == '\r' || s[a] == '\v' || s[a] == '\f')) a++;
+    while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\n' || s[b - 1] == '\r' || s[b - 1] == '\v' || s[b - 1] == '\f')) b--;
+    *start = a; *end = b; return true;
+}
+
+static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
+    const char *s = NULL; size_t len = 0;
+    if (!vm_string_arg(vm, ins, 0, &s, &len)) return false;
+    if (helper_is(ins, "string.trim")) {
+        size_t a = 0, b = 0; ascii_trim_bounds(s, len, &a, &b);
+        DsString r; ds_string_from_range(&r, s + a, b - a); *out = ds_value_string_take(&r); return true;
+    }
+    if (helper_is(ins, "string.upper") || helper_is(ins, "string.lower")) {
+        DsString r; ds_string_from_range(&r, s, len);
+        for (size_t i = 0; i < r.len; i++) {
+            if (helper_is(ins, "string.upper") && r.data[i] >= 'a' && r.data[i] <= 'z') r.data[i] = (char)(r.data[i] - 'a' + 'A');
+            if (helper_is(ins, "string.lower") && r.data[i] >= 'A' && r.data[i] <= 'Z') r.data[i] = (char)(r.data[i] - 'A' + 'a');
+        }
+        *out = ds_value_string_take(&r); return true;
+    }
+    if (helper_is(ins, "string.contains") || helper_is(ins, "string.starts_with") || helper_is(ins, "string.ends_with")) {
+        const char *sub = NULL; size_t sub_len = 0;
+        if (!vm_string_arg(vm, ins, 1, &sub, &sub_len)) return false;
+        bool ok = false;
+        if (helper_is(ins, "string.contains")) ok = contains_bytes(s, len, sub, sub_len);
+        else if (helper_is(ins, "string.starts_with")) ok = sub_len <= len && memcmp(s, sub, sub_len) == 0;
+        else ok = sub_len <= len && memcmp(s + len - sub_len, sub, sub_len) == 0;
+        *out = ds_value_bool(ok); return true;
+    }
+    if (helper_is(ins, "string.replace")) {
+        const char *from = NULL, *to = NULL; size_t from_len = 0, to_len = 0;
+        if (!vm_string_arg(vm, ins, 1, &from, &from_len) || !vm_string_arg(vm, ins, 2, &to, &to_len)) return false;
+        if (from_len == 0) { ds_diag_error(vm->diag, ins->span, "replace with an empty source is unsupported in v0.19.0"); return false; }
+        DsString r; ds_string_init(&r);
+        size_t i = 0;
+        while (i < len) {
+            if (i + from_len <= len && memcmp(s + i, from, from_len) == 0) { ds_string_append_range(&r, to, to_len); i += from_len; }
+            else { ds_string_append_char(&r, s[i]); i++; }
+        }
+        *out = ds_value_string_take(&r); return true;
+    }
+    if (helper_is(ins, "string.split")) {
+        const char *sep = NULL; size_t sep_len = 0;
+        if (!vm_string_arg(vm, ins, 1, &sep, &sep_len)) return false;
+        if (sep_len == 0) { ds_diag_error(vm->diag, ins->span, "split with an empty separator is unsupported in v0.19.0"); return false; }
+        DsValue array = ds_value_null(); array.kind = DS_VALUE_ARRAY; ds_array_init(&array.as.array);
+        size_t part = 0, i = 0;
+        while (i + sep_len <= len) {
+            if (memcmp(s + i, sep, sep_len) == 0) { array_push_string(&array, s + part, i - part); i += sep_len; part = i; }
+            else i++;
+        }
+        array_push_string(&array, s + part, len - part);
+        *out = array; return true;
+    }
+    ds_diag_error(vm->diag, ins->span, "unknown string method `%s`", ins->name ? ins->name : "");
+    return false;
+}
+
 bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     *out = ds_value_null();
 
@@ -469,6 +538,7 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     }
 
     if (helper_is(ins, "cmd.exists") || helper_is(ins, "cmd.require")) return stdlib_cmd(vm, ins, out);
+    if (strncmp(name, "string.", 7) == 0) return string_method(vm, ins, out);
     if (helper_is(ins, "env.get")) return stdlib_env_get(vm, ins, out);
     if (helper_is(ins, "env.set")) return stdlib_env_set(vm, ins);
     if (helper_is(ins, "env.unset")) return stdlib_env_unset(vm, ins);

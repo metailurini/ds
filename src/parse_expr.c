@@ -192,18 +192,31 @@ static DsExpr *parse_postfix(Parser *p) {
         field_expr->as.field.object = expr;
         field_expr->as.field.field = parser_copy_token_text(field);
         expr = field_expr;
-        if (field_expr->as.field.object && field_expr->as.field.object->kind == DS_EXPR_IDENT && parser_advance_if(p, DS_TOK_LPAREN)) {
+        if (parser_advance_if(p, DS_TOK_LPAREN)) {
             DsToken *open = parser_previous(p);
             DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, open->span.end, dot->span.source});
-            DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
-            DsToken right = {.text = field_expr->as.field.field, .span = field->span};
-            call->as.call.name = parser_copy_dotted_name(&left, &right);
-            free(field_expr->as.field.object->as.text.data);
-            free(field_expr->as.field.object);
+            bool namespace_call = field_expr->as.field.object && field_expr->as.field.object->kind == DS_EXPR_IDENT &&
+                ((field_expr->as.field.object->as.text.len == 4 && memcmp(field_expr->as.field.object->as.text.data, "file", 4) == 0) ||
+                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "dir", 3) == 0) ||
+                 (field_expr->as.field.object->as.text.len == 4 && memcmp(field_expr->as.field.object->as.text.data, "path", 4) == 0) ||
+                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "cmd", 3) == 0) ||
+                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "env", 3) == 0));
+            if (namespace_call) {
+                DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
+                DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+                call->as.call.name = parser_copy_dotted_name(&left, &right);
+                free(field_expr->as.field.object->as.text.data);
+                free(field_expr->as.field.object);
+            } else {
+                DsToken left = {.text = (DsStr){"string", 6}, .span = field->span};
+                DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+                call->as.call.name = parser_copy_dotted_name(&left, &right);
+                parser_expr_vec_push(&call->as.call.args, field_expr->as.field.object);
+            }
             free(field_expr->as.field.field.data);
             free(field_expr);
             parse_call_args(p, &call->as.call.args);
-            if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
+            if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after method call arguments")) call->span.end = parser_previous(p)->span.end;
             expr = call;
         }
     }

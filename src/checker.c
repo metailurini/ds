@@ -121,8 +121,19 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             size_t start = i + 1;
             size_t j = start;
             while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+            size_t name_end = j;
+            if (j < text.len && text.data[j] == '.') {
+                j++;
+                if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
+                    while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+                }
+            }
+            if (j < text.len && text.data[j] == ':') {
+                j++;
+                while (j < text.len && text.data[j] != '}') j++;
+            }
             if (j < text.len && text.data[j] == '}') {
-                use_cstr(c, text.data + start, j - start);
+                use_cstr(c, text.data + start, name_end - start);
                 i = j;
             }
         }

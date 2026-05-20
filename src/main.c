@@ -12,7 +12,7 @@
 
 
 static void usage(FILE *out) {
-    fputs("ds v0.18.0\n\n", out);
+    fputs("ds v0.19.0\n\n", out);
     fputs("Usage:\n", out);
     fputs("  ds <file.ds> [args...]\n", out);
     fputs("  ds run <file.ds> [args...]\n", out);

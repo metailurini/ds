@@ -1,3 +1,11 @@
+# v0.19.0 - String Library and Formatted Output
+
+- Added scoped string methods with VM and standalone Bash support: `trim`, `upper`, `lower`, `replace`, `contains`, `split`, `starts_with`, and `ends_with`.
+- Added formatted interpolation specifiers for string transforms, width/alignment, integer padding, and narrow fixed-decimal integer rendering.
+- Added triple-quoted multi-line string literals.
+- Added `examples/strings.ds`.
+- Tests for v0.19.0 are intentionally not added in this implementation-only pass.
+
 # v0.18.0 - Pipelines
 
 - Added linear command pipelines for plain command statements and captured `run` expressions.

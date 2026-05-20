@@ -79,8 +79,10 @@ let app = "api"
 echo "Deploying {app}"
 echo "Deploying {app} to {target}"
 
-# In normal strings, {name} interpolates a ds expression or variable.
-# In command mode, $name passes a variable as a command argument.
+# In normal strings, {name} and {name.field} interpolate variables and command-result fields.
+# v0.19.0 also supports small portable specifiers such as {app:upper},
+# {app:<10}, and {port:05d}. In command mode, $name passes a variable as a
+# command argument.
 
 
 # -----------------------------------------------------------------------------
@@ -235,8 +237,8 @@ if branch.failed {
 
 echo "Current branch: {branch.stdout}"
 
-# String methods such as `.trim()` are deferred until the language has a
-# standard string helper model.
+# v0.19.0 adds scoped string methods such as `.trim()` and `.split()` with
+# matching VM and standalone Bash behavior.
 
 
 # -----------------------------------------------------------------------------
@@ -617,16 +619,22 @@ let ends   = s.ends_with("!  ")
 # No printf command is added to ds.
 
 let port = 5432
-let ratio = 0.9375
 let label = "api"
 
 echo "{port:05d}"           # zero-padded integer
 echo "{label:<10}"          # left-aligned, width 10
-echo "{ratio:.2f}"          # float with 2 decimal places
+echo "{port:.2f}"           # fixed decimal rendering for integer values
 echo "{label:upper}"        # named transform: uppercase
 echo "{label:lower}"        # named transform: lowercase
+echo "{label:trim}"         # named transform: trim
 
-# Only specifiers with reliable VM/Bash emission parity are supported.
+let body = """
+line one
+line two
+"""
+echo "{body}"
+
+# Only specifiers with reliable VM/Bash emission parity are supported; general floats remain deferred.
 # Full printf format strings are not a goal.
 
 

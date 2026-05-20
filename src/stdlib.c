@@ -27,6 +27,14 @@ static const DsStdlibHelper HELPERS[] = {
     {"glob", "__ds_stdlib_glob", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true},
     {"glob!", "__ds_stdlib_glob_required", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true},
     {"lines", "__ds_stdlib_lines", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false},
+    {"string.trim", "__ds_string_trim", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
+    {"string.upper", "__ds_string_upper", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
+    {"string.lower", "__ds_string_lower", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
+    {"string.replace", "__ds_string_replace", 3, 3, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
+    {"string.contains", "__ds_string_contains", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
+    {"string.split", "__ds_string_split", 2, 2, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false},
+    {"string.starts_with", "__ds_string_starts_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
+    {"string.ends_with", "__ds_string_ends_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
 };
 
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {

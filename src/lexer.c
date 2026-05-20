@@ -185,6 +185,38 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         if (c == '"') {
             size_t start = i;
             int start_col = col;
+            DsLoc start_loc = {start, line, start_col};
+            if (i + 2 < source->len && source->data[i + 1] == '"' && source->data[i + 2] == '"') {
+                i += 3;
+                col += 3;
+                bool terminated = false;
+                while (i < source->len) {
+                    if (i + 2 < source->len && source->data[i] == '"' && source->data[i + 1] == '"' && source->data[i + 2] == '"') {
+                        i += 3;
+                        col += 3;
+                        terminated = true;
+                        break;
+                    }
+                    if (source->data[i] == '\0') {
+                        ds_diag_error(diag, (DsSpan){(DsLoc){i, line, col}, (DsLoc){i + 1, line, col + 1}, source}, "string literals do not support embedded NUL bytes");
+                    }
+                    if (source->data[i] == '\n') {
+                        i++;
+                        line++;
+                        col = 1;
+                    } else {
+                        i++;
+                        col++;
+                    }
+                }
+                DsLoc end = {i, line, col};
+                if (!terminated) {
+                    ds_diag_error(diag, (DsSpan){start_loc, end, source}, "unterminated triple-quoted string literal");
+                    continue;
+                }
+                add_token(out, source, DS_TOK_STRING, source->data + start, i - start, start_loc, end);
+                continue;
+            }
             i++;
             col++;
             bool terminated = false;
@@ -220,10 +252,13 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
                     break;
                 }
                 if (ch == '\n') break;
+                if (ch == '\0') {
+                    ds_diag_error(diag, (DsSpan){(DsLoc){i, line, col}, (DsLoc){i + 1, line, col + 1}, source}, "string literals do not support embedded NUL bytes");
+                    invalid_escape = true;
+                }
                 i++;
                 col++;
             }
-            DsLoc start_loc = {start, line, start_col};
             DsLoc end = {i, line, col};
             if (!terminated) {
                 ds_diag_error(diag, (DsSpan){start_loc, end, source}, "unterminated string literal");

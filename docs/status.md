@@ -1,7 +1,7 @@
 # Current Status
 
 This document is the user-facing snapshot for the implementation and test pass
-after `v0.18.0` pipelines. It is
+after `v0.19.0` string methods and formatted output. It is
 not a replacement for the roadmap or language catalog; it summarizes what users
 can rely on today and what is still deliberately deferred.
 
@@ -174,7 +174,7 @@ while internal code should prefer focused headers.
 parity and clear interaction with existing block and loop scopes.
 
 `v0.18.0` adds linear command pipelines for plain command statements and
-captured `run` expressions. Pipeline status uses Bash `pipefail` semantics: if
+captured `run` expressions. `v0.19.0` adds ASCII string methods, formatted interpolation, and triple-quoted strings. Pipeline status uses Bash `pipefail` semantics: if
 any stage fails, the pipeline status is the rightmost failing stage.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,

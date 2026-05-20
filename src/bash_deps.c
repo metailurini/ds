@@ -1,5 +1,7 @@
 #include "bash_internal.h"
 
+#include <string.h>
+
 static bool expr_uses_run(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
@@ -36,9 +38,18 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
     }
 }
 
+static bool string_literal_needs_stdlib(DsStr text) {
+    if (text.len < 2 || text.data[0] != '"') return false;
+    for (size_t i = 0; i + 5 < text.len; i++) {
+        if (text.data[i] == ':' && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') return true;
+    }
+    return false;
+}
+
 static bool expr_uses_stdlib(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING: return string_literal_needs_stdlib(expr->as.text);
         case DS_LOWER_EXPR_CALL: return ds_stdlib_is_name(expr->as.call.name);
         case DS_LOWER_EXPR_FIELD: return expr_uses_stdlib(expr->as.field.object);
         case DS_LOWER_EXPR_INDEX: return expr_uses_stdlib(expr->as.index.object) || expr_uses_stdlib(expr->as.index.index);

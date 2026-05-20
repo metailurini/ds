@@ -18,6 +18,11 @@ bool parse_i64(DsStr text, int64_t *out) {
 bool lower_decode_string_text(DsStr text, DsStr *out) {
     out->data = NULL;
     out->len = 0;
+    if (text.len >= 6 && memcmp(text.data, "\"\"\"", 3) == 0 && memcmp(text.data + text.len - 3, "\"\"\"", 3) == 0) {
+        out->data = ds_str_dup_range(text.data + 3, text.len - 6);
+        out->len = text.len - 6;
+        return true;
+    }
     if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') return false;
     char *buf = (char *)ds_xcalloc(text.len, 1);
     size_t len = 0;

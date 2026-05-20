@@ -756,3 +756,18 @@ pipeline emission is structured: the emitter writes the exact staged argv words
 directly into a Bash pipeline, redirects that pipeline into temporary capture
 files, and records stdout/stderr/code/ok/failed fields without using `eval` or
 depending on the `ds` binary.
+
+## v0.19.0 string runtime
+
+`v0.19.0` keeps string helpers inside the normal VM/Bash parity boundary. The VM
+implements ASCII `trim`, `upper`, `lower`, literal `replace`, literal
+`contains`, literal `split`, `starts_with`, and `ends_with` using owned
+`DsString`/`DsArray` values. `split` returns an array of owned string values that
+works with existing array indexing and `for` loops.
+
+Triple-quoted literals use the simple byte rule: every byte between the opening
+`"""` and closing `"""` is literal content. They do not strip indentation.
+Formatted interpolation is rendered during the existing interpolation step. The
+supported subset is intentionally small: string transforms, string
+width/alignment, integer padding, and fixed decimal rendering for integer values.
+General floats and full printf-style formatting remain out of scope.
