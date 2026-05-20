@@ -9,11 +9,13 @@ const char *op_name(OpCode op) {
         case OP_LOAD_VAR: return "LOAD_VAR";
         case OP_STORE_VAR: return "STORE_VAR";
         case OP_NOT: return "NOT";
+        case OP_BINARY: return "BINARY";
         case OP_COMPARE: return "COMPARE";
         case OP_INTERPOLATE: return "INTERPOLATE";
         case OP_RUN_CAPTURE: return "RUN_CAPTURE";
         case OP_GET_FIELD: return "GET_FIELD";
         case OP_JUMP: return "JUMP";
+        case OP_JUMP_POP: return "JUMP_POP";
         case OP_JUMP_IF_FALSE: return "JUMP_IF_FALSE";
         case OP_PUSH_SCOPE: return "PUSH_SCOPE";
         case OP_POP_SCOPE: return "POP_SCOPE";
@@ -151,6 +153,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_LOAD_VAR: fprintf(out, " r%d, %s", ins->dst, ins->name); break;
             case OP_STORE_VAR: fprintf(out, " %s, r%d", ins->name, ins->a); break;
             case OP_NOT: fprintf(out, " r%d, r%d", ins->dst, ins->a); break;
+            case OP_BINARY: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
             case OP_RUN_CAPTURE:
@@ -165,6 +168,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 break;
             case OP_GET_FIELD: fprintf(out, " r%d, r%d.%s", ins->dst, ins->a, ins->field); break;
             case OP_JUMP: fprintf(out, " %d", ins->target); break;
+            case OP_JUMP_POP: fprintf(out, " pop %d -> %d", ins->a, ins->target); break;
             case OP_JUMP_IF_FALSE: fprintf(out, " r%d, %d", ins->a, ins->target); break;
             case OP_PUSH_SCOPE: break;
             case OP_POP_SCOPE: break;

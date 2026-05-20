@@ -173,6 +173,12 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             fputs("Let ", out); print_str(out, stmt->as.let_stmt.name); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.let_stmt.value, level + 1);
             break;
+        case DS_LOWER_STMT_ASSIGN: {
+            const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+=" : (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SUB ? "-=" : "=");
+            fprintf(out, "Assign "); print_str(out, stmt->as.assign_stmt.name); fprintf(out, " %s", op); print_span(out, stmt->span); fputc('\n', out);
+            dump_expr(out, stmt->as.assign_stmt.value, level + 1);
+            break;
+        }
         case DS_LOWER_STMT_CMD:
             fputs("Command ", out); dump_word_vec(out, &stmt->as.cmd_stmt.words); dump_redirect(out, &stmt->as.cmd_stmt.redirect); print_span(out, stmt->span); fputc('\n', out);
             break;
@@ -187,6 +193,37 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.for_stmt.iterable, level + 1);
             indent(out, level + 1); fputs("Body\n", out);
             dump_block(out, stmt->as.for_stmt.body, level + 2);
+            break;
+        case DS_LOWER_STMT_WHILE:
+            fputs("While", out); print_span(out, stmt->span); fputc('\n', out);
+            indent(out, level + 1); fputs("Condition\n", out);
+            dump_expr(out, stmt->as.while_stmt.condition, level + 2);
+            indent(out, level + 1); fputs("Body\n", out);
+            dump_block(out, stmt->as.while_stmt.body, level + 2);
+            break;
+        case DS_LOWER_STMT_BREAK:
+            fputs("Break", out); print_span(out, stmt->span); fputc('\n', out);
+            break;
+        case DS_LOWER_STMT_CONTINUE:
+            fputs("Continue", out); print_span(out, stmt->span); fputc('\n', out);
+            break;
+        case DS_LOWER_STMT_CASE:
+            fputs("Case", out); print_span(out, stmt->span); fputc('\n', out);
+            indent(out, level + 1); fputs("Selector\n", out);
+            dump_expr(out, stmt->as.case_stmt.selector, level + 2);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                indent(out, level + 1); fputs("Arm", out);
+                for (size_t j = 0; j < arm->patterns.len; j++) {
+                    const DsLowerCasePattern *p = &arm->patterns.items[j];
+                    fputc(' ', out);
+                    if (p->kind == DS_LOWER_CASE_PATTERN_DEFAULT) fputs("_", out);
+                    else if (p->kind == DS_LOWER_CASE_PATTERN_BOOL) fputs(p->boolean ? "true" : "false", out);
+                    else print_str(out, p->text);
+                }
+                print_span(out, arm->span); fputc('\n', out);
+                dump_block(out, arm->body, level + 2);
+            }
             break;
         case DS_LOWER_STMT_IF:
             fputs("If", out); print_span(out, stmt->span); fputc('\n', out);

@@ -165,3 +165,19 @@ void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl) {
     }
     vec->items[vec->len++] = decl;
 }
+
+void lower_case_pattern_vec_push(DsLowerCasePatternVec *vec, DsLowerCasePattern pattern) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 4;
+        vec->items = (DsLowerCasePattern *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerCasePattern));
+    }
+    vec->items[vec->len++] = pattern;
+}
+
+void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 4;
+        vec->items = (DsLowerCaseArm *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerCaseArm));
+    }
+    vec->items[vec->len++] = arm;
+}

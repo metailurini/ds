@@ -73,6 +73,17 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             if (!emit_call_args(e, &expr->as.call.args, out)) return false;
             buf_append(out, ")\"");
             return true;
+        case DS_LOWER_EXPR_BINARY:
+            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-")) {
+                buf_append(out, "$(( ");
+                if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
+                buf_append(out, str_eq(expr->as.binary.op, "+") ? " + " : " - ");
+                if (!emit_condition_operand(e, expr->as.binary.right, out)) return false;
+                buf_append(out, " ))");
+                return true;
+            }
+            ds_diag_error(e->diag, expr->span, "unsupported binary value expression for Bash emission in v0.17.0");
+            return false;
         default:
             ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");
             return false;

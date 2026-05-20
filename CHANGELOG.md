@@ -1,5 +1,13 @@
 # Changelog
 
+# v0.17.0 - Control Flow Completion
+
+- Implemented scalar reassignment with `name = expr` plus integer `+=` and `-=` updates.
+- Added VM and standalone Bash support for `while`, lexical `break`/`continue`, and expression-style `case`.
+- Kept `case` alternatives as exact ds literals; emitted Bash uses exact comparisons instead of glob-style Bash `case` patterns.
+- Added `examples/control-flow.ds` and updated language/status docs for the implemented control-flow surface.
+- Deferred `until`, loop `else`, labeled/depth loop control, map iteration, index/field/env assignment, string binary `+`, function `return`, pipelines, and regex/glob/fallthrough case arms.
+
 ## v0.16.0 - Cleanup: Pre-Beta Hardening
 
 - Added `docs/status.md` as the current support matrix for commands, production syntax, test-only syntax, formatter/checker behavior, examples, deferred language features, and the next feature wave.

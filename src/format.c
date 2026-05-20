@@ -216,6 +216,12 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             format_expr(fmt, stmt->as.let_stmt.value);
             append_cstr(fmt, "\n");
             break;
+        case DS_STMT_ASSIGN:
+            append_str(fmt, stmt->as.assign_stmt.name);
+            append_cstr(fmt, stmt->as.assign_stmt.op == DS_ASSIGN_ADD ? " += " : (stmt->as.assign_stmt.op == DS_ASSIGN_SUB ? " -= " : " = "));
+            format_expr(fmt, stmt->as.assign_stmt.value);
+            append_cstr(fmt, "\n");
+            break;
         case DS_STMT_IF:
             append_cstr(fmt, "if ");
             format_expr(fmt, stmt->as.if_stmt.condition);
@@ -269,6 +275,38 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             format_block_after_header(fmt, stmt->as.for_stmt.body, level);
             append_cstr(fmt, "\n");
             break;
+        case DS_STMT_WHILE:
+            append_cstr(fmt, "while ");
+            format_expr(fmt, stmt->as.while_stmt.condition);
+            format_block_after_header(fmt, stmt->as.while_stmt.body, level);
+            append_cstr(fmt, "\n");
+            break;
+        case DS_STMT_BREAK:
+            append_cstr(fmt, "break\n");
+            break;
+        case DS_STMT_CONTINUE:
+            append_cstr(fmt, "continue\n");
+            break;
+        case DS_STMT_CASE:
+            append_cstr(fmt, "case ");
+            format_expr(fmt, stmt->as.case_stmt.selector);
+            append_cstr(fmt, " {\n");
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                const DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                indent(fmt, level + 1);
+                for (size_t j = 0; j < arm->patterns.len; j++) {
+                    if (j) append_cstr(fmt, " | ");
+                    const DsCasePattern *p = &arm->patterns.items[j];
+                    if (p->kind == DS_CASE_PATTERN_DEFAULT) append_cstr(fmt, "_");
+                    else if (p->kind == DS_CASE_PATTERN_BOOL) append_cstr(fmt, p->boolean ? "true" : "false");
+                    else append_str(fmt, p->text);
+                }
+                format_block_after_header(fmt, arm->body, level + 1);
+                append_cstr(fmt, "\n");
+            }
+            indent(fmt, level);
+            append_cstr(fmt, "}\n");
+            break;
         case DS_STMT_PUSH:
             append_str(fmt, stmt->as.push_stmt.name);
             append_cstr(fmt, ".push(");
@@ -300,12 +338,17 @@ static int top_stmt_group(const DsStmt *stmt) {
     switch (stmt->kind) {
         case DS_STMT_IMPORT: return 1;
         case DS_STMT_LET:
+        case DS_STMT_ASSIGN:
         case DS_STMT_CMD:
         case DS_STMT_CALL:
         case DS_STMT_PUSH:
         case DS_STMT_ASSERT: return 2;
         case DS_STMT_IF:
         case DS_STMT_FOR:
+        case DS_STMT_WHILE:
+        case DS_STMT_BREAK:
+        case DS_STMT_CONTINUE:
+        case DS_STMT_CASE:
         case DS_STMT_BLOCK: return 3;
         case DS_STMT_FN: return 4;
         case DS_STMT_TEST: return 5;

@@ -38,6 +38,7 @@ typedef struct {
     DsDiag *diag;
     Scope *scope;
     DsLowerProgram *program;
+    int loop_depth;
 } Lower;
 
 bool lower_str_eq(DsStr a, const char *b);
@@ -62,6 +63,8 @@ void lower_fn_param_vec_push(DsLowerFnParamVec *vec, DsLowerFnParam param);
 void lower_fn_vec_push(DsLowerFnVec *vec, DsLowerFn fn);
 void lower_test_vec_push(DsLowerTestVec *vec, DsLowerTest test);
 void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl);
+void lower_case_pattern_vec_push(DsLowerCasePatternVec *vec, DsLowerCasePattern pattern);
+void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm);
 
 DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span);
 bool command_result_field_kind(DsStr field, SymKind *kind_out);

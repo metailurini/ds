@@ -98,9 +98,19 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
             return false;
         case DS_LOWER_STMT_FOR_ARRAY:
             return stmt_reaches_function(lower, stmt->as.for_stmt.body, target_index, seen, cycle_span);
+        case DS_LOWER_STMT_WHILE:
+            return stmt_reaches_function(lower, stmt->as.while_stmt.body, target_index, seen, cycle_span);
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                if (stmt_reaches_function(lower, stmt->as.case_stmt.arms.items[i].body, target_index, seen, cycle_span)) return true;
+            }
+            return false;
         case DS_LOWER_STMT_LET:
+        case DS_LOWER_STMT_ASSIGN:
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
             return false;
         case DS_LOWER_STMT_ASSERT:
             return false;
@@ -135,11 +145,14 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     Scope local;
     scope_init(&local, lower->scope);
     Scope *saved = lower->scope;
+    int saved_depth = lower->loop_depth;
     lower->scope = &local;
+    lower->loop_depth = 0;
     for (size_t i = 0; i < fn->params.len; i++) {
         scope_define(lower, &local, fn->params.items[i].name, SYM_UNKNOWN, fn->params.items[i].span);
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);
     lower->scope = saved;
+    lower->loop_depth = saved_depth;
     scope_free(&local);
 }

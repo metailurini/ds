@@ -1,7 +1,7 @@
 # Current Status
 
 This document is the user-facing snapshot for the implementation after the
-`v0.16.0` cleanup implementation pass and before the next feature wave. It is
+`v0.17.0` control-flow implementation pass and before its test pass. It is
 not a replacement for the roadmap or language catalog; it summarizes what users
 can rely on today and what is still deliberately deferred.
 
@@ -35,7 +35,7 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented through
-`v0.15.0`:
+`v0.17.0`:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -51,6 +51,11 @@ The production runtime supports the language slice implemented through
 - statement-style function calls;
 - array literals, map literals with string-like keys, array/map access, array
   `push`, and array `for` loops;
+- scalar reassignment with `name = expr` plus integer `+=` and `-=` updates;
+- `while` loops with normal expression conditions;
+- lexical `break` and `continue` inside `for` and `while` loops;
+- expression-style `case selector { ... }` with exact string/int/bool literal
+  alternatives and a final `_` default arm;
 - `script { ... }` positional args, options, and boolean flags;
 - local `import "./file.ds"` composition;
 - shell-oriented helpers from `file`, `dir`, `path`, `cmd`, `env`, `glob`,
@@ -107,6 +112,7 @@ The current examples are the public tour of implemented behavior:
 - `examples/redirection.ds`
 - `examples/functions.ds`
 - `examples/collections.ds`
+- `examples/control-flow.ds`
 - `examples/stdlib.ds`
 - `examples/vm.ds`
 - `examples/bad.ds` for an intentionally invalid diagnostic example
@@ -119,8 +125,10 @@ and `ds emit bash` to inspect parity. Bash output is intended to be standalone.
 The following remain intentionally unsupported or backend-limited until later
 milestones:
 
-- `while`, `break`, `continue`, and `case`;
 - function return values and recursive-call semantics;
+- `until`, loop `else`, and labeled/depth-based `break`/`continue`;
+- regex/glob/destructuring/fallthrough `case` behavior;
+- string binary `+` concatenation; use interpolation instead;
 - string methods;
 - regex and membership operators;
 - ranges, slices, index assignment, and nested collections;
@@ -153,12 +161,13 @@ while internal code should prefer focused headers.
 
 ## Next wave
 
-`v0.17.0` is planned to resume feature work with control-flow completion:
-`while`, `break`, `continue`, and `case`, with VM/Bash parity and clear
-interaction with existing block and loop scopes.
+`v0.17.0` resumes feature work with control-flow completion: `while`,
+`break`, `continue`, scalar reassignment, and expression-style `case`, with
+VM/Bash parity and clear interaction with existing block and loop scopes.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
-and array-loop lowering model are the safe pieces to build on. The next wave
-should still keep function return values, map iteration, nested collections,
-formatter trivia preservation, and warning suppression out of scope unless their
-own milestones explicitly pull them in.
+and array-loop lowering model remain the safe pieces to build on. The next
+planned feature wave is `v0.18.0` pipelines. It should still keep function
+return values, map iteration, nested collections, formatter trivia preservation,
+and warning suppression out of scope unless their own milestones explicitly pull
+them in.

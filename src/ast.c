@@ -82,6 +82,12 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fprintf(out, "LetStmt %.*s\n", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
             print_expr(stmt->as.let_stmt.value, out, level + 1);
             break;
+        case DS_STMT_ASSIGN: {
+            const char *op = stmt->as.assign_stmt.op == DS_ASSIGN_ADD ? "+=" : (stmt->as.assign_stmt.op == DS_ASSIGN_SUB ? "-=" : "=");
+            fprintf(out, "AssignStmt %.*s %s\n", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data, op);
+            print_expr(stmt->as.assign_stmt.value, out, level + 1);
+            break;
+        }
         case DS_STMT_IF:
             fputs("IfStmt\n", out);
             indent(out, level + 1);
@@ -143,6 +149,41 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             indent(out, level + 1);
             fputs("Body\n", out);
             print_stmt(stmt->as.for_stmt.body, out, level + 2);
+            break;
+        case DS_STMT_WHILE:
+            fputs("WhileStmt\n", out);
+            indent(out, level + 1);
+            fputs("Condition\n", out);
+            print_expr(stmt->as.while_stmt.condition, out, level + 2);
+            indent(out, level + 1);
+            fputs("Body\n", out);
+            print_stmt(stmt->as.while_stmt.body, out, level + 2);
+            break;
+        case DS_STMT_BREAK:
+            fputs("BreakStmt\n", out);
+            break;
+        case DS_STMT_CONTINUE:
+            fputs("ContinueStmt\n", out);
+            break;
+        case DS_STMT_CASE:
+            fputs("CaseStmt\n", out);
+            indent(out, level + 1);
+            fputs("Selector\n", out);
+            print_expr(stmt->as.case_stmt.selector, out, level + 2);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                const DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                indent(out, level + 1);
+                fputs("Arm", out);
+                for (size_t j = 0; j < arm->patterns.len; j++) {
+                    const DsCasePattern *p = &arm->patterns.items[j];
+                    fputc(' ', out);
+                    if (p->kind == DS_CASE_PATTERN_DEFAULT) fputs("_", out);
+                    else if (p->kind == DS_CASE_PATTERN_BOOL) fputs(p->boolean ? "true" : "false", out);
+                    else fprintf(out, "%.*s", (int)p->text.len, p->text.data);
+                }
+                fputc('\n', out);
+                print_stmt(arm->body, out, level + 2);
+            }
             break;
         case DS_STMT_PUSH:
             fprintf(out, "PushStmt %.*s\n", (int)stmt->as.push_stmt.name.len, stmt->as.push_stmt.name.data);
@@ -257,6 +298,10 @@ static void free_stmt(DsStmt *stmt) {
             free(stmt->as.let_stmt.name.data);
             free_expr(stmt->as.let_stmt.value);
             break;
+        case DS_STMT_ASSIGN:
+            free(stmt->as.assign_stmt.name.data);
+            free_expr(stmt->as.assign_stmt.value);
+            break;
         case DS_STMT_IF:
             free_expr(stmt->as.if_stmt.condition);
             free_stmt(stmt->as.if_stmt.then_branch);
@@ -297,6 +342,23 @@ static void free_stmt(DsStmt *stmt) {
             free(stmt->as.for_stmt.value_name.data);
             free_expr(stmt->as.for_stmt.iterable);
             free_stmt(stmt->as.for_stmt.body);
+            break;
+        case DS_STMT_WHILE:
+            free_expr(stmt->as.while_stmt.condition);
+            free_stmt(stmt->as.while_stmt.body);
+            break;
+        case DS_STMT_BREAK:
+        case DS_STMT_CONTINUE:
+            break;
+        case DS_STMT_CASE:
+            free_expr(stmt->as.case_stmt.selector);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                for (size_t j = 0; j < arm->patterns.len; j++) free(arm->patterns.items[j].text.data);
+                free(arm->patterns.items);
+                free_stmt(arm->body);
+            }
+            free(stmt->as.case_stmt.arms.items);
             break;
         case DS_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);

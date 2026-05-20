@@ -145,6 +145,22 @@ static inline bool parser_is_identifier_like(DsTokenKind kind) {
            kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN || kind == DS_TOK_FN;
 }
 
+static inline void parser_case_pattern_vec_push(DsCasePatternVec *vec, DsCasePattern pattern) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 4;
+        vec->items = (DsCasePattern *)ds_xrealloc(vec->items, vec->cap * sizeof(DsCasePattern));
+    }
+    vec->items[vec->len++] = pattern;
+}
+
+static inline void parser_case_arm_vec_push(DsCaseArmVec *vec, DsCaseArm arm) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 4;
+        vec->items = (DsCaseArm *)ds_xrealloc(vec->items, vec->cap * sizeof(DsCaseArm));
+    }
+    vec->items[vec->len++] = arm;
+}
+
 static inline bool parser_expect_identifier_like(Parser *p, const char *message) {
     if (parser_is_identifier_like(parser_peek(p)->kind)) {
         parser_advance(p);

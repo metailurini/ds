@@ -46,9 +46,14 @@ void program_free(Program *p) {
         }
         free(p->functions[i].params);
     }
+    for (size_t i = 0; i < p->loop_len; i++) {
+        free(p->loop_stack[i].breaks);
+        free(p->loop_stack[i].continues);
+    }
     free(p->consts);
     free(p->instrs);
     free(p->functions);
+    free(p->loop_stack);
 }
 
 static int new_reg(Program *p) { return p->next_reg++; }
@@ -118,6 +123,40 @@ static size_t emit_instr(Program *p, Instr ins) {
     }
     p->instrs[p->instr_len] = ins;
     return p->instr_len++;
+}
+
+static void loop_patch_vec_push(size_t **items, size_t *len, size_t *cap, size_t value) {
+    if (*len == *cap) {
+        *cap = *cap ? *cap * 2 : 4;
+        *items = (size_t *)ds_xrealloc(*items, *cap * sizeof(size_t));
+    }
+    (*items)[(*len)++] = value;
+}
+
+static LoopPatch *push_loop(Program *p, size_t start, int base_scope_depth) {
+    if (p->loop_len == p->loop_cap) {
+        p->loop_cap = p->loop_cap ? p->loop_cap * 2 : 4;
+        p->loop_stack = (LoopPatch *)ds_xrealloc(p->loop_stack, p->loop_cap * sizeof(LoopPatch));
+    }
+    LoopPatch *loop = &p->loop_stack[p->loop_len++];
+    memset(loop, 0, sizeof(*loop));
+    loop->start = start;
+    loop->base_scope_depth = base_scope_depth;
+    return loop;
+}
+
+static LoopPatch *current_loop(Program *p) {
+    return p->loop_len ? &p->loop_stack[p->loop_len - 1] : NULL;
+}
+
+static void pop_loop(Program *p, size_t end) {
+    if (!p->loop_len) return;
+    LoopPatch *loop = &p->loop_stack[p->loop_len - 1];
+    for (size_t i = 0; i < loop->break_len; i++) p->instrs[loop->breaks[i]].target = (int)end;
+    for (size_t i = 0; i < loop->continue_len; i++) p->instrs[loop->continues[i]].target = (int)loop->start;
+    free(loop->breaks);
+    free(loop->continues);
+    p->loop_len--;
 }
 
 bool decode_string_text(DsStr text, DsString *out) {
@@ -231,7 +270,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             int right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            ins.op = OP_COMPARE;
+            ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-')) ? OP_BINARY : OP_COMPARE;
             ins.span = expr->span;
             ins.dst = r;
             ins.a = left;
@@ -314,11 +353,13 @@ static void compile_scoped_block(Program *p, const DsLowerStmt *block) {
     push.op = OP_PUSH_SCOPE;
     push.span = block->span;
     emit_instr(p, push);
+    p->scope_depth++;
     compile_block(p, block);
     Instr pop = {0};
     pop.op = OP_POP_SCOPE;
     pop.span = block->span;
     emit_instr(p, pop);
+    p->scope_depth--;
 }
 
 static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
@@ -330,6 +371,38 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             ins.span = stmt->span;
             ins.a = src;
             ins.name = ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len);
+            emit_instr(p, ins);
+            break;
+        }
+        case DS_LOWER_STMT_ASSIGN: {
+            int src = -1;
+            if (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SET) {
+                src = compile_expr(p, stmt->as.assign_stmt.value);
+            } else {
+                int left = new_reg(p);
+                Instr load = {0};
+                load.op = OP_LOAD_VAR;
+                load.span = stmt->span;
+                load.dst = left;
+                load.name = ds_str_dup_range(stmt->as.assign_stmt.name.data, stmt->as.assign_stmt.name.len);
+                emit_instr(p, load);
+                int right = compile_expr(p, stmt->as.assign_stmt.value);
+                src = new_reg(p);
+                Instr bin = {0};
+                bin.op = OP_BINARY;
+                bin.span = stmt->span;
+                bin.dst = src;
+                bin.a = left;
+                bin.b = right;
+                const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+" : "-";
+                bin.cmp = ds_str_dup_range(op, 1);
+                emit_instr(p, bin);
+            }
+            Instr ins = {0};
+            ins.op = OP_STORE_VAR;
+            ins.span = stmt->span;
+            ins.a = src;
+            ins.name = ds_str_dup_range(stmt->as.assign_stmt.name.data, stmt->as.assign_stmt.name.len);
             emit_instr(p, ins);
             break;
         }
@@ -378,17 +451,132 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             begin.a = iterable;
             begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
             size_t begin_pos = emit_instr(p, begin);
+            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
+            p->scope_depth++;
             compile_block(p, stmt->as.for_stmt.body);
             Instr pop = {0};
             pop.op = OP_POP_SCOPE;
             pop.span = stmt->span;
             emit_instr(p, pop);
+            p->scope_depth--;
             Instr jump = {0};
             jump.op = OP_JUMP;
             jump.span = stmt->span;
             jump.target = (int)begin_pos;
             emit_instr(p, jump);
             p->instrs[begin_pos].target = (int)p->instr_len;
+            (void)loop;
+            pop_loop(p, p->instr_len);
+            break;
+        }
+        case DS_LOWER_STMT_WHILE: {
+            size_t begin_pos = p->instr_len;
+            int cond = compile_expr(p, stmt->as.while_stmt.condition);
+            Instr jif = {0};
+            jif.op = OP_JUMP_IF_FALSE;
+            jif.span = stmt->as.while_stmt.condition->span;
+            jif.a = cond;
+            size_t jif_pos = emit_instr(p, jif);
+            Instr push = {0};
+            push.op = OP_PUSH_SCOPE;
+            push.span = stmt->span;
+            emit_instr(p, push);
+            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
+            p->scope_depth++;
+            compile_block(p, stmt->as.while_stmt.body);
+            Instr pop = {0};
+            pop.op = OP_POP_SCOPE;
+            pop.span = stmt->span;
+            emit_instr(p, pop);
+            p->scope_depth--;
+            Instr jump = {0};
+            jump.op = OP_JUMP;
+            jump.span = stmt->span;
+            jump.target = (int)begin_pos;
+            emit_instr(p, jump);
+            p->instrs[jif_pos].target = (int)p->instr_len;
+            (void)loop;
+            pop_loop(p, p->instr_len);
+            break;
+        }
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE: {
+            LoopPatch *loop = current_loop(p);
+            Instr jump = {0};
+            jump.op = OP_JUMP_POP;
+            jump.span = stmt->span;
+            jump.target = 0;
+            jump.a = loop ? p->scope_depth - loop->base_scope_depth : 0;
+            size_t pos = emit_instr(p, jump);
+            if (loop) {
+                if (stmt->kind == DS_LOWER_STMT_BREAK) loop_patch_vec_push(&loop->breaks, &loop->break_len, &loop->break_cap, pos);
+                else loop_patch_vec_push(&loop->continues, &loop->continue_len, &loop->continue_cap, pos);
+            }
+            break;
+        }
+        case DS_LOWER_STMT_CASE: {
+            int selector = compile_expr(p, stmt->as.case_stmt.selector);
+            size_t *end_jumps = NULL;
+            size_t end_len = 0, end_cap = 0;
+            size_t next_arm_target = 0;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                if (next_arm_target) p->instrs[next_arm_target].target = (int)p->instr_len;
+                const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                bool is_default = false;
+                for (size_t j = 0; j < arm->patterns.len; j++) {
+                    const DsLowerCasePattern *pat = &arm->patterns.items[j];
+                    if (pat->kind == DS_LOWER_CASE_PATTERN_DEFAULT) { is_default = true; break; }
+                    int lit = new_reg(p);
+                    Instr load = {0};
+                    load.op = OP_LOAD_CONST;
+                    load.span = pat->span;
+                    load.dst = lit;
+                    if (pat->kind == DS_LOWER_CASE_PATTERN_STRING) {
+                        DsString decoded;
+                        decode_string_text(pat->text, &decoded);
+                        load.a = add_const(p, ds_value_string_take(&decoded));
+                    } else if (pat->kind == DS_LOWER_CASE_PATTERN_INT) {
+                        char *tmp = ds_str_dup_range(pat->text.data, pat->text.len);
+                        load.a = add_const(p, ds_value_int(strtoll(tmp, NULL, 10)));
+                        free(tmp);
+                    } else {
+                        load.a = add_const(p, ds_value_bool(pat->boolean));
+                    }
+                    emit_instr(p, load);
+                    int cmp_reg = new_reg(p);
+                    Instr cmp = {0};
+                    cmp.op = OP_COMPARE;
+                    cmp.span = pat->span;
+                    cmp.dst = cmp_reg;
+                    cmp.a = selector;
+                    cmp.b = lit;
+                    cmp.cmp = ds_str_dup_range("==", 2);
+                    emit_instr(p, cmp);
+                    Instr jif = {0};
+                    jif.op = OP_JUMP_IF_FALSE;
+                    jif.span = pat->span;
+                    jif.a = cmp_reg;
+                    size_t false_pos = emit_instr(p, jif);
+                    compile_scoped_block(p, arm->body);
+                    Instr end_jump = {0};
+                    end_jump.op = OP_JUMP;
+                    end_jump.span = arm->span;
+                    size_t end_pos = emit_instr(p, end_jump);
+                    loop_patch_vec_push(&end_jumps, &end_len, &end_cap, end_pos);
+                    p->instrs[false_pos].target = (int)p->instr_len;
+                }
+                if (is_default) {
+                    compile_scoped_block(p, arm->body);
+                    Instr end_jump = {0};
+                    end_jump.op = OP_JUMP;
+                    end_jump.span = arm->span;
+                    size_t end_pos = emit_instr(p, end_jump);
+                    loop_patch_vec_push(&end_jumps, &end_len, &end_cap, end_pos);
+                }
+                next_arm_target = 0;
+            }
+            for (size_t i = 0; i < end_len; i++) p->instrs[end_jumps[i]].target = (int)p->instr_len;
+            free(end_jumps);
             break;
         }
         case DS_LOWER_STMT_IF: {

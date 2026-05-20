@@ -55,7 +55,13 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
             }
             case OP_STORE_VAR: {
                 DsStr key = {ins->name, strlen(ins->name)};
-                ds_map_set(&vm.scope->vars, key, ds_value_copy(&vm.regs[ins->a]));
+                DsValue *slot = lookup_var_ref(&vm, ins->name);
+                if (slot) {
+                    ds_value_free(slot);
+                    *slot = ds_value_copy(&vm.regs[ins->a]);
+                } else {
+                    ds_map_set(&vm.scope->vars, key, ds_value_copy(&vm.regs[ins->a]));
+                }
                 ip++;
                 break;
             }
@@ -63,6 +69,35 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 bool truth = false;
                 ds_value_truthy(&vm.regs[ins->a], &truth);
                 set_reg(&vm, ins->dst, ds_value_bool(!truth));
+                ip++;
+                break;
+            }
+            case OP_BINARY: {
+                DsValue *left = &vm.regs[ins->a];
+                DsValue *right = &vm.regs[ins->b];
+                if (strcmp(ins->cmp, "+") == 0) {
+                    if (left->kind == DS_VALUE_INT && right->kind == DS_VALUE_INT) {
+                        set_reg(&vm, ins->dst, ds_value_int(left->as.integer + right->as.integer));
+                    } else if (left->kind == DS_VALUE_STRING && right->kind == DS_VALUE_STRING) {
+                        DsString joined;
+                        ds_string_init(&joined);
+                        ds_string_append_range(&joined, left->as.string.data ? left->as.string.data : "", left->as.string.len);
+                        ds_string_append_range(&joined, right->as.string.data ? right->as.string.data : "", right->as.string.len);
+                        set_reg(&vm, ins->dst, ds_value_string_take(&joined));
+                    } else {
+                        ds_diag_error(diag, ins->span, "operator `+` supports int+int or string+string");
+                        rc = 1; goto done;
+                    }
+                } else if (strcmp(ins->cmp, "-") == 0) {
+                    if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                        ds_diag_error(diag, ins->span, "operator `-` requires integer operands");
+                        rc = 1; goto done;
+                    }
+                    set_reg(&vm, ins->dst, ds_value_int(left->as.integer - right->as.integer));
+                } else {
+                    ds_diag_error(diag, ins->span, "unknown binary operator `%s`", ins->cmp ? ins->cmp : "");
+                    rc = 1; goto done;
+                }
                 ip++;
                 break;
             }
@@ -101,6 +136,10 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 break;
             }
             case OP_JUMP:
+                ip = (size_t)ins->target;
+                break;
+            case OP_JUMP_POP:
+                for (int i = 0; i < ins->a; i++) vm_pop_scope(&vm);
                 ip = (size_t)ins->target;
                 break;
             case OP_JUMP_IF_FALSE: {

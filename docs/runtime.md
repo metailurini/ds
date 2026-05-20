@@ -659,6 +659,13 @@ boundary as `check`, `hir`, `bytecode`, `run`, direct execution, and
 source loading and lowering before the VM test runner receives a lowered
 program. Normal execution and emitted Bash continue to skip test metadata.
 
+The v0.17.0 control-flow implementation keeps VM and Bash behavior aligned for
+scalar reassignment, `while`, lexical `break`/`continue`, and expression-style
+`case`. VM bytecode uses explicit jump and scoped-pop instructions so loop
+control exits only the active loop scopes. Bash emission uses native `while`,
+`break`, and `continue`; case dispatch is emitted as exact `[[ value == literal
+]]` comparisons rather than Bash glob patterns.
+
 ## Testing strategy
 
 Runtime primitives must have direct C tests.

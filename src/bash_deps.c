@@ -71,6 +71,7 @@ static bool expr_uses_map_literal(const DsLowerExpr *expr) {
 static bool stmt_uses_run(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: return expr_uses_run(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return expr_uses_run(stmt->as.assign_stmt.value);
         case DS_LOWER_STMT_IF:
             return expr_uses_run(stmt->as.if_stmt.condition) || stmt_uses_run(stmt->as.if_stmt.then_branch) ||
                    (stmt->as.if_stmt.else_branch && stmt_uses_run(stmt->as.if_stmt.else_branch));
@@ -80,6 +81,13 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CMD: return false;
         case DS_LOWER_STMT_CALL: return false;
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_run(stmt->as.for_stmt.iterable) || stmt_uses_run(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_uses_run(stmt->as.while_stmt.condition) || stmt_uses_run(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            if (expr_uses_run(stmt->as.case_stmt.selector)) return true;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_run(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_run(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_run(stmt->as.assert_stmt.condition);
     }
@@ -91,13 +99,20 @@ static bool stmt_has_command(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_CMD: return true;
         case DS_LOWER_STMT_LET: return stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN;
+        case DS_LOWER_STMT_ASSIGN: return stmt->as.assign_stmt.value && stmt->as.assign_stmt.value->kind == DS_LOWER_EXPR_RUN;
         case DS_LOWER_STMT_IF: return stmt_has_command(stmt->as.if_stmt.then_branch) || stmt_has_command(stmt->as.if_stmt.else_branch);
         case DS_LOWER_STMT_BLOCK:
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_has_command(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
         case DS_LOWER_STMT_FOR_ARRAY: return stmt_has_command(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return stmt_has_command(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_has_command(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
         case DS_LOWER_STMT_CALL:
         case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
         case DS_LOWER_STMT_ASSERT:
             return false;
     }
@@ -113,6 +128,7 @@ bool program_has_command(const DsLowerProgram *program) {
 static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: return expr_uses_stdlib(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return expr_uses_stdlib(stmt->as.assign_stmt.value);
         case DS_LOWER_STMT_IF:
             return expr_uses_stdlib(stmt->as.if_stmt.condition) || stmt_uses_stdlib(stmt->as.if_stmt.then_branch) ||
                    (stmt->as.if_stmt.else_branch && stmt_uses_stdlib(stmt->as.if_stmt.else_branch));
@@ -121,6 +137,13 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_CALL: return ds_stdlib_is_name(stmt->as.call_stmt.name);
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_stdlib(stmt->as.for_stmt.iterable) || stmt_uses_stdlib(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_uses_stdlib(stmt->as.while_stmt.condition) || stmt_uses_stdlib(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            if (expr_uses_stdlib(stmt->as.case_stmt.selector)) return true;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_stdlib(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_stdlib(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_stdlib(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_CMD: return false;
@@ -131,6 +154,7 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
 static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: return expr_uses_collection_index(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return expr_uses_collection_index(stmt->as.assign_stmt.value);
         case DS_LOWER_STMT_IF:
             return expr_uses_collection_index(stmt->as.if_stmt.condition) || stmt_uses_collection_index(stmt->as.if_stmt.then_branch) ||
                    (stmt->as.if_stmt.else_branch && stmt_uses_collection_index(stmt->as.if_stmt.else_branch));
@@ -138,6 +162,13 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_collection_index(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_collection_index(stmt->as.for_stmt.iterable) || stmt_uses_collection_index(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_uses_collection_index(stmt->as.while_stmt.condition) || stmt_uses_collection_index(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            if (expr_uses_collection_index(stmt->as.case_stmt.selector)) return true;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_collection_index(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_collection_index(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_collection_index(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_CMD:
@@ -150,6 +181,7 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
 static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: return expr_uses_map_literal(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return expr_uses_map_literal(stmt->as.assign_stmt.value);
         case DS_LOWER_STMT_IF:
             return expr_uses_map_literal(stmt->as.if_stmt.condition) || stmt_uses_map_literal(stmt->as.if_stmt.then_branch) ||
                    (stmt->as.if_stmt.else_branch && stmt_uses_map_literal(stmt->as.if_stmt.else_branch));
@@ -157,6 +189,13 @@ static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_map_literal(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
         case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_map_literal(stmt->as.for_stmt.iterable) || stmt_uses_map_literal(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_uses_map_literal(stmt->as.while_stmt.condition) || stmt_uses_map_literal(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            if (expr_uses_map_literal(stmt->as.case_stmt.selector)) return true;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_map_literal(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_map_literal(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_map_literal(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_CMD:

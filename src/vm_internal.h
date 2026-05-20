@@ -12,11 +12,13 @@ typedef enum {
     OP_LOAD_VAR,
     OP_STORE_VAR,
     OP_NOT,
+    OP_BINARY,
     OP_COMPARE,
     OP_INTERPOLATE,
     OP_RUN_CAPTURE,
     OP_GET_FIELD,
     OP_JUMP,
+    OP_JUMP_POP,
     OP_JUMP_IF_FALSE,
     OP_PUSH_SCOPE,
     OP_POP_SCOPE,
@@ -33,6 +35,17 @@ typedef enum {
     OP_RETURN,
     OP_NOP
 } OpCode;
+
+typedef struct {
+    size_t start;
+    size_t *breaks;
+    size_t break_len;
+    size_t break_cap;
+    size_t *continues;
+    size_t continue_len;
+    size_t continue_cap;
+    int base_scope_depth;
+} LoopPatch;
 
 typedef struct {
     char *name;
@@ -78,6 +91,10 @@ typedef struct {
     FnMeta *functions;
     size_t function_len;
     size_t function_cap;
+    int scope_depth;
+    LoopPatch *loop_stack;
+    size_t loop_len;
+    size_t loop_cap;
 } Program;
 
 typedef struct VmScope VmScope;

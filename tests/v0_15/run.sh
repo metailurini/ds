@@ -462,13 +462,11 @@ capture_status bad_assert_fmt "$DS" fmt "$FIX/bad_assert.ds"
 assert_nonzero_status bad_assert_fmt
 assert_contains "$TMP/bad_assert_fmt.err" ': error:' 'fmt malformed assert emits parser diagnostic'
 write_fixture "$FIX/future.ds" <<'DS'
-while true {
-  echo "no"
-}
+let x = "a".upper()
 DS
 capture_status future_fmt "$DS" fmt "$FIX/future.ds"
 assert_nonzero_status future_fmt
-assert_contains "$TMP/future_fmt.err" ': error:' 'unsupported while rejected by formatter'
+assert_contains "$TMP/future_fmt.err" ': error:' 'unsupported future expression rejected by formatter'
 write_fixture "$FIX/bash_if.ds" <<'DS'
 if [ -f x ]; then
   echo yes

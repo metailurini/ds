@@ -62,6 +62,38 @@ static DsStmt *parse_let(Parser *p) {
     return stmt;
 }
 
+static DsStmt *parse_assign(Parser *p) {
+    DsToken *name = parser_advance(p);
+    DsAssignOp op = DS_ASSIGN_SET;
+    DsSpan op_span = parser_peek(p)->span;
+    if (parser_advance_if(p, DS_TOK_EQUAL)) {
+        op = DS_ASSIGN_SET;
+    } else if ((parser_at(p, DS_TOK_PLUS) || parser_at(p, DS_TOK_MINUS)) && parser_next_at(p, DS_TOK_EQUAL)) {
+        op = parser_at(p, DS_TOK_PLUS) ? DS_ASSIGN_ADD : DS_ASSIGN_SUB;
+        op_span = parser_peek(p)->span;
+        parser_advance(p);
+        parser_advance(p);
+    } else {
+        ds_diag_error(p->diag, op_span, "expected assignment operator");
+        return NULL;
+    }
+    if (parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after assignment operator");
+        return NULL;
+    }
+    DsExpr *value = parse_expr(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_ASSIGN, (DsSpan){name->span.start, value ? value->span.end : name->span.end, name->span.source});
+    stmt->as.assign_stmt.name = parser_copy_token_text(name);
+    stmt->as.assign_stmt.op = op;
+    stmt->as.assign_stmt.value = value;
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of assignment statement");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+    }
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
 static DsStmt *parse_if(Parser *p) {
     DsToken *start = parser_previous(p);
     if (parser_at(p, DS_TOK_LBRACE)) {
@@ -172,6 +204,112 @@ static DsStmt *parse_for(Parser *p) {
     return stmt;
 }
 
+static DsStmt *parse_while(Parser *p) {
+    DsToken *start = parser_previous(p);
+    if (parser_at(p, DS_TOK_LBRACE)) ds_diag_error(p->diag, parser_peek(p)->span, "expected condition after `while`");
+    DsExpr *condition = parse_expr(p);
+    if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after while condition")) return NULL;
+    DsStmt *body = parse_block(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_WHILE, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
+    stmt->as.while_stmt.condition = condition;
+    stmt->as.while_stmt.body = body;
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
+static DsStmt *parse_loop_control(Parser *p, DsStmtKind kind) {
+    DsToken *start = parser_previous(p);
+    DsStmt *stmt = parser_new_stmt(kind, start->span);
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, kind == DS_STMT_BREAK ? "`break` does not accept arguments" : "`continue` does not accept arguments");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+    }
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
+static bool parse_case_pattern(Parser *p, DsCasePattern *pattern) {
+    memset(pattern, 0, sizeof(*pattern));
+    if (parser_advance_if(p, DS_TOK_STRING)) {
+        DsToken *tok = parser_previous(p);
+        pattern->kind = DS_CASE_PATTERN_STRING;
+        pattern->text = parser_copy_token_text(tok);
+        pattern->span = tok->span;
+        return true;
+    }
+    if (parser_advance_if(p, DS_TOK_INT)) {
+        DsToken *tok = parser_previous(p);
+        pattern->kind = DS_CASE_PATTERN_INT;
+        pattern->text = parser_copy_token_text(tok);
+        pattern->span = tok->span;
+        return true;
+    }
+    if (parser_advance_if(p, DS_TOK_TRUE) || parser_advance_if(p, DS_TOK_FALSE)) {
+        DsToken *tok = parser_previous(p);
+        pattern->kind = DS_CASE_PATTERN_BOOL;
+        pattern->boolean = tok->kind == DS_TOK_TRUE;
+        pattern->span = tok->span;
+        return true;
+    }
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 1 && parser_peek(p)->text.data[0] == '_') {
+        DsToken *tok = parser_advance(p);
+        pattern->kind = DS_CASE_PATTERN_DEFAULT;
+        pattern->span = tok->span;
+        return true;
+    }
+    ds_diag_error(p->diag, parser_peek(p)->span, "expected case pattern literal or `_`");
+    return false;
+}
+
+static DsStmt *parse_case(Parser *p) {
+    DsToken *start = parser_previous(p);
+    if (parser_at(p, DS_TOK_DOLLAR_IDENT)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "case selectors use expression syntax; write `case name`, not `case $name`");
+        parser_advance(p);
+        if (parser_at(p, DS_TOK_LBRACE)) {
+            int depth = 0;
+            do {
+                if (parser_at(p, DS_TOK_LBRACE)) depth++;
+                else if (parser_at(p, DS_TOK_RBRACE)) depth--;
+                parser_advance(p);
+            } while (!parser_at_end(p) && depth > 0);
+        } else {
+            while (!parser_at_end(p) && !parser_is_stmt_end(p)) parser_advance(p);
+        }
+        parser_consume_statement_end(p);
+        return NULL;
+    }
+    if (parser_at(p, DS_TOK_LBRACE)) ds_diag_error(p->diag, parser_peek(p)->span, "expected selector expression after `case`");
+    DsExpr *selector = parse_expr(p);
+    if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after case selector")) return NULL;
+    DsStmt *stmt = parser_new_stmt(DS_STMT_CASE, start->span);
+    stmt->as.case_stmt.selector = selector;
+    parser_skip_newlines(p);
+    while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACE)) {
+        DsCaseArm arm;
+        memset(&arm, 0, sizeof(arm));
+        DsToken *arm_start = parser_peek(p);
+        do {
+            DsCasePattern pattern;
+            if (!parse_case_pattern(p, &pattern)) break;
+            parser_case_pattern_vec_push(&arm.patterns, pattern);
+        } while (parser_advance_if(p, DS_TOK_PIPE));
+        if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after case pattern")) {
+            while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACE) && !parser_is_stmt_end(p)) parser_advance(p);
+            parser_skip_newlines(p);
+            continue;
+        }
+        arm.body = parse_block(p);
+        arm.span = (DsSpan){arm_start->span.start, arm.body ? arm.body->span.end : arm_start->span.end, arm_start->span.source};
+        parser_case_arm_vec_push(&stmt->as.case_stmt.arms, arm);
+        parser_skip_newlines(p);
+    }
+    if (!parser_expect(p, DS_TOK_RBRACE, "expected `}` to close case statement")) return stmt;
+    stmt->span.end = parser_previous(p)->span.end;
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
 
 static DsStmt *parse_assert(Parser *p) {
     DsToken *start = parser_previous(p);
@@ -209,54 +347,14 @@ DsStmt *parse_stmt(Parser *p) {
         return NULL;
     }
     if (parser_advance_if(p, DS_TOK_LET)) return parse_let(p);
+    if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||
+        ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
     if (parser_advance_if(p, DS_TOK_IF)) return parse_if(p);
     if (parser_advance_if(p, DS_TOK_FOR)) return parse_for(p);
-    if (parser_advance_if(p, DS_TOK_WHILE)) {
-        ds_diag_error(p->diag, parser_previous(p)->span, "`while` loops are deferred in v0.10.0 because reassignment is not implemented yet");
-        while (!parser_at_end(p) && !parser_at(p, DS_TOK_LBRACE) && !parser_is_stmt_end(p)) parser_advance(p);
-        if (parser_advance_if(p, DS_TOK_LBRACE)) {
-            int depth = 1;
-            while (!parser_at_end(p) && depth > 0) {
-                if (parser_advance_if(p, DS_TOK_LBRACE)) depth++;
-                else if (parser_advance_if(p, DS_TOK_RBRACE)) depth--;
-                else parser_advance(p);
-            }
-        } else {
-            while (!parser_is_stmt_end(p)) parser_advance(p);
-        }
-        parser_consume_statement_end(p);
-        return NULL;
-    }
-    if (parser_advance_if(p, DS_TOK_BREAK)) {
-        ds_diag_error(p->diag, parser_previous(p)->span, "`break` is deferred in v0.10.0 loop control");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-        parser_consume_statement_end(p);
-        return NULL;
-    }
-    if (parser_advance_if(p, DS_TOK_CONTINUE)) {
-        ds_diag_error(p->diag, parser_previous(p)->span, "`continue` is deferred in v0.10.0 loop control");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-        parser_consume_statement_end(p);
-        return NULL;
-    }
-    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 4 &&
-        memcmp(parser_peek(p)->text.data, "case", 4) == 0) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "`case` is deferred in v0.17.0 control-flow work");
-        parser_advance(p);
-        while (!parser_at_end(p) && !parser_at(p, DS_TOK_LBRACE) && !parser_is_stmt_end(p)) parser_advance(p);
-        if (parser_advance_if(p, DS_TOK_LBRACE)) {
-            int depth = 1;
-            while (!parser_at_end(p) && depth > 0) {
-                if (parser_advance_if(p, DS_TOK_LBRACE)) depth++;
-                else if (parser_advance_if(p, DS_TOK_RBRACE)) depth--;
-                else parser_advance(p);
-            }
-        } else {
-            while (!parser_is_stmt_end(p)) parser_advance(p);
-        }
-        parser_consume_statement_end(p);
-        return NULL;
-    }
+    if (parser_advance_if(p, DS_TOK_WHILE)) return parse_while(p);
+    if (parser_advance_if(p, DS_TOK_BREAK)) return parse_loop_control(p, DS_STMT_BREAK);
+    if (parser_advance_if(p, DS_TOK_CONTINUE)) return parse_loop_control(p, DS_STMT_CONTINUE);
+    if (parser_advance_if(p, DS_TOK_CASE)) return parse_case(p);
     if (parser_at(p, DS_TOK_IDENT) && parser_next_at(p, DS_TOK_DOT)) {
         if (p->pos + 3 < p->tokens->len && p->tokens->items[p->pos + 2].kind == DS_TOK_IDENT &&
             p->tokens->items[p->pos + 2].text.len == 4 && memcmp(p->tokens->items[p->pos + 2].text.data, "push", 4) == 0 &&

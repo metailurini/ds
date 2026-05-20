@@ -61,6 +61,10 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.let_stmt.name.data);
             lower_expr_free(stmt->as.let_stmt.value);
             break;
+        case DS_LOWER_STMT_ASSIGN:
+            free(stmt->as.assign_stmt.name.data);
+            lower_expr_free(stmt->as.assign_stmt.value);
+            break;
         case DS_LOWER_STMT_IF:
             lower_expr_free(stmt->as.if_stmt.condition);
             lower_stmt_free(stmt->as.if_stmt.then_branch);
@@ -82,6 +86,23 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.for_stmt.name.data);
             lower_expr_free(stmt->as.for_stmt.iterable);
             lower_stmt_free(stmt->as.for_stmt.body);
+            break;
+        case DS_LOWER_STMT_WHILE:
+            lower_expr_free(stmt->as.while_stmt.condition);
+            lower_stmt_free(stmt->as.while_stmt.body);
+            break;
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+            break;
+        case DS_LOWER_STMT_CASE:
+            lower_expr_free(stmt->as.case_stmt.selector);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                for (size_t j = 0; j < arm->patterns.len; j++) free(arm->patterns.items[j].text.data);
+                free(arm->patterns.items);
+                lower_stmt_free(arm->body);
+            }
+            free(stmt->as.case_stmt.arms.items);
             break;
         case DS_LOWER_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);

@@ -239,6 +239,10 @@ if
 else
 true
 false
+while
+break
+continue
+case
 ```
 
 Likely future keywords:
@@ -252,7 +256,6 @@ import
 fn
 return
 for
-while
 in
 run
 try
@@ -811,6 +814,21 @@ argument parsing, command dispatch, and command-specific flags, while the CLI
 program boundary owns source loading, root-file lex/parse, composed import-aware
 parse, lowering, import cycle/load-once diagnostics, and cleanup of loaded
 units. This is a behavior-preserving cleanup boundary.
+
+## v0.17.0 control flow
+
+The `v0.17.0` implementation extends the shared AST/HIR path with scalar
+reassignment, `while`, lexical `break`/`continue`, and expression-style `case`.
+The parser keeps these constructs as explicit statement nodes; lowering
+validates assignment targets, loop-control placement, duplicate/default case
+arms, and scalar case selectors before either backend runs.
+
+The VM compiles loops and cases into normal jumps plus scoped block cleanup for
+`break` and `continue`. Bash emission stays standalone: `while` and loop
+control emit native Bash constructs, and `case` emits exact-comparison
+`if`/`elif` chains instead of Bash glob-style `case` patterns. This preserves
+the language rule that case alternatives are exact ds literals, not shell
+patterns.
 
 ## v0.7.0 command results and redirection
 

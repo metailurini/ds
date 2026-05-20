@@ -75,16 +75,59 @@ struct DsLowerExpr {
 
 typedef enum {
     DS_LOWER_STMT_LET,
+    DS_LOWER_STMT_ASSIGN,
     DS_LOWER_STMT_IF,
     DS_LOWER_STMT_BLOCK,
     DS_LOWER_STMT_CMD,
     DS_LOWER_STMT_CALL,
     DS_LOWER_STMT_FOR_ARRAY,
+    DS_LOWER_STMT_WHILE,
+    DS_LOWER_STMT_BREAK,
+    DS_LOWER_STMT_CONTINUE,
+    DS_LOWER_STMT_CASE,
     DS_LOWER_STMT_PUSH,
     DS_LOWER_STMT_ASSERT
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
+
+typedef enum {
+    DS_LOWER_ASSIGN_SET,
+    DS_LOWER_ASSIGN_ADD,
+    DS_LOWER_ASSIGN_SUB
+} DsLowerAssignOp;
+
+typedef enum {
+    DS_LOWER_CASE_PATTERN_STRING,
+    DS_LOWER_CASE_PATTERN_INT,
+    DS_LOWER_CASE_PATTERN_BOOL,
+    DS_LOWER_CASE_PATTERN_DEFAULT
+} DsLowerCasePatternKind;
+
+typedef struct {
+    DsLowerCasePatternKind kind;
+    DsStr text;
+    bool boolean;
+    DsSpan span;
+} DsLowerCasePattern;
+
+typedef struct {
+    DsLowerCasePattern *items;
+    size_t len;
+    size_t cap;
+} DsLowerCasePatternVec;
+
+typedef struct {
+    DsLowerCasePatternVec patterns;
+    DsLowerStmt *body;
+    DsSpan span;
+} DsLowerCaseArm;
+
+typedef struct {
+    DsLowerCaseArm *items;
+    size_t len;
+    size_t cap;
+} DsLowerCaseArmVec;
 
 typedef struct {
     DsLowerStmt **items;
@@ -136,10 +179,13 @@ struct DsLowerStmt {
     DsSpan span;
     union {
         struct { DsStr name; DsLowerExpr *value; } let_stmt;
+        struct { DsStr name; DsLowerAssignOp op; DsLowerExpr *value; } assign_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
         struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; } for_stmt;
+        struct { DsLowerExpr *condition; DsLowerStmt *body; } while_stmt;
+        struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
         struct { DsStr name; DsLowerExpr *value; } push_stmt;
         struct { DsLowerExpr *condition; } assert_stmt;
         DsCommand cmd_stmt;

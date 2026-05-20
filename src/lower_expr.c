@@ -144,6 +144,22 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     out->as.binary.left = left;
     out->as.binary.op = str_clone(expr->as.binary.op);
     out->as.binary.right = right;
+    if (lower_str_eq(expr->as.binary.op, "+")) {
+        if (left_kind == SYM_INT && right_kind == SYM_INT) *kind_out = SYM_INT;
+        else if (left_kind == SYM_STRING && right_kind == SYM_STRING) {
+            ds_diag_error(lower->diag, expr->span, "string binary `+` cannot be emitted to standalone Bash with parity in v0.17.0; use interpolation instead");
+            *kind_out = SYM_STRING;
+        }
+        else if (left_kind == SYM_UNKNOWN || right_kind == SYM_UNKNOWN) *kind_out = SYM_UNKNOWN;
+        else ds_diag_error(lower->diag, expr->span, "operator `+` supports integer operands in v0.17.0; string concatenation is deferred");
+        return out;
+    }
+    if (lower_str_eq(expr->as.binary.op, "-")) {
+        if (left_kind != SYM_INT && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "operator `-` requires integer operands in v0.17.0");
+        if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "operator `-` requires integer operands in v0.17.0");
+        *kind_out = SYM_INT;
+        return out;
+    }
     if (lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
         lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
         lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) {

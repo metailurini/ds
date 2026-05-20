@@ -41,6 +41,7 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 5 && strncmp(text, "while", 5) == 0) return DS_TOK_WHILE;
     if (len == 5 && strncmp(text, "break", 5) == 0) return DS_TOK_BREAK;
     if (len == 8 && strncmp(text, "continue", 8) == 0) return DS_TOK_CONTINUE;
+    if (len == 4 && strncmp(text, "case", 4) == 0) return DS_TOK_CASE;
     if (len == 4 && strncmp(text, "test", 4) == 0) return DS_TOK_TEST;
     if (len == 6 && strncmp(text, "assert", 6) == 0) return DS_TOK_ASSERT;
     return DS_TOK_IDENT;
@@ -85,6 +86,8 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_WHILE: return "WHILE";
         case DS_TOK_BREAK: return "BREAK";
         case DS_TOK_CONTINUE: return "CONTINUE";
+        case DS_TOK_CASE: return "CASE";
+        case DS_TOK_PIPE: return "PIPE";
         case DS_TOK_TEST: return "TEST";
         case DS_TOK_ASSERT: return "ASSERT";
         case DS_TOK_COLON: return "COLON";
@@ -253,6 +256,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         DsTokenKind kind = DS_TOK_UNKNOWN;
         size_t len = 1;
         if (c == '|' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_OUT; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_OUT_APPEND; len = 3; } }
+        else if (c == '|') { kind = DS_TOK_PIPE; len = 1; }
         else if (c == '!' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_ERR; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_ERR_APPEND; len = 3; } }
         else if (c == '&' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_ALL; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_ALL_APPEND; len = 3; } }
         else if (c == '=' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_EQUAL_EQUAL; len = 2; }

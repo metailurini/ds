@@ -30,6 +30,8 @@ typedef enum {
     DS_TOK_WHILE,
     DS_TOK_BREAK,
     DS_TOK_CONTINUE,
+    DS_TOK_CASE,
+    DS_TOK_PIPE,
     DS_TOK_TEST,
     DS_TOK_ASSERT,
     DS_TOK_COLON,

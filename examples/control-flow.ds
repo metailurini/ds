@@ -1,0 +1,29 @@
+let i = 0
+
+while i < 5 {
+  i += 1
+
+  if i == 2 {
+    continue
+  }
+
+  if i == 4 {
+    break
+  }
+
+  echo "i={i}"
+}
+
+let target = "bash"
+
+case target {
+  "bash" | "sh" {
+    echo "shell target"
+  }
+  "python" {
+    echo "python target"
+  }
+  _ {
+    echo "other target"
+  }
+}

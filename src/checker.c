@@ -224,6 +224,10 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
                 symbol_push(c, stmt->as.let_stmt.name, stmt->span, SYM_LET, depth);
             }
             break;
+        case DS_STMT_ASSIGN:
+            use_name(c, stmt->as.assign_stmt.name);
+            check_expr(c, stmt->as.assign_stmt.value);
+            break;
         case DS_STMT_IF:
             check_expr(c, stmt->as.if_stmt.condition);
             check_block(c, stmt->as.if_stmt.then_branch, depth + 1);
@@ -268,6 +272,19 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             c->len = base;
             break;
         }
+        case DS_STMT_WHILE:
+            check_expr(c, stmt->as.while_stmt.condition);
+            check_block(c, stmt->as.while_stmt.body, depth + 1);
+            break;
+        case DS_STMT_BREAK:
+        case DS_STMT_CONTINUE:
+            break;
+        case DS_STMT_CASE:
+            check_expr(c, stmt->as.case_stmt.selector);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                check_block(c, stmt->as.case_stmt.arms.items[i].body, depth + 1);
+            }
+            break;
         case DS_STMT_PUSH:
             use_name(c, stmt->as.push_stmt.name);
             check_expr(c, stmt->as.push_stmt.value);

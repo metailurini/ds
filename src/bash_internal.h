@@ -54,6 +54,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_array_elements(BashEmitter *e, const DsLowerExprVec *elements, EmitBuf *out);
 bool emit_map_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, EmitBuf *out);
 bool emit_call_arg_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
+bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
 bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);

@@ -47,6 +47,56 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
     return ok;
 }
 
+static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent) {
+    if (value->kind == DS_LOWER_EXPR_RUN) {
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "__ds_capture ");
+        emit_var_name(&e->out, name);
+        if (!emit_capture_words(e, &value->as.run.words, &e->out, value->span)) return false;
+        buf_append(&e->out, "\n\n");
+        return true;
+    }
+    if (value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(value->as.call.name) && !stdlib_returns_array(value->as.call.name)) {
+        emit_indent(&e->out, indent);
+        emit_var_name(&e->out, name);
+        buf_append(&e->out, "=\"\"\n");
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "__ds_stdlib_capture ");
+        emit_var_name(&e->out, name);
+        buf_append(&e->out, " ");
+        emit_stdlib_helper_name(&e->out, value->as.call.name);
+        if (!emit_call_args(e, &value->as.call.args, &e->out)) return false;
+        buf_append(&e->out, "\n\n");
+        return true;
+    }
+    emit_indent(&e->out, indent);
+    emit_var_name(&e->out, name);
+    buf_append(&e->out, "=");
+    if (!emit_value_expr(e, value, &e->out)) return false;
+    buf_append(&e->out, "\n\n");
+    return true;
+}
+
+static bool emit_case_pattern_condition(BashEmitter *e, const DsLowerExpr *selector, const DsLowerCasePattern *pattern, EmitBuf *out) {
+    buf_append(out, "[[ ");
+    if (!emit_condition_operand(e, selector, out)) return false;
+    buf_append(out, " == ");
+    if (pattern->kind == DS_LOWER_CASE_PATTERN_STRING) {
+        char *decoded = NULL; size_t len = 0;
+        DsLowerExpr tmp = {.kind = DS_LOWER_EXPR_STRING, .span = pattern->span};
+        tmp.as.text = pattern->text;
+        if (!decode_string_literal(e->diag, &tmp, &decoded, &len)) return false;
+        bash_single_quote(out, decoded, len);
+        free(decoded);
+    } else if (pattern->kind == DS_LOWER_CASE_PATTERN_INT) {
+        buf_append_len(out, pattern->text.data, pattern->text.len);
+    } else if (pattern->kind == DS_LOWER_CASE_PATTERN_BOOL) {
+        buf_append(out, pattern->boolean ? "true" : "false");
+    }
+    buf_append(out, " ]]");
+    return true;
+}
+
 bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     emit_indent(&e->out, indent);
     const DsSource *stmt_source = stmt->span.source ? stmt->span.source : e->source;
@@ -128,6 +178,22 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 DsStr copy = {ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len), stmt->as.let_stmt.name.len};
                 symbol_vec_push(&e->symbols, copy);
             }
+            return true;
+
+        case DS_LOWER_STMT_ASSIGN:
+            if (!is_safe_identifier(stmt->as.assign_stmt.name)) {
+                ds_diag_error(e->diag, stmt->span, "cannot emit unsafe Bash variable name `%.*s`", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);
+                return false;
+            }
+            if (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SET) {
+                return emit_assignment_rhs(e, stmt->as.assign_stmt.name, stmt->as.assign_stmt.value, indent);
+            }
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "(( ");
+            emit_var_name(&e->out, stmt->as.assign_stmt.name);
+            buf_append(&e->out, stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? " += " : " -= ");
+            if (!emit_condition_operand(e, stmt->as.assign_stmt.value, &e->out)) return false;
+            buf_append(&e->out, " ))\n\n");
             return true;
 
         case DS_LOWER_STMT_CMD:
@@ -218,6 +284,49 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, "else\n");
                 if (!emit_block_body(e, stmt->as.if_stmt.else_branch, indent + 1)) return false;
+            }
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "fi\n\n");
+            return true;
+
+        case DS_LOWER_STMT_WHILE:
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "while ");
+            if (!emit_condition(e, stmt->as.while_stmt.condition, &e->out)) return false;
+            buf_append(&e->out, "; do\n");
+            if (!emit_block_body(e, stmt->as.while_stmt.body, indent + 1)) return false;
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "done\n\n");
+            return true;
+
+        case DS_LOWER_STMT_BREAK:
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "break\n\n");
+            return true;
+
+        case DS_LOWER_STMT_CONTINUE:
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "continue\n\n");
+            return true;
+
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                bool is_default = arm->patterns.len > 0 && arm->patterns.items[0].kind == DS_LOWER_CASE_PATTERN_DEFAULT;
+                emit_indent(&e->out, indent);
+                if (is_default) {
+                    if (i == 0) buf_append(&e->out, "if true; then\n");
+                    else buf_append(&e->out, "else\n");
+                } else {
+                    if (i == 0) buf_append(&e->out, "if ");
+                    else buf_append(&e->out, "elif ");
+                    for (size_t j = 0; j < arm->patterns.len; j++) {
+                        if (j) buf_append(&e->out, " || ");
+                        if (!emit_case_pattern_condition(e, stmt->as.case_stmt.selector, &arm->patterns.items[j], &e->out)) return false;
+                    }
+                    buf_append(&e->out, "; then\n");
+                }
+                if (!emit_block_body(e, arm->body, indent + 1)) return false;
             }
             emit_indent(&e->out, indent);
             buf_append(&e->out, "fi\n\n");

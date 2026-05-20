@@ -59,6 +59,7 @@ struct DsExpr {
 
 typedef enum {
     DS_STMT_LET,
+    DS_STMT_ASSIGN,
     DS_STMT_IF,
     DS_STMT_BLOCK,
     DS_STMT_CMD,
@@ -66,12 +67,54 @@ typedef enum {
     DS_STMT_FN,
     DS_STMT_CALL,
     DS_STMT_FOR,
+    DS_STMT_WHILE,
+    DS_STMT_BREAK,
+    DS_STMT_CONTINUE,
+    DS_STMT_CASE,
     DS_STMT_PUSH,
     DS_STMT_TEST,
     DS_STMT_ASSERT
 } DsStmtKind;
 
 typedef struct DsStmt DsStmt;
+
+typedef enum {
+    DS_ASSIGN_SET,
+    DS_ASSIGN_ADD,
+    DS_ASSIGN_SUB
+} DsAssignOp;
+
+typedef enum {
+    DS_CASE_PATTERN_STRING,
+    DS_CASE_PATTERN_INT,
+    DS_CASE_PATTERN_BOOL,
+    DS_CASE_PATTERN_DEFAULT
+} DsCasePatternKind;
+
+typedef struct {
+    DsCasePatternKind kind;
+    DsStr text;
+    bool boolean;
+    DsSpan span;
+} DsCasePattern;
+
+typedef struct {
+    DsCasePattern *items;
+    size_t len;
+    size_t cap;
+} DsCasePatternVec;
+
+typedef struct {
+    DsCasePatternVec patterns;
+    DsStmt *body;
+    DsSpan span;
+} DsCaseArm;
+
+typedef struct {
+    DsCaseArm *items;
+    size_t len;
+    size_t cap;
+} DsCaseArmVec;
 
 typedef enum {
     DS_SCRIPT_DECL_ARG,
@@ -129,6 +172,7 @@ struct DsStmt {
     DsSpan span;
     union {
         struct { DsStr name; DsExpr *value; } let_stmt;
+        struct { DsStr name; DsAssignOp op; DsExpr *value; } assign_stmt;
         struct { DsExpr *condition; DsStmt *then_branch; DsStmt *else_branch; } if_stmt;
         struct { DsStmtVec statements; } block_stmt;
         struct { DsWordVec words; DsRedirect redirect; } cmd_stmt;
@@ -136,6 +180,8 @@ struct DsStmt {
         struct { DsStr name; DsFnParamVec params; DsStmt *body; } fn_stmt;
         struct { DsStr name; DsExprVec args; } call_stmt;
         struct { DsStr key_name; DsStr value_name; bool has_value_name; DsExpr *iterable; DsStmt *body; } for_stmt;
+        struct { DsExpr *condition; DsStmt *body; } while_stmt;
+        struct { DsExpr *selector; DsCaseArmVec arms; } case_stmt;
         struct { DsStr name; DsExpr *value; } push_stmt;
         struct { DsStr name; DsStmt *body; } test_stmt;
         struct { DsExpr *condition; } assert_stmt;

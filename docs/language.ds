@@ -126,7 +126,7 @@ git checkout $target
 ./deploy.sh $app $target
 
 # Normal expressions do not use $.
-let message = "target=" + target
+let message = "target={target}"
 
 
 # -----------------------------------------------------------------------------
@@ -351,12 +351,12 @@ let web_port = ports["web"]
 
 
 # -----------------------------------------------------------------------------
-# 17. Loops [v0.10.0 / v0.17.0] [partially implemented]
+# 17. Loops and case [v0.10.0 / v0.17.0] [implemented]
 # -----------------------------------------------------------------------------
 
 # `for item in array` is implemented in v0.10.0.
-# `while`, `break`, and `continue` are scheduled for v0.17.0.
-# `case` is scheduled for v0.17.0.
+# `while`, `break`, `continue`, scalar reassignment, and expression-style
+# `case` are implemented in v0.17.0.
 # `until` is rejected — use `while !condition` instead.
 
 for service in services {
@@ -364,30 +364,30 @@ for service in services {
 }
 
 # while — v0.17.0
-#
-# while i < 10 {
-#   i += 1
-# }
-#
-# while !result.ok {
-#   result = run ./retry.sh
-# }
+
+let i = 0
+while i < 3 {
+  echo "i={i}"
+  i += 1
+}
 
 # break / continue — v0.17.0
-#
-# for item in items {
-#   if item == "skip" { continue }
-#   if item == "stop" { break }
-#   echo $item
-# }
 
-# case — v0.17.0
-#
-# case $lang {
-#   "bash" | "sh" { echo "shell" }
-#   "python"      { echo "python" }
-#   _             { echo "other" }
-# }
+for item in services {
+  if item == "skip" { continue }
+  if item == "stop" { break }
+  echo $item
+}
+
+# case — v0.17.0. Selectors are normal expressions, not command `$name` words.
+
+case target {
+  "bash" | "sh" { echo "shell" }
+  "python"      { echo "python" }
+  _             { echo "other" }
+}
+
+# String binary `+` remains deferred for Bash parity; use interpolation.
 
 # Ranges are planned for v0.23.0; `lines` is implemented in v0.11.0.
 #

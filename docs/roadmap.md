@@ -709,7 +709,8 @@ ds check file.ds
 
 - Complete `while condition { ... }` loops (deferred from v0.10.0).
 - Add `break` and `continue` inside `for` and `while` loops.
-- Add `case` statement with pattern matching over strings and integers.
+- Add expression-style `case` statement with exact matching over strings,
+  integers, and booleans.
 - Implement all of the above in VM mode and Bash emission.
 
 **Expected syntax:**
@@ -725,7 +726,7 @@ for item in items {
   echo $item
 }
 
-case $lang {
+case lang {
   "bash" | "sh" { echo "shell" }
   "python"      { echo "python" }
   _             { echo "other" }
@@ -736,7 +737,7 @@ case $lang {
 
 - No `until` — use `while !condition` instead.
 - No pattern destructuring in `case`.
-- No regex patterns in `case` unless trivially emittable to Bash.
+- No regex, glob, or Bash-pattern semantics in `case`.
 - No labeled `break`/`continue`.
 
 **Expected outputs:**
