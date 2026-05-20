@@ -512,21 +512,27 @@ static void close_pipe_array(int (*pipes)[2], size_t count) {
     }
 }
 
-static void pipeline_child_exec(VmProcessSpec *specs, size_t stage_count, size_t idx, int (*pipes)[2], int redirect_fd, FILE *out_fp, FILE *err_fp) {
+static bool redirect_wants_stdout(DsRedirectKind kind) {
+    return kind == DS_REDIRECT_OUT || kind == DS_REDIRECT_OUT_APPEND || kind == DS_REDIRECT_ALL || kind == DS_REDIRECT_ALL_APPEND;
+}
+
+static bool redirect_wants_stderr(DsRedirectKind kind) {
+    return kind == DS_REDIRECT_ERR || kind == DS_REDIRECT_ERR_APPEND || kind == DS_REDIRECT_ALL || kind == DS_REDIRECT_ALL_APPEND;
+}
+
+static void pipeline_child_exec(VmProcessSpec *specs, size_t stage_count, size_t idx, int (*pipes)[2], int redirect_fd, const DsRedirect *pipeline_redirect, FILE *out_fp, FILE *err_fp) {
     VmProcessSpec *spec = &specs[idx];
     if (idx > 0) dup2(pipes[idx - 1][0], STDIN_FILENO);
     if (idx + 1 < stage_count) {
         dup2(pipes[idx][1], STDOUT_FILENO);
     } else if (spec->capture) {
         dup2(fileno(out_fp), STDOUT_FILENO);
-    } else if (spec->redirect.kind == DS_REDIRECT_OUT || spec->redirect.kind == DS_REDIRECT_OUT_APPEND ||
-               spec->redirect.kind == DS_REDIRECT_ALL || spec->redirect.kind == DS_REDIRECT_ALL_APPEND) {
+    } else if (redirect_wants_stdout(pipeline_redirect->kind)) {
         dup2(redirect_fd, STDOUT_FILENO);
     }
     if (spec->capture) {
         dup2(fileno(err_fp), STDERR_FILENO);
-    } else if (spec->redirect.kind == DS_REDIRECT_ERR || spec->redirect.kind == DS_REDIRECT_ERR_APPEND ||
-               spec->redirect.kind == DS_REDIRECT_ALL || spec->redirect.kind == DS_REDIRECT_ALL_APPEND) {
+    } else if (redirect_wants_stderr(pipeline_redirect->kind)) {
         dup2(redirect_fd, STDERR_FILENO);
     }
     close_pipe_array(pipes, stage_count > 0 ? stage_count - 1 : 0);
@@ -599,7 +605,7 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
         }
         if (pids[i] == 0) {
             close(exec_error_pipe[0]);
-            pipeline_child_exec(specs, n, i, pipes, redirect_fd, out_fp, err_fp);
+            pipeline_child_exec(specs, n, i, pipes, redirect_fd, &ins->redirect, out_fp, err_fp);
         }
     }
 

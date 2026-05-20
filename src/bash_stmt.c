@@ -397,9 +397,15 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
-            buf_append(&e->out, " || __ds_fail ");
-            emit_source_loc(&e->out, e->source, stmt->span);
-            buf_append(&e->out, " \"$?\"\n\n");
+            if (stmt->as.cmd_stmt.stages.len > 1) {
+                buf_append(&e->out, " || { __ds_code=$?; printf '%s: error: pipeline failed with exit %s\\n' ");
+                emit_source_loc(&e->out, e->source, stmt->span);
+                buf_append(&e->out, " \"$__ds_code\" >&2; exit \"$__ds_code\"; }\n\n");
+            } else {
+                buf_append(&e->out, " || __ds_fail ");
+                emit_source_loc(&e->out, e->source, stmt->span);
+                buf_append(&e->out, " \"$?\"\n\n");
+            }
             return true;
 
         case DS_LOWER_STMT_CALL:

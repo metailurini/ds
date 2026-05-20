@@ -106,7 +106,10 @@ static bool emit_stage_words(BashEmitter *e, const DsWordVec *words, EmitBuf *ou
 }
 
 bool emit_command_pipeline(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
+    bool needs_group = command->stages.len > 1 && command->redirect.kind != DS_REDIRECT_NONE;
+    if (needs_group) buf_append(out, "{ ");
     if (!emit_command_pipeline_stages(e, command, out)) return false;
+    if (needs_group) buf_append(out, "; }");
     return emit_redirect(e, &command->redirect, out, span);
 }
 
