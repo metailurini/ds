@@ -699,6 +699,286 @@ ds check file.ds
 - Full regression/parity test pass.
 - A clear next-wave plan.
 
+---
+
+### v0.17.0 — Control Flow Completion
+
+**Purpose:** finish the control flow model started in v0.10.0. `while` was in scope but deferred; `break`, `continue`, and `case` were never scheduled. Together they unblock nearly every non-trivial script pattern.
+
+**Scope:**
+
+- Complete `while condition { ... }` loops (deferred from v0.10.0).
+- Add `break` and `continue` inside `for` and `while` loops.
+- Add `case` statement with pattern matching over strings and integers.
+- Implement all of the above in VM mode and Bash emission.
+
+**Expected syntax:**
+
+```ds
+while i < 10 {
+  i += 1
+}
+
+for item in items {
+  if item == "skip" { continue }
+  if item == "stop" { break }
+  echo $item
+}
+
+case $lang {
+  "bash" | "sh" { echo "shell" }
+  "python"      { echo "python" }
+  _             { echo "other" }
+}
+```
+
+**Out of scope:**
+
+- No `until` — use `while !condition` instead.
+- No pattern destructuring in `case`.
+- No regex patterns in `case` unless trivially emittable to Bash.
+- No labeled `break`/`continue`.
+
+**Expected outputs:**
+
+- Parser, semantic, VM, and Bash emission tests for each construct.
+- Updated `docs/language.ds` with `while`, `until`, `break`, `continue`, and `case` status markers.
+
+---
+
+### v0.18.0 — Pipelines
+
+**Purpose:** deliver the pipeline feature that was explicitly deferred in v0.7.0 and is listed as a 1.0.0 requirement. Without pipelines, ds cannot replace bash for any script that processes command output through a chain of tools.
+
+**Scope:**
+
+- Add `|` pipeline support in plain command statements.
+- Add `|` pipeline support in captured `run` expressions.
+- Define pipeline exit code semantics (last command, or pipefail equivalent).
+- Implement pipelines in VM mode and Bash emission.
+- Add diagnostics for unsupported pipeline configurations.
+
+**Expected syntax:**
+
+```ds
+cat access.log | grep "ERROR" | sort | uniq
+
+let errors = run cat access.log | grep "ERROR"
+```
+
+**Out of scope:**
+
+- No named pipes or FIFOs.
+- No pipeline as a first-class value.
+- No async pipeline stages.
+
+**Expected outputs:**
+
+- Pipeline parser, VM, and Bash emission tests.
+- Parity tests for exit code behavior under failure in mid-pipeline.
+- Updated `docs/language.ds` pipeline status from `[deferred]` to `[stable]`.
+
+---
+
+### v0.19.0 — String Library and Formatted Output
+
+**Purpose:** give scripts practical string handling and formatted output without adding a separate `printf` command. All formatting lives inside string interpolation so `echo` stays the single output primitive.
+
+**Scope:**
+
+- Add string methods: `.trim()`, `.upper()`, `.lower()`, `.replace(from, to)`, `.contains(sub)`, `.split(sep)`, `.starts_with(pre)`, `.ends_with(suf)`.
+- Extend string interpolation `{}` with format specifiers: `{value:05d}`, `{label:<10}`, `{ratio:.2f}`.
+- Add named transform specifiers where parity with Bash emission is straightforward: `{name:upper}`, `{name:lower}`.
+- Add multi-line string literals as a lightweight alternative to heredocs.
+- Implement all of the above in VM mode and Bash emission.
+- `echo` itself is unchanged; formatting power lives inside `{}`.
+
+**Expected syntax:**
+
+```ds
+let s = "  hello  "
+echo s.trim()
+echo s.upper()
+echo s.replace("hello", "world")
+
+echo "{port:05d}"
+echo "{label:<10} {value:>8.2f}"
+echo "{name:upper}"
+
+let body = """
+  line one
+  line two
+"""
+```
+
+**Out of scope:**
+
+- No `printf` command or `fmt()` function — use interpolation instead.
+- No full Python/Rust format spec — only specifiers with reliable VM/Bash parity.
+- No regex-based string operations (deferred to a later version).
+
+**Expected outputs:**
+
+- String method VM and Bash emission tests.
+- Interpolation format specifier tests covering width, precision, padding, and named transforms.
+- Updated `docs/language.ds` string method status.
+
+---
+
+### v0.20.0 — Cleanup: Wave 2
+
+**Purpose:** stabilize control flow, pipelines, and the string model before the language adds more expression power.
+
+**Scope:**
+
+- Review `while`/`until`/`break`/`continue`/`case` behavior for edge cases and VM/Bash parity gaps.
+- Review pipeline exit code semantics and ensure they match documented behavior.
+- Review string method naming and format specifier syntax for consistency.
+- Remove or rename anything confusing before users depend on it.
+- Verify every Wave 2 feature has VM behavior, Bash emission, tests, and docs.
+
+**Out of scope:**
+
+- No new language features.
+- No function return values yet.
+- No arithmetic expansion.
+
+**Expected outputs:**
+
+- Full Wave 2 regression/parity test pass.
+- Updated `docs/language.ds` and examples.
+- Written list of deferred items carried into Wave 3.
+
+---
+
+### v0.21.0 — Function Values and Arithmetic
+
+**Purpose:** allow functions to produce values and give the expression model the arithmetic operators needed for real scripts. These two areas share a dependency: ds needs a clean value-result model before both work correctly.
+
+**Scope:**
+
+- Add `return expr` to functions.
+- Allow `let x = fn()` — capturing a function's return value.
+- Add arithmetic operators: `*`, `/`, `%`, `**`.
+- Add compound assignment: `*=`, `/=`, `%=`.
+- Implement all of the above in VM mode and Bash emission.
+
+**Expected syntax:**
+
+```ds
+fn to_upper(s) {
+  return s.upper()
+}
+
+let label = to_upper("hello")
+
+fn factorial(n) {
+  if n <= 1 { return 1 }
+  return n * factorial(n - 1)
+}
+
+let result = factorial(6)
+```
+
+**Out of scope:**
+
+- No closures or anonymous functions.
+- No higher-order functions.
+- No multiple return values.
+- No floating-point arithmetic unless trivially emittable.
+
+**Expected outputs:**
+
+- Return value parser, semantic, VM, and Bash emission tests.
+- Arithmetic operator tests including compound assignment.
+- Recursion smoke test with a reasonable depth limit.
+
+---
+
+### v0.22.0 — Process Control and Signal Handling
+
+**Purpose:** give scripts safe cleanup and signal awareness. `defer` covers the EXIT case but real scripts also need to handle interruption, errors, and termination cleanly.
+
+**Scope:**
+
+- Expand `defer` to support signal-specific handlers: `defer on: "INT" { ... }`, `defer on: "TERM" { ... }`.
+- Add `trap` as a lower-level escape hatch for cases `defer` cannot express.
+- Expose `$LINENO`-equivalent context in error handlers.
+- Define clear semantics for what happens when a deferred block itself fails.
+- Implement in VM mode and Bash emission.
+
+**Expected syntax:**
+
+```ds
+defer {
+  remove tmp, recursive: true
+}
+
+defer on: "INT" {
+  echo "interrupted, cleaning up"
+  exit 1
+}
+```
+
+**Out of scope:**
+
+- No background job control or async execution.
+- No coprocesses.
+- No full POSIX signal set unless emission to Bash is straightforward.
+
+**Expected outputs:**
+
+- Signal handler VM and Bash emission tests.
+- Parity tests for EXIT, INT, and TERM cases.
+- Docs explaining when to use `defer` vs `trap`.
+
+---
+
+### v0.23.0 — [Open]
+
+**Purpose:** address the highest-priority deferred items that remain after Wave 2 and v0.21/v0.22. Candidates include regex matching, heredoc support, integer ranges for loops, and the `in` membership operator. The exact scope should be decided based on what is most blocking real scripts at the time.
+
+**Candidate scope:**
+
+- Regex matching: `if s matches /pattern/ { ... }` with `[deferred]` status in `language.ds`.
+- Integer ranges: `for n in 1..10 { ... }`.
+- `in` operator: `let known = app in ["api", "web"]`.
+- Heredoc literals if multi-line strings from v0.19.0 prove insufficient.
+
+**Out of scope:**
+
+- Determined by the milestone spec written when this version is started.
+
+---
+
+### v0.24.0 — Cleanup: Pre-1.0 Hardening
+
+**Purpose:** final pre-1.0.0 pass. Make the language boring, consistent, documented, and safe enough to declare stable.
+
+**Scope:**
+
+- Review every syntax feature added across all waves.
+- Remove or rename anything confusing before 1.0.0 locks the surface.
+- Verify every supported feature has VM behavior, Bash emission, tests, and docs.
+- Run every example in both VM mode and emitted Bash mode.
+- Review memory ownership in the runtime.
+- Write or update `docs/status.md` with stable, experimental, and deferred areas.
+- Define the exact 1.0.0 release checklist.
+
+**Out of scope:**
+
+- No new language features.
+- No backend expansion to zsh/fish.
+- No native compiler.
+
+**Expected outputs:**
+
+- `docs/status.md`.
+- Full regression/parity test pass across all versions.
+- A clear 1.0.0 release checklist.
+
+---
+
 ## Later waves
 
 Possible future areas:

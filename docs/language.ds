@@ -99,8 +99,17 @@ let not_ok = !ok
 let both = ok && force
 let either = ok || force
 
-# Membership and regex are planned later.
+# Arithmetic operators *, /, %, ** are planned for v0.21.0 alongside function
+# return values. Compound assignment *=, /=, %= are included in the same version.
+let product = count * 2
+let quotient = count / 2
+let remainder = count % 3
+let power = 2 ** 8
+
+# Membership operator is planned for v0.23.0.
 let known = app in ["api", "web", "worker"]
+
+# Regex match is planned for v0.23.0.
 let has_error = "ERROR: failed" matches /error|failed/i
 
 
@@ -251,7 +260,7 @@ npm run build &>> "build.log"
 
 
 # -----------------------------------------------------------------------------
-# 13. Pipes [deferred] [planned]
+# 13. Pipes [v0.18.0] [candidate]
 # -----------------------------------------------------------------------------
 
 cat access.log | grep "ERROR" | sort | uniq
@@ -259,8 +268,7 @@ cat access.log | grep "ERROR" | sort | uniq
 let errors = run cat access.log | grep "ERROR"
 
 # v0.7.0 deliberately rejects pipelines in both plain commands and captured
-# `run` expressions. Pipeline semantics remain planned for a later command-model
-# milestone.
+# `run` expressions. Pipelines are scheduled for v0.18.0.
 
 
 # -----------------------------------------------------------------------------
@@ -286,12 +294,19 @@ fn deploy_default(target = "staging") {
 #   docker compose restart $service
 # }
 
-# Non-goals for early functions:
+# Return values are planned for v0.21.0.
+#
+# fn to_upper(s) {
+#   return s.upper()
+# }
+#
+# let label = to_upper("hello")
+
+# Permanent non-goals for functions:
 # - no closures;
 # - no anonymous functions;
 # - no higher-order functions;
-# - no complex generics;
-# - no return values.
+# - no complex generics.
 
 
 # -----------------------------------------------------------------------------
@@ -336,27 +351,45 @@ let web_port = ports["web"]
 
 
 # -----------------------------------------------------------------------------
-# 17. Loops [v0.10.0] [partially implemented]
+# 17. Loops [v0.10.0 / v0.17.0] [partially implemented]
 # -----------------------------------------------------------------------------
 
-# `for item in array` is implemented. `while`, `break`, and `continue` remain
-# deferred because mutable reassignment / update syntax and loop-control
-# semantics are not implemented yet. Passing whole arrays or maps to functions
-# is deferred in v0.10.0; pass scalar elements instead.
-
-# let i = 0
-#
-# while i < 5 {
-#   echo "{i}"
-#   i += 1
-# }
+# `for item in array` is implemented in v0.10.0.
+# `while`, `break`, and `continue` are scheduled for v0.17.0.
+# `case` is scheduled for v0.17.0.
+# `until` is rejected — use `while !condition` instead.
 
 for service in services {
   echo "{service}"
 }
 
-# Ranges and stdlib-backed iteration are later-version syntax.
-# `lines` is implemented in v0.11.0; ranges remain deferred.
+# while — v0.17.0
+#
+# while i < 10 {
+#   i += 1
+# }
+#
+# while !result.ok {
+#   result = run ./retry.sh
+# }
+
+# break / continue — v0.17.0
+#
+# for item in items {
+#   if item == "skip" { continue }
+#   if item == "stop" { break }
+#   echo $item
+# }
+
+# case — v0.17.0
+#
+# case $lang {
+#   "bash" | "sh" { echo "shell" }
+#   "python"      { echo "python" }
+#   _             { echo "other" }
+# }
+
+# Ranges are planned for v0.23.0; `lines` is implemented in v0.11.0.
 #
 # for n in 1..10 {
 #   echo "{n}"
@@ -470,7 +503,18 @@ defer {
 
 echo "working in {tmp}"
 
-# Defer replaces Bash trap usage for common cleanup cases.
+# EXIT-style defer is planned for v0.11.0+.
+# Signal-specific defer and trap are planned for v0.22.0.
+#
+# defer on: "INT" {
+#   echo "interrupted, cleaning up"
+#   exit 1
+# }
+#
+# defer on: "TERM" {
+#   echo "terminated"
+#   exit 1
+# }
 
 
 # -----------------------------------------------------------------------------
@@ -546,7 +590,67 @@ test "explicit failure helpers" {
 
 
 # -----------------------------------------------------------------------------
-# 27. Rejected or not-now syntax [rejected]
+# 27. String methods [v0.19.0] [candidate]
+# -----------------------------------------------------------------------------
+
+# String methods extend the standard string value type. All methods have both
+# VM behavior and Bash emission behavior.
+
+let s = "  Hello, World!  "
+
+let trimmed = s.trim()
+let upper   = s.upper()
+let lower   = s.lower()
+let replaced = s.replace("World", "ds")
+let has_world = s.contains("World")
+let parts = s.split(", ")
+let starts = s.starts_with("  Hello")
+let ends   = s.ends_with("!  ")
+
+
+# -----------------------------------------------------------------------------
+# 28. String interpolation format specifiers [v0.19.0] [candidate]
+# -----------------------------------------------------------------------------
+
+# Format specifiers live inside {} so echo stays the single output primitive.
+# No printf command is added to ds.
+
+let port = 5432
+let ratio = 0.9375
+let label = "api"
+
+echo "{port:05d}"           # zero-padded integer
+echo "{label:<10}"          # left-aligned, width 10
+echo "{ratio:.2f}"          # float with 2 decimal places
+echo "{label:upper}"        # named transform: uppercase
+echo "{label:lower}"        # named transform: lowercase
+
+# Only specifiers with reliable VM/Bash emission parity are supported.
+# Full printf format strings are not a goal.
+
+
+# -----------------------------------------------------------------------------
+# 29. Signal handling [v0.22.0] [candidate]
+# -----------------------------------------------------------------------------
+
+# Signal-specific defer and trap expand the v0.11.0+ EXIT-only defer model.
+
+defer on: "INT" {
+  echo "interrupted, cleaning up"
+  exit 1
+}
+
+defer on: "TERM" {
+  echo "terminated"
+  exit 1
+}
+
+# trap is a lower-level escape hatch for cases defer cannot express.
+# Semantics and exact syntax are defined by the v0.22.0 milestone spec.
+
+
+# -----------------------------------------------------------------------------
+# 30. Rejected or not-now syntax [rejected]
 # -----------------------------------------------------------------------------
 
 # Do not add classes before 1.0.0.
