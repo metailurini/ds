@@ -505,14 +505,14 @@ if true {
   let name = "inner"
 }
 DS
-run_fail lower_shadow_rejected "$DS" check "$TMP/lower_shadow_rejected.ds"
-assert_contains "$TMP/lower_shadow_rejected.err" 'duplicate variable `name` in this scope' "lowering rejects nested shadowing consistently"
+run_ok lower_shadow_rejected "$DS" check "$TMP/lower_shadow_rejected.ds"
+assert_contains "$TMP/lower_shadow_rejected.err" 'shadows an outer declaration' "checker warns for nested shadowing consistently"
 
 cat >"$TMP/unsupported_expr.ds" <<'DS'
-let total = 1 + 2
+let total = "a" + "b"
 DS
 run_fail diag_unsupported_expr "$DS" run "$TMP/unsupported_expr.ds"
-assert_contains "$TMP/diag_unsupported_expr.err" 'unsupported operator `+` in v0.3.0' "unsupported expression diagnostic"
+assert_contains "$TMP/diag_unsupported_expr.err" 'string binary `+` cannot be emitted to standalone Bash with parity' "unsupported expression diagnostic"
 
 cat >"$TMP/parse_error.ds" <<'DS'
 if true {

@@ -29,11 +29,15 @@ __ds_parse_int() {
 }
 
 __ds_app=
+__ds_type_app='string'
 __ds_target='staging'
+__ds_type_target='string'
 __ds_seen_target=false
 __ds_retries=3
+__ds_type_retries='int'
 __ds_seen_retries=false
 __ds_force=false
+__ds_type_force='bool'
 __ds_seen_force=false
 __ds_positionals=()
 while (($#)); do
@@ -105,7 +109,7 @@ __ds_trace_cmd 'tests/v0_5/fixtures/args_basic.ds':9:1 echo "retries=${__ds_retr
 echo "retries=${__ds_retries}" || __ds_fail 'tests/v0_5/fixtures/args_basic.ds':9:1 "$?"
 
 # ds: tests/v0_5/fixtures/args_basic.ds:11
-if [[ "$__ds_force" == true ]]; then
+if [[ ( "${__ds_type_force:-unknown}" == bool && "$__ds_force" == true ) || ( "${__ds_type_force:-unknown}" == int && "$__ds_force" != 0 ) || ( "${__ds_type_force:-unknown}" != bool && "${__ds_type_force:-unknown}" != int && -n "$__ds_force" ) ]]; then
   # ds: tests/v0_5/fixtures/args_basic.ds:12
   __ds_trace_cmd 'tests/v0_5/fixtures/args_basic.ds':12:3 echo "force enabled"
   echo "force enabled" || __ds_fail 'tests/v0_5/fixtures/args_basic.ds':12:3 "$?"

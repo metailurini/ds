@@ -830,8 +830,9 @@ Bash emission stays standalone: `while` and loop control emit native Bash
 constructs, and `case` emits exact-comparison `if`/`elif` chains instead of Bash
 glob-style `case` patterns. Emitted Bash records lightweight sidecar type tags
 for variables so `case x { "1" ... 1 ... }` follows ds value-kind semantics even
-though shell variables are strings. This preserves the language rule that case
-alternatives are exact ds literals, not shell patterns.
+though shell variables are strings. Those tags also preserve ds truthiness for
+scalar-variable `if` and `while` conditions in emitted Bash. This preserves the
+language rule that case alternatives are exact ds literals, not shell patterns.
 
 ## v0.7.0 command results and redirection
 

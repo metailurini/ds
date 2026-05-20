@@ -7,6 +7,11 @@ static bool result_field_is_bool(DsStr field) {
     return desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL;
 }
 
+static void emit_type_var_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_type_");
+    buf_append_len(out, name.data, name.len);
+}
+
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
@@ -160,6 +165,24 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         if (!symbol_exists(&e->symbols, expr->as.text)) {
             ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
             return false;
+        }
+        if (e->needs_case_types) {
+            buf_append(out, "[[ ( \"${");
+            emit_type_var_name(out, expr->as.text);
+            buf_append(out, ":-unknown}\" == bool && \"$");
+            emit_var_name(out, expr->as.text);
+            buf_append(out, "\" == true ) || ( \"${");
+            emit_type_var_name(out, expr->as.text);
+            buf_append(out, ":-unknown}\" == int && \"$");
+            emit_var_name(out, expr->as.text);
+            buf_append(out, "\" != 0 ) || ( \"${");
+            emit_type_var_name(out, expr->as.text);
+            buf_append(out, ":-unknown}\" != bool && \"${");
+            emit_type_var_name(out, expr->as.text);
+            buf_append(out, ":-unknown}\" != int && -n \"$");
+            emit_var_name(out, expr->as.text);
+            buf_append(out, "\" ) ]]");
+            return true;
         }
         buf_append(out, "[[ \"$");
         emit_var_name(out, expr->as.text);

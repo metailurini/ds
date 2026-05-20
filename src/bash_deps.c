@@ -229,17 +229,24 @@ bool program_uses_map_literal(const DsLowerProgram *program) {
     return false;
 }
 
+static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_IDENT) return true;
+    if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "!")) return expr_needs_type_tags_for_truthiness(expr->as.unary.right);
+    return false;
+}
+
 static bool stmt_uses_case(const DsLowerStmt *stmt) {
     if (!stmt) return false;
     switch (stmt->kind) {
         case DS_LOWER_STMT_CASE: return true;
         case DS_LOWER_STMT_IF:
-            return stmt_uses_case(stmt->as.if_stmt.then_branch) || stmt_uses_case(stmt->as.if_stmt.else_branch);
+            return expr_needs_type_tags_for_truthiness(stmt->as.if_stmt.condition) || stmt_uses_case(stmt->as.if_stmt.then_branch) || stmt_uses_case(stmt->as.if_stmt.else_branch);
         case DS_LOWER_STMT_BLOCK:
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_case(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
         case DS_LOWER_STMT_FOR_ARRAY: return stmt_uses_case(stmt->as.for_stmt.body);
-        case DS_LOWER_STMT_WHILE: return stmt_uses_case(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_needs_type_tags_for_truthiness(stmt->as.while_stmt.condition) || stmt_uses_case(stmt->as.while_stmt.body);
         case DS_LOWER_STMT_LET:
         case DS_LOWER_STMT_ASSIGN:
         case DS_LOWER_STMT_CMD:

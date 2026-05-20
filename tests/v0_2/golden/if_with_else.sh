@@ -29,9 +29,10 @@ __ds_fail() {
 
 # ds: tests/v0_2/fixtures/if_with_else.ds:1
 __ds_ok=false
+__ds_type_ok='bool'
 
 # ds: tests/v0_2/fixtures/if_with_else.ds:2
-if [[ "$__ds_ok" == true ]]; then
+if [[ ( "${__ds_type_ok:-unknown}" == bool && "$__ds_ok" == true ) || ( "${__ds_type_ok:-unknown}" == int && "$__ds_ok" != 0 ) || ( "${__ds_type_ok:-unknown}" != bool && "${__ds_type_ok:-unknown}" != int && -n "$__ds_ok" ) ]]; then
   # ds: tests/v0_2/fixtures/if_with_else.ds:3
   __ds_trace_cmd 'tests/v0_2/fixtures/if_with_else.ds':3:3 echo "yes"
   echo "yes" || __ds_fail 'tests/v0_2/fixtures/if_with_else.ds':3:3 "$?"

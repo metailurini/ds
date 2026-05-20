@@ -431,12 +431,12 @@ assert_diag for_missing_value_name "$FIX/bad_for_missing_value_name.ds" 'expecte
 write_fixture "$FIX/bad_while_empty.ds" <<'DS'
 while {}
 DS
-assert_diag while_empty "$FIX/bad_while_empty.ds" 'while` loops are deferred in v0.10.0'
+assert_diag while_empty "$FIX/bad_while_empty.ds" 'expected condition after `while`'
 
 write_fixture "$FIX/bad_while_missing_block.ds" <<'DS'
 while i < 3 echo "missing block"
 DS
-assert_diag while_missing_block "$FIX/bad_while_missing_block.ds" 'while` loops are deferred in v0.10.0'
+assert_diag while_missing_block "$FIX/bad_while_missing_block.ds" 'expected `{` after while condition'
 
 write_fixture "$FIX/bad_index_type.ds" <<'DS'
 let services = ["api"]
@@ -555,7 +555,8 @@ for service in services {
   echo "{service}"
 }
 DS
-assert_single_diag loop_shadow "$FIX/bad_loop_shadow.ds" 'duplicate variable `service` in this scope'
+run_ok loop_shadow_check "$DS" check "$FIX/bad_loop_shadow.ds"
+assert_contains "$TMP/loop_shadow_check.err" 'shadows an outer declaration' 'loop shadow warning appears'
 
 write_fixture "$FIX/bad_collection_function_arg.ds" <<'DS'
 fn show(items) {
@@ -601,12 +602,12 @@ assert_diag collection_access_command_arg "$FIX/bad_collection_access_command_ar
 write_fixture "$FIX/bad_break.ds" <<'DS'
 break
 DS
-assert_diag break_deferred "$FIX/bad_break.ds" '`break` is deferred in v0.10.0 loop control'
+assert_diag break_deferred "$FIX/bad_break.ds" '`break` is only allowed inside a loop'
 
 write_fixture "$FIX/bad_continue.ds" <<'DS'
 continue
 DS
-assert_diag continue_deferred "$FIX/bad_continue.ds" '`continue` is deferred in v0.10.0 loop control'
+assert_diag continue_deferred "$FIX/bad_continue.ds" '`continue` is only allowed inside a loop'
 
 write_fixture "$FIX/bad_nested_array.ds" <<'DS'
 let nested = [["api"]]

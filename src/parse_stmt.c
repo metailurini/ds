@@ -94,6 +94,31 @@ static DsStmt *parse_assign(Parser *p) {
     return stmt;
 }
 
+static bool token_is_percent_equal_start(const Parser *p, size_t pos) {
+    if (pos + 1 >= p->tokens->len) return false;
+    const DsToken *tok = &p->tokens->items[pos];
+    return tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 && tok->text.data[0] == '%' &&
+           p->tokens->items[pos + 1].kind == DS_TOK_EQUAL;
+}
+
+static bool stmt_contains_assignment_operator(const Parser *p) {
+    for (size_t i = p->pos; i < p->tokens->len; i++) {
+        DsTokenKind kind = p->tokens->items[i].kind;
+        if (kind == DS_TOK_NEWLINE || kind == DS_TOK_EOF || kind == DS_TOK_RBRACE) return false;
+        if (kind == DS_TOK_EQUAL) return true;
+        if (i + 1 < p->tokens->len &&
+            (kind == DS_TOK_PLUS || kind == DS_TOK_MINUS || kind == DS_TOK_STAR || kind == DS_TOK_SLASH) &&
+            p->tokens->items[i + 1].kind == DS_TOK_EQUAL) return true;
+        if (token_is_percent_equal_start(p, i)) return true;
+    }
+    return false;
+}
+
+static void consume_bad_statement(Parser *p) {
+    while (!parser_is_stmt_end(p)) parser_advance(p);
+    parser_consume_statement_end(p);
+}
+
 static DsStmt *parse_if(Parser *p) {
     DsToken *start = parser_previous(p);
     if (parser_at(p, DS_TOK_LBRACE)) {
@@ -347,6 +372,16 @@ DsStmt *parse_stmt(Parser *p) {
         return NULL;
     }
     if (parser_advance_if(p, DS_TOK_LET)) return parse_let(p);
+    if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_STAR) || parser_next_at(p, DS_TOK_SLASH) || token_is_percent_equal_start(p, p->pos + 1)) && parser_peek2_at(p, DS_TOK_EQUAL)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "unsupported assignment operator in v0.17.0");
+        consume_bad_statement(p);
+        return NULL;
+    }
+    if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "unsupported assignment target in v0.17.0");
+        consume_bad_statement(p);
+        return NULL;
+    }
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||
         ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
     if (parser_advance_if(p, DS_TOK_IF)) return parse_if(p);
@@ -355,6 +390,7 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_advance_if(p, DS_TOK_BREAK)) return parse_loop_control(p, DS_STMT_BREAK);
     if (parser_advance_if(p, DS_TOK_CONTINUE)) return parse_loop_control(p, DS_STMT_CONTINUE);
     if (parser_advance_if(p, DS_TOK_CASE)) return parse_case(p);
+    if (parser_advance_if(p, DS_TOK_LBRACE)) return parse_block(p);
     if (parser_at(p, DS_TOK_IDENT) && parser_next_at(p, DS_TOK_DOT)) {
         if (p->pos + 3 < p->tokens->len && p->tokens->items[p->pos + 2].kind == DS_TOK_IDENT &&
             p->tokens->items[p->pos + 2].text.len == 4 && memcmp(p->tokens->items[p->pos + 2].text.data, "push", 4) == 0 &&

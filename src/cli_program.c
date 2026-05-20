@@ -184,7 +184,6 @@ static bool process_ast_statements(DsCliProgram *program, LoadedUnit *unit, bool
             unit->ast->statements.items[i] = NULL;
         }
     }
-    unit->ast->statements.len = 0;
     return !program->diag.has_error;
 }
 

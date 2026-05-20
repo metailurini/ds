@@ -224,7 +224,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             int saved_depth = lower->loop_depth;
             lower->loop_depth++;
             lower->scope = &local;
-            scope_define(lower, &local, stmt->as.for_stmt.key_name, SYM_UNKNOWN, stmt->span);
+            scope_define(lower, &local, stmt->as.for_stmt.key_name, SYM_STRING, stmt->span);
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
             lower->scope = saved;
             lower->loop_depth = saved_depth;

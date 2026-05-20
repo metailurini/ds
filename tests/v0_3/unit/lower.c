@@ -113,7 +113,7 @@ static void test_lower_unary_binary_and_scope(void) {
     lower_fail("if true { let hidden = \"x\" }\necho $hidden\n");
     lower_fail("let name = \"one\"\nlet name = \"two\"\n");
     lower_fail("echo \"Hello {missing}\"\n");
-    lower_fail("let total = 1 + 2\n");
+    lower_fail("let total = \"a\" + \"b\"\n");
 }
 
 int main(void) {

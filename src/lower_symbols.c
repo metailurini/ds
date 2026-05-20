@@ -89,7 +89,7 @@ void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan s
         current->kind = kind;
         return;
     }
-    if (scope_find(scope, name)) {
+    if (scope_find_current(scope, name)) {
         ds_diag_error(lower->diag, span, "duplicate variable `%.*s` in this scope", (int)name.len, name.data);
         return;
     }

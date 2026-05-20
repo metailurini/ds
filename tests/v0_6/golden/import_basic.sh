@@ -29,15 +29,19 @@ __ds_fail() {
 
 # ds: tests/v0_6/fixtures/imports_basic/lib.ds:1
 __ds_app="api"
+__ds_type_app='string'
 
 # ds: tests/v0_6/fixtures/imports_basic/constants.ds:1
 __ds_target="production"
+__ds_type_target='string'
 
 # ds: tests/v0_6/fixtures/imports_basic/constants.ds:2
 __ds_retries=3
+__ds_type_retries='int'
 
 # ds: tests/v0_6/fixtures/imports_basic/constants.ds:3
 __ds_enabled=true
+__ds_type_enabled='bool'
 
 # ds: tests/v0_6/fixtures/imports_basic/main.ds:3
 __ds_trace_cmd 'tests/v0_6/fixtures/imports_basic/main.ds':3:1 echo "Deploying ${__ds_app} to ${__ds_target}"
@@ -48,7 +52,7 @@ __ds_trace_cmd 'tests/v0_6/fixtures/imports_basic/main.ds':4:1 echo "$__ds_retri
 echo "$__ds_retries" || __ds_fail 'tests/v0_6/fixtures/imports_basic/main.ds':4:1 "$?"
 
 # ds: tests/v0_6/fixtures/imports_basic/main.ds:5
-if [[ "$__ds_enabled" == true ]]; then
+if [[ ( "${__ds_type_enabled:-unknown}" == bool && "$__ds_enabled" == true ) || ( "${__ds_type_enabled:-unknown}" == int && "$__ds_enabled" != 0 ) || ( "${__ds_type_enabled:-unknown}" != bool && "${__ds_type_enabled:-unknown}" != int && -n "$__ds_enabled" ) ]]; then
   # ds: tests/v0_6/fixtures/imports_basic/main.ds:6
   __ds_trace_cmd 'tests/v0_6/fixtures/imports_basic/main.ds':6:3 echo "enabled"
   echo "enabled" || __ds_fail 'tests/v0_6/fixtures/imports_basic/main.ds':6:3 "$?"

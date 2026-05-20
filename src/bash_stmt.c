@@ -278,9 +278,10 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 return emit_assignment_rhs(e, stmt->as.assign_stmt.name, stmt->as.assign_stmt.value, indent);
             }
             emit_indent(&e->out, indent);
-            buf_append(&e->out, "(( ");
             emit_var_name(&e->out, stmt->as.assign_stmt.name);
-            buf_append(&e->out, stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? " += " : " -= ");
+            buf_append(&e->out, "=$(( ");
+            emit_var_name(&e->out, stmt->as.assign_stmt.name);
+            buf_append(&e->out, stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? " + " : " - ");
             if (!emit_condition_operand(e, stmt->as.assign_stmt.value, &e->out)) return false;
             buf_append(&e->out, " ))\n");
             emit_type_assignment(e, stmt->as.assign_stmt.name, "int", indent, false);
@@ -353,6 +354,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             size_t mark = e->symbols.len;
             DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
             symbol_vec_push(&e->symbols, copy);
+            emit_type_assignment(e, stmt->as.for_stmt.name, "string", indent + 1, false);
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
             emit_indent(&e->out, indent);

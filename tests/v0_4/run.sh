@@ -151,7 +151,7 @@ run_fail usage_direct_extra_arg "$DS" "$TMP/pipeline_valid.ds" extra
 assert_contains "$TMP/usage_direct_extra_arg.err" 'unexpected script arguments' "direct script extra arg rejected for scripts without arg contract"
 
 cat >"$TMP/future_assignment.ds" <<'DS'
-let total = 1 + 2
+let total = "a" + "b"
 DS
 run_fail unsupported_expr "$DS" check "$TMP/future_assignment.ds"
 assert_contains "$TMP/unsupported_expr.err" "$TMP/future_assignment.ds:1:13: error:" "unsupported expression diagnostic shape"

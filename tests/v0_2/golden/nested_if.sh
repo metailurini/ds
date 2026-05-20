@@ -29,14 +29,16 @@ __ds_fail() {
 
 # ds: tests/v0_2/fixtures/nested_if.ds:1
 __ds_ok=true
+__ds_type_ok='bool'
 
 # ds: tests/v0_2/fixtures/nested_if.ds:2
 __ds_ready=true
+__ds_type_ready='bool'
 
 # ds: tests/v0_2/fixtures/nested_if.ds:3
-if [[ "$__ds_ok" == true ]]; then
+if [[ ( "${__ds_type_ok:-unknown}" == bool && "$__ds_ok" == true ) || ( "${__ds_type_ok:-unknown}" == int && "$__ds_ok" != 0 ) || ( "${__ds_type_ok:-unknown}" != bool && "${__ds_type_ok:-unknown}" != int && -n "$__ds_ok" ) ]]; then
   # ds: tests/v0_2/fixtures/nested_if.ds:4
-  if [[ "$__ds_ready" == true ]]; then
+  if [[ ( "${__ds_type_ready:-unknown}" == bool && "$__ds_ready" == true ) || ( "${__ds_type_ready:-unknown}" == int && "$__ds_ready" != 0 ) || ( "${__ds_type_ready:-unknown}" != bool && "${__ds_type_ready:-unknown}" != int && -n "$__ds_ready" ) ]]; then
     # ds: tests/v0_2/fixtures/nested_if.ds:5
     __ds_trace_cmd 'tests/v0_2/fixtures/nested_if.ds':5:5 echo "ready"
     echo "ready" || __ds_fail 'tests/v0_2/fixtures/nested_if.ds':5:5 "$?"

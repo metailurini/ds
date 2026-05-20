@@ -150,6 +150,8 @@ static DsExpr *parse_postfix(Parser *p) {
             DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, bang->span.end, expr->span.source});
             DsToken tmp = {.text = expr->as.text, .span = expr->span};
             call->as.call.name = parser_copy_bang_name(&tmp);
+            free(expr->as.text.data);
+            free(expr);
             parse_call_args(p, &call->as.call.args);
             if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
             expr = call;
@@ -159,10 +161,12 @@ static DsExpr *parse_postfix(Parser *p) {
         DsToken *open = parser_previous(p);
         DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, open->span.end, expr->span.source});
         call->as.call.name = parser_copy_token_text(&(DsToken){.text = expr->as.text, .span = expr->span});
+        free(expr->as.text.data);
+        free(expr);
         parse_call_args(p, &call->as.call.args);
+        expr = call;
         if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) break;
         call->span.end = parser_previous(p)->span.end;
-        expr = call;
     }
     while (parser_advance_if(p, DS_TOK_LBRACKET)) {
         DsToken *open = parser_previous(p);
@@ -194,6 +198,10 @@ static DsExpr *parse_postfix(Parser *p) {
             DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
             DsToken right = {.text = field_expr->as.field.field, .span = field->span};
             call->as.call.name = parser_copy_dotted_name(&left, &right);
+            free(field_expr->as.field.object->as.text.data);
+            free(field_expr->as.field.object);
+            free(field_expr->as.field.field.data);
+            free(field_expr);
             parse_call_args(p, &call->as.call.args);
             if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
             expr = call;

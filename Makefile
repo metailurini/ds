@@ -6,7 +6,7 @@ SRC := src/main.c src/cli_program.c src/source.c src/diag.c src/lexer.c src/ast.
 OBJ := $(SRC:src/%.c=build/%.o)
 PRIVATE_HEADERS := $(wildcard src/*.h src/runtime/*.h)
 BIN := ds
-TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16
+TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
 .PHONY: all clean check smoke test $(TEST_TARGETS) asan ubsan

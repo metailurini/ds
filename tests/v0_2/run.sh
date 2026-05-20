@@ -271,10 +271,10 @@ run_ok bash_syntax_comparisons bash -n "$TMP/comparisons.sh"
 
 # Diagnostics for unsupported/unsafe emission cases and CLI behavior.
 cat >"$TMP/unsupported_assignment.ds" <<'EOF_DS'
-let total = 1 + 2
+let total = "a" + "b"
 EOF_DS
 run_fail unsupported_assignment "$DS" emit bash "$TMP/unsupported_assignment.ds" -o "$TMP/unsupported_assignment.sh"
-assert_contains "$TMP/unsupported_assignment.err" 'this expression cannot be emitted as a Bash assignment in v0.2.0' "unsupported assignment diagnostic"
+assert_contains "$TMP/unsupported_assignment.err" 'string binary `+` cannot be emitted to standalone Bash with parity' "unsupported assignment diagnostic"
 
 cat >"$TMP/unknown_command_var.ds" <<'EOF_DS'
 echo $missing
