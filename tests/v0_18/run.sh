@@ -435,6 +435,26 @@ DS
 assert_vm_bash_env_parity import_pipeline "$FIX/import_main.ds" 0 ''
 assert_contains "$TMP/import_pipeline_vm.out" 'fn=0' 'function captures pipeline from imported file'
 
+write_fixture "$FIX/dup_import_lib.ds" <<'DS'
+emit_lines | filter_error | sort
+fn dup_import_fn() {
+  emit_lines | filter_error | sort
+}
+DS
+write_fixture "$FIX/dup_import_main.ds" <<'DS'
+import "./dup_import_lib.ds"
+import "./dup_import_lib.ds"
+dup_import_fn()
+DS
+assert_vm_bash_env_parity duplicate_import_pipeline "$FIX/dup_import_main.ds" 0 ''
+cat >"$TMP/expected_duplicate_import.out" <<'EOF_EXPECTED_DUP_IMPORT'
+ERROR alpha
+ERROR beta
+ERROR alpha
+ERROR beta
+EOF_EXPECTED_DUP_IMPORT
+assert_same "$TMP/expected_duplicate_import.out" "$TMP/duplicate_import_pipeline_vm.out" 'duplicate import keeps imported pipeline single-instanced'
+
 write_fixture "$FIX/bad_import.ds" <<'DS'
 echo a |
 DS
@@ -503,6 +523,23 @@ run_ok case_ast "$DS" ast "$FIX/case_pipe.ds"
 assert_contains "$TMP/case_ast.out" 'CaseStmt' 'AST distinguishes case statement'
 assert_contains "$TMP/case_ast.out" 'Arm "bash" "sh"' 'AST prints case alternatives'
 
+# Trace behavior: plain pipeline failures keep source markers in VM and emitted Bash.
+write_fixture "$FIX/trace_pipeline.ds" <<'DS'
+pass | fail7 | pass
+DS
+run_env_ok trace_pipeline_emit "$DS" emit bash "$FIX/trace_pipeline.ds" -o "$TMP/trace_pipeline.sh"
+capture_env_in_dir trace_pipeline_vm "$TMP/trace_pipeline_vm_work" "$DS" run --trace-cmd "$FIX/trace_pipeline.ds"
+capture_in_dir trace_pipeline_bash "$TMP/trace_pipeline_bash_work" env PATH="$FAKEBIN:$PATH" DS_TRACE_CMD=1 bash "$TMP/trace_pipeline.sh"
+assert_status trace_pipeline_vm 7
+assert_status trace_pipeline_bash 7
+assert_contains "$TMP/trace_pipeline_vm.err" 'trace: cmd' 'VM trace emits command trace for pipeline stages'
+assert_contains "$TMP/trace_pipeline_vm.err" '"pass"' 'VM trace includes first pipeline stage'
+assert_contains "$TMP/trace_pipeline_vm.err" '"fail7"' 'VM trace includes failing pipeline stage'
+assert_contains "$TMP/trace_pipeline_vm.err" 'pipeline failed with exit 7' 'VM traced pipeline keeps failure diagnostic'
+assert_contains "$TMP/trace_pipeline_bash.err" 'trace: cmd' 'Bash trace emits command trace for pipeline'
+assert_contains "$TMP/trace_pipeline_bash.err" '"pass" "|" "fail7" "|" "pass"' 'Bash trace includes full pipeline shape'
+assert_contains "$TMP/trace_pipeline_bash.err" 'pipeline failed with exit 7' 'Bash traced pipeline keeps failure diagnostic'
+
 # Examples: check, run deterministic examples, emit Bash.
 for example in examples/*.ds; do
   base="$(basename "$example")"
@@ -516,6 +553,16 @@ for example in examples/*.ds; do
   run_ok "example_${base}_emit" "$DS" emit bash "$example" -o "$script"
   run_ok "example_${base}_bash_n" bash -n "$script"
 done
+assert_vm_bash_env_parity example_args "$ROOT/examples/args.ds" 0 '' demo --target prod --force
+assert_vm_bash_env_parity example_basic "$ROOT/examples/basic.ds" 0 ''
+assert_vm_bash_env_parity example_collections "$ROOT/examples/collections.ds" 0 ''
+assert_vm_bash_env_parity example_command_result "$ROOT/examples/command-result.ds" 0 ''
+assert_vm_bash_env_parity example_control_flow "$ROOT/examples/control-flow.ds" 0 ''
+assert_vm_bash_env_parity example_functions "$ROOT/examples/functions.ds" 0 ''
+assert_vm_bash_env_parity example_import_main "$ROOT/examples/import-main.ds" 0 ''
+assert_vm_bash_env_parity example_redirection "$ROOT/examples/redirection.ds" 0 'build.log'
+assert_vm_bash_env_parity example_stdlib "$ROOT/examples/stdlib.ds" 0 ''
+assert_vm_bash_env_parity example_vm "$ROOT/examples/vm.ds" 0 ''
 assert_vm_bash_env_parity pipeline_example "$ROOT/examples/pipeline.ds" 0 ''
 
 # Sanitizer/resource smoke is covered by make asan/ubsan, but keep focused repeated loops fast.
