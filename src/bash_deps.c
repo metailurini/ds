@@ -228,3 +228,33 @@ bool program_uses_map_literal(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_map_literal(program->statements.items[i])) return true;
     return false;
 }
+
+static bool stmt_uses_case(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_CASE: return true;
+        case DS_LOWER_STMT_IF:
+            return stmt_uses_case(stmt->as.if_stmt.then_branch) || stmt_uses_case(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_case(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY: return stmt_uses_case(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return stmt_uses_case(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_LET:
+        case DS_LOWER_STMT_ASSIGN:
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+        case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_ASSERT:
+            return false;
+    }
+    return false;
+}
+
+bool program_uses_case(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_case(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_case(program->statements.items[i])) return true;
+    return false;
+}

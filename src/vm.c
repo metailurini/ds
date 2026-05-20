@@ -102,9 +102,12 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 break;
             }
             case OP_COMPARE: {
+                bool same_kind = vm.regs[ins->a].kind == vm.regs[ins->b].kind;
                 int cmp = ds_value_compare(&vm.regs[ins->a], &vm.regs[ins->b]);
                 bool result = false;
-                if (strcmp(ins->cmp, "==") == 0) result = cmp == 0;
+                if (strcmp(ins->cmp, "===") == 0) result = same_kind && cmp == 0;
+                else if (strcmp(ins->cmp, "!==") == 0) result = !same_kind || cmp != 0;
+                else if (strcmp(ins->cmp, "==") == 0) result = cmp == 0;
                 else if (strcmp(ins->cmp, "!=") == 0) result = cmp != 0;
                 else if (strcmp(ins->cmp, ">") == 0) result = cmp > 0;
                 else if (strcmp(ins->cmp, ">=") == 0) result = cmp >= 0;

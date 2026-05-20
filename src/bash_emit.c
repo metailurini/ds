@@ -22,6 +22,20 @@ static const char *script_type_name(DsScriptType type) {
     return "unknown";
 }
 
+static void emit_type_var_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_type_");
+    buf_append_len(out, name.data, name.len);
+}
+
+static void emit_script_type_assignment(BashEmitter *e, DsStr name, DsScriptType type) {
+    if (!e->needs_case_types) return;
+    emit_type_var_name(&e->out, name);
+    buf_append(&e->out, "=");
+    const char *type_name = script_type_name(type);
+    bash_single_quote(&e->out, type_name, strlen(type_name));
+    buf_append(&e->out, "\n");
+}
+
 static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
     buf_append(&e->out, "__ds_usage() {\n");
     buf_append(&e->out, "  cat <<'__DS_USAGE__'\n");
@@ -84,12 +98,15 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
             else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
             else buf_append(&e->out, decl->default_bool ? "true" : "false");
             buf_append(&e->out, "\n");
+            emit_script_type_assignment(e, decl->name, decl->type);
         } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
             emit_var_name(&e->out, decl->name);
             buf_append(&e->out, "=false\n");
+            emit_script_type_assignment(e, decl->name, decl->type);
         } else {
             emit_var_name(&e->out, decl->name);
             buf_append(&e->out, "=\n");
+            emit_script_type_assignment(e, decl->name, decl->type);
         }
         if (decl->kind != DS_SCRIPT_DECL_ARG) {
             buf_append(&e->out, "__ds_seen_");
@@ -178,6 +195,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     memset(&e, 0, sizeof(e));
     e.source = source;
     e.diag = diag;
+    e.needs_case_types = program_uses_case(lowered);
 
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");

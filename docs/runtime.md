@@ -662,9 +662,15 @@ program. Normal execution and emitted Bash continue to skip test metadata.
 The v0.17.0 control-flow implementation keeps VM and Bash behavior aligned for
 scalar reassignment, `while`, lexical `break`/`continue`, and expression-style
 `case`. VM bytecode uses explicit jump and scoped-pop instructions so loop
-control exits only the active loop scopes. Bash emission uses native `while`,
-`break`, and `continue`; case dispatch is emitted as exact `[[ value == literal
-]]` comparisons rather than Bash glob patterns.
+control exits only the active loop scopes. Case dispatch uses kind-aware exact
+matching: an integer `1` does not match the string `"1"`, and boolean `true`
+does not match the string `"true"`. Bash emission uses native `while`, `break`,
+and `continue`; case dispatch is emitted as exact `if`/`elif` tests rather than
+Bash glob patterns, with small sidecar type tags for emitted variables so Bash
+does not accidentally coerce unlike ds literal kinds.
+Selectors whose scalar kind is still unknown after lowering are rejected in this
+milestone; later function-return/type work can relax that once the HIR carries
+complete runtime value-kind metadata through calls and collection iteration.
 
 ## Testing strategy
 

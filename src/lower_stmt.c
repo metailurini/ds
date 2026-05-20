@@ -251,8 +251,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CASE, stmt->span);
             SymKind selector_kind = SYM_UNKNOWN;
             out->as.case_stmt.selector = lower_expr(lower, stmt->as.case_stmt.selector, &selector_kind);
-            if (selector_kind == SYM_ARRAY || selector_kind == SYM_MAP || selector_kind == SYM_COMMAND_RESULT) {
-                ds_diag_error(lower->diag, stmt->as.case_stmt.selector->span, "case selectors must be scalar string, int, or bool values in v0.17.0");
+            if (selector_kind == SYM_ARRAY || selector_kind == SYM_MAP || selector_kind == SYM_COMMAND_RESULT || selector_kind == SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, stmt->as.case_stmt.selector->span, "case selectors must have a known scalar string, int, or bool kind in v0.17.0");
             }
             if (stmt->as.case_stmt.arms.len == 0) ds_diag_error(lower->diag, stmt->span, "case statements require at least one arm");
             bool seen_default = false;

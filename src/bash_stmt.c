@@ -1,12 +1,81 @@
 #include "bash_internal.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) {
         if (!emit_stmt(e, block->as.block_stmt.statements.items[i], indent)) return false;
     }
     return true;
+}
+
+static const char *expr_type_name(const DsLowerExpr *expr) {
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING: return "string";
+        case DS_LOWER_EXPR_INT: return "int";
+        case DS_LOWER_EXPR_BOOL: return "bool";
+        case DS_LOWER_EXPR_ARRAY: return "array";
+        case DS_LOWER_EXPR_MAP: return "map";
+        case DS_LOWER_EXPR_RUN: return "command_result";
+        case DS_LOWER_EXPR_BINARY:
+            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-")) return "int";
+            return "bool";
+        case DS_LOWER_EXPR_UNARY:
+            if (str_eq(expr->as.unary.op, "!")) return "bool";
+            return "unknown";
+        case DS_LOWER_EXPR_CALL:
+            if (stdlib_returns_array(expr->as.call.name)) return "array";
+            if (ds_stdlib_is_name(expr->as.call.name)) return "string";
+            return "unknown";
+        case DS_LOWER_EXPR_FIELD: {
+            const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
+            if (!desc) return "unknown";
+            switch (desc->kind) {
+                case DS_COMMAND_RESULT_FIELD_STRING: return "string";
+                case DS_COMMAND_RESULT_FIELD_INT: return "int";
+                case DS_COMMAND_RESULT_FIELD_BOOL: return "bool";
+            }
+            return "unknown";
+        }
+        case DS_LOWER_EXPR_INDEX:
+        case DS_LOWER_EXPR_IDENT:
+        case DS_LOWER_EXPR_ERROR:
+            return "unknown";
+    }
+    return "unknown";
+}
+
+static void emit_type_var_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_type_");
+    buf_append_len(out, name.data, name.len);
+}
+
+static void emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl) {
+    if (!e->needs_case_types) return;
+    emit_indent(&e->out, indent);
+    if (local_decl) buf_append(&e->out, "local ");
+    emit_type_var_name(&e->out, name);
+    buf_append(&e->out, "=");
+    bash_single_quote(&e->out, type, strlen(type));
+    buf_append(&e->out, "\n");
+}
+
+static void emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl) {
+    if (!e->needs_case_types) return;
+    emit_indent(&e->out, indent);
+    if (local_decl) buf_append(&e->out, "local ");
+    emit_type_var_name(&e->out, name);
+    buf_append(&e->out, "=");
+    if (value->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(&e->out, "\"${");
+        emit_type_var_name(&e->out, value->as.text);
+        buf_append(&e->out, ":-unknown}\"");
+    } else {
+        const char *type = expr_type_name(value);
+        bash_single_quote(&e->out, type, strlen(type));
+    }
+    buf_append(&e->out, "\n");
 }
 
 bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
@@ -53,7 +122,9 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         buf_append(&e->out, "__ds_capture ");
         emit_var_name(&e->out, name);
         if (!emit_capture_words(e, &value->as.run.words, &e->out, value->span)) return false;
-        buf_append(&e->out, "\n\n");
+        buf_append(&e->out, "\n");
+        emit_type_assignment_for_expr(e, name, value, indent, false);
+        buf_append(&e->out, "\n");
         return true;
     }
     if (value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(value->as.call.name) && !stdlib_returns_array(value->as.call.name)) {
@@ -66,19 +137,35 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         buf_append(&e->out, " ");
         emit_stdlib_helper_name(&e->out, value->as.call.name);
         if (!emit_call_args(e, &value->as.call.args, &e->out)) return false;
-        buf_append(&e->out, "\n\n");
+        buf_append(&e->out, "\n");
+        emit_type_assignment_for_expr(e, name, value, indent, false);
+        buf_append(&e->out, "\n");
         return true;
     }
     emit_indent(&e->out, indent);
     emit_var_name(&e->out, name);
     buf_append(&e->out, "=");
     if (!emit_value_expr(e, value, &e->out)) return false;
-    buf_append(&e->out, "\n\n");
+    buf_append(&e->out, "\n");
+    emit_type_assignment_for_expr(e, name, value, indent, false);
+    buf_append(&e->out, "\n");
     return true;
 }
 
 static bool emit_case_pattern_condition(BashEmitter *e, const DsLowerExpr *selector, const DsLowerCasePattern *pattern, EmitBuf *out) {
     buf_append(out, "[[ ");
+    if (selector->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, "\"${");
+        emit_type_var_name(out, selector->as.text);
+        buf_append(out, ":-unknown}\"");
+    } else {
+        bash_single_quote(out, expr_type_name(selector), strlen(expr_type_name(selector)));
+    }
+    buf_append(out, " == ");
+    if (pattern->kind == DS_LOWER_CASE_PATTERN_STRING) bash_single_quote(out, "string", 6);
+    else if (pattern->kind == DS_LOWER_CASE_PATTERN_INT) bash_single_quote(out, "int", 3);
+    else if (pattern->kind == DS_LOWER_CASE_PATTERN_BOOL) bash_single_quote(out, "bool", 4);
+    buf_append(out, " && ");
     if (!emit_condition_operand(e, selector, out)) return false;
     buf_append(out, " == ");
     if (pattern->kind == DS_LOWER_CASE_PATTERN_STRING) {
@@ -173,7 +260,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "=");
                 if (!emit_value_expr(e, stmt->as.let_stmt.value, &e->out)) return false;
             }
-            buf_append(&e->out, "\n\n");
+            buf_append(&e->out, "\n");
+            emit_type_assignment_for_expr(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent, e->function_depth > 0);
+            buf_append(&e->out, "\n");
             if (!symbol_exists(&e->symbols, stmt->as.let_stmt.name)) {
                 DsStr copy = {ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len), stmt->as.let_stmt.name.len};
                 symbol_vec_push(&e->symbols, copy);
@@ -193,7 +282,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_var_name(&e->out, stmt->as.assign_stmt.name);
             buf_append(&e->out, stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? " += " : " -= ");
             if (!emit_condition_operand(e, stmt->as.assign_stmt.value, &e->out)) return false;
-            buf_append(&e->out, " ))\n\n");
+            buf_append(&e->out, " ))\n");
+            emit_type_assignment(e, stmt->as.assign_stmt.name, "int", indent, false);
+            buf_append(&e->out, "\n");
             return true;
 
         case DS_LOWER_STMT_CMD:

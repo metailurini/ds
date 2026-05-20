@@ -550,7 +550,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     cmp.dst = cmp_reg;
                     cmp.a = selector;
                     cmp.b = lit;
-                    cmp.cmp = ds_str_dup_range("==", 2);
+                    cmp.cmp = ds_str_dup_range("===", 3);
                     emit_instr(p, cmp);
                     Instr jif = {0};
                     jif.op = OP_JUMP_IF_FALSE;

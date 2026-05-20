@@ -26,6 +26,7 @@ typedef struct {
     EmitBuf out;
     int function_depth;
     size_t temp_counter;
+    bool needs_case_types;
 } BashEmitter;
 
 void buf_reserve(EmitBuf *buf, size_t need);
@@ -69,6 +70,7 @@ bool program_uses_run(const DsLowerProgram *program);
 bool program_uses_stdlib(const DsLowerProgram *program);
 bool program_uses_collection_index(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);
+bool program_uses_case(const DsLowerProgram *program);
 
 bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent);
 bool emit_function(BashEmitter *e, const DsLowerFn *fn);

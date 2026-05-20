@@ -824,11 +824,14 @@ validates assignment targets, loop-control placement, duplicate/default case
 arms, and scalar case selectors before either backend runs.
 
 The VM compiles loops and cases into normal jumps plus scoped block cleanup for
-`break` and `continue`. Bash emission stays standalone: `while` and loop
-control emit native Bash constructs, and `case` emits exact-comparison
-`if`/`elif` chains instead of Bash glob-style `case` patterns. This preserves
-the language rule that case alternatives are exact ds literals, not shell
-patterns.
+`break` and `continue`. Case matching uses a dedicated kind-aware exact compare
+path so integer, string, and boolean literals do not coerce into each other.
+Bash emission stays standalone: `while` and loop control emit native Bash
+constructs, and `case` emits exact-comparison `if`/`elif` chains instead of Bash
+glob-style `case` patterns. Emitted Bash records lightweight sidecar type tags
+for variables so `case x { "1" ... 1 ... }` follows ds value-kind semantics even
+though shell variables are strings. This preserves the language rule that case
+alternatives are exact ds literals, not shell patterns.
 
 ## v0.7.0 command results and redirection
 
