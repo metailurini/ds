@@ -4,29 +4,48 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool parse_format_limit(DsStr spec, size_t start, size_t end, size_t *value) {
+    if (start >= end) return false;
+    size_t out = 0;
+    for (size_t i = start; i < end; i++) {
+        if (spec.data[i] < '0' || spec.data[i] > '9') return false;
+        size_t digit = (size_t)(spec.data[i] - '0');
+        if (out > 1024 / 10 || (out == 1024 / 10 && digit > 1024 % 10)) return false;
+        out = out * 10 + digit;
+    }
+    if (out < 1 || out > 1024) return false;
+    *value = out;
+    return true;
+}
+
 static bool is_supported_format_spec(DsStr spec, SymKind kind) {
     if (spec.len == 0) return true;
     if ((spec.len == 5 && memcmp(spec.data, "upper", 5) == 0) ||
         (spec.len == 5 && memcmp(spec.data, "lower", 5) == 0) ||
-        (spec.len == 4 && memcmp(spec.data, "trim", 4) == 0)) return kind == SYM_STRING || kind == SYM_UNKNOWN;
+        (spec.len == 4 && memcmp(spec.data, "trim", 4) == 0)) return kind == SYM_STRING;
     size_t i = 0;
     if (spec.data[0] == '<' || spec.data[0] == '>' || spec.data[0] == '^') {
         i = 1;
         if (i >= spec.len) return false;
         while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
-        return i == spec.len && (kind == SYM_STRING || kind == SYM_UNKNOWN);
+        size_t width = 0;
+        return i == spec.len && parse_format_limit(spec, 1, i, &width) && kind == SYM_STRING;
     }
     bool zero = false;
     if (i < spec.len && spec.data[i] == '0') { zero = true; i++; }
     size_t digits_start = i;
     while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
-    if (i < spec.len && spec.data[i] == 'd') return i + 1 == spec.len && i > digits_start && (kind == SYM_INT || kind == SYM_UNKNOWN);
+    if (i < spec.len && spec.data[i] == 'd') {
+        size_t width = 0;
+        return i + 1 == spec.len && parse_format_limit(spec, digits_start, i, &width) && kind == SYM_INT;
+    }
     if (zero) return false;
     if (i < spec.len && spec.data[i] == '.') {
         i++;
         size_t prec_start = i;
         while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
-        return i < spec.len && spec.data[i] == 'f' && i + 1 == spec.len && i > prec_start && (kind == SYM_INT || kind == SYM_UNKNOWN);
+        size_t precision = 0;
+        return i < spec.len && spec.data[i] == 'f' && i + 1 == spec.len && parse_format_limit(spec, prec_start, i, &precision) && kind == SYM_INT;
     }
     return false;
 }
@@ -346,9 +365,9 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         SymKind arg_kind = SYM_UNKNOWN;
         lower_expr_vec_push(&out->as.call.args, lower_expr(lower, expr->as.call.args.items[i], &arg_kind));
         if (is_string_helper_name(expr->as.call.name)) {
-            if (i == 0 && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+            if (i == 0 && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` requires a string receiver", (int)expr->as.call.name.len, expr->as.call.name.data);
-            } else if (i > 0 && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+            } else if (i > 0 && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects string arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
             }
         } else if (ds_stdlib_is_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {

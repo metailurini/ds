@@ -35,7 +35,7 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented through
-`v0.18.0`:
+`v0.19.0`:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -63,7 +63,11 @@ The production runtime supports the language slice implemented through
 - `script { ... }` positional args, options, and boolean flags;
 - local `import "./file.ds"` composition;
 - shell-oriented helpers from `file`, `dir`, `path`, `cmd`, `env`, `glob`,
-  `glob!`, and `lines` within the scoped standard-library surface.
+  `glob!`, and `lines` within the scoped standard-library surface;
+- ASCII string methods: `.trim()`, `.upper()`, `.lower()`, `.replace()`,
+  `.contains()`, `.split()`, `.starts_with()`, and `.ends_with()`;
+- formatted string interpolation with scoped string/int specifiers and
+  triple-quoted multi-line string literals.
 
 Every supported production feature is expected to run in the VM and emit
 standalone Bash. Generated Bash must not call the `ds` binary or depend on the C
@@ -121,6 +125,7 @@ The current examples are the public tour of implemented behavior:
 - `examples/collections.ds`
 - `examples/control-flow.ds`
 - `examples/pipeline.ds`
+- `examples/strings.ds`
 - `examples/stdlib.ds`
 - `examples/vm.ds`
 - `examples/bad.ds` for an intentionally invalid diagnostic example
@@ -137,7 +142,6 @@ milestones:
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;
-- string methods;
 - regex and membership operators;
 - ranges, slices, index assignment, and nested collections;
 - map iteration;
@@ -173,13 +177,20 @@ while internal code should prefer focused headers.
 `continue`, scalar reassignment, and expression-style `case`, with VM/Bash
 parity and clear interaction with existing block and loop scopes.
 
-`v0.18.0` adds linear command pipelines for plain command statements and
-captured `run` expressions. `v0.19.0` adds ASCII string methods, formatted interpolation, and triple-quoted strings. Pipeline status uses Bash `pipefail` semantics: if
+`v0.18.0` added linear command pipelines for plain command statements and
+captured `run` expressions. Pipeline status uses Bash `pipefail` semantics: if
 any stage fails, the pipeline status is the rightmost failing stage.
+
+`v0.19.0` added ASCII string methods, formatted interpolation, and
+triple-quoted strings. Format widths and precisions are bounded to `1..1024`.
+Because function parameters remain untyped until the function-value wave, string
+methods and formatted interpolation require a statically known compatible value
+kind; unknown-kind parameters are rejected by `ds check` instead of drifting
+between VM runtime checks and Bash shell-string coercion.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 and array-loop lowering model remain the safe pieces to build on. The next
-planned feature wave is `v0.19.0` strings/formatted output. Function return
-values, map iteration, nested collections, formatter trivia preservation,
-warning suppression, logical shell operators, and advanced pipeline forms remain
+planned wave is `v0.20.0` cleanup/stabilization before function return values.
+Function return values, map iteration, nested collections, formatter trivia
+preservation, warning suppression, logical shell operators, and advanced pipeline forms remain
 out of scope unless their own milestones explicitly pull them in.
