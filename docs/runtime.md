@@ -653,6 +653,12 @@ Diagnostics should be usable from:
 
 The v0.14.0 test runner uses the normal composed parse/lower pipeline and the VM backend. Test blocks are lowered as test metadata rather than production statements, so normal `ds run`, direct execution, and normal standalone Bash emission do not execute assertions or print test summaries. Inside `ds test`, `assert expr` uses the VM truthiness rules, `fail "message"` fails the active test, `exit 0` stops the active test as a pass, and `exit nonzero` fails the active test. Command output from tests streams normally before each `ok`/`fail` line; the runner does not capture or hide it in this milestone.
 
+The v0.16.0 cleanup keeps test execution on the same composed CLI program
+boundary as `check`, `hir`, `bytecode`, `run`, direct execution, and
+`emit bash`. The boundary lives in `src/cli_program.c`; it owns import-aware
+source loading and lowering before the VM test runner receives a lowered
+program. Normal execution and emitted Bash continue to skip test metadata.
+
 ## Testing strategy
 
 Runtime primitives must have direct C tests.

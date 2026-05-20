@@ -113,6 +113,7 @@ Important files:
 - `docs/runtime.md`
 - `docs/version-workflow.md`
 - `docs/editor.md`
+- `docs/status.md`
 - `docs/milestones/v0.1.0-spec.md`
 - `docs/milestones/v0.1.0-test-plan.md`
 - `docs/milestones/v0.2.0-spec.md`
@@ -143,6 +144,8 @@ Important files:
 - `docs/milestones/v0.14.0-test-plan.md`
 - `docs/milestones/v0.15.0-spec.md`
 - `docs/milestones/v0.15.0-test-plan.md`
+- `docs/milestones/v0.16.0-spec.md`
+- `docs/milestones/v0.16.0-test-plan.md`
 
 ## Editor / LSP setup
 
@@ -152,7 +155,9 @@ IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
 
 ## Project status
 
-Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass; `v0.11.0` implementation and tests are complete for the scoped shell-oriented standard library pass; `v0.12.0` implementation and tests are complete for the scoped standard-library/type consistency cleanup, VM/Bash helper-boundary refactors, and hashmap absorption pass; `v0.13.0` implementation and tests are complete for the scoped debugging/tracing pass; `v0.14.0` implementation and tests are complete for the scoped VM-backed test-runner pass.
+Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass; `v0.11.0` implementation and tests are complete for the scoped shell-oriented standard library pass; `v0.12.0` implementation and tests are complete for the scoped standard-library/type consistency cleanup, VM/Bash helper-boundary refactors, and hashmap absorption pass; `v0.13.0` implementation and tests are complete for the scoped debugging/tracing pass; `v0.14.0` implementation and tests are complete for the scoped VM-backed test-runner pass; `v0.15.0` implementation and tests are complete for the scoped formatter/checker pass; `v0.16.0` implementation is complete for the scoped pre-beta cleanup pass, with tests intentionally left for the follow-up test-plan execution step.
+
+For the current user-facing support matrix, see `docs/status.md`.
 
 The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, the `v0.8.0` command-model/process-wrapper cleanup, the scoped `v0.9.0` user-defined functions pass, the initial `v0.10.0` collection/array-loop implementation, and the initial `v0.11.0` shell-oriented standard library implementation:
 
@@ -208,6 +213,8 @@ let api_port = ports.api
 `v0.10.0` deliberately defers map iteration, `while`, `break`/`continue`, ranges, index assignment, empty map literals, empty map keys, nested collections, passing whole collection values to functions or commands, direct collection access in command arguments, and collection element expressions that cannot yet be emitted into Bash assignments. Bind/index scalar values first.
 
 `v0.11.0` adds the first standard-library helpers: `file.exists`, `file.is_file`, `file.read`, `file.write`, `file.append`, `dir.exists`, `path.cwd`, `path.join`, `path.basename`, `path.dirname`, `path.ext`, `cmd.exists`, `cmd.require`, `env.get`, `env.set`, `env.unset`, `glob`, `glob!`, and `lines`. The implementation deliberately rejects direct `env.NAME` access, recursive `**` glob patterns, and embedded NUL bytes in text file helpers while deferring binary file APIs, directory mutation/listing, and streaming `lines`.
+
+`v0.16.0` keeps comment-preserving formatting deferred. Comments are accepted by normal lexing/parsing/checking/running/emission, but `ds fmt` rejects comment-bearing files with a clear diagnostic rather than silently dropping trivia. The CLI source/import composition path now lives behind a focused internal `src/cli_program.c` boundary; `tokens` and `ast` remain root-file debug views, while `check`, `hir`, `bytecode`, `run`, direct execution, `test`, and `emit bash` use the composed import-aware path.
 
 ```sh
 make

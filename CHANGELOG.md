@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.16.0 - Cleanup: Pre-Beta Hardening
+
+- Added `docs/status.md` as the current support matrix for commands, production syntax, test-only syntax, formatter/checker behavior, examples, deferred language features, and the next feature wave.
+- Split CLI source loading, import composition, lowering setup, and loaded-unit cleanup from `src/main.c` into `src/cli_program.c` / `src/cli_program.h`.
+- Kept `tokens` and `ast` as root-file debug views while preserving the composed import-aware path for `check`, `hir`, `bytecode`, `run`, direct execution, `test`, and `emit bash`.
+- Documented the formatter comment decision: comment-preserving formatting remains deferred, and `ds fmt` must reject comment-bearing files instead of silently dropping trivia.
+- Updated README, architecture, and runtime docs to point at the current status document and describe the new CLI program boundary.
+
+Deferred: comment-preserving formatting remains out of scope for this cleanup implementation because the lexer/parser pipeline still discards trivia; implementing it safely requires a dedicated attachment model rather than a small refactor.
+
 ## v0.8.0 - Cleanup: Command Model and Bash Parity
 
 - Added shared command model regression tests under `tests/v0_8/`, including ownership/clone/free unit coverage for `DsCommand` and direct checks for the shared command-result field descriptor table.

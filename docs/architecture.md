@@ -152,11 +152,13 @@ ds hir ./script.ds
 ds bytecode ./script.ds
 ds fmt ./script.ds
 ds test ./script.ds
-ds repl
-ds debug ./script.ds
 ```
 
-Initial versions only implement a small subset.
+`tokens` and `ast` are root-file frontend/debug views. They read the file passed
+on the command line and preserve import statements as syntax. `check`, `hir`,
+`bytecode`, `run`, direct script execution, `test`, and `emit bash` use the
+composed import-aware program path. `fmt` formats only the root source passed to
+it; there is no workspace formatter yet.
 
 ## Source manager
 
@@ -802,6 +804,13 @@ Mitigation:
 ## v0.6.0 import composition
 
 Behavior-sensitive CLI commands now share a source/import loader before lowering. Local `import "./file.ds"` statements are resolved relative to the importing file, loaded once per root program, composed before the importing file's executable statements, and then lowered into the same backend-facing program used by the VM and Bash emitter. `tokens` and `ast` remain root-file debug views.
+
+As of `v0.16.0`, that loader/composer lives in `src/cli_program.c` behind
+`src/cli_program.h`. `src/main.c` remains responsible for usage text, public
+argument parsing, command dispatch, and command-specific flags, while the CLI
+program boundary owns source loading, root-file lex/parse, composed import-aware
+parse, lowering, import cycle/load-once diagnostics, and cleanup of loaded
+units. This is a behavior-preserving cleanup boundary.
 
 ## v0.7.0 command results and redirection
 
