@@ -1,3 +1,11 @@
+# v0.22.0 - Process Control and Signal Handling (planned)
+
+Planned:
+- Add EXIT-style `defer` cleanup blocks with deterministic VM/Bash ordering.
+- Add signal-specific `defer on: "INT"` and `defer on: "TERM"` handlers.
+- Add lower-level `trap "SIGNAL" { ... }` for the scoped `EXIT`/`INT`/`TERM` signal set.
+- Preserve standalone Bash emission, cleanup final-status rules, imports, script args, and handler diagnostics for the supported subset.
+
 # v0.21.0 - Function Values and Arithmetic (planned)
 
 Planned:
