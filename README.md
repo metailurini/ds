@@ -152,6 +152,8 @@ Important files:
 - `docs/milestones/v0.18.0-test-plan.md`
 - `docs/milestones/v0.19.0-spec.md`
 - `docs/milestones/v0.19.0-test-plan.md`
+- `docs/milestones/v0.20.0-spec.md`
+- `docs/milestones/v0.20.0-test-plan.md`
 
 ## Editor / LSP setup
 
