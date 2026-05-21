@@ -11,7 +11,7 @@
   for run, pipeline, stdlib/string, collection-index, and map helper needs.
 - Added the dedicated `tests/v0_20/run.sh` suite and wired it into `make test-v0-20`, aggregate `make test`, ASAN, and UBSAN paths.
 - Fixed VM nested `for` loops so lexical `break` resets that loop's iterator state before the loop is re-entered.
-- Inferred static kinds for function parameters with literal defaults, allowing imported/defaulted string parameters to use scoped string methods while leaving untyped required parameters deferred.
+- Inferred static kinds for function parameters with literal defaults, allowing imported/defaulted string parameters to use scoped string methods and defaulted string/int/bool parameters to preserve kind-aware Bash `case` matching while leaving untyped required parameters and explicit argument runtime tags deferred.
 - Covered kind-aware exact `case` matching so mismatched literal kinds fall
   through without matching in both VM and Bash.
 - Fixed VM integer formatting for large accepted widths such as `1024d` without truncating the formatted value.

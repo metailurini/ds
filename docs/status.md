@@ -193,7 +193,7 @@ arguments. This means values indexed out of known string arrays, such as
 `"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
 parity and emitted helper coverage.
 
-Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body; required unknown-kind parameters are rejected by `ds check` instead of drifting between VM runtime checks and Bash shell-string coercion.
+Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag when a literal default is used so defaulted parameters can participate in kind-aware `case` matching. Required unknown-kind parameters and explicit runtime argument kind propagation remain deferred instead of drifting between VM runtime checks and Bash shell-string coercion.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 and array-loop lowering model remain the safe pieces to build on. The next

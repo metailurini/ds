@@ -508,6 +508,36 @@ DS
 run_fail fn_param_bad_check "$DS" check "$FIX/fn_param_bad.ds"
 assert_diag "$TMP/fn_param_bad_check.err" 'string.trim' 'unknown function parameter receiver rejected'
 
+write_fixture "$FIX/fn_default_string_case.ds" <<'DS'
+fn show(name = "api") {
+  case name {
+    "api" { echo yes }
+    _ { echo no }
+  }
+}
+show()
+DS
+assert_vm_bash_parity_args fn_default_string_case "$FIX/fn_default_string_case.ds" 0 ''
+assert_file_equals "$TMP/fn_default_string_case_vm.out" $'yes\n' 'defaulted string parameter case selector matches by kind'
+
+write_fixture "$FIX/fn_default_scalar_case.ds" <<'DS'
+fn show(n = 2, b = true) {
+  case n {
+    2 { echo two }
+    _ { echo other }
+  }
+  case b {
+    true { echo yes }
+    _ { echo no }
+  }
+}
+show()
+DS
+assert_vm_bash_parity_args fn_default_scalar_case "$FIX/fn_default_scalar_case.ds" 0 ''
+assert_file_equals "$TMP/fn_default_scalar_case_vm.out" $'two\nyes\n' 'defaulted int/bool parameters case selectors match by kind'
+assert_contains "$TMP/fn_default_scalar_case.sh" '__ds_type_n' 'defaulted int parameter emits Bash type tag'
+assert_contains "$TMP/fn_default_scalar_case.sh" '__ds_type_b' 'defaulted bool parameter emits Bash type tag'
+
 # Formatter behavior.
 write_fixture "$FIX/format_mix.ds" <<'DS'
 let xs = ["api", "skip", "web"]

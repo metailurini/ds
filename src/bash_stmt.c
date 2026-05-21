@@ -128,6 +128,12 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
         buf_append(&e->out, "local ");
         emit_var_name(&e->out, param->name);
         buf_append(&e->out, "\n");
+        if (e->needs_case_types) {
+            emit_indent(&e->out, 1);
+            buf_append(&e->out, "local ");
+            emit_type_var_name(&e->out, param->name);
+            buf_append(&e->out, "\n");
+        }
         emit_indent(&e->out, 1);
         buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i);
         emit_var_name(&e->out, param->name);
@@ -138,6 +144,13 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
             if (!emit_function_default(e, param->default_value, &e->out)) { symbols_truncate(&e->symbols, symbol_mark); return false; }
         } else {
             buf_append(&e->out, "\"\"");
+        }
+        if (e->needs_case_types) {
+            buf_append(&e->out, "; ");
+            emit_type_var_name(&e->out, param->name);
+            buf_append(&e->out, "=");
+            const char *type = param->has_default ? lower_value_type_name(param->default_kind) : "unknown";
+            bash_single_quote(&e->out, type, strlen(type));
         }
         buf_append(&e->out, "; fi\n");
     }
