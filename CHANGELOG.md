@@ -1,3 +1,15 @@
+# v0.20.0 - Cleanup: Wave 2 Stabilization
+
+- Stabilized Wave 2 lowering by tracking known array element kinds for array
+  literals and string-array helpers such as `string.split`, `lines`, `glob`, and
+  `glob!`.
+- Fixed indexed string-array composition so values like `parts[0]` from a known
+  string array can call scoped string methods with VM/Bash parity.
+- Hardened Bash helper dependency scanning so nested call arguments are scanned
+  for run, pipeline, stdlib/string, collection-index, and map helper needs.
+- Documented that dedicated v0.20 tests are intentionally pending for the next
+  test pass because this implementation pass was scoped to code/docs only.
+
 # v0.19.0 - String Library and Formatted Output
 
 - Added scoped string methods with VM and standalone Bash support: `trim`, `upper`, `lower`, `replace`, `contains`, `split`, `starts_with`, and `ends_with`.

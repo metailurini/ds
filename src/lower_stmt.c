@@ -144,7 +144,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
             out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
             out->as.let_stmt.value = lower_expr(lower, stmt->as.let_stmt.value, &kind);
-            scope_define(lower, lower->scope, stmt->as.let_stmt.name, kind, stmt->span);
+            scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
+                               kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN,
+                               stmt->span);
             return out;
         }
         case DS_STMT_ASSIGN: {
@@ -225,7 +227,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             int saved_depth = lower->loop_depth;
             lower->loop_depth++;
             lower->scope = &local;
-            scope_define(lower, &local, stmt->as.for_stmt.key_name, SYM_STRING, stmt->span);
+            scope_define(lower, &local, stmt->as.for_stmt.key_name,
+                         infer_array_element_kind(lower, out->as.for_stmt.iterable), stmt->span);
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
             lower->scope = saved;
             lower->loop_depth = saved_depth;

@@ -84,9 +84,14 @@ Symbol *scope_find(Scope *scope, DsStr name) {
 }
 
 void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span) {
+    scope_define_array(lower, scope, name, kind, SYM_UNKNOWN, span);
+}
+
+void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span) {
     Symbol *current = scope_find_current(scope, name);
     if (current && current->kind == SYM_TOPLEVEL_PREDECLARED) {
         current->kind = kind;
+        current->element_kind = element_kind;
         return;
     }
     if (scope_find_current(scope, name)) {
@@ -99,6 +104,7 @@ void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan s
     }
     scope->items[scope->len].name = ds_str_dup_range(name.data, name.len);
     scope->items[scope->len].kind = kind;
+    scope->items[scope->len].element_kind = element_kind;
     scope->len++;
 }
 

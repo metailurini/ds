@@ -877,3 +877,10 @@ lowered program needs string helpers or interpolation trimming.
 Triple-quoted strings remain regular string literals in the AST/HIR; decode
 helpers in lowering, VM compilation, and Bash emission agree that the content is
 all bytes between the delimiters.
+
+`v0.20.0` keeps helper emission at the existing dependency-class granularity but
+hardens the dependency scan: call arguments are now traversed when deciding
+whether emitted Bash needs run, pipeline, collection-index, map, or stdlib/string
+helper support. This preserves standalone Bash for compositions such as a string
+method called on an indexed `split` result, where the outer call needs string
+helpers and the receiver argument also needs collection-index helpers.

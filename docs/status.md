@@ -1,7 +1,7 @@
 # Current Status
 
-This document is the user-facing snapshot for the implementation and test pass
-after `v0.19.0` string methods and formatted output. It is
+This document is the user-facing snapshot after `v0.19.0` string methods and formatted output for the implementation and test pass, plus the
+implementation-only `v0.20.0` Wave 2 stabilization cleanup. It is
 not a replacement for the roadmap or language catalog; it summarizes what users
 can rely on today and what is still deliberately deferred.
 
@@ -34,8 +34,8 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 
 ## Production language support
 
-The production runtime supports the language slice implemented through
-`v0.19.0`:
+The production runtime supports the language slice implemented through the
+`v0.20.0` cleanup pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -65,7 +65,9 @@ The production runtime supports the language slice implemented through
 - shell-oriented helpers from `file`, `dir`, `path`, `cmd`, `env`, `glob`,
   `glob!`, and `lines` within the scoped standard-library surface;
 - ASCII string methods: `.trim()`, `.upper()`, `.lower()`, `.replace()`,
-  `.contains()`, `.split()`, `.starts_with()`, and `.ends_with()`;
+  `.contains()`, `.split()`, `.starts_with()`, and `.ends_with()`, including
+  known string-array elements from `split`, `lines`, `glob`, and `glob!` when
+  those values are indexed or iterated;
 - formatted string interpolation with scoped string/int specifiers and
   triple-quoted multi-line string literals.
 
@@ -183,6 +185,12 @@ any stage fails, the pipeline status is the rightmost failing stage.
 
 `v0.19.0` added ASCII string methods, formatted interpolation, and
 triple-quoted strings. Format widths and precisions are bounded to `1..1024`.
+`v0.20.0` stabilizes Wave 2 composition by keeping known array element kinds in
+the lowerer and by making Bash helper dependency scanning recurse through call
+arguments. This means values indexed out of known string arrays, such as
+`"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
+parity and emitted helper coverage.
+
 Because function parameters remain untyped until the function-value wave, string
 methods and formatted interpolation require a statically known compatible value
 kind; unknown-kind parameters are rejected by `ds check` instead of drifting
@@ -190,7 +198,7 @@ between VM runtime checks and Bash shell-string coercion.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 and array-loop lowering model remain the safe pieces to build on. The next
-planned wave is `v0.20.0` cleanup/stabilization before function return values.
+planned feature wave starts with `v0.21.0` function return values.
 Function return values, map iteration, nested collections, formatter trivia
 preservation, warning suppression, logical shell operators, and advanced pipeline forms remain
 out of scope unless their own milestones explicitly pull them in.

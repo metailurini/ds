@@ -771,3 +771,13 @@ Formatted interpolation is rendered during the existing interpolation step. The
 supported subset is intentionally small: string transforms, string
 width/alignment, integer padding, and fixed decimal rendering for integer values.
 General floats and full printf-style formatting remain out of scope.
+
+`v0.20.0` keeps the public language surface unchanged while making Wave 2
+composition less conservative. The lowerer now remembers known array element
+kinds for array literals and string-array helpers such as `string.split`,
+`lines`, `glob`, and `glob!`. Indexing one of those arrays can therefore keep a
+known string/int/bool kind for later checks, which lets scoped string methods
+compose with indexed split/line/glob values without relying on runtime coercion
+or Bash-only string behavior. Unknown element kinds remain unknown, and untyped
+function parameters still cannot call string methods until typed parameters or a
+runtime type-tag design is deliberately added.

@@ -24,6 +24,7 @@ typedef enum {
 typedef struct {
     char *name;
     SymKind kind;
+    SymKind element_kind;
 } Symbol;
 
 typedef struct Scope Scope;
@@ -53,6 +54,7 @@ void scope_free(Scope *scope);
 Symbol *scope_find_current(Scope *scope, DsStr name);
 Symbol *scope_find(Scope *scope, DsStr name);
 void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span);
+void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span);
 
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name);
 int find_function_index(DsLowerProgram *program, DsStr name);
@@ -69,6 +71,8 @@ void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm);
 DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span);
 bool command_result_field_kind(DsStr field, SymKind *kind_out);
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
+SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr);
+SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr);
 bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span);
 bool validate_interpolation(Lower *lower, DsStr text, DsSpan span);
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg);

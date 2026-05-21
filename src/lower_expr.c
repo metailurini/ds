@@ -484,6 +484,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     if (obj_kind == SYM_ARRAY) {
         out->as.index.object_is_array = true;
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
+        *kind_out = infer_array_element_kind(lower, object);
     } else if (obj_kind == SYM_MAP) {
         out->as.index.object_is_map = true;
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
@@ -495,8 +496,70 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     } else {
         ds_diag_error(lower->diag, expr->span, "indexing requires an array or map in v0.10.0");
     }
-    *kind_out = SYM_UNKNOWN;
     return out;
+}
+
+static bool helper_returns_string_array(DsStr name) {
+    return lower_str_eq(name, "string.split") || lower_str_eq(name, "glob") ||
+           lower_str_eq(name, "glob!") || lower_str_eq(name, "lines");
+}
+
+SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
+    if (!expr) return SYM_UNKNOWN;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_IDENT: {
+            Symbol *sym = scope_find(lower->scope, expr->as.text);
+            return sym ? sym->kind : SYM_UNKNOWN;
+        }
+        case DS_LOWER_EXPR_STRING: return SYM_STRING;
+        case DS_LOWER_EXPR_INT: return SYM_INT;
+        case DS_LOWER_EXPR_BOOL: return SYM_BOOL;
+        case DS_LOWER_EXPR_RUN: return SYM_COMMAND_RESULT;
+        case DS_LOWER_EXPR_UNARY: return SYM_BOOL;
+        case DS_LOWER_EXPR_BINARY:
+            if (lower_str_eq(expr->as.binary.op, "+") || lower_str_eq(expr->as.binary.op, "-")) return SYM_INT;
+            if (lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
+                lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
+                lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) return SYM_BOOL;
+            return SYM_UNKNOWN;
+        case DS_LOWER_EXPR_CALL: {
+            const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
+            SymKind ret = SYM_UNKNOWN;
+            return stdlib_return_kind(helper, &ret) ? ret : SYM_UNKNOWN;
+        }
+        case DS_LOWER_EXPR_ARRAY: return SYM_ARRAY;
+        case DS_LOWER_EXPR_MAP: return SYM_MAP;
+        case DS_LOWER_EXPR_INDEX:
+            if (expr->as.index.object_is_array) return infer_array_element_kind(lower, expr->as.index.object);
+            return SYM_UNKNOWN;
+        case DS_LOWER_EXPR_FIELD:
+            if (infer_lower_expr_kind(lower, expr->as.field.object) == SYM_COMMAND_RESULT) {
+                SymKind field_kind = SYM_UNKNOWN;
+                if (command_result_field_kind(expr->as.field.field, &field_kind)) return field_kind;
+            }
+            return SYM_UNKNOWN;
+        case DS_LOWER_EXPR_ERROR: return SYM_UNKNOWN;
+    }
+    return SYM_UNKNOWN;
+}
+
+SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr) {
+    if (!expr) return SYM_UNKNOWN;
+    if (expr->kind == DS_LOWER_EXPR_IDENT) {
+        Symbol *sym = scope_find(lower->scope, expr->as.text);
+        return sym ? sym->element_kind : SYM_UNKNOWN;
+    }
+    if (expr->kind == DS_LOWER_EXPR_CALL && helper_returns_string_array(expr->as.call.name)) return SYM_STRING;
+    if (expr->kind != DS_LOWER_EXPR_ARRAY) return SYM_UNKNOWN;
+
+    SymKind common = SYM_UNKNOWN;
+    for (size_t i = 0; i < expr->as.array.elements.len; i++) {
+        SymKind elem = infer_lower_expr_kind(lower, expr->as.array.elements.items[i]);
+        if (elem == SYM_UNKNOWN) return SYM_UNKNOWN;
+        if (common == SYM_UNKNOWN) common = elem;
+        else if (common != elem) return SYM_UNKNOWN;
+    }
+    return common;
 }
 
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {

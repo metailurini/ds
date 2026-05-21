@@ -16,6 +16,9 @@ static bool expr_uses_run(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_run(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_run(expr->as.binary.left) || expr_uses_run(expr->as.binary.right);
+        case DS_LOWER_EXPR_CALL:
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_run(expr->as.call.args.items[i])) return true;
+            return false;
         default: return false;
     }
 }
@@ -34,6 +37,9 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_pipeline_run(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_pipeline_run(expr->as.binary.left) || expr_uses_pipeline_run(expr->as.binary.right);
+        case DS_LOWER_EXPR_CALL:
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_pipeline_run(expr->as.call.args.items[i])) return true;
+            return false;
         default: return false;
     }
 }
@@ -54,7 +60,10 @@ static bool expr_uses_stdlib(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING: return string_literal_needs_stdlib(expr->as.text);
-        case DS_LOWER_EXPR_CALL: return ds_stdlib_is_name(expr->as.call.name);
+        case DS_LOWER_EXPR_CALL:
+            if (ds_stdlib_is_name(expr->as.call.name)) return true;
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_stdlib(expr->as.call.args.items[i])) return true;
+            return false;
         case DS_LOWER_EXPR_FIELD: return expr_uses_stdlib(expr->as.field.object);
         case DS_LOWER_EXPR_INDEX: return expr_uses_stdlib(expr->as.index.object) || expr_uses_stdlib(expr->as.index.index);
         case DS_LOWER_EXPR_ARRAY:
@@ -93,6 +102,9 @@ static bool expr_uses_collection_index(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_collection_index(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_collection_index(expr->as.binary.left) || expr_uses_collection_index(expr->as.binary.right);
+        case DS_LOWER_EXPR_CALL:
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_collection_index(expr->as.call.args.items[i])) return true;
+            return false;
         default: return false;
     }
 }
@@ -108,6 +120,9 @@ static bool expr_uses_map_literal(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_map_literal(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_map_literal(expr->as.binary.left) || expr_uses_map_literal(expr->as.binary.right);
+        case DS_LOWER_EXPR_CALL:
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_map_literal(expr->as.call.args.items[i])) return true;
+            return false;
         default: return false;
     }
 }
