@@ -392,7 +392,7 @@ case target {
 
 # String binary `+` remains deferred for Bash parity; use interpolation.
 
-# Ranges are planned for v0.23.0; `lines` is implemented in v0.11.0.
+# Integer range loop sources are planned for v0.23.0; `lines` is implemented in v0.11.0.
 #
 # for n in 1..10 {
 #   echo "{n}"
@@ -532,14 +532,33 @@ delete_forever "dangerous-path"
 
 
 # -----------------------------------------------------------------------------
-# 24. Regex [deferred] [candidate]
+# 24. Regex, ranges, and membership [v0.23.0] [candidate]
 # -----------------------------------------------------------------------------
+
+# v0.23.0 plans a conservative regex/membership/range surface with VM/Bash
+# parity. Regex literals are scoped to `matches`, ranges are scoped to `for`
+# loop sources, and membership is scoped to scalar arrays.
 
 if "deploy failed" matches /failed/ {
   echo "bad"
 }
 
-let match = regex.match("v1.2.3", /v(\d+)\.(\d+)\.(\d+)/)
+let is_release = "release/123" matches /^release\/[0-9]+$/
+let is_api = "API" matches /api/i
+
+for n in 1..10 {
+  echo "{n}"
+}
+
+let allowed = ["api", "web", "worker"]
+let known_app = app in allowed
+
+# Capture values, regex replacement/splitting, runtime regex strings, range
+# values, reverse/stepped/half-open ranges, and membership over maps or unknown
+# iterables remain deferred.
+#
+# let match = regex.match("v1.2.3", /v([0-9]+)\.([0-9]+)\.([0-9]+)/)
+# let xs = 1..3
 
 # Regex must be carefully specified because VM regex and Bash regex can differ.
 # ds should restrict supported regex syntax if needed to preserve parity.

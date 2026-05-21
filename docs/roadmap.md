@@ -935,20 +935,30 @@ defer on: "INT" {
 
 ---
 
-### v0.23.0 — [Open]
+### v0.23.0 — Regex, Ranges, and Membership
 
-**Purpose:** address the highest-priority deferred items that remain after Wave 2 and v0.21/v0.22. Candidates include regex matching, heredoc support, integer ranges for loops, and the `in` membership operator. The exact scope should be decided based on what is most blocking real scripts at the time.
+**Purpose:** address the highest-priority deferred expression and iteration
+items that remain after Wave 2 and v0.21/v0.22. This is the final Wave 3
+feature-integration milestone before pre-1.0 hardening.
 
-**Candidate scope:**
+**Scope:**
 
-- Regex matching: `if s matches /pattern/ { ... }` with `[deferred]` status in `language.ds`.
-- Integer ranges: `for n in 1..10 { ... }`.
-- `in` operator: `let known = app in ["api", "web"]`.
-- Heredoc literals if multi-line strings from v0.19.0 prove insufficient.
+- Add regex matching: `if s matches /pattern/ { ... }` using a conservative
+  VM/Bash-parity regex subset.
+- Add integer ranges as loop sources: `for n in 1..10 { ... }`.
+- Add the `in` membership operator for kind-aware membership in scalar arrays:
+  `let known = app in ["api", "web"]`.
+- Implement all scoped behavior in VM mode and emitted standalone Bash.
 
 **Out of scope:**
 
-- Determined by the milestone spec written when this version is started.
+- No heredoc or here-string syntax; v0.19 triple-quoted strings remain the
+  preferred multi-line literal surface for now.
+- No regex captures as values, replacement, splitting, runtime regex strings, or
+  full PCRE compatibility.
+- No range values, reverse ranges, stepped ranges, half-open ranges, or slices.
+- No membership over maps, ranges, regexes, command results, or arbitrary
+  iterables.
 
 ---
 

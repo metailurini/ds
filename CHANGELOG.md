@@ -1,3 +1,11 @@
+# v0.23.0 - Regex, Ranges, and Membership (planned)
+
+Planned:
+- Add kind-aware `in` membership checks for scalar arrays.
+- Add inclusive integer range loop sources with `for n in start..end`.
+- Add conservative regex literals and `matches` expressions with VM/Bash parity.
+- Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
+
 # v0.22.0 - Process Control and Signal Handling (planned)
 
 Planned:
