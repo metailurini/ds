@@ -1,3 +1,11 @@
+# v0.21.0 - Function Values and Arithmetic (planned)
+
+Planned:
+- Add `return expr` for scalar value-returning functions.
+- Allow user-defined function calls in expression positions.
+- Add integer arithmetic operators `*`, `/`, `%`, `**` and compound assignments `*=`, `/=`, `%=`.
+- Preserve VM/Bash parity and standalone Bash emission for the scoped value-result model.
+
 # v0.20.0 - Cleanup: Wave 2 Stabilization
 
 - Stabilized Wave 2 lowering by tracking known array element kinds for array
