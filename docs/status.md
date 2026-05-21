@@ -1,9 +1,9 @@
 # Current Status
 
-This document is the user-facing snapshot after `v0.19.0` string methods and formatted output for the implementation and test pass, plus the
-implementation-only `v0.20.0` Wave 2 stabilization cleanup. It is
-not a replacement for the roadmap or language catalog; it summarizes what users
-can rely on today and what is still deliberately deferred.
+This document is the user-facing snapshot after `v0.19.0` string methods and formatted output and after the completed `v0.20.0` Wave 2 stabilization cleanup
+implementation and test pass. It is not a replacement for the roadmap or
+language catalog; it summarizes what users can rely on today and what is still
+deliberately deferred.
 
 ## Command support
 
@@ -35,7 +35,7 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented through the
-`v0.20.0` cleanup pass:
+`v0.20.0` cleanup/test pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -193,10 +193,7 @@ arguments. This means values indexed out of known string arrays, such as
 `"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
 parity and emitted helper coverage.
 
-Because function parameters remain untyped until the function-value wave, string
-methods and formatted interpolation require a statically known compatible value
-kind; unknown-kind parameters are rejected by `ds check` instead of drifting
-between VM runtime checks and Bash shell-string coercion.
+Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body; required unknown-kind parameters are rejected by `ds check` instead of drifting between VM runtime checks and Bash shell-string coercion.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 and array-loop lowering model remain the safe pieces to build on. The next

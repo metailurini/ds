@@ -518,6 +518,13 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE: {
             LoopPatch *loop = current_loop(p);
+            if (stmt->kind == DS_LOWER_STMT_BREAK && loop && p->instrs[loop->start].op == OP_FOR_ARRAY) {
+                Instr reset = {0};
+                reset.op = OP_RESET_FOR;
+                reset.span = stmt->span;
+                reset.target = (int)loop->start;
+                emit_instr(p, reset);
+            }
             Instr jump = {0};
             jump.op = OP_JUMP_POP;
             jump.span = stmt->span;

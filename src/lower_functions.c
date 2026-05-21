@@ -54,6 +54,7 @@ void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram
             SymKind default_kind = SYM_UNKNOWN;
             out.has_default = true;
             out.default_value = lower_expr(lower, param->default_value, &default_kind);
+            out.default_kind = lower_value_kind_from_sym(default_kind);
         } else {
             if (seen_default) {
                 ds_diag_error(lower->diag, param->span,
@@ -149,7 +150,17 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     lower->scope = &local;
     lower->loop_depth = 0;
     for (size_t i = 0; i < fn->params.len; i++) {
-        scope_define(lower, &local, fn->params.items[i].name, SYM_UNKNOWN, fn->params.items[i].span);
+        SymKind kind = SYM_UNKNOWN;
+        switch (fn->params.items[i].default_kind) {
+            case DS_LOWER_VALUE_BOOL: kind = SYM_BOOL; break;
+            case DS_LOWER_VALUE_INT: kind = SYM_INT; break;
+            case DS_LOWER_VALUE_STRING: kind = SYM_STRING; break;
+            case DS_LOWER_VALUE_COMMAND_RESULT: kind = SYM_COMMAND_RESULT; break;
+            case DS_LOWER_VALUE_ARRAY: kind = SYM_ARRAY; break;
+            case DS_LOWER_VALUE_MAP: kind = SYM_MAP; break;
+            case DS_LOWER_VALUE_UNKNOWN: kind = SYM_UNKNOWN; break;
+        }
+        scope_define(lower, &local, fn->params.items[i].name, kind, fn->params.items[i].span);
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);
     lower->scope = saved;

@@ -9,8 +9,12 @@
   array `for` loop variables with known int/bool/string element kinds.
 - Hardened Bash helper dependency scanning so nested call arguments are scanned
   for run, pipeline, stdlib/string, collection-index, and map helper needs.
-- Documented that dedicated v0.20 tests are intentionally pending for the next
-  test pass because this implementation pass was scoped to code/docs only.
+- Added the dedicated `tests/v0_20/run.sh` suite and wired it into `make test-v0-20`, aggregate `make test`, ASAN, and UBSAN paths.
+- Fixed VM nested `for` loops so lexical `break` resets that loop's iterator state before the loop is re-entered.
+- Inferred static kinds for function parameters with literal defaults, allowing imported/defaulted string parameters to use scoped string methods while leaving untyped required parameters deferred.
+- Covered kind-aware exact `case` matching so mismatched literal kinds fall
+  through without matching in both VM and Bash.
+- Fixed VM integer formatting for large accepted widths such as `1024d` without truncating the formatted value.
 
 # v0.19.0 - String Library and Formatted Output
 

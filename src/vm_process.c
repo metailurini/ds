@@ -90,15 +90,32 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
     if (value->kind != DS_VALUE_INT) { ds_diag_error(vm->diag, span, "numeric format specifier requires an int value"); return false; }
     size_t idx = 0; bool zero = false; int width = 0, prec = -1;
     if (idx < spec_len && spec[idx] == '0') { zero = true; idx++; }
-    if (idx < spec_len && spec[idx] >= '0' && spec[idx] <= '9') { if (!parse_positive_number(spec, spec_len, &idx, &width)) return false; }
-    if (idx < spec_len && spec[idx] == '.') { idx++; if (!parse_positive_number(spec, spec_len, &idx, &prec)) return false; }
+    if (idx < spec_len && spec[idx] >= '0' && spec[idx] <= '9') {
+        if (!parse_positive_number(spec, spec_len, &idx, &width)) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+    }
+    if (idx < spec_len && spec[idx] == '.') {
+        idx++;
+        if (!parse_positive_number(spec, spec_len, &idx, &prec)) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+    }
     if (idx >= spec_len) return false;
     char conv = spec[idx++];
     if (idx != spec_len || !(conv == 'd' || conv == 'f')) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
-    char fmt[32]; char buf[128];
+    char buf[64];
     if (conv == 'd') {
-        snprintf(fmt, sizeof(fmt), zero ? "%%0%dlld" : "%%%dlld", width > 0 ? width : 1);
-        snprintf(buf, sizeof(buf), fmt, (long long)value->as.integer);
+        snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
+        size_t len = strlen(buf);
+        if (width <= (int)len) return ds_string_append_cstr(out, buf);
+        int pad = width - (int)len;
+        if (zero) {
+            if (buf[0] == '-') {
+                ds_string_append_char(out, '-');
+                for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
+                return ds_string_append_cstr(out, buf + 1);
+            }
+            for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
+            return ds_string_append_cstr(out, buf);
+        }
+        for (int i = 0; i < pad; i++) ds_string_append_char(out, ' ');
         return ds_string_append_cstr(out, buf);
     }
     if (prec < 0) prec = 6;

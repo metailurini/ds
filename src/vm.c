@@ -241,6 +241,17 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 ip++;
                 break;
             }
+            case OP_RESET_FOR: {
+                if (ins->target >= 0 && (size_t)ins->target < p.instr_len) {
+                    Instr *for_ins = &p.instrs[ins->target];
+                    if (for_ins->op == OP_FOR_ARRAY) {
+                        for_ins->loop_active = false;
+                        for_ins->loop_index = 0;
+                    }
+                }
+                ip++;
+                break;
+            }
             case OP_ASSERT: {
                 bool truth = false;
                 ds_value_truthy(&vm.regs[ins->a], &truth);
