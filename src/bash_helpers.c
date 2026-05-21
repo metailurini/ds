@@ -122,6 +122,7 @@ const char *ds_bash_string_helpers_source(void) {
         "__ds_string_contains() { local s=\"$1\" sub=\"$2\" i=0 slen=${#2}; if [[ -z \"$sub\" ]]; then printf true; return; fi; while (( i + slen <= ${#s} )); do [[ \"${s:i:slen}\" == \"$sub\" ]] && { printf true; return; }; i=$((i + 1)); done; printf false; }\n"
         "__ds_string_starts_with() { local s=\"$1\" pre=\"$2\"; [[ \"${s:0:${#pre}}\" == \"$pre\" ]] && printf true || printf false; }\n"
         "__ds_string_ends_with() { local s=\"$1\" suf=\"$2\"; if [[ -z \"$suf\" ]]; then printf true; elif [[ \"${s: -${#suf}}\" == \"$suf\" ]]; then printf true; else printf false; fi; }\n"
-        "__ds_string_split() { [[ -n \"$2\" ]] || __ds_error 'split with an empty separator is unsupported in v0.19.0'; local s=\"$1\" sep=\"$2\" start=0 i=0 slen=${#2}; while (( i + slen <= ${#s} )); do if [[ \"${s:i:slen}\" == \"$sep\" ]]; then printf '%s\\n' \"${s:start:i-start}\"; i=$((i + slen)); start=$i; else i=$((i + 1)); fi; done; printf '%s\\n' \"${s:start}\"; }\n\n";
+        "__ds_string_split() { [[ -n \"$2\" ]] || __ds_error 'split with an empty separator is unsupported in v0.19.0'; local s=\"$1\" sep=\"$2\" start=0 i=0 slen=${#2}; while (( i + slen <= ${#s} )); do if [[ \"${s:i:slen}\" == \"$sep\" ]]; then printf '%s\\n' \"${s:start:i-start}\"; i=$((i + slen)); start=$i; else i=$((i + 1)); fi; done; printf '%s\\n' \"${s:start}\"; }\n"
+        "__ds_format_center() { local width=\"$1\" s=\"$2\" pad left right; pad=$((width - ${#s})); (( pad > 0 )) || pad=0; left=$((pad / 2)); right=$((pad - left)); printf '%*s%s%*s' \"$left\" '' \"$s\" \"$right\" ''; }\n\n";
 }
 

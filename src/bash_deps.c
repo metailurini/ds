@@ -40,7 +40,8 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
 
 static bool string_literal_needs_stdlib(DsStr text) {
     if (text.len < 2 || text.data[0] != '"') return false;
-    for (size_t i = 0; i + 5 < text.len; i++) {
+    for (size_t i = 0; i + 2 < text.len; i++) {
+        if (text.data[i] == ':' && text.data[i + 1] == '^') return true;
         if (text.data[i] == ':' && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') return true;
     }
     return false;
@@ -63,6 +64,17 @@ static bool expr_uses_stdlib(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_BINARY: return expr_uses_stdlib(expr->as.binary.left) || expr_uses_stdlib(expr->as.binary.right);
         default: return false;
     }
+}
+
+static bool command_uses_stdlib(const DsCommand *command) {
+    if (!command) return false;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        const DsCommandStage *stage = &command->stages.items[s];
+        for (size_t i = 0; i < stage->words.len; i++) {
+            if (string_literal_needs_stdlib(stage->words.items[i].text)) return true;
+        }
+    }
+    return false;
 }
 
 static bool expr_uses_collection_index(const DsLowerExpr *expr) {
@@ -202,7 +214,7 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_stdlib(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_stdlib(stmt->as.assert_stmt.condition);
-        case DS_LOWER_STMT_CMD: return false;
+        case DS_LOWER_STMT_CMD: return command_uses_stdlib(&stmt->as.cmd_stmt);
     }
     return false;
 }

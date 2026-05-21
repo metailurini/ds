@@ -4,7 +4,10 @@
 - Added formatted interpolation specifiers for string transforms, width/alignment, integer padding, and narrow fixed-decimal integer rendering.
 - Added triple-quoted multi-line string literals.
 - Added `examples/strings.ds`.
-- Tests for v0.19.0 are intentionally not added in this implementation-only pass.
+- Tests for v0.19.0 now cover string methods, formatted interpolation,
+  triple-quoted strings, VM/Bash parity, checker and formatter behavior,
+  generated Bash standalone execution, examples, imports, script args, test
+  blocks, and expected diagnostics for unsupported/deferred forms.
 
 # v0.18.0 - Pipelines
 

@@ -593,7 +593,7 @@ test "explicit failure helpers" {
 
 
 # -----------------------------------------------------------------------------
-# 27. String methods [v0.19.0] [candidate]
+# 27. String methods [v0.19.0] [implemented]
 # -----------------------------------------------------------------------------
 
 # String methods extend the standard string value type. All methods have both
@@ -612,7 +612,7 @@ let ends   = s.ends_with("!  ")
 
 
 # -----------------------------------------------------------------------------
-# 28. String interpolation format specifiers [v0.19.0] [candidate]
+# 28. String interpolation format specifiers [v0.19.0] [implemented]
 # -----------------------------------------------------------------------------
 
 # Format specifiers live inside {} so echo stays the single output primitive.

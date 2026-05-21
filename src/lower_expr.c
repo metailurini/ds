@@ -19,7 +19,7 @@ static bool parse_format_limit(DsStr spec, size_t start, size_t end, size_t *val
 }
 
 static bool is_supported_format_spec(DsStr spec, SymKind kind) {
-    if (spec.len == 0) return true;
+    if (spec.len == 0) return false;
     if ((spec.len == 5 && memcmp(spec.data, "upper", 5) == 0) ||
         (spec.len == 5 && memcmp(spec.data, "lower", 5) == 0) ||
         (spec.len == 4 && memcmp(spec.data, "trim", 4) == 0)) return kind == SYM_STRING;
