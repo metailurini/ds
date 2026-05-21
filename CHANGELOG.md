@@ -5,6 +5,8 @@
   `glob!`.
 - Fixed indexed string-array composition so values like `parts[0]` from a known
   string array can call scoped string methods with VM/Bash parity.
+- Fixed standalone Bash `case` parity for known indexed array selectors and
+  array `for` loop variables with known int/bool/string element kinds.
 - Hardened Bash helper dependency scanning so nested call arguments are scanned
   for run, pipeline, stdlib/string, collection-index, and map helper needs.
 - Documented that dedicated v0.20 tests are intentionally pending for the next

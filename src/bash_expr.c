@@ -153,6 +153,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             return true;
         case DS_LOWER_EXPR_FIELD:
         case DS_LOWER_EXPR_CALL:
+        case DS_LOWER_EXPR_INDEX:
             return emit_value_expr(e, expr, out);
         default:
             ds_diag_error(e->diag, expr->span, "unsupported condition operand for Bash emission");

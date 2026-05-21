@@ -68,6 +68,8 @@ The production runtime supports the language slice implemented through the
   `.contains()`, `.split()`, `.starts_with()`, and `.ends_with()`, including
   known string-array elements from `split`, `lines`, `glob`, and `glob!` when
   those values are indexed or iterated;
+- kind-aware Bash `case` parity for known indexed array values and array `for`
+  loop variables with known string/int/bool element kinds;
 - formatted string interpolation with scoped string/int specifiers and
   triple-quoted multi-line string literals.
 

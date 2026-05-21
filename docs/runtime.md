@@ -778,6 +778,9 @@ kinds for array literals and string-array helpers such as `string.split`,
 `lines`, `glob`, and `glob!`. Indexing one of those arrays can therefore keep a
 known string/int/bool kind for later checks, which lets scoped string methods
 compose with indexed split/line/glob values without relying on runtime coercion
-or Bash-only string behavior. Unknown element kinds remain unknown, and untyped
-function parameters still cannot call string methods until typed parameters or a
-runtime type-tag design is deliberately added.
+or Bash-only string behavior. The same lowered element-kind metadata is carried
+into standalone Bash `case` emission, so known indexed array selectors and array
+`for` loop variables are matched as strings, ints, or bools instead of being
+collapsed to strings. Unknown element kinds remain unknown, and untyped function
+parameters still cannot call string methods until typed parameters or a runtime
+type-tag design is deliberately added.

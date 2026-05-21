@@ -38,6 +38,16 @@ typedef enum {
 
 typedef struct DsLowerExpr DsLowerExpr;
 
+typedef enum {
+    DS_LOWER_VALUE_UNKNOWN,
+    DS_LOWER_VALUE_BOOL,
+    DS_LOWER_VALUE_INT,
+    DS_LOWER_VALUE_STRING,
+    DS_LOWER_VALUE_ARRAY,
+    DS_LOWER_VALUE_MAP,
+    DS_LOWER_VALUE_COMMAND_RESULT
+} DsLowerValueKind;
+
 typedef struct {
     DsLowerExpr **items;
     size_t len;
@@ -69,7 +79,7 @@ struct DsLowerExpr {
         struct { DsStr name; DsLowerExprVec args; } call;
         struct { DsLowerExprVec elements; } array;
         struct { DsLowerMapEntryVec entries; } map;
-        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; } index;
+        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; } index;
     } as;
 };
 
@@ -183,7 +193,7 @@ struct DsLowerStmt {
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
-        struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; } for_stmt;
+        struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; } for_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *body; } while_stmt;
         struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
         struct { DsStr name; DsLowerExpr *value; } push_stmt;

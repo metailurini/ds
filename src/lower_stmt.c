@@ -221,14 +221,15 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             if (!stmt->as.for_stmt.has_value_name && iterable_kind != SYM_ARRAY && iterable_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
             }
+            SymKind element_kind = infer_array_element_kind(lower, out->as.for_stmt.iterable);
+            out->as.for_stmt.element_kind = lower_value_kind_from_sym(element_kind);
             Scope local;
             scope_init(&local, lower->scope);
             Scope *saved = lower->scope;
             int saved_depth = lower->loop_depth;
             lower->loop_depth++;
             lower->scope = &local;
-            scope_define(lower, &local, stmt->as.for_stmt.key_name,
-                         infer_array_element_kind(lower, out->as.for_stmt.iterable), stmt->span);
+            scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
             lower->scope = saved;
             lower->loop_depth = saved_depth;

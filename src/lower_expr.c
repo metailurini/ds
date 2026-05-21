@@ -187,6 +187,22 @@ bool command_result_field_kind(DsStr field, SymKind *kind_out) {
     return false;
 }
 
+DsLowerValueKind lower_value_kind_from_sym(SymKind kind) {
+    switch (kind) {
+        case SYM_BOOL: return DS_LOWER_VALUE_BOOL;
+        case SYM_INT: return DS_LOWER_VALUE_INT;
+        case SYM_STRING: return DS_LOWER_VALUE_STRING;
+        case SYM_COMMAND_RESULT: return DS_LOWER_VALUE_COMMAND_RESULT;
+        case SYM_ARRAY: return DS_LOWER_VALUE_ARRAY;
+        case SYM_MAP: return DS_LOWER_VALUE_MAP;
+        case SYM_FUNCTION:
+        case SYM_TOPLEVEL_PREDECLARED:
+        case SYM_UNKNOWN:
+            return DS_LOWER_VALUE_UNKNOWN;
+    }
+    return DS_LOWER_VALUE_UNKNOWN;
+}
+
 DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind left_kind = SYM_UNKNOWN;
     SymKind right_kind = SYM_UNKNOWN;
@@ -484,7 +500,9 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     if (obj_kind == SYM_ARRAY) {
         out->as.index.object_is_array = true;
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
-        *kind_out = infer_array_element_kind(lower, object);
+        SymKind element_kind = infer_array_element_kind(lower, object);
+        out->as.index.element_kind = lower_value_kind_from_sym(element_kind);
+        *kind_out = element_kind;
     } else if (obj_kind == SYM_MAP) {
         out->as.index.object_is_map = true;
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {

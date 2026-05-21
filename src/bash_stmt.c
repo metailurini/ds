@@ -50,9 +50,32 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
             return "unknown";
         }
         case DS_LOWER_EXPR_INDEX:
+            switch (expr->as.index.element_kind) {
+                case DS_LOWER_VALUE_BOOL: return "bool";
+                case DS_LOWER_VALUE_INT: return "int";
+                case DS_LOWER_VALUE_STRING: return "string";
+                case DS_LOWER_VALUE_ARRAY: return "array";
+                case DS_LOWER_VALUE_MAP: return "map";
+                case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
+                case DS_LOWER_VALUE_UNKNOWN: return "unknown";
+            }
+            return "unknown";
         case DS_LOWER_EXPR_IDENT:
         case DS_LOWER_EXPR_ERROR:
             return "unknown";
+    }
+    return "unknown";
+}
+
+static const char *lower_value_type_name(DsLowerValueKind kind) {
+    switch (kind) {
+        case DS_LOWER_VALUE_BOOL: return "bool";
+        case DS_LOWER_VALUE_INT: return "int";
+        case DS_LOWER_VALUE_STRING: return "string";
+        case DS_LOWER_VALUE_ARRAY: return "array";
+        case DS_LOWER_VALUE_MAP: return "map";
+        case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
+        case DS_LOWER_VALUE_UNKNOWN: return "unknown";
     }
     return "unknown";
 }
@@ -464,7 +487,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             size_t mark = e->symbols.len;
             DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
             symbol_vec_push(&e->symbols, copy);
-            emit_type_assignment(e, stmt->as.for_stmt.name, "string", indent + 1, false);
+            emit_type_assignment(e, stmt->as.for_stmt.name, lower_value_type_name(stmt->as.for_stmt.element_kind), indent + 1, false);
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
             emit_indent(&e->out, indent);
