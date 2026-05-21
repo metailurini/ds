@@ -424,11 +424,17 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             emit_indent(&e->out, indent);
             emit_var_name(&e->out, stmt->as.assign_stmt.name);
-            buf_append(&e->out, "=$(( ");
+            buf_append(&e->out, "=\"$(__ds_int_bin ");
+            const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+" :
+                             (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SUB ? "-" :
+                              (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_MUL ? "*" :
+                               (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_DIV ? "/" : "%")));
+            bash_single_quote(&e->out, op, strlen(op));
+            buf_append(&e->out, " \"$");
             emit_var_name(&e->out, stmt->as.assign_stmt.name);
-            buf_append(&e->out, stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? " + " : " - ");
-            if (!emit_condition_operand(e, stmt->as.assign_stmt.value, &e->out)) return false;
-            buf_append(&e->out, " ))\n");
+            buf_append(&e->out, "\" ");
+            if (!emit_value_expr(e, stmt->as.assign_stmt.value, &e->out)) return false;
+            buf_append(&e->out, ")\"\n");
             emit_type_assignment(e, stmt->as.assign_stmt.name, "int", indent, false);
             buf_append(&e->out, "\n");
             return true;

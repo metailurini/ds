@@ -5,6 +5,48 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool int_add_checked(int64_t a, int64_t b, int64_t *out) {
+    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) return false;
+    *out = a + b;
+    return true;
+}
+
+static bool int_sub_checked(int64_t a, int64_t b, int64_t *out) {
+    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) return false;
+    *out = a - b;
+    return true;
+}
+
+static bool int_mul_checked(int64_t a, int64_t b, int64_t *out) {
+    if (a == 0 || b == 0) { *out = 0; return true; }
+    if (a == -1 && b == INT64_MIN) return false;
+    if (b == -1 && a == INT64_MIN) return false;
+    if (a > 0) {
+        if (b > 0) { if (a > INT64_MAX / b) return false; }
+        else { if (b < INT64_MIN / a) return false; }
+    } else {
+        if (b > 0) { if (a < INT64_MIN / b) return false; }
+        else { if (a < INT64_MAX / b) return false; }
+    }
+    *out = a * b;
+    return true;
+}
+
+static bool int_pow_checked(int64_t base, int64_t exp, int64_t *out) {
+    if (exp < 0) return false;
+    int64_t result = 1;
+    int64_t factor = base;
+    while (exp > 0) {
+        if (exp & 1) {
+            if (!int_mul_checked(result, factor, &result)) return false;
+        }
+        exp >>= 1;
+        if (exp > 0 && !int_mul_checked(factor, factor, &factor)) return false;
+    }
+    *out = result;
+    return true;
+}
+
 static bool ensure_regs(Vm *vm) {
     if (vm->program->next_reg <= 0) vm->program->next_reg = 1;
     vm->regs = (DsValue *)ds_xcalloc((size_t)vm->program->next_reg, sizeof(DsValue));
@@ -77,7 +119,12 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 DsValue *right = &vm.regs[ins->b];
                 if (strcmp(ins->cmp, "+") == 0) {
                     if (left->kind == DS_VALUE_INT && right->kind == DS_VALUE_INT) {
-                        set_reg(&vm, ins->dst, ds_value_int(left->as.integer + right->as.integer));
+                        int64_t out = 0;
+                        if (!int_add_checked(left->as.integer, right->as.integer, &out)) {
+                            ds_diag_error(diag, ins->span, "integer overflow in operator `+`");
+                            rc = 1; goto done;
+                        }
+                        set_reg(&vm, ins->dst, ds_value_int(out));
                     } else if (left->kind == DS_VALUE_STRING && right->kind == DS_VALUE_STRING) {
                         DsString joined;
                         ds_string_init(&joined);
@@ -93,7 +140,12 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                         ds_diag_error(diag, ins->span, "operator `-` requires integer operands");
                         rc = 1; goto done;
                     }
-                    set_reg(&vm, ins->dst, ds_value_int(left->as.integer - right->as.integer));
+                    int64_t out = 0;
+                    if (!int_sub_checked(left->as.integer, right->as.integer, &out)) {
+                        ds_diag_error(diag, ins->span, "integer overflow in operator `-`");
+                        rc = 1; goto done;
+                    }
+                    set_reg(&vm, ins->dst, ds_value_int(out));
                 } else if (strcmp(ins->cmp, "*") == 0 || strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0 || strcmp(ins->cmp, "**") == 0) {
                     if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
                         ds_diag_error(diag, ins->span, "arithmetic operator `%s` requires integer operands", ins->cmp);
@@ -103,14 +155,27 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                         ds_diag_error(diag, ins->span, "division or modulo by zero");
                         rc = 1; goto done;
                     }
-                    if (strcmp(ins->cmp, "*") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer * right->as.integer));
-                    else if (strcmp(ins->cmp, "/") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer / right->as.integer));
+                    if ((strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0) && left->as.integer == INT64_MIN && right->as.integer == -1) {
+                        ds_diag_error(diag, ins->span, "integer overflow in operator `%s`", ins->cmp);
+                        rc = 1; goto done;
+                    }
+                    if (strcmp(ins->cmp, "*") == 0) {
+                        int64_t out = 0;
+                        if (!int_mul_checked(left->as.integer, right->as.integer, &out)) {
+                            ds_diag_error(diag, ins->span, "integer overflow in operator `*`");
+                            rc = 1; goto done;
+                        }
+                        set_reg(&vm, ins->dst, ds_value_int(out));
+                    } else if (strcmp(ins->cmp, "/") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer / right->as.integer));
                     else if (strcmp(ins->cmp, "%") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer % right->as.integer));
                     else {
                         if (right->as.integer < 0) { ds_diag_error(diag, ins->span, "negative exponents are not supported"); rc = 1; goto done; }
-                        int64_t result = 1;
-                        for (int64_t i = 0; i < right->as.integer; i++) result *= left->as.integer;
-                        set_reg(&vm, ins->dst, ds_value_int(result));
+                        int64_t out = 0;
+                        if (!int_pow_checked(left->as.integer, right->as.integer, &out)) {
+                            ds_diag_error(diag, ins->span, "integer overflow in operator `**`");
+                            rc = 1; goto done;
+                        }
+                        set_reg(&vm, ins->dst, ds_value_int(out));
                     }
                 } else {
                     ds_diag_error(diag, ins->span, "unknown binary operator `%s`", ins->cmp ? ins->cmp : "");

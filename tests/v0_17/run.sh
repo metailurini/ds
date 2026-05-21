@@ -141,7 +141,7 @@ assert_contains docs/milestones/v0.17.0-test-plan.md 'Implemented' 'test plan st
 
 # Public command help.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.19.0' 'help reports v0.17.0'
+assert_contains "$TMP/help_top.out" 'ds v0.21.0' 'help reports v0.17.0'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 
 # Token, AST, HIR, and bytecode coverage.
@@ -227,16 +227,13 @@ echo "script={app}:{target}:{force}"
 DS
 assert_vm_bash_with_args reassign_scopes "$FIX/reassign_scopes.ds" 0 $'item=loop\nparam=changed\ncounter=3\nscript=web:prod:false\n' cli --target dev --force
 
-for case_name in unknown index field env mul div mod string_plus bool_plus missing_rhs; do
+for case_name in unknown index field env string_plus bool_plus missing_rhs; do
   file="$FIX/bad_assign_${case_name}.ds"
   case "$case_name" in
     unknown) printf 'unknown = 1\n' >"$file" ;;
     index) printf 'let xs = ["a"]\nxs[0] = "x"\n' >"$file" ;;
     field) printf 'let ports = { api: 3000 }\nports.api = 3001\n' >"$file" ;;
     env) printf 'env.PATH = "bin"\n' >"$file" ;;
-    mul) printf 'let count = 2\ncount *= 2\n' >"$file" ;;
-    div) printf 'let count = 2\ncount /= 2\n' >"$file" ;;
-    mod) printf 'let count = 2\ncount %%= 2\n' >"$file" ;;
     string_plus) printf 'let name = "a"\nname += "b"\n' >"$file" ;;
     bool_plus) printf 'let ok = true\nok += 1\n' >"$file" ;;
     missing_rhs) printf 'let count = 1\ncount +=\n' >"$file" ;;

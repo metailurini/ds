@@ -29,6 +29,54 @@ const char *ds_bash_debug_helpers_source(void) {
         "}\n\n";
 }
 
+const char *ds_bash_int_helpers_source(void) {
+    return
+        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
+        "__ds_int_check() {\n"
+        "  [[ \"$1\" =~ ^[+-]?[0-9]+$ ]] || return 1\n"
+        "  [[ \"$1\" != '+' && \"$1\" != '-' ]] || return 1\n"
+        "  local __ds_abs=\"$1\" __ds_limit=9223372036854775807\n"
+        "  if [[ \"$__ds_abs\" == -* ]]; then __ds_abs=\"${__ds_abs#-}\"; __ds_limit=9223372036854775808; elif [[ \"$__ds_abs\" == +* ]]; then __ds_abs=\"${__ds_abs#+}\"; fi\n"
+        "  while [[ ${#__ds_abs} -gt 1 && \"$__ds_abs\" == 0* ]]; do __ds_abs=\"${__ds_abs#0}\"; done\n"
+        "  [[ ${#__ds_abs} -lt ${#__ds_limit} ]] && return 0\n"
+        "  [[ ${#__ds_abs} -gt ${#__ds_limit} ]] && return 1\n"
+        "  [[ \"$__ds_abs\" < \"$__ds_limit\" || \"$__ds_abs\" == \"$__ds_limit\" ]]\n"
+        "}\n"
+        "__ds_int_overflow() { __ds_error \"integer overflow in operator '$1'\"; }\n"
+        "__ds_int_mul_checked() { local __ds_op_name=\"$1\" __ds_l=\"$2\" __ds_r=\"$3\" __ds_out=0; __ds_out=$((__ds_l * __ds_r)); (( __ds_l != 0 && __ds_out / __ds_l != __ds_r )) && __ds_int_overflow \"$__ds_op_name\"; printf '%s' \"$__ds_out\"; }\n"
+        "__ds_int_bin() {\n"
+        "  local __ds_op=\"$1\" __ds_l=\"$2\" __ds_r=\"$3\" __ds_out=0\n"
+        "  __ds_int_check \"$__ds_l\" && __ds_int_check \"$__ds_r\" || __ds_error \"integer arithmetic received a non-int operand\"\n"
+        "  case \"$__ds_op\" in\n"
+        "    '+') __ds_out=$((__ds_l + __ds_r)); (( (__ds_r > 0 && __ds_out < __ds_l) || (__ds_r < 0 && __ds_out > __ds_l) )) && __ds_int_overflow '+' ;;\n"
+        "    '-') __ds_out=$((__ds_l - __ds_r)); (( (__ds_r < 0 && __ds_out < __ds_l) || (__ds_r > 0 && __ds_out > __ds_l) )) && __ds_int_overflow '-' ;;\n"
+        "    '*') __ds_out=$(__ds_int_mul_checked '*' \"$__ds_l\" \"$__ds_r\") || exit $? ;;\n"
+        "    '/') (( __ds_r != 0 )) || __ds_error 'division or modulo by zero'; (( __ds_l == (-9223372036854775807 - 1) && __ds_r == -1 )) && __ds_int_overflow '/'; __ds_out=$((__ds_l / __ds_r)) ;;\n"
+        "    '%') (( __ds_r != 0 )) || __ds_error 'division or modulo by zero'; (( __ds_l == (-9223372036854775807 - 1) && __ds_r == -1 )) && __ds_int_overflow '%'; __ds_out=$((__ds_l % __ds_r)) ;;\n"
+        "    '**') (( __ds_r >= 0 )) || __ds_error 'negative exponents are not supported'; local __ds_base=\"$__ds_l\"; __ds_out=1; while (( __ds_r > 0 )); do if (( __ds_r & 1 )); then __ds_out=$(__ds_int_mul_checked '**' \"$__ds_out\" \"$__ds_base\") || exit $?; fi; __ds_r=$((__ds_r / 2)); if (( __ds_r > 0 )); then __ds_base=$(__ds_int_mul_checked '**' \"$__ds_base\" \"$__ds_base\") || exit $?; fi; done ;;\n"
+        "    *) __ds_error \"unknown integer operator '$__ds_op'\" ;;\n"
+        "  esac\n"
+        "  printf '%s' \"$__ds_out\"\n"
+        "}\n"
+        "__ds_int_neg() { __ds_int_bin '-' 0 \"$1\"; }\n"
+        "__ds_call_value() {\n"
+        "  local __ds_fn=\"$1\" __ds_tmpdir __ds_stdout __ds_stderr __ds_code __ds_data\n"
+        "  shift\n"
+        "  __ds_return=\n"
+        "  __ds_tmpdir=$(mktemp -d) || __ds_error 'failed to create function capture temp dir'\n"
+        "  __ds_stdout=\"$__ds_tmpdir/stdout\"\n"
+        "  __ds_stderr=\"$__ds_tmpdir/stderr\"\n"
+        "  set +e\n"
+        "  \"$__ds_fn\" \"$@\" >\"$__ds_stdout\" 2>\"$__ds_stderr\"\n"
+        "  __ds_code=$?\n"
+        "  set -e\n"
+        "  if (( __ds_code != 0 )); then cat \"$__ds_stderr\" >&2; rm -rf \"$__ds_tmpdir\"; exit \"$__ds_code\"; fi\n"
+        "  if [[ -s \"$__ds_stdout\" ]]; then cat \"$__ds_stdout\" >&2; rm -rf \"$__ds_tmpdir\"; __ds_error 'value-returning function produced stdout during expression capture'; fi\n"
+        "  printf '%s' \"$__ds_return\"\n"
+        "  rm -rf \"$__ds_tmpdir\"\n"
+        "}\n\n";
+}
+
 const char *ds_bash_command_result_helpers_source(void) {
     return
         "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"

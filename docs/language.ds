@@ -298,6 +298,11 @@ fn deploy_default(target = "staging") {
 # }
 
 # Scalar return values are part of the v0.21.0 implementation surface.
+# Value-returning functions may call other value-returning functions declared
+# later in the same composed program when the return kind is statically known.
+# They reject plain command statements so VM execution and emitted Bash cannot
+# confuse user stdout with the scalar return transport; use captured `run`
+# expressions inside value functions when command output is needed.
 
 fn to_upper(s = "hello") {
   return s.upper()

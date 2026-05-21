@@ -416,7 +416,7 @@ write_fixture "$FIX/bad_call_value.ds" <<'DS'
 fn deploy() {}
 let result = deploy()
 DS
-assert_diag call_value "$FIX/bad_call_value.ds" 'function calls do not produce values in v0.9.0'
+assert_diag call_value "$FIX/bad_call_value.ds" 'does not return a value'
 
 write_fixture "$FIX/bad_function_as_variable.ds" <<'DS'
 fn deploy() {}

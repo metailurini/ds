@@ -12,24 +12,9 @@ static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
-static bool emit_arith_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
-    if (expr->kind == DS_LOWER_EXPR_BINARY && (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-") || str_eq(expr->as.binary.op, "*") || str_eq(expr->as.binary.op, "/") || str_eq(expr->as.binary.op, "%") || str_eq(expr->as.binary.op, "**"))) {
-        buf_append(out, "( ");
-        if (!emit_arith_operand(e, expr->as.binary.left, out)) return false;
-        buf_append(out, " ");
-        buf_append_len(out, expr->as.binary.op.data, expr->as.binary.op.len);
-        buf_append(out, " ");
-        if (!emit_arith_operand(e, expr->as.binary.right, out)) return false;
-        buf_append(out, " )");
-        return true;
-    }
-    if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "-")) {
-        buf_append(out, "-( ");
-        if (!emit_arith_operand(e, expr->as.unary.right, out)) return false;
-        buf_append(out, " )");
-        return true;
-    }
-    return emit_condition_operand(e, expr, out);
+static bool is_int_binary_op(DsStr op) {
+    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
+           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
 }
 
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
@@ -90,10 +75,10 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         case DS_LOWER_EXPR_CALL:
             if (expr->as.call.is_user_function) {
-                buf_append(out, "\"$(");
+                buf_append(out, "\"$(__ds_call_value ");
                 emit_fn_name(out, expr->as.call.name);
                 if (!emit_call_args(e, &expr->as.call.args, out)) return false;
-                buf_append(out, "; printf '%s' \"$__ds_return\")\"");
+                buf_append(out, ")\"");
                 return true;
             }
             if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name)) {
@@ -106,17 +91,26 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_BINARY:
-            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-") || str_eq(expr->as.binary.op, "*") || str_eq(expr->as.binary.op, "/") || str_eq(expr->as.binary.op, "%") || str_eq(expr->as.binary.op, "**")) {
-                buf_append(out, "$(( ");
-                if (!emit_arith_operand(e, expr->as.binary.left, out)) return false;
+            if (is_int_binary_op(expr->as.binary.op)) {
+                buf_append(out, "\"$(__ds_int_bin ");
+                bash_single_quote(out, expr->as.binary.op.data, expr->as.binary.op.len);
                 buf_append(out, " ");
-                buf_append_len(out, expr->as.binary.op.data, expr->as.binary.op.len);
+                if (!emit_value_expr(e, expr->as.binary.left, out)) return false;
                 buf_append(out, " ");
-                if (!emit_arith_operand(e, expr->as.binary.right, out)) return false;
-                buf_append(out, " ))");
+                if (!emit_value_expr(e, expr->as.binary.right, out)) return false;
+                buf_append(out, ")\"");
                 return true;
             }
             ds_diag_error(e->diag, expr->span, "unsupported binary value expression for Bash emission in v0.17.0");
+            return false;
+        case DS_LOWER_EXPR_UNARY:
+            if (str_eq(expr->as.unary.op, "-")) {
+                buf_append(out, "\"$(__ds_int_neg ");
+                if (!emit_value_expr(e, expr->as.unary.right, out)) return false;
+                buf_append(out, ")\"");
+                return true;
+            }
+            ds_diag_error(e->diag, expr->span, "unsupported unary value expression for Bash emission in v0.21.0");
             return false;
         default:
             ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");

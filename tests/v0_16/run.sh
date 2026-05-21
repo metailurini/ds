@@ -122,7 +122,7 @@ assert_contains README.md 'keeps comment-preserving formatting deferred' 'README
 
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.19.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.21.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 write_fixture "$FIX/usage_side_effect.ds" <<'DS'
 touch SHOULD_NOT_EXIST
@@ -565,14 +565,13 @@ for pair in \
 done
 
 unsupported_cases=(
-  'return_value|fn f() { return 1 }|function return values are deferred'
   'unknown_string_method|let x = "a".regex_replace("a", "b")|unknown string method'
   'regex_matches|if "a" matches "a" { echo "yes" }|expected `{` after if condition'
   'membership_in|if "a" in ["a"] { echo "yes" }|expected `{` after if condition'
   'direct_env|echo env.PATH|unknown command variable `env`'
   'map_iteration|for k in { a: 1 } { echo $k }|expected iterable expression after `in`'
   'nested_collection|let xs = [[1]]|nested collections are deferred'
-  'bash_if|if [ -f foo ]; then echo yes; fi|expected expression'
+  'bash_if|if [ -f foo ]; then echo yes; fi|expected `]` to close array literal'
   'raw_fd_redir|echo hi 2>&1|unsupported command operator `>`'
 )
 for pair in "${unsupported_cases[@]}"; do

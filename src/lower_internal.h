@@ -91,6 +91,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt);
 
 void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram *program);
 void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt);
+void infer_function_return_signatures(Lower *lower, const DsAst *ast);
 bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index, bool *seen, DsSpan *cycle_span);
 void reject_recursive_functions(Lower *lower);
 void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt);

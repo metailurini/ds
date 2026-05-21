@@ -153,12 +153,6 @@ milestones:
 
 - recursive-call semantics;
 - collection/command-result function returns and typed return annotations;
-- full return-kind inference for forward function-value calls inside earlier
-  function bodies;
-- overflow hardening for integer arithmetic; current VM/Bash behavior follows
-  the existing signed integer runtime behavior instead of reporting overflow;
-- expression-style Bash calls to value-returning functions whose bodies also
-  write arbitrary command stdout; keep value functions stdout-free for parity;
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;
@@ -209,13 +203,18 @@ arguments. This means values indexed out of known string arrays, such as
 `"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
 parity and emitted helper coverage.
 
-`v0.21.0` adds the implementation path for scalar function return values and
+`v0.21.0` adds the implementation path for scalar function `return` values and
 integer arithmetic: `return expr` inside functions, function calls as supported
 value expressions, `*`, `/`, `%`, `**`, unary `-`, and integer `*=`, `/=`, `%=`
 compound assignments. Functions used as values must have explicit compatible
-scalar returns on all statically-known paths. Statement-style calls may still
-ignore returned values. The scoped test-plan implementation remains for a later
-pass because the current request explicitly excluded tests.
+scalar returns on all statically-known paths, including supported forward calls
+to later value-returning functions. The VM and emitted Bash diagnose checked
+integer overflow instead of silently wrapping. Value-returning functions reject
+plain command statements so expression-style calls cannot collide with the
+return transport through arbitrary stdout; use captured `run` expressions inside
+value functions instead. Statement-style calls may still ignore returned values.
+The scoped test-plan implementation remains for a later pass because the current
+request explicitly excluded tests.
 
 Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag when a literal default is used so defaulted parameters can participate in kind-aware `case` matching. Required unknown-kind parameters and explicit runtime argument kind propagation remain deferred instead of drifting between VM runtime checks and Bash shell-string coercion.
 

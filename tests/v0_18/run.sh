@@ -208,7 +208,7 @@ assert_not_contains src/bash_stmt.c '__ds_capture_eval' 'Bash capture does not u
 assert_contains docs/milestones/v0.18.0-spec.md 'Implementation and tests complete' 'v0.18 spec records implementation completion'
 assert_contains docs/milestones/v0.18.0-spec.md 'whole-pipeline redirection' 'v0.18 spec records whole-pipeline redirection'
 assert_contains docs/milestones/v0.18.0-test-plan.md 'tests/v0_18/run.sh' 'v0.18 test plan names suite'
-assert_contains docs/status.md 'after `v0.19.0`' 'status identifies current pipeline/string state'
+assert_contains docs/status.md 'v0.21.0' 'status identifies current pipeline/string state'
 assert_contains docs/status.md 'captured `run` pipelines' 'status documents captured pipelines'
 assert_contains docs/status.md 'pipefail-style' 'status documents pipefail'
 assert_contains docs/status.md 'advanced pipeline forms remain' 'status keeps advanced forms deferred'
@@ -219,7 +219,7 @@ assert_contains CHANGELOG.md 'v0.18.0' 'changelog mentions v0.18.0'
 assert_contains examples/pipeline.ds 'run printf' 'pipeline example has captured run pipeline'
 
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.19.0' 'help reports v0.18.0'
+assert_contains "$TMP/help_top.out" 'ds v0.21.0' 'help reports v0.18.0'
 
 # Lexer/parser/token tests.
 write_fixture "$FIX/tokens.ds" <<'DS'

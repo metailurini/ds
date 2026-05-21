@@ -191,6 +191,10 @@ static void emit_debug_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_debug_helpers_source());
 }
 
+static void emit_int_helpers(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_int_helpers_source());
+}
+
 bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered, const char *output_path, DsDiag *diag) {
     BashEmitter e;
     memset(&e, 0, sizeof(e));
@@ -205,6 +209,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_collection_helpers = program_uses_collection_index(lowered);
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_debug = program_has_command(lowered);
+    bool needs_int_helpers = program_uses_int_helpers(lowered);
     if (needs_map_guard || needs_stdlib) {
         buf_append(&e.out, "if (( BASH_VERSINFO[0] < 4 )); then\n");
         if (needs_map_guard) buf_append(&e.out, "  echo \"${0##*/}: error: v0.10.0 maps require Bash 4 or newer\" >&2\n");
@@ -225,6 +230,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     }
 
     emit_script_args(&e, lowered);
+    if (needs_int_helpers) emit_int_helpers(&e);
     if (needs_debug) emit_debug_helpers(&e);
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
     if (needs_collection_helpers) emit_collection_helpers(&e);

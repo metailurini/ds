@@ -14,13 +14,23 @@ Planned:
 - Add lower-level `trap "SIGNAL" { ... }` for the scoped `EXIT`/`INT`/`TERM` signal set.
 - Preserve standalone Bash emission, cleanup final-status rules, imports, script args, and handler diagnostics for the supported subset.
 
-# v0.21.0 - Function Values and Arithmetic (planned)
+# v0.21.0 - Function Values and Arithmetic
 
-Planned:
-- Add `return expr` for scalar value-returning functions.
-- Allow user-defined function calls in expression positions.
-- Add integer arithmetic operators `*`, `/`, `%`, `**` and compound assignments `*=`, `/=`, `%=`.
-- Preserve VM/Bash parity and standalone Bash emission for the scoped value-result model.
+- Added `return expr` for scalar value-returning functions.
+- Allowed user-defined function calls in expression positions when all known
+  paths return a compatible scalar value, including supported forward calls to
+  later scalar-returning functions.
+- Added checked integer arithmetic operators `*`, `/`, `%`, `**`, unary `-`, and
+  compound assignments `*=`, `/=`, `%=` in both the VM and emitted Bash.
+- Added integer overflow diagnostics instead of silent VM/Bash wrapping for the
+  scoped arithmetic operators and rejected out-of-range integer literals during
+  lowering.
+- Preserved standalone Bash emission for value-returning functions with a
+  conservative stdout safety rule: scalar-returning functions reject plain
+  command statements, and expression capture reports accidental stdout as an
+  error.
+- Left the dedicated `v0.21.0` test suite pending because the implementation
+  request explicitly excluded new tests.
 
 # v0.20.0 - Cleanup: Wave 2 Stabilization
 

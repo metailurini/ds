@@ -142,13 +142,16 @@ assert_not_contains "$TMP/run_strings.out" '^bad$' "runtime did not execute comm
 cat >"$TMP/ints.ds" <<'EOF_DS'
 let zero = 0
 let positive = 42
-let large = 12345678901234567890
 EOF_DS
 run_ok emit_ints "$DS" emit bash "$TMP/ints.ds" -o "$TMP/ints.sh"
 assert_contains "$TMP/ints.sh" '__ds_zero=0' "integer zero emitted"
 assert_contains "$TMP/ints.sh" '__ds_positive=42' "integer positive emitted"
-assert_contains "$TMP/ints.sh" '__ds_large=12345678901234567890' "integer large emitted"
 run_ok bash_syntax_ints bash -n "$TMP/ints.sh"
+cat >"$TMP/int_too_large.ds" <<'EOF_DS'
+let large = 12345678901234567890
+EOF_DS
+run_fail emit_int_too_large "$DS" emit bash "$TMP/int_too_large.ds" -o "$TMP/int_too_large.sh"
+assert_contains "$TMP/emit_int_too_large.err" 'integer literal is outside the supported int range' "integer literal range diagnostic"
 
 # Interpolation positions and multiple variables.
 cat >"$TMP/interp_positions.ds" <<'EOF_DS'

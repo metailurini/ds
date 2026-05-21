@@ -165,7 +165,7 @@ assert_contains src/bash_deps.c 'i + 6 < text.len' 'Bash dependency scanner boun
 # Documentation and status checks.
 assert_contains docs/milestones/v0.19.0-spec.md 'Implementation and tests complete' 'v0.19 spec records test completion'
 assert_contains docs/milestones/v0.19.0-test-plan.md 'Implemented' 'v0.19 test plan status records implementation'
-assert_contains docs/status.md 'after `v0.19.0` string methods and formatted output' 'status identifies v0.19 state'
+assert_contains docs/status.md 'v0.21.0' 'status identifies v0.19 state'
 assert_contains docs/status.md 'ASCII string methods' 'status documents string methods'
 assert_contains docs/status.md 'formatted string interpolation' 'status documents formatted interpolation'
 assert_contains README.md 'v0.19.0` implementation and tests are complete' 'README marks v0.19 tests complete'

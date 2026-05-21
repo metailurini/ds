@@ -4,6 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool int_literal_in_range(DsStr text) {
+    static const char max_text[] = "9223372036854775807";
+    size_t start = 0;
+    while (start + 1 < text.len && text.data[start] == '0') start++;
+    size_t len = text.len - start;
+    if (len < sizeof(max_text) - 1) return true;
+    if (len > sizeof(max_text) - 1) return false;
+    return memcmp(text.data + start, max_text, len) <= 0;
+}
+
 static bool parse_format_limit(DsStr spec, size_t start, size_t end, size_t *value) {
     if (start >= end) return false;
     size_t out = 0;
@@ -271,8 +281,11 @@ DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     return out;
 }
 
-DsLowerExpr *lower_int_expr(const DsExpr *expr, SymKind *kind_out) {
+DsLowerExpr *lower_int_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     *kind_out = SYM_INT;
+    if (!int_literal_in_range(expr->as.text)) {
+        ds_diag_error(lower->diag, expr->span, "integer literal is outside the supported int range");
+    }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INT, expr->span);
     out->as.text = str_clone(expr->as.text);
     return out;
@@ -528,6 +541,10 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     if (obj_kind == SYM_ARRAY) {
         out->as.index.object_is_array = true;
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
+        if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.index.index->as.unary.op, "-") &&
+            expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {
+            ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be non-negative in v0.10.0");
+        }
         SymKind element_kind = infer_array_element_kind(lower, object);
         out->as.index.element_kind = lower_value_kind_from_sym(element_kind);
         *kind_out = element_kind;
@@ -561,9 +578,12 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_INT: return SYM_INT;
         case DS_LOWER_EXPR_BOOL: return SYM_BOOL;
         case DS_LOWER_EXPR_RUN: return SYM_COMMAND_RESULT;
-        case DS_LOWER_EXPR_UNARY: return SYM_BOOL;
+        case DS_LOWER_EXPR_UNARY:
+            return lower_str_eq(expr->as.unary.op, "-") ? SYM_INT : SYM_BOOL;
         case DS_LOWER_EXPR_BINARY:
-            if (lower_str_eq(expr->as.binary.op, "+") || lower_str_eq(expr->as.binary.op, "-")) return SYM_INT;
+            if (lower_str_eq(expr->as.binary.op, "+") || lower_str_eq(expr->as.binary.op, "-") ||
+                lower_str_eq(expr->as.binary.op, "*") || lower_str_eq(expr->as.binary.op, "/") ||
+                lower_str_eq(expr->as.binary.op, "%") || lower_str_eq(expr->as.binary.op, "**")) return SYM_INT;
             if (lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
                 lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
                 lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) return SYM_BOOL;
@@ -617,7 +637,7 @@ DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
         case DS_EXPR_STRING:
             return lower_string_expr(lower, expr, kind_out);
         case DS_EXPR_INT:
-            return lower_int_expr(expr, kind_out);
+            return lower_int_expr(lower, expr, kind_out);
         case DS_EXPR_BOOL:
             return lower_bool_expr(expr, kind_out);
         case DS_EXPR_RUN:

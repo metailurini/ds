@@ -477,7 +477,7 @@ write_fixture "$FIX/bad_negative_index.ds" <<'DS'
 let services = ["api"]
 let bad = services[-1]
 DS
-assert_diag negative_index "$FIX/bad_negative_index.ds" 'expected expression'
+assert_diag negative_index "$FIX/bad_negative_index.ds" 'array index must be non-negative'
 
 write_fixture "$FIX/bad_duplicate_key_ident.ds" <<'DS'
 let ports = { api: 3000, api: 3001 }
