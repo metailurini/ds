@@ -40,9 +40,12 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
 
 static bool string_literal_needs_stdlib(DsStr text) {
     if (text.len < 2 || text.data[0] != '"') return false;
-    for (size_t i = 0; i + 2 < text.len; i++) {
-        if (text.data[i] == ':' && text.data[i + 1] == '^') return true;
-        if (text.data[i] == ':' && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') return true;
+    for (size_t i = 0; i < text.len; i++) {
+        if (text.data[i] != ':') continue;
+        if (i + 1 < text.len && text.data[i + 1] == '^') return true;
+        if (i + 5 < text.len && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') return true;
+        if (i + 6 < text.len && memcmp(text.data + i + 1, "upper", 5) == 0 && text.data[i + 6] == '}') return true;
+        if (i + 6 < text.len && memcmp(text.data + i + 1, "lower", 5) == 0 && text.data[i + 6] == '}') return true;
     }
     return false;
 }

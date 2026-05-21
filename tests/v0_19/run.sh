@@ -160,6 +160,7 @@ assert_contains src/lexer.c 'triple-quoted string literal' 'lexer diagnoses trip
 assert_contains src/vm_stdlib.c 'helper_is(ins, "string.split")' 'VM has split helper'
 assert_contains src/bash_helpers.c '__ds_string_split' 'Bash has split helper'
 assert_contains src/bash_deps.c 'ds_stdlib_is_name' 'Bash dependency scanner recognizes string stdlib helpers'
+assert_contains src/bash_deps.c 'i + 6 < text.len' 'Bash dependency scanner bounds-checks format-spec probes'
 
 # Documentation and status checks.
 assert_contains docs/milestones/v0.19.0-spec.md 'Implementation and tests complete' 'v0.19 spec records test completion'
@@ -223,6 +224,17 @@ if !s.contains("web") { echo "missing" }
 if s.contains("") { echo "contains-empty" }
 if s.starts_with("") { echo "starts-empty" }
 if s.ends_with("") { echo "ends-empty" }
+let paren = ("  Paren  ").trim().lower()
+echo "paren={paren}"
+let loop_text = "alpha"
+while loop_text.contains("a") {
+  echo "while-predicate"
+  loop_text = "looped"
+}
+case s.contains("api") {
+  true { echo "case-predicate" }
+  _ { echo "case-missing" }
+}
 let parts = "a,,b".split(",")
 for x in parts {
   echo "part=[{x}]"
@@ -258,6 +270,9 @@ missing
 contains-empty
 starts-empty
 ends-empty
+paren=paren
+while-predicate
+case-predicate
 part=[a]
 part=[]
 part=[b]
@@ -339,9 +354,25 @@ DS
 assert_vm_bash_env_parity imports "$FIX/import_main.ds" 0 ''
 assert_same_text 'lib=LIB
 ' "$TMP/imports_vm.out" 'imported string helper output'
-helper_count="$(grep -c '__ds_string_upper' "$TMP/imports.sh" || true)"
+helper_count="$(grep -c '^__ds_string_upper()' "$TMP/imports.sh" || true)"
 [ "$helper_count" = 1 ] || fail "expected upper helper exactly once, got $helper_count"
 pass 'Bash helper emitted once for import fixture'
+assert_contains "$TMP/imports.sh" 'BASH_VERSINFO' 'upper/lower interpolation emits Bash 4 helper guard'
+assert_not_contains "$TMP/imports.sh" '${__ds_lib_name^^}' 'upper interpolation uses guarded helper instead of inline Bash 4 expansion'
+
+write_fixture "$FIX/short_colon_fragments.ds" <<'DS'
+let x = "ok"
+echo ":"
+echo ":t"
+echo ":tr"
+echo ":tri"
+echo ":trim"
+echo "{x:upper}"
+DS
+run_ok short_colon_check "$DS" check "$FIX/short_colon_fragments.ds"
+run_ok short_colon_emit "$DS" emit bash "$FIX/short_colon_fragments.ds" -o "$TMP/short_colon.sh"
+run_ok short_colon_bash_n bash -n "$TMP/short_colon.sh"
+assert_contains "$TMP/short_colon.sh" 'BASH_VERSINFO' 'short colon fragments with upper format still emit helper guard'
 
 write_fixture "$FIX/function_param_rejected.ds" <<'DS'
 fn show(name) {

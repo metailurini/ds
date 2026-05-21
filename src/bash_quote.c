@@ -176,10 +176,10 @@ static bool emit_interpolation_var_quoted(BashEmitter *e, DsStr name, const char
 static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char *field, size_t field_len, const char *spec, size_t spec_len, EmitBuf *out) {
     if (spec_len == 0) return emit_interpolation_var(e, name, field, field_len, out);
     if (spec_len == 5 && memcmp(spec, "upper", 5) == 0) {
-        buf_append(out, "${__ds_"); buf_append_len(out, name.data, name.len); if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); } buf_append(out, "^^}"); return true;
+        buf_append(out, "$(__ds_string_upper "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
     }
     if (spec_len == 5 && memcmp(spec, "lower", 5) == 0) {
-        buf_append(out, "${__ds_"); buf_append_len(out, name.data, name.len); if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); } buf_append(out, ",,}"); return true;
+        buf_append(out, "$(__ds_string_lower "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
     }
     if (spec_len == 4 && memcmp(spec, "trim", 4) == 0) {
         buf_append(out, "$(__ds_string_trim "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;

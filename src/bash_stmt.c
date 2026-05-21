@@ -25,8 +25,19 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
             if (str_eq(expr->as.unary.op, "!")) return "bool";
             return "unknown";
         case DS_LOWER_EXPR_CALL:
-            if (stdlib_returns_array(expr->as.call.name)) return "array";
-            if (ds_stdlib_is_name(expr->as.call.name)) return "string";
+            if (ds_stdlib_is_name(expr->as.call.name)) {
+                const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
+                if (!helper) return "unknown";
+                switch (helper->return_kind) {
+                    case DS_STDLIB_RETURN_BOOL: return "bool";
+                    case DS_STDLIB_RETURN_INT: return "int";
+                    case DS_STDLIB_RETURN_STRING: return "string";
+                    case DS_STDLIB_RETURN_ARRAY: return "array";
+                    case DS_STDLIB_RETURN_MAP: return "map";
+                    case DS_STDLIB_RETURN_COMMAND_RESULT: return "command_result";
+                    case DS_STDLIB_RETURN_STATEMENT_ONLY: return "unknown";
+                }
+            }
             return "unknown";
         case DS_LOWER_EXPR_FIELD: {
             const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
