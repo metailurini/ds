@@ -142,7 +142,15 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
         emit_indent(&e->out, 1);
         buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i);
         emit_var_name(&e->out, param->name);
-        buf_appendf(&e->out, "=\"${%zu}\"; else ", i + 1);
+        buf_appendf(&e->out, "=\"${%zu}\"", i + 1);
+        if (e->needs_case_types) {
+            buf_append(&e->out, "; ");
+            emit_type_var_name(&e->out, param->name);
+            buf_append(&e->out, "=");
+            const char *type = param->has_default ? lower_value_type_name(param->default_kind) : "unknown";
+            bash_single_quote(&e->out, type, strlen(type));
+        }
+        buf_append(&e->out, "; else ");
         emit_var_name(&e->out, param->name);
         buf_append(&e->out, "=");
         if (param->has_default) {

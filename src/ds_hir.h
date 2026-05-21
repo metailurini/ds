@@ -173,6 +173,7 @@ typedef struct {
     DsLowerValueKind return_kind;
     bool has_return;
     bool all_paths_return;
+    bool contains_plain_command;
     DsSpan span;
 } DsLowerFn;
 

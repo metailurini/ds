@@ -370,8 +370,9 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 size_t return_ip = 0;
                 if (vm.return_len == 0) { ds_diag_error(diag, ins->span, "return outside active function"); rc = 1; goto done; }
                 int dst = vm.return_dsts[vm.return_len - 1];
+                VmScope *caller_scope = vm.return_scopes[vm.return_len - 1];
                 DsValue value = ds_value_copy(&vm.regs[ins->a]);
-                vm_pop_scope(&vm);
+                vm_pop_to_scope(&vm, caller_scope);
                 if (!vm_pop_return(&vm, &return_ip)) { ds_value_free(&value); rc = 1; goto done; }
                 if (dst >= 0) set_reg(&vm, dst, value);
                 else ds_value_free(&value);
@@ -380,7 +381,8 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
             }
             case OP_RETURN_FUNC: {
                 size_t return_ip = 0;
-                vm_pop_scope(&vm);
+                VmScope *caller_scope = vm.return_len ? vm.return_scopes[vm.return_len - 1] : NULL;
+                vm_pop_to_scope(&vm, caller_scope);
                 if (!vm_pop_return(&vm, &return_ip)) { rc = 1; goto done; }
                 ip = return_ip;
                 break;
@@ -399,6 +401,7 @@ done:
     free(vm.regs);
     free(vm.return_ips);
     free(vm.return_dsts);
+    free(vm.return_scopes);
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;

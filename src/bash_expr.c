@@ -260,7 +260,8 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         buf_append(out, expr->as.boolean ? "true" : "false");
         return true;
     }
-    if (expr->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(expr->as.call.name)) {
+    if (expr->kind == DS_LOWER_EXPR_CALL &&
+        (ds_stdlib_is_name(expr->as.call.name) || expr->as.call.return_kind == DS_LOWER_VALUE_BOOL)) {
         buf_append(out, "[[ ");
         if (!emit_value_expr(e, expr, out)) return false;
         buf_append(out, " == true ]]");

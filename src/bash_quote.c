@@ -207,6 +207,151 @@ static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char 
     return true;
 }
 
+typedef struct {
+    BashEmitter *e;
+    const char *data;
+    size_t len;
+    size_t pos;
+    DsSpan span;
+} BashArithParser;
+
+static void bash_arith_skip(BashArithParser *p) {
+    while (p->pos < p->len && (p->data[p->pos] == ' ' || p->data[p->pos] == '\t')) p->pos++;
+}
+
+static bool bash_arith_parse_expr(BashArithParser *p, EmitBuf *out);
+
+static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
+    bash_arith_skip(p);
+    if (p->pos >= p->len) return false;
+    char c = p->data[p->pos];
+    if (c == '(') {
+        p->pos++;
+        if (!bash_arith_parse_expr(p, out)) return false;
+        bash_arith_skip(p);
+        if (p->pos >= p->len || p->data[p->pos] != ')') return false;
+        p->pos++;
+        return true;
+    }
+    if (c == '-') {
+        p->pos++;
+        EmitBuf inner = {0};
+        if (!bash_arith_parse_primary(p, &inner)) { free(inner.data); return false; }
+        buf_append(out, "$(__ds_int_neg ");
+        buf_append(out, inner.data ? inner.data : "");
+        buf_append(out, ")");
+        free(inner.data);
+        return true;
+    }
+    if (c >= '0' && c <= '9') {
+        size_t start = p->pos++;
+        while (p->pos < p->len && p->data[p->pos] >= '0' && p->data[p->pos] <= '9') p->pos++;
+        buf_append_len(out, p->data + start, p->pos - start);
+        return true;
+    }
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+        size_t start = p->pos++;
+        while (p->pos < p->len && ((p->data[p->pos] >= 'A' && p->data[p->pos] <= 'Z') || (p->data[p->pos] >= 'a' && p->data[p->pos] <= 'z') || (p->data[p->pos] >= '0' && p->data[p->pos] <= '9') || p->data[p->pos] == '_')) p->pos++;
+        DsStr name = {(char *)p->data + start, p->pos - start};
+        if (!symbol_exists(&p->e->symbols, name)) {
+            ds_diag_error(p->e->diag, p->span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+            return false;
+        }
+        buf_append(out, "\"$");
+        emit_var_name(out, name);
+        buf_append(out, "\"");
+        return true;
+    }
+    return false;
+}
+
+static bool bash_arith_parse_power(BashArithParser *p, EmitBuf *out) {
+    EmitBuf left = {0};
+    if (!bash_arith_parse_primary(p, &left)) return false;
+    bash_arith_skip(p);
+    if (p->pos + 1 < p->len && p->data[p->pos] == '*' && p->data[p->pos + 1] == '*') {
+        p->pos += 2;
+        EmitBuf right = {0};
+        if (!bash_arith_parse_power(p, &right)) { free(left.data); free(right.data); return false; }
+        buf_append(out, "$(__ds_int_bin '**' ");
+        buf_append(out, left.data ? left.data : "");
+        buf_append(out, " ");
+        buf_append(out, right.data ? right.data : "");
+        buf_append(out, ")");
+        free(left.data); free(right.data);
+        return true;
+    }
+    buf_append(out, left.data ? left.data : "");
+    free(left.data);
+    return true;
+}
+
+static bool bash_arith_parse_mul(BashArithParser *p, EmitBuf *out) {
+    EmitBuf acc = {0};
+    if (!bash_arith_parse_power(p, &acc)) return false;
+    for (;;) {
+        bash_arith_skip(p);
+        if (p->pos >= p->len) break;
+        char op = p->data[p->pos];
+        if (!(op == '*' || op == '/' || op == '%')) break;
+        if (op == '*' && p->pos + 1 < p->len && p->data[p->pos + 1] == '*') break;
+        p->pos++;
+        EmitBuf right = {0};
+        if (!bash_arith_parse_power(p, &right)) { free(acc.data); free(right.data); return false; }
+        EmitBuf next = {0};
+        char op_text[2] = {op, 0};
+        buf_append(&next, "$(__ds_int_bin ");
+        bash_single_quote(&next, op_text, 1);
+        buf_append(&next, " ");
+        buf_append(&next, acc.data ? acc.data : "");
+        buf_append(&next, " ");
+        buf_append(&next, right.data ? right.data : "");
+        buf_append(&next, ")");
+        free(acc.data); free(right.data); acc = next;
+    }
+    buf_append(out, acc.data ? acc.data : "");
+    free(acc.data);
+    return true;
+}
+
+static bool bash_arith_parse_expr(BashArithParser *p, EmitBuf *out) {
+    EmitBuf acc = {0};
+    if (!bash_arith_parse_mul(p, &acc)) return false;
+    for (;;) {
+        bash_arith_skip(p);
+        if (p->pos >= p->len) break;
+        char op = p->data[p->pos];
+        if (!(op == '+' || op == '-')) break;
+        p->pos++;
+        EmitBuf right = {0};
+        if (!bash_arith_parse_mul(p, &right)) { free(acc.data); free(right.data); return false; }
+        EmitBuf next = {0};
+        char op_text[2] = {op, 0};
+        buf_append(&next, "$(__ds_int_bin ");
+        bash_single_quote(&next, op_text, 1);
+        buf_append(&next, " ");
+        buf_append(&next, acc.data ? acc.data : "");
+        buf_append(&next, " ");
+        buf_append(&next, right.data ? right.data : "");
+        buf_append(&next, ")");
+        free(acc.data); free(right.data); acc = next;
+    }
+    buf_append(out, acc.data ? acc.data : "");
+    free(acc.data);
+    return true;
+}
+
+static bool emit_arithmetic_interpolation(BashEmitter *e, const char *data, size_t len, DsSpan span, EmitBuf *out) {
+    BashArithParser p = {.e = e, .data = data, .len = len, .span = span};
+    EmitBuf expr = {0};
+    if (!bash_arith_parse_expr(&p, &expr)) { free(expr.data); return false; }
+    bash_arith_skip(&p);
+    if (p.pos != len) { free(expr.data); return false; }
+    buf_append(out, expr.data ? expr.data : "");
+    free(expr.data);
+    return true;
+}
+
 bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     char *decoded = NULL;
     size_t len = 0;
@@ -252,6 +397,12 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                     i = j;
                     continue;
                 }
+            }
+            size_t arith_end = start;
+            while (arith_end < len && decoded[arith_end] != '}') arith_end++;
+            if (arith_end < len && emit_arithmetic_interpolation(e, decoded + start, arith_end - start, expr->span, out)) {
+                i = arith_end;
+                continue;
             }
             ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
             free(decoded);

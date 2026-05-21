@@ -73,6 +73,8 @@ void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm);
 DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span);
 bool command_result_field_kind(DsStr field, SymKind *kind_out);
 DsLowerValueKind lower_value_kind_from_sym(SymKind kind);
+SymKind sym_kind_from_lower_value_kind(DsLowerValueKind kind);
+void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExprVec *args, const SymKind *arg_kinds);
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr);
 SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr);

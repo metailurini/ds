@@ -558,13 +558,8 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);
     fn->all_paths_return = stmt_all_paths_return(fn->body);
-    if (fn->has_return) {
-        DsSpan command_span = fn->span;
-        if (stmt_contains_plain_command(fn->body, &command_span)) {
-            ds_diag_error(lower->diag, command_span,
-                          "value-returning functions cannot contain plain command statements in v0.21.0; capture command output with `run` or move stdout-producing commands outside the function");
-        }
-    }
+    DsSpan command_span = fn->span;
+    fn->contains_plain_command = stmt_contains_plain_command(fn->body, &command_span);
     lower->scope = saved;
     lower->loop_depth = saved_depth;
     lower->function_depth = saved_fn_depth;

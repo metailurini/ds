@@ -58,7 +58,12 @@ const char *ds_bash_int_helpers_source(void) {
         "  esac\n"
         "  printf '%s' \"$__ds_out\"\n"
         "}\n"
-        "__ds_int_neg() { __ds_int_bin '-' 0 \"$1\"; }\n"
+        "__ds_int_neg() { __ds_int_bin '-' 0 \"$1\"; }\n\n";
+}
+
+const char *ds_bash_function_value_helpers_source(void) {
+    return
+        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_call_value() {\n"
         "  local __ds_fn=\"$1\" __ds_tmpdir __ds_stdout __ds_stderr __ds_code __ds_data\n"
         "  shift\n"

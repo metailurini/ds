@@ -671,8 +671,24 @@ does not accidentally coerce unlike ds literal kinds. The same tags are also
 used when an emitted `if` or `while` condition is a scalar variable whose ds
 truthiness would otherwise differ from a raw shell string test.
 Selectors whose scalar kind is still unknown after lowering are rejected in this
-milestone; later function-return/type work can relax that once the HIR carries
-complete runtime value-kind metadata through calls and collection iteration.
+milestone. The v0.21.0 function-value work extends that metadata through scalar
+function returns and through explicit arguments validated against defaulted
+parameter kinds, so emitted Bash keeps kind-aware `case` parity for the supported
+function-call forms.
+
+The v0.21.0 runtime value-return path transports scalar `string`, `int`, and
+`bool` results out of user functions. VM execution stores the returned value in
+the caller; standalone Bash uses `__ds_return` plus an expression-capture helper
+that rejects unexpected stdout from value-style calls. Plain command statements
+inside value-returning functions are therefore rejected; captured `run`
+expressions remain the supported way to use command results inside functions.
+Integer arithmetic uses the same signed 64-bit contract in both backends: `*`,
+`/`, `%`, `**`, unary `-`, and compound integer updates diagnose division by
+zero, negative exponents, out-of-range integer literals, and overflow instead of
+silently wrapping. Expression-backed interpolation supports scalar function
+calls; command-word interpolation supports legacy variable/field interpolation
+and integer arithmetic, while direct function calls in command words must be
+bound first.
 
 ## Testing strategy
 

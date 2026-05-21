@@ -297,12 +297,14 @@ fn deploy_default(target = "staging") {
 #   docker compose restart $service
 # }
 
-# Scalar return values are part of the v0.21.0 implementation surface.
+# Scalar `return expr` values are part of the v0.21.0 implementation surface.
 # Value-returning functions may call other value-returning functions declared
 # later in the same composed program when the return kind is statically known.
-# They reject plain command statements so VM execution and emitted Bash cannot
-# confuse user stdout with the scalar return transport; use captured `run`
-# expressions inside value functions when command output is needed.
+# Functions called as expression values reject plain command statements so VM
+# execution and emitted Bash cannot confuse user stdout with the scalar return
+# transport. Statement-style calls may still stream stdout and ignore the scalar
+# return. Use captured `run` expressions inside value functions when command
+# output should participate in the returned value.
 
 fn to_upper(s = "hello") {
   return s.upper()

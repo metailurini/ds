@@ -1,9 +1,8 @@
 # Current Status
 
 This document is the user-facing snapshot after the completed `v0.20.0` Wave 2
-stabilization cleanup implementation and test pass, plus the `v0.21.0`
-implementation-only function-value/arithmetic pass. The `v0.21.0` scoped tests
-are intentionally not added yet in the current implementation pass. It is not a replacement for the roadmap or
+stabilization cleanup pass and the completed `v0.21.0` function-value/arithmetic
+implementation and test pass. It is not a replacement for the roadmap or
 language catalog; it summarizes what users can rely on today and what is still
 deliberately deferred.
 
@@ -141,6 +140,7 @@ The current examples are the public tour of implemented behavior:
 - `examples/strings.ds`
 - `examples/stdlib.ds`
 - `examples/vm.ds`
+- `examples/function-values.ds`
 - `examples/bad.ds` for an intentionally invalid diagnostic example
 
 Use `ds check`, `ds run`, direct script execution, `ds test` where applicable,
@@ -209,19 +209,22 @@ value expressions, `*`, `/`, `%`, `**`, unary `-`, and integer `*=`, `/=`, `%=`
 compound assignments. Functions used as values must have explicit compatible
 scalar returns on all statically-known paths, including supported forward calls
 to later value-returning functions. The VM and emitted Bash diagnose checked
-integer overflow instead of silently wrapping. Value-returning functions reject
-plain command statements so expression-style calls cannot collide with the
-return transport through arbitrary stdout; use captured `run` expressions inside
-value functions instead. Expression-backed string interpolation can include
-scalar value-returning calls; command-word interpolation remains the legacy
-text-only interpolation path and now emits a targeted diagnostic telling callers
-to bind the string expression first. Statement-style calls may still ignore
-returned values. `examples/function-values.ds` shows the supported return,
-arithmetic, and expression interpolation path.
-The scoped test-plan implementation remains for a later pass because the current
-request explicitly excluded tests.
+integer overflow instead of silently wrapping. Functions called as expression
+values reject plain command statements so expression-style calls cannot collide
+with the return transport through arbitrary stdout; statement-style calls may
+still stream stdout and ignore returned scalar values. Use captured `run`
+expressions inside value functions when command output should participate in the
+returned value. Expression-backed string interpolation can include
+scalar value-returning calls. Command-word interpolation supports the legacy
+`{name}`/`{name.field}` forms plus integer arithmetic expressions; direct
+function-call interpolation in command words still emits a targeted diagnostic
+telling callers to bind the string expression first. Statement-style calls may
+still ignore returned values. `examples/function-values.ds` shows the supported
+return, arithmetic, and expression interpolation path.
+The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
+diagnostic, formatting, example, and generated-Bash boundary behavior.
 
-Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag when a literal default is used so defaulted parameters can participate in kind-aware `case` matching. Required unknown-kind parameters and explicit runtime argument kind propagation remain deferred instead of drifting between VM runtime checks and Bash shell-string coercion.
+Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag for both defaulted and explicit arguments that are validated against the default kind, so defaulted parameters can participate in kind-aware `case` matching without VM/Bash coercion drift. Required unknown-kind parameters remain unknown until typed parameters or a broader runtime type-tag design is deliberately added.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 array-loop lowering model, and scalar return transport are the safe pieces to

@@ -120,6 +120,7 @@ typedef struct {
     size_t return_len;
     size_t return_cap;
     int *return_dsts;
+    VmScope **return_scopes;
 } Vm;
 
 void program_free(Program *p);
@@ -137,6 +138,7 @@ void scope_free_chain(VmScope *scope);
 void vm_push_scope(Vm *vm);
 void vm_pop_scope(Vm *vm);
 bool vm_pop_return(Vm *vm, size_t *out);
+void vm_pop_to_scope(Vm *vm, VmScope *target);
 bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip);
 bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span);
 DsValue *lookup_var_ref(Vm *vm, const char *name);

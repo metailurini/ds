@@ -76,6 +76,7 @@ bool program_uses_collection_index(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);
 bool program_uses_case(const DsLowerProgram *program);
 bool program_uses_int_helpers(const DsLowerProgram *program);
+bool program_uses_function_value_helpers(const DsLowerProgram *program);
 
 bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent);
 bool emit_function(BashEmitter *e, const DsLowerFn *fn);

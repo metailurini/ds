@@ -147,6 +147,30 @@ static bool int_binary_op(DsStr op) {
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
 }
 
+static bool word_has_arith_interp(DsStr word) {
+    if (word.len < 4 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
+    for (size_t i = 1; i + 1 < word.len; i++) {
+        if (word.data[i] != '{') continue;
+        size_t j = i + 1;
+        bool saw_op = false;
+        while (j + 1 < word.len && word.data[j] != '}') {
+            char c = word.data[j++];
+            if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '(' || c == ')') saw_op = true;
+        }
+        if (j + 1 < word.len && word.data[j] == '}' && saw_op) return true;
+    }
+    return false;
+}
+
+static bool command_uses_int_helpers(const DsCommand *command) {
+    for (size_t s = 0; s < command->stages.len; s++) {
+        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
+            if (word_has_arith_interp(command->stages.items[s].words.items[i].text)) return true;
+        }
+    }
+    return word_has_arith_interp(command->redirect.target);
+}
+
 static bool expr_uses_int_helpers(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
@@ -155,7 +179,6 @@ static bool expr_uses_int_helpers(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_UNARY:
             return str_eq(expr->as.unary.op, "-") || expr_uses_int_helpers(expr->as.unary.right);
         case DS_LOWER_EXPR_CALL:
-            if (expr->as.call.is_user_function) return true;
             for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_int_helpers(expr->as.call.args.items[i])) return true;
             return false;
         case DS_LOWER_EXPR_FIELD: return expr_uses_int_helpers(expr->as.field.object);
@@ -171,6 +194,31 @@ static bool expr_uses_int_helpers(const DsLowerExpr *expr) {
             return false;
         default:
             return false;
+    }
+}
+
+static bool expr_uses_function_value_helpers(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_CALL:
+            if (expr->as.call.is_user_function) return true;
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_function_value_helpers(expr->as.call.args.items[i])) return true;
+            return false;
+        case DS_LOWER_EXPR_BINARY:
+            return expr_uses_function_value_helpers(expr->as.binary.left) || expr_uses_function_value_helpers(expr->as.binary.right);
+        case DS_LOWER_EXPR_UNARY: return expr_uses_function_value_helpers(expr->as.unary.right);
+        case DS_LOWER_EXPR_FIELD: return expr_uses_function_value_helpers(expr->as.field.object);
+        case DS_LOWER_EXPR_INDEX: return expr_uses_function_value_helpers(expr->as.index.object) || expr_uses_function_value_helpers(expr->as.index.index);
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_function_value_helpers(expr->as.array.elements.items[i])) return true;
+            return false;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_function_value_helpers(expr->as.map.entries.items[i].value)) return true;
+            return false;
+        case DS_LOWER_EXPR_INTERP:
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_function_value_helpers(expr->as.interp.parts.items[i])) return true;
+            return false;
+        default: return false;
     }
 }
 
@@ -219,7 +267,7 @@ static bool stmt_uses_pipeline_run(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_pipeline_run(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_pipeline_run(stmt->as.assert_stmt.condition);
-        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CMD: return false;
         case DS_LOWER_STMT_CALL:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
@@ -396,7 +444,7 @@ static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_int_helpers(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_int_helpers(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_int_helpers(stmt->as.return_stmt.value);
-        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CMD: return command_uses_int_helpers(&stmt->as.cmd_stmt);
         case DS_LOWER_STMT_CALL:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
@@ -408,6 +456,40 @@ static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
 bool program_uses_int_helpers(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_int_helpers(program->functions.items[i].body)) return true;
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_int_helpers(program->statements.items[i])) return true;
+    return false;
+}
+
+static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET: return expr_uses_function_value_helpers(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return expr_uses_function_value_helpers(stmt->as.assign_stmt.value);
+        case DS_LOWER_STMT_IF:
+            return expr_uses_function_value_helpers(stmt->as.if_stmt.condition) || stmt_uses_function_value_helpers(stmt->as.if_stmt.then_branch) || stmt_uses_function_value_helpers(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_function_value_helpers(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY: return expr_uses_function_value_helpers(stmt->as.for_stmt.iterable) || stmt_uses_function_value_helpers(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_uses_function_value_helpers(stmt->as.while_stmt.condition) || stmt_uses_function_value_helpers(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            if (expr_uses_function_value_helpers(stmt->as.case_stmt.selector)) return true;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_function_value_helpers(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_PUSH: return expr_uses_function_value_helpers(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return expr_uses_function_value_helpers(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return expr_uses_function_value_helpers(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+            return false;
+    }
+    return false;
+}
+
+bool program_uses_function_value_helpers(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_function_value_helpers(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_function_value_helpers(program->statements.items[i])) return true;
     return false;
 }
 

@@ -26,11 +26,14 @@ Planned:
   scoped arithmetic operators and rejected out-of-range integer literals during
   lowering.
 - Preserved standalone Bash emission for value-returning functions with a
-  conservative stdout safety rule: scalar-returning functions reject plain
-  command statements, and expression capture reports accidental stdout as an
-  error.
-- Left the dedicated `v0.21.0` test suite pending because the implementation
-  request explicitly excluded new tests.
+  conservative stdout safety rule: expression-value calls reject functions that
+  contain plain command statements, while statement-style calls may stream stdout
+  and ignore the scalar return.
+- Added expression-backed interpolation coverage for scalar calls and arithmetic,
+  including command-word arithmetic interpolation while keeping direct
+  command-word function calls on the bind-first diagnostic path.
+- Added the dedicated `tests/v0_21/run.sh` suite and wired it into aggregate,
+  ASAN, and UBSAN test targets.
 
 # v0.20.0 - Cleanup: Wave 2 Stabilization
 

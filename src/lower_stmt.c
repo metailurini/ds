@@ -40,9 +40,11 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
                           (int)fn->name.len, fn->name.data, fn->required_count, fn->params.len, stmt->as.call_stmt.args.len);
         }
     }
+    SymKind *arg_kinds = stmt->as.call_stmt.args.len ? (SymKind *)ds_xcalloc(stmt->as.call_stmt.args.len, sizeof(SymKind)) : NULL;
     for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
         SymKind arg_kind = SYM_UNKNOWN;
         lower_expr_vec_push(&out->as.call_stmt.args, lower_expr(lower, stmt->as.call_stmt.args.items[i], &arg_kind));
+        arg_kinds[i] = arg_kind;
         if (stdlib && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
             ds_diag_error(lower->diag, stmt->as.call_stmt.args.items[i]->span, "standard-library helper `%.*s` expects string arguments in v0.11.0", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
         } else if (arg_kind == SYM_ARRAY || arg_kind == SYM_MAP) {
@@ -57,6 +59,8 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
             free(decoded.data);
         }
     }
+    if (fn) validate_user_call_arg_kinds(lower, fn, &stmt->as.call_stmt.args, arg_kinds);
+    free(arg_kinds);
     if (stdlib && stmt->as.call_stmt.args.len > 0) validate_glob_pattern_arg(lower, stmt->as.call_stmt.name, stmt->as.call_stmt.args.items[0]);
     return out;
 }
