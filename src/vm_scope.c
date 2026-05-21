@@ -41,8 +41,11 @@ static void vm_push_return(Vm *vm, size_t ip) {
     if (vm->return_len == vm->return_cap) {
         vm->return_cap = vm->return_cap ? vm->return_cap * 2 : 8;
         vm->return_ips = (size_t *)ds_xrealloc(vm->return_ips, vm->return_cap * sizeof(size_t));
+        vm->return_dsts = (int *)ds_xrealloc(vm->return_dsts, vm->return_cap * sizeof(int));
     }
-    vm->return_ips[vm->return_len++] = ip;
+    vm->return_ips[vm->return_len] = ip;
+    vm->return_dsts[vm->return_len] = -1;
+    vm->return_len++;
 }
 
 bool vm_pop_return(Vm *vm, size_t *out) {
@@ -72,6 +75,7 @@ bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
     }
     vm->scope = scope;
     vm_push_return(vm, next_ip);
+    vm->return_dsts[vm->return_len - 1] = ins->dst;
     *target_ip = fn->target;
     return true;
 }

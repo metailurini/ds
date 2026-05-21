@@ -149,6 +149,7 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_run(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_run(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return expr_uses_run(stmt->as.return_stmt.value);
     }
     return false;
 }
@@ -176,6 +177,8 @@ static bool stmt_uses_pipeline_run(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
             return false;
+        case DS_LOWER_STMT_RETURN:
+            return expr_uses_pipeline_run(stmt->as.return_stmt.value);
     }
     return false;
 }
@@ -201,6 +204,8 @@ static bool stmt_has_command(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE:
         case DS_LOWER_STMT_ASSERT:
             return false;
+        case DS_LOWER_STMT_RETURN:
+            return expr_uses_run(stmt->as.return_stmt.value);
     }
     return false;
 }
@@ -232,6 +237,7 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_stdlib(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_stdlib(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return expr_uses_stdlib(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_CMD: return command_uses_stdlib(&stmt->as.cmd_stmt);
     }
     return false;
@@ -257,6 +263,7 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_collection_index(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_collection_index(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return expr_uses_collection_index(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
             return false;
@@ -284,6 +291,7 @@ static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE: return false;
         case DS_LOWER_STMT_PUSH: return expr_uses_map_literal(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_map_literal(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return expr_uses_map_literal(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
             return false;
@@ -347,6 +355,7 @@ static bool stmt_uses_case(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_CONTINUE:
         case DS_LOWER_STMT_PUSH:
         case DS_LOWER_STMT_ASSERT:
+        case DS_LOWER_STMT_RETURN:
             return false;
     }
     return false;

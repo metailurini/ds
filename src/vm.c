@@ -94,6 +94,24 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                         rc = 1; goto done;
                     }
                     set_reg(&vm, ins->dst, ds_value_int(left->as.integer - right->as.integer));
+                } else if (strcmp(ins->cmp, "*") == 0 || strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0 || strcmp(ins->cmp, "**") == 0) {
+                    if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                        ds_diag_error(diag, ins->span, "arithmetic operator `%s` requires integer operands", ins->cmp);
+                        rc = 1; goto done;
+                    }
+                    if ((strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0) && right->as.integer == 0) {
+                        ds_diag_error(diag, ins->span, "division or modulo by zero");
+                        rc = 1; goto done;
+                    }
+                    if (strcmp(ins->cmp, "*") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer * right->as.integer));
+                    else if (strcmp(ins->cmp, "/") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer / right->as.integer));
+                    else if (strcmp(ins->cmp, "%") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer % right->as.integer));
+                    else {
+                        if (right->as.integer < 0) { ds_diag_error(diag, ins->span, "negative exponents are not supported"); rc = 1; goto done; }
+                        int64_t result = 1;
+                        for (int64_t i = 0; i < right->as.integer; i++) result *= left->as.integer;
+                        set_reg(&vm, ins->dst, ds_value_int(result));
+                    }
                 } else {
                     ds_diag_error(diag, ins->span, "unknown binary operator `%s`", ins->cmp ? ins->cmp : "");
                     rc = 1; goto done;
@@ -270,6 +288,18 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 ip++;
                 break;
             }
+            case OP_RETURN_VALUE: {
+                size_t return_ip = 0;
+                if (vm.return_len == 0) { ds_diag_error(diag, ins->span, "return outside active function"); rc = 1; goto done; }
+                int dst = vm.return_dsts[vm.return_len - 1];
+                DsValue value = ds_value_copy(&vm.regs[ins->a]);
+                vm_pop_scope(&vm);
+                if (!vm_pop_return(&vm, &return_ip)) { ds_value_free(&value); rc = 1; goto done; }
+                if (dst >= 0) set_reg(&vm, dst, value);
+                else ds_value_free(&value);
+                ip = return_ip;
+                break;
+            }
             case OP_RETURN_FUNC: {
                 size_t return_ip = 0;
                 vm_pop_scope(&vm);
@@ -290,6 +320,7 @@ done:
     for (int i = 0; i < p.next_reg; i++) ds_value_free(&vm.regs[i]);
     free(vm.regs);
     free(vm.return_ips);
+    free(vm.return_dsts);
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;

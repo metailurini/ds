@@ -10,6 +10,8 @@ bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
     return true;
 }
 
+static const char *lower_value_type_name(DsLowerValueKind kind);
+
 static const char *expr_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING: return "string";
@@ -19,10 +21,11 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_MAP: return "map";
         case DS_LOWER_EXPR_RUN: return "command_result";
         case DS_LOWER_EXPR_BINARY:
-            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-")) return "int";
+            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-") || str_eq(expr->as.binary.op, "*") || str_eq(expr->as.binary.op, "/") || str_eq(expr->as.binary.op, "%") || str_eq(expr->as.binary.op, "**")) return "int";
             return "bool";
         case DS_LOWER_EXPR_UNARY:
             if (str_eq(expr->as.unary.op, "!")) return "bool";
+            if (str_eq(expr->as.unary.op, "-")) return "int";
             return "unknown";
         case DS_LOWER_EXPR_CALL:
             if (ds_stdlib_is_name(expr->as.call.name)) {
@@ -38,6 +41,7 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
                     case DS_STDLIB_RETURN_STATEMENT_ONLY: return "unknown";
                 }
             }
+            return lower_value_type_name(expr->as.call.return_kind);
             return "unknown";
         case DS_LOWER_EXPR_FIELD: {
             const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
@@ -576,6 +580,14 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_ASSERT:
             ds_diag_error(e->diag, stmt->span, "assert statements are only emitted by the test runner in v0.14.0");
             return false;
+        case DS_LOWER_STMT_RETURN:
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "__ds_return=");
+            if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;
+            buf_append(&e->out, "\n");
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "return 0\n\n");
+            return true;
     }
     return true;
 }

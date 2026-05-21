@@ -69,7 +69,8 @@ static int expr_prec(const DsExpr *expr) {
             if ((expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '>' || expr->as.binary.op.data[0] == '<')) ||
                 (expr->as.binary.op.len == 2 && (memcmp(expr->as.binary.op.data, ">=", 2) == 0 || memcmp(expr->as.binary.op.data, "<=", 2) == 0))) return 2;
             if (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-')) return 3;
-            if (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/')) return 4;
+            if (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) return 4;
+            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "**", 2) == 0) return 5;
             return 1;
         case DS_EXPR_UNARY: return 5;
         case DS_EXPR_FIELD:
@@ -240,7 +241,11 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             break;
         case DS_STMT_ASSIGN:
             append_str(fmt, stmt->as.assign_stmt.name);
-            append_cstr(fmt, stmt->as.assign_stmt.op == DS_ASSIGN_ADD ? " += " : (stmt->as.assign_stmt.op == DS_ASSIGN_SUB ? " -= " : " = "));
+            append_cstr(fmt, stmt->as.assign_stmt.op == DS_ASSIGN_ADD ? " += " :
+                             (stmt->as.assign_stmt.op == DS_ASSIGN_SUB ? " -= " :
+                              (stmt->as.assign_stmt.op == DS_ASSIGN_MUL ? " *= " :
+                               (stmt->as.assign_stmt.op == DS_ASSIGN_DIV ? " /= " :
+                                (stmt->as.assign_stmt.op == DS_ASSIGN_MOD ? " %= " : " = ")))));
             format_expr(fmt, stmt->as.assign_stmt.value);
             append_cstr(fmt, "\n");
             break;
@@ -345,6 +350,11 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             format_expr(fmt, stmt->as.assert_stmt.condition);
             append_cstr(fmt, "\n");
             break;
+        case DS_STMT_RETURN:
+            append_cstr(fmt, "return ");
+            format_expr(fmt, stmt->as.return_stmt.value);
+            append_cstr(fmt, "\n");
+            break;
     }
 }
 
@@ -363,7 +373,8 @@ static int top_stmt_group(const DsStmt *stmt) {
         case DS_STMT_CMD:
         case DS_STMT_CALL:
         case DS_STMT_PUSH:
-        case DS_STMT_ASSERT: return 2;
+        case DS_STMT_ASSERT:
+        case DS_STMT_RETURN: return 2;
         case DS_STMT_IF:
         case DS_STMT_FOR:
         case DS_STMT_WHILE:

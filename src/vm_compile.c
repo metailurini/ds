@@ -281,10 +281,24 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             int right = compile_expr(p, expr->as.unary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            ins.op = OP_NOT;
+            if (expr->as.unary.op.len == 1 && expr->as.unary.op.data[0] == '-') {
+                int zero = new_reg(p);
+                Instr load = {0};
+                load.op = OP_LOAD_CONST;
+                load.span = expr->span;
+                load.dst = zero;
+                load.a = add_const(p, ds_value_int(0));
+                emit_instr(p, load);
+                ins.op = OP_BINARY;
+                ins.b = right;
+                ins.cmp = ds_str_dup_range("-", 1);
+                ins.a = zero;
+            } else {
+                ins.op = OP_NOT;
+                ins.a = right;
+            }
             ins.span = expr->span;
             ins.dst = r;
-            ins.a = right;
             emit_instr(p, ins);
             return r;
         }
@@ -293,7 +307,8 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             int right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-')) ? OP_BINARY : OP_COMPARE;
+            ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-' || expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) ||
+                     (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "**", 2) == 0) ? OP_BINARY : OP_COMPARE;
             ins.span = expr->span;
             ins.dst = r;
             ins.a = left;
@@ -349,10 +364,12 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
         {
             int r = new_reg(p);
             Instr ins = {0};
-            ins.op = OP_STDLIB_CALL;
+            int fn_index = find_function_meta(p, expr->as.call.name);
+            ins.op = fn_index >= 0 ? OP_CALL : OP_STDLIB_CALL;
             ins.span = expr->span;
             ins.dst = r;
-            ins.name = ds_str_dup_range(expr->as.call.name.data, expr->as.call.name.len);
+            ins.target = fn_index;
+            if (fn_index < 0) ins.name = ds_str_dup_range(expr->as.call.name.data, expr->as.call.name.len);
             ins.arg_count = expr->as.call.args.len;
             ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
             for (size_t i = 0; i < expr->as.call.args.len; i++) ins.args[i] = compile_expr(p, expr->as.call.args.items[i]);
@@ -417,8 +434,11 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                 bin.dst = src;
                 bin.a = left;
                 bin.b = right;
-                const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+" : "-";
-                bin.cmp = ds_str_dup_range(op, 1);
+                const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+" :
+                                 (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SUB ? "-" :
+                                  (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_MUL ? "*" :
+                                   (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_DIV ? "/" : "%")));
+                bin.cmp = ds_str_dup_range(op, strlen(op));
                 emit_instr(p, bin);
             }
             Instr ins = {0};
@@ -632,6 +652,15 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             ins.op = OP_ASSERT;
             ins.span = stmt->span;
             ins.a = cond;
+            emit_instr(p, ins);
+            break;
+        }
+        case DS_LOWER_STMT_RETURN: {
+            int value = compile_expr(p, stmt->as.return_stmt.value);
+            Instr ins = {0};
+            ins.op = OP_RETURN_VALUE;
+            ins.span = stmt->span;
+            ins.a = value;
             emit_instr(p, ins);
             break;
         }

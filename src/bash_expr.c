@@ -12,6 +12,26 @@ static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
+static bool emit_arith_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    if (expr->kind == DS_LOWER_EXPR_BINARY && (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-") || str_eq(expr->as.binary.op, "*") || str_eq(expr->as.binary.op, "/") || str_eq(expr->as.binary.op, "%") || str_eq(expr->as.binary.op, "**"))) {
+        buf_append(out, "( ");
+        if (!emit_arith_operand(e, expr->as.binary.left, out)) return false;
+        buf_append(out, " ");
+        buf_append_len(out, expr->as.binary.op.data, expr->as.binary.op.len);
+        buf_append(out, " ");
+        if (!emit_arith_operand(e, expr->as.binary.right, out)) return false;
+        buf_append(out, " )");
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "-")) {
+        buf_append(out, "-( ");
+        if (!emit_arith_operand(e, expr->as.unary.right, out)) return false;
+        buf_append(out, " )");
+        return true;
+    }
+    return emit_condition_operand(e, expr, out);
+}
+
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
@@ -69,6 +89,13 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_CALL:
+            if (expr->as.call.is_user_function) {
+                buf_append(out, "\"$(");
+                emit_fn_name(out, expr->as.call.name);
+                if (!emit_call_args(e, &expr->as.call.args, out)) return false;
+                buf_append(out, "; printf '%s' \"$__ds_return\")\"");
+                return true;
+            }
             if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name)) {
                 ds_diag_error(e->diag, expr->span, "unsupported standard-library value expression for Bash emission in v0.11.0");
                 return false;
@@ -79,11 +106,13 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_BINARY:
-            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-")) {
+            if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-") || str_eq(expr->as.binary.op, "*") || str_eq(expr->as.binary.op, "/") || str_eq(expr->as.binary.op, "%") || str_eq(expr->as.binary.op, "**")) {
                 buf_append(out, "$(( ");
-                if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
-                buf_append(out, str_eq(expr->as.binary.op, "+") ? " + " : " - ");
-                if (!emit_condition_operand(e, expr->as.binary.right, out)) return false;
+                if (!emit_arith_operand(e, expr->as.binary.left, out)) return false;
+                buf_append(out, " ");
+                buf_append_len(out, expr->as.binary.op.data, expr->as.binary.op.len);
+                buf_append(out, " ");
+                if (!emit_arith_operand(e, expr->as.binary.right, out)) return false;
                 buf_append(out, " ))");
                 return true;
             }
@@ -154,6 +183,8 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_FIELD:
         case DS_LOWER_EXPR_CALL:
         case DS_LOWER_EXPR_INDEX:
+        case DS_LOWER_EXPR_BINARY:
+        case DS_LOWER_EXPR_UNARY:
             return emit_value_expr(e, expr, out);
         default:
             ds_diag_error(e->diag, expr->span, "unsupported condition operand for Bash emission");

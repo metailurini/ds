@@ -111,6 +111,9 @@ void lower_stmt_free(DsLowerStmt *stmt) {
         case DS_LOWER_STMT_ASSERT:
             lower_expr_free(stmt->as.assert_stmt.condition);
             break;
+        case DS_LOWER_STMT_RETURN:
+            lower_expr_free(stmt->as.return_stmt.value);
+            break;
     }
     free(stmt);
 }

@@ -40,6 +40,8 @@ typedef struct {
     Scope *scope;
     DsLowerProgram *program;
     int loop_depth;
+    int function_depth;
+    DsLowerFn *current_function;
 } Lower;
 
 bool lower_str_eq(DsStr a, const char *b);

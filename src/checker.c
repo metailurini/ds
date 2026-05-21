@@ -314,6 +314,9 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
         case DS_STMT_ASSERT:
             check_expr(c, stmt->as.assert_stmt.condition);
             break;
+        case DS_STMT_RETURN:
+            check_expr(c, stmt->as.return_stmt.value);
+            break;
     }
 }
 

@@ -1,7 +1,9 @@
 # Current Status
 
-This document is the user-facing snapshot after `v0.19.0` string methods and formatted output and after the completed `v0.20.0` Wave 2 stabilization cleanup
-implementation and test pass. It is not a replacement for the roadmap or
+This document is the user-facing snapshot after the completed `v0.20.0` Wave 2
+stabilization cleanup implementation and test pass, plus the `v0.21.0`
+implementation-only function-value/arithmetic pass. The `v0.21.0` scoped tests
+are intentionally not added yet in the current implementation pass. It is not a replacement for the roadmap or
 language catalog; it summarizes what users can rely on today and what is still
 deliberately deferred.
 
@@ -35,7 +37,7 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented through the
-`v0.20.0` cleanup/test pass:
+`v0.21.0` implementation pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -51,10 +53,17 @@ The production runtime supports the language slice implemented through the
   `!>>`, `&>`, and `&>>`;
 - top-level `fn` declarations with positional parameters and trailing literal
   defaults;
-- statement-style function calls;
+- statement-style function calls and scalar value-returning function calls in
+  expressions;
+- `return expr` inside function bodies for scalar string/int/bool values, with
+  conservative same-kind/all-paths validation before a function can be used as a
+  value;
 - array literals, map literals with string-like keys, array/map access, array
   `push`, and array `for` loops;
-- scalar reassignment with `name = expr` plus integer `+=` and `-=` updates;
+- scalar reassignment with `name = expr` plus integer `+=`, `-=`, `*=`, `/=`, and
+  `%=` updates;
+- integer arithmetic `+`, `-`, `*`, `/`, `%`, `**`, and unary `-` in supported
+  value expressions;
 - `while` loops with normal expression conditions;
 - lexical `break` and `continue` inside `for` and `while` loops;
 - expression-style `case selector { ... }`, for example `case target { ... }`,
@@ -142,7 +151,14 @@ and `ds emit bash` to inspect parity. Bash output is intended to be standalone.
 The following remain intentionally unsupported or backend-limited until later
 milestones:
 
-- function return values (`return`; function `return`) and recursive-call semantics;
+- recursive-call semantics;
+- collection/command-result function returns and typed return annotations;
+- full return-kind inference for forward function-value calls inside earlier
+  function bodies;
+- overflow hardening for integer arithmetic; current VM/Bash behavior follows
+  the existing signed integer runtime behavior instead of reporting overflow;
+- expression-style Bash calls to value-returning functions whose bodies also
+  write arbitrary command stdout; keep value functions stdout-free for parity;
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;
@@ -193,11 +209,19 @@ arguments. This means values indexed out of known string arrays, such as
 `"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
 parity and emitted helper coverage.
 
+`v0.21.0` adds the implementation path for scalar function return values and
+integer arithmetic: `return expr` inside functions, function calls as supported
+value expressions, `*`, `/`, `%`, `**`, unary `-`, and integer `*=`, `/=`, `%=`
+compound assignments. Functions used as values must have explicit compatible
+scalar returns on all statically-known paths. Statement-style calls may still
+ignore returned values. The scoped test-plan implementation remains for a later
+pass because the current request explicitly excluded tests.
+
 Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag when a literal default is used so defaulted parameters can participate in kind-aware `case` matching. Required unknown-kind parameters and explicit runtime argument kind propagation remain deferred instead of drifting between VM runtime checks and Bash shell-string coercion.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
-and array-loop lowering model remain the safe pieces to build on. The next
-planned feature wave starts with `v0.21.0` function return values.
-Function return values, map iteration, nested collections, formatter trivia
-preservation, warning suppression, logical shell operators, and advanced pipeline forms remain
+array-loop lowering model, and scalar return transport are the safe pieces to
+build on. The next planned feature wave starts with `v0.22.0` process-control
+cleanup. Map iteration, nested collections, formatter trivia preservation,
+warning suppression, logical shell operators, and advanced pipeline forms remain
 out of scope unless their own milestones explicitly pull them in.

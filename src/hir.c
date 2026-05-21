@@ -184,7 +184,15 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.let_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_ASSIGN: {
-            const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+=" : (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SUB ? "-=" : "=");
+            const char *op = "=";
+            switch (stmt->as.assign_stmt.op) {
+                case DS_LOWER_ASSIGN_SET: op = "="; break;
+                case DS_LOWER_ASSIGN_ADD: op = "+="; break;
+                case DS_LOWER_ASSIGN_SUB: op = "-="; break;
+                case DS_LOWER_ASSIGN_MUL: op = "*="; break;
+                case DS_LOWER_ASSIGN_DIV: op = "/="; break;
+                case DS_LOWER_ASSIGN_MOD: op = "%="; break;
+            }
             fprintf(out, "Assign "); print_str(out, stmt->as.assign_stmt.name); fprintf(out, " %s", op); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.assign_stmt.value, level + 1);
             break;
@@ -253,6 +261,10 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
         case DS_LOWER_STMT_ASSERT:
             fputs("Assert", out); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.assert_stmt.condition, level + 1);
+            break;
+        case DS_LOWER_STMT_RETURN:
+            fputs("Return", out); print_span(out, stmt->span); fputc('\n', out);
+            dump_expr(out, stmt->as.return_stmt.value, level + 1);
             break;
     }
 }

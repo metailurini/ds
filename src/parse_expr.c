@@ -11,7 +11,9 @@ static int precedence(DsTokenKind kind) {
         case DS_TOK_PLUS:
         case DS_TOK_MINUS: return 3;
         case DS_TOK_STAR:
-        case DS_TOK_SLASH: return 4;
+        case DS_TOK_SLASH:
+        case DS_TOK_PERCENT: return 4;
+        case DS_TOK_STAR_STAR: return 5;
         default: return 0;
     }
 }
@@ -224,7 +226,7 @@ static DsExpr *parse_postfix(Parser *p) {
 }
 
 static DsExpr *parse_unary(Parser *p) {
-    if (parser_advance_if(p, DS_TOK_BANG)) {
+    if (parser_advance_if(p, DS_TOK_BANG) || parser_advance_if(p, DS_TOK_MINUS)) {
         DsToken *op = parser_previous(p);
         DsExpr *right = parse_unary(p);
         DsExpr *expr = parser_new_expr(DS_EXPR_UNARY, (DsSpan){op->span.start, right ? right->span.end : op->span.end, op->span.source});
@@ -244,7 +246,7 @@ static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
         if (prec < min_prec || prec == 0) break;
 
         DsToken *op = parser_advance(p);
-        DsExpr *right = parse_expr_prec(p, prec + 1);
+        DsExpr *right = parse_expr_prec(p, op_kind == DS_TOK_STAR_STAR ? prec : prec + 1);
         DsSpan span = {left ? left->span.start : op->span.start, right ? right->span.end : op->span.end, left ? left->span.source : op->span.source};
         DsExpr *binary = parser_new_expr(DS_EXPR_BINARY, span);
         binary->as.binary.left = left;

@@ -32,6 +32,7 @@ typedef enum {
     OP_FOR_ARRAY,
     OP_RESET_FOR,
     OP_ASSERT,
+    OP_RETURN_VALUE,
     OP_RETURN_FUNC,
     OP_RETURN,
     OP_NOP
@@ -117,6 +118,7 @@ typedef struct {
     size_t *return_ips;
     size_t return_len;
     size_t return_cap;
+    int *return_dsts;
 } Vm;
 
 void program_free(Program *p);

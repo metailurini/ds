@@ -76,7 +76,7 @@ struct DsLowerExpr {
         struct { DsLowerExpr *object; DsStr field; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
-        struct { DsStr name; DsLowerExprVec args; } call;
+        struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; } call;
         struct { DsLowerExprVec elements; } array;
         struct { DsLowerMapEntryVec entries; } map;
         struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; } index;
@@ -97,6 +97,7 @@ typedef enum {
     DS_LOWER_STMT_CASE,
     DS_LOWER_STMT_PUSH,
     DS_LOWER_STMT_ASSERT
+    ,DS_LOWER_STMT_RETURN
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
@@ -104,7 +105,10 @@ typedef struct DsLowerStmt DsLowerStmt;
 typedef enum {
     DS_LOWER_ASSIGN_SET,
     DS_LOWER_ASSIGN_ADD,
-    DS_LOWER_ASSIGN_SUB
+    DS_LOWER_ASSIGN_SUB,
+    DS_LOWER_ASSIGN_MUL,
+    DS_LOWER_ASSIGN_DIV,
+    DS_LOWER_ASSIGN_MOD
 } DsLowerAssignOp;
 
 typedef enum {
@@ -164,6 +168,9 @@ typedef struct {
     DsLowerFnParamVec params;
     DsLowerStmt *body;
     size_t required_count;
+    DsLowerValueKind return_kind;
+    bool has_return;
+    bool all_paths_return;
     DsSpan span;
 } DsLowerFn;
 
@@ -199,6 +206,7 @@ struct DsLowerStmt {
         struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
         struct { DsStr name; DsLowerExpr *value; } push_stmt;
         struct { DsLowerExpr *condition; } assert_stmt;
+        struct { DsLowerExpr *value; } return_stmt;
         DsCommand cmd_stmt;
     } as;
 };

@@ -44,7 +44,9 @@ DsStmt *parse_fn(Parser *p, bool top_level) {
     }
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function parameters")) return stmt;
     if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after function declaration")) return stmt;
+    p->function_depth++;
     stmt->as.fn_stmt.body = parse_block(p);
+    p->function_depth--;
     stmt->span = (DsSpan){start->span.start, stmt->as.fn_stmt.body ? stmt->as.fn_stmt.body->span.end : parser_previous(p)->span.end, start->span.source};
     parser_consume_statement_end(p);
     return stmt;

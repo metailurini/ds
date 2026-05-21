@@ -222,9 +222,11 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         else ds_diag_error(lower->diag, expr->span, "operator `+` supports integer operands in v0.17.0; string concatenation is deferred");
         return out;
     }
-    if (lower_str_eq(expr->as.binary.op, "-")) {
-        if (left_kind != SYM_INT && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "operator `-` requires integer operands in v0.17.0");
-        if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "operator `-` requires integer operands in v0.17.0");
+    if (lower_str_eq(expr->as.binary.op, "-") || lower_str_eq(expr->as.binary.op, "*") ||
+        lower_str_eq(expr->as.binary.op, "/") || lower_str_eq(expr->as.binary.op, "%") ||
+        lower_str_eq(expr->as.binary.op, "**")) {
+        if (left_kind != SYM_INT && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "operator `%.*s` requires integer operands in v0.21.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+        if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "operator `%.*s` requires integer operands in v0.21.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
         *kind_out = SYM_INT;
         return out;
     }
@@ -348,8 +350,13 @@ DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     SymKind right_kind = SYM_UNKNOWN;
     DsLowerExpr *right = lower_expr(lower, expr->as.unary.right, &right_kind);
     if (!lower_str_eq(expr->as.unary.op, "!")) {
-        ds_diag_error(lower->diag, expr->span, "unsupported unary operator `%.*s` in v0.3.0", (int)expr->as.unary.op.len, expr->as.unary.op.data);
-        *kind_out = SYM_UNKNOWN;
+        if (lower_str_eq(expr->as.unary.op, "-")) {
+            if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->span, "unary `-` requires an integer operand in v0.21.0");
+            *kind_out = SYM_INT;
+        } else {
+            ds_diag_error(lower->diag, expr->span, "unsupported unary operator `%.*s` in v0.3.0", (int)expr->as.unary.op.len, expr->as.unary.op.data);
+            *kind_out = SYM_UNKNOWN;
+        }
     } else {
         *kind_out = SYM_BOOL;
     }
@@ -428,6 +435,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         }
         if (expr->as.call.args.len > 0) validate_glob_pattern_arg(lower, expr->as.call.name, expr->as.call.args.items[0]);
         *kind_out = ret;
+        out->as.call.return_kind = lower_value_kind_from_sym(ret);
         return out;
     }
     DsStr ns = {0}, member = {0};
@@ -439,7 +447,27 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with", (int)member.len, member.data);
         return out;
     }
-    ds_diag_error(lower->diag, expr->span, "function calls do not produce values in v0.9.0");
+    DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
+    if (fn) {
+        if (expr->as.call.args.len < fn->required_count || expr->as.call.args.len > fn->params.len) {
+            ds_diag_error(lower->diag, expr->span, "function `%.*s` called with wrong number of arguments", (int)fn->name.len, fn->name.data);
+        }
+        if (!fn->has_return) {
+            ds_diag_error(lower->diag, expr->span, "function `%.*s` does not return a value", (int)fn->name.len, fn->name.data);
+        } else if (!fn->all_paths_return) {
+            ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a value because not all control paths return in v0.21.0", (int)fn->name.len, fn->name.data);
+        }
+        switch (fn->return_kind) {
+            case DS_LOWER_VALUE_BOOL: *kind_out = SYM_BOOL; break;
+            case DS_LOWER_VALUE_INT: *kind_out = SYM_INT; break;
+            case DS_LOWER_VALUE_STRING: *kind_out = SYM_STRING; break;
+            default: *kind_out = SYM_UNKNOWN; break;
+        }
+        out->as.call.is_user_function = true;
+        out->as.call.return_kind = fn->return_kind;
+        return out;
+    }
+    ds_diag_error(lower->diag, expr->span, "unknown function `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
     return out;
 }
 

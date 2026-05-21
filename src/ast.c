@@ -205,6 +205,10 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fputs("AssertStmt\n", out);
             print_expr(stmt->as.assert_stmt.condition, out, level + 1);
             break;
+        case DS_STMT_RETURN:
+            fputs("ReturnStmt\n", out);
+            print_expr(stmt->as.return_stmt.value, out, level + 1);
+            break;
     }
 }
 
@@ -373,6 +377,9 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_ASSERT:
             free_expr(stmt->as.assert_stmt.condition);
+            break;
+        case DS_STMT_RETURN:
+            free_expr(stmt->as.return_stmt.value);
             break;
     }
     free(stmt);

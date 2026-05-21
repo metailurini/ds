@@ -1,7 +1,7 @@
 #include "parser_internal.h"
 
 DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
-    Parser p = {tokens, 0, diag, 0};
+    Parser p = {tokens, 0, diag, 0, 0};
     DsAst *ast = (DsAst *)ds_xcalloc(1, sizeof(DsAst));
     bool after_executable = false;
     if (tokens->len > 0) ast->span.start = tokens->items[0].span.start;

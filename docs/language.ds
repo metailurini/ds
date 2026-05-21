@@ -101,8 +101,8 @@ let not_ok = !ok
 let both = ok && force
 let either = ok || force
 
-# Arithmetic operators *, /, %, ** are planned for v0.21.0 alongside function
-# return values. Compound assignment *=, /=, %= are included in the same version.
+# Arithmetic operators *, /, %, ** and compound assignment *=, /=, %= are part
+# of the v0.21.0 implementation surface.
 let product = count * 2
 let quotient = count / 2
 let remainder = count % 3
@@ -297,13 +297,13 @@ fn deploy_default(target = "staging") {
 #   docker compose restart $service
 # }
 
-# Return values are planned for v0.21.0.
-#
-# fn to_upper(s) {
-#   return s.upper()
-# }
-#
-# let label = to_upper("hello")
+# Scalar return values are part of the v0.21.0 implementation surface.
+
+fn to_upper(s = "hello") {
+  return s.upper()
+}
+
+let label = to_upper("hello")
 
 # Permanent non-goals for functions:
 # - no closures;

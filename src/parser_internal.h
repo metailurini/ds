@@ -11,6 +11,7 @@ typedef struct {
     size_t pos;
     DsDiag *diag;
     int test_depth;
+    int function_depth;
 } Parser;
 
 static inline DsToken *parser_peek(Parser *p) { return &p->tokens->items[p->pos]; }

@@ -74,6 +74,7 @@ typedef enum {
     DS_STMT_PUSH,
     DS_STMT_TEST,
     DS_STMT_ASSERT
+    ,DS_STMT_RETURN
 } DsStmtKind;
 
 typedef struct DsStmt DsStmt;
@@ -81,7 +82,10 @@ typedef struct DsStmt DsStmt;
 typedef enum {
     DS_ASSIGN_SET,
     DS_ASSIGN_ADD,
-    DS_ASSIGN_SUB
+    DS_ASSIGN_SUB,
+    DS_ASSIGN_MUL,
+    DS_ASSIGN_DIV,
+    DS_ASSIGN_MOD
 } DsAssignOp;
 
 typedef enum {
@@ -185,6 +189,7 @@ struct DsStmt {
         struct { DsStr name; DsExpr *value; } push_stmt;
         struct { DsStr name; DsStmt *body; } test_stmt;
         struct { DsExpr *condition; } assert_stmt;
+        struct { DsExpr *value; } return_stmt;
     } as;
 };
 

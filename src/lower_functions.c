@@ -112,6 +112,7 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
         case DS_LOWER_STMT_PUSH:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
+        case DS_LOWER_STMT_RETURN:
             return false;
         case DS_LOWER_STMT_ASSERT:
             return false;
@@ -142,13 +143,50 @@ void reject_recursive_functions(Lower *lower) {
     free(seen);
 }
 
+static bool stmt_all_paths_return(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_RETURN:
+            return true;
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
+                if (stmt_all_paths_return(stmt->as.block_stmt.statements.items[i])) return true;
+            }
+            return false;
+        case DS_LOWER_STMT_IF:
+            return stmt->as.if_stmt.else_branch &&
+                   stmt_all_paths_return(stmt->as.if_stmt.then_branch) &&
+                   stmt_all_paths_return(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_CASE: {
+            bool has_default = false;
+            if (stmt->as.case_stmt.arms.len == 0) return false;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                bool arm_default = false;
+                for (size_t j = 0; j < arm->patterns.len; j++) {
+                    if (arm->patterns.items[j].kind == DS_LOWER_CASE_PATTERN_DEFAULT) arm_default = true;
+                }
+                has_default = has_default || arm_default;
+                if (!stmt_all_paths_return(arm->body)) return false;
+            }
+            return has_default;
+        }
+        default:
+            return false;
+    }
+}
+
 void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     Scope local;
     scope_init(&local, lower->scope);
     Scope *saved = lower->scope;
     int saved_depth = lower->loop_depth;
+    int saved_fn_depth = lower->function_depth;
+    DsLowerFn *saved_fn = lower->current_function;
     lower->scope = &local;
     lower->loop_depth = 0;
+    lower->function_depth++;
+    lower->current_function = fn;
     for (size_t i = 0; i < fn->params.len; i++) {
         SymKind kind = SYM_UNKNOWN;
         switch (fn->params.items[i].default_kind) {
@@ -163,7 +201,10 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
         scope_define(lower, &local, fn->params.items[i].name, kind, fn->params.items[i].span);
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);
+    fn->all_paths_return = stmt_all_paths_return(fn->body);
     lower->scope = saved;
     lower->loop_depth = saved_depth;
+    lower->function_depth = saved_fn_depth;
+    lower->current_function = saved_fn;
     scope_free(&local);
 }

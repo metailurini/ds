@@ -68,8 +68,12 @@ static DsStmt *parse_assign(Parser *p) {
     DsSpan op_span = parser_peek(p)->span;
     if (parser_advance_if(p, DS_TOK_EQUAL)) {
         op = DS_ASSIGN_SET;
-    } else if ((parser_at(p, DS_TOK_PLUS) || parser_at(p, DS_TOK_MINUS)) && parser_next_at(p, DS_TOK_EQUAL)) {
-        op = parser_at(p, DS_TOK_PLUS) ? DS_ASSIGN_ADD : DS_ASSIGN_SUB;
+    } else if ((parser_at(p, DS_TOK_PLUS) || parser_at(p, DS_TOK_MINUS) || parser_at(p, DS_TOK_STAR) || parser_at(p, DS_TOK_SLASH) || parser_at(p, DS_TOK_PERCENT)) && parser_next_at(p, DS_TOK_EQUAL)) {
+        if (parser_at(p, DS_TOK_PLUS)) op = DS_ASSIGN_ADD;
+        else if (parser_at(p, DS_TOK_MINUS)) op = DS_ASSIGN_SUB;
+        else if (parser_at(p, DS_TOK_STAR)) op = DS_ASSIGN_MUL;
+        else if (parser_at(p, DS_TOK_SLASH)) op = DS_ASSIGN_DIV;
+        else op = DS_ASSIGN_MOD;
         op_span = parser_peek(p)->span;
         parser_advance(p);
         parser_advance(p);
@@ -94,24 +98,35 @@ static DsStmt *parse_assign(Parser *p) {
     return stmt;
 }
 
-static bool token_is_percent_equal_start(const Parser *p, size_t pos) {
-    if (pos + 1 >= p->tokens->len) return false;
-    const DsToken *tok = &p->tokens->items[pos];
-    return tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 && tok->text.data[0] == '%' &&
-           p->tokens->items[pos + 1].kind == DS_TOK_EQUAL;
-}
-
 static bool stmt_contains_assignment_operator(const Parser *p) {
     for (size_t i = p->pos; i < p->tokens->len; i++) {
         DsTokenKind kind = p->tokens->items[i].kind;
         if (kind == DS_TOK_NEWLINE || kind == DS_TOK_EOF || kind == DS_TOK_RBRACE) return false;
         if (kind == DS_TOK_EQUAL) return true;
         if (i + 1 < p->tokens->len &&
-            (kind == DS_TOK_PLUS || kind == DS_TOK_MINUS || kind == DS_TOK_STAR || kind == DS_TOK_SLASH) &&
+            (kind == DS_TOK_PLUS || kind == DS_TOK_MINUS || kind == DS_TOK_STAR || kind == DS_TOK_SLASH || kind == DS_TOK_PERCENT) &&
             p->tokens->items[i + 1].kind == DS_TOK_EQUAL) return true;
-        if (token_is_percent_equal_start(p, i)) return true;
     }
     return false;
+}
+
+static DsStmt *parse_return(Parser *p) {
+    DsToken *start = parser_previous(p);
+    if (p->function_depth <= 0) ds_diag_error(p->diag, start->span, "`return` is only allowed inside a function");
+    if (parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, start->span, "expected expression after `return`");
+        parser_consume_statement_end(p);
+        return NULL;
+    }
+    DsExpr *value = parse_expr(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_RETURN, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
+    stmt->as.return_stmt.value = value;
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of return statement");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+    }
+    parser_consume_statement_end(p);
+    return stmt;
 }
 
 static void consume_bad_statement(Parser *p) {
@@ -372,18 +387,14 @@ DsStmt *parse_stmt(Parser *p) {
         return NULL;
     }
     if (parser_advance_if(p, DS_TOK_LET)) return parse_let(p);
-    if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_STAR) || parser_next_at(p, DS_TOK_SLASH) || token_is_percent_equal_start(p, p->pos + 1)) && parser_peek2_at(p, DS_TOK_EQUAL)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "unsupported assignment operator in v0.17.0");
-        consume_bad_statement(p);
-        return NULL;
-    }
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "unsupported assignment target in v0.17.0");
         consume_bad_statement(p);
         return NULL;
     }
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||
-        ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
+        ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS) || parser_next_at(p, DS_TOK_STAR) || parser_next_at(p, DS_TOK_SLASH) || parser_next_at(p, DS_TOK_PERCENT)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
+    if (parser_advance_if(p, DS_TOK_RETURN)) return parse_return(p);
     if (parser_advance_if(p, DS_TOK_IF)) return parse_if(p);
     if (parser_advance_if(p, DS_TOK_FOR)) return parse_for(p);
     if (parser_advance_if(p, DS_TOK_WHILE)) return parse_while(p);

@@ -48,6 +48,7 @@ const char *op_name(OpCode op) {
         case OP_FOR_ARRAY: return "FOR_ARRAY";
         case OP_RESET_FOR: return "RESET_FOR";
         case OP_ASSERT: return "ASSERT";
+        case OP_RETURN_VALUE: return "RETURN_VALUE";
         case OP_RETURN_FUNC: return "RETURN_FUNC";
         case OP_RETURN: return "RETURN";
         case OP_NOP: return "NOP";
@@ -223,6 +224,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_FOR_ARRAY: fprintf(out, " %s in r%d -> %d", ins->name, ins->a, ins->target); break;
             case OP_RESET_FOR: fprintf(out, " %d", ins->target); break;
             case OP_ASSERT: fprintf(out, " r%d", ins->a); break;
+            case OP_RETURN_VALUE: fprintf(out, " r%d", ins->a); break;
             case OP_RETURN_FUNC: break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;

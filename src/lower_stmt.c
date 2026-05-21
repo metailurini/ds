@@ -85,6 +85,9 @@ static DsLowerAssignOp lower_assign_op(DsAssignOp op) {
     switch (op) {
         case DS_ASSIGN_ADD: return DS_LOWER_ASSIGN_ADD;
         case DS_ASSIGN_SUB: return DS_LOWER_ASSIGN_SUB;
+        case DS_ASSIGN_MUL: return DS_LOWER_ASSIGN_MUL;
+        case DS_ASSIGN_DIV: return DS_LOWER_ASSIGN_DIV;
+        case DS_ASSIGN_MOD: return DS_LOWER_ASSIGN_MOD;
         case DS_ASSIGN_SET: return DS_LOWER_ASSIGN_SET;
     }
     return DS_LOWER_ASSIGN_SET;
@@ -164,22 +167,16 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
                 ds_diag_error(lower->diag, stmt->as.assign_stmt.value->span, "collection reassignment is deferred in v0.17.0");
             }
-            if (stmt->as.assign_stmt.op == DS_ASSIGN_ADD) {
+            if (stmt->as.assign_stmt.op != DS_ASSIGN_SET) {
                 if (sym && sym->kind != SYM_INT && sym->kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) {
-                    ds_diag_error(lower->diag, stmt->span, "`+=` supports only integer variables in v0.17.0; string compound assignment is deferred");
+                    ds_diag_error(lower->diag, stmt->span, "compound arithmetic assignment supports only integer variables in v0.21.0");
                 }
                 if (value_kind != SYM_INT && value_kind != SYM_UNKNOWN) {
-                    ds_diag_error(lower->diag, stmt->as.assign_stmt.value->span, "`+=` supports only integer values in v0.17.0; string compound assignment is deferred");
-                }
-            } else if (stmt->as.assign_stmt.op == DS_ASSIGN_SUB) {
-                if (sym && sym->kind != SYM_INT && sym->kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) {
-                    ds_diag_error(lower->diag, stmt->span, "`-=` supports only integer variables in v0.17.0");
-                }
-                if (value_kind != SYM_INT && value_kind != SYM_UNKNOWN) {
-                    ds_diag_error(lower->diag, stmt->as.assign_stmt.value->span, "`-=` supports only integer values in v0.17.0");
+                    ds_diag_error(lower->diag, stmt->as.assign_stmt.value->span, "compound arithmetic assignment supports only integer values in v0.21.0");
                 }
             }
             if (stmt->as.assign_stmt.op == DS_ASSIGN_SET) maybe_update_symbol(sym, value_kind);
+            else maybe_update_symbol(sym, SYM_INT);
             return out;
         }
         case DS_STMT_CMD: {
@@ -307,6 +304,29 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSERT, stmt->span);
             SymKind cond_kind = SYM_UNKNOWN;
             out->as.assert_stmt.condition = lower_expr(lower, stmt->as.assert_stmt.condition, &cond_kind);
+            return out;
+        }
+        case DS_STMT_RETURN: {
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
+            if (lower->function_depth <= 0 || !lower->current_function) {
+                ds_diag_error(lower->diag, stmt->span, "`return` is only allowed inside a function");
+            }
+            SymKind value_kind = SYM_UNKNOWN;
+            out->as.return_stmt.value = lower_expr(lower, stmt->as.return_stmt.value, &value_kind);
+            if (value_kind == SYM_ARRAY || value_kind == SYM_MAP || value_kind == SYM_COMMAND_RESULT) {
+                ds_diag_error(lower->diag, stmt->span, "returning collections and command results is deferred in v0.21.0");
+            }
+            if (lower->current_function) {
+                DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
+                if (ret == DS_LOWER_VALUE_UNKNOWN) {
+                    ds_diag_error(lower->diag, stmt->span, "function return value kind must be known in v0.21.0");
+                } else if (!lower->current_function->has_return) {
+                    lower->current_function->has_return = true;
+                    lower->current_function->return_kind = ret;
+                } else if (lower->current_function->return_kind != ret) {
+                    ds_diag_error(lower->diag, stmt->span, "all return statements in a function must have the same value kind in v0.21.0");
+                }
+            }
             return out;
         }
         case DS_STMT_TEST:
