@@ -212,7 +212,12 @@ to later value-returning functions. The VM and emitted Bash diagnose checked
 integer overflow instead of silently wrapping. Value-returning functions reject
 plain command statements so expression-style calls cannot collide with the
 return transport through arbitrary stdout; use captured `run` expressions inside
-value functions instead. Statement-style calls may still ignore returned values.
+value functions instead. Expression-backed string interpolation can include
+scalar value-returning calls; command-word interpolation remains the legacy
+text-only interpolation path and now emits a targeted diagnostic telling callers
+to bind the string expression first. Statement-style calls may still ignore
+returned values. `examples/function-values.ds` shows the supported return,
+arithmetic, and expression interpolation path.
 The scoped test-plan implementation remains for a later pass because the current
 request explicitly excluded tests.
 

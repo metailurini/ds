@@ -72,6 +72,11 @@ bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
             j++;
             while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
             DsStr name = {decoded.data + start, j - start};
+            if (j < decoded.len && decoded.data[j] == '(') {
+                ds_diag_error(lower->diag, span, "function-call interpolation in command words must be bound to a string expression first in v0.21.0");
+                free(decoded.data);
+                return false;
+            }
             Symbol *sym = scope_find(lower->scope, name);
             if (!sym) {
                 ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
@@ -213,6 +218,8 @@ DsLowerValueKind lower_value_kind_from_sym(SymKind kind) {
     return DS_LOWER_VALUE_UNKNOWN;
 }
 
+DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
+
 DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind left_kind = SYM_UNKNOWN;
     SymKind right_kind = SYM_UNKNOWN;
@@ -273,7 +280,177 @@ DsLowerExpr *lower_ident_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     return out;
 }
 
+static bool interp_is_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static bool interp_is_ident_char(char c) {
+    return interp_is_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static DsStr quoted_string_from_decoded(const char *data, size_t len) {
+    size_t cap = len * 2 + 3;
+    char *buf = (char *)ds_xcalloc(cap, 1);
+    size_t n = 0;
+    buf[n++] = '"';
+    for (size_t i = 0; i < len; i++) {
+        char c = data[i];
+        if (n + 3 >= cap) { cap *= 2; buf = (char *)ds_xrealloc(buf, cap); }
+        if (c == '\\' || c == '"') { buf[n++] = '\\'; buf[n++] = c; }
+        else if (c == '\n') { buf[n++] = '\\'; buf[n++] = 'n'; }
+        else if (c == '\t') { buf[n++] = '\\'; buf[n++] = 't'; }
+        else buf[n++] = c;
+    }
+    buf[n++] = '"';
+    return (DsStr){buf, n};
+}
+
+static DsExpr *temp_expr_new(DsExprKind kind, DsSpan span) {
+    DsExpr *expr = (DsExpr *)ds_xcalloc(1, sizeof(DsExpr));
+    expr->kind = kind;
+    expr->span = span;
+    return expr;
+}
+
+static void temp_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 4;
+        vec->items = (DsExpr **)ds_xrealloc(vec->items, vec->cap * sizeof(DsExpr *));
+    }
+    vec->items[vec->len++] = expr;
+}
+
+static void interp_skip_ws(const char *s, size_t len, size_t *i) {
+    while (*i < len && (s[*i] == ' ' || s[*i] == '\t' || s[*i] == '\n' || s[*i] == '\r')) (*i)++;
+}
+
+static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) {
+    size_t start = *i;
+    if (start >= len || !interp_is_ident_start(s[start])) return false;
+    (*i)++;
+    while (*i < len && (interp_is_ident_char(s[*i]) || s[*i] == '.')) (*i)++;
+    *out = (DsStr){(char *)s + start, *i - start};
+    return true;
+}
+
+static DsExpr *parse_interp_simple_expr(const char *s, size_t len, size_t *i, DsSpan span);
+
+static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i, DsStr name, DsSpan span) {
+    if (*i >= len || s[*i] != '(') return NULL;
+    (*i)++;
+    DsExpr *call = temp_expr_new(DS_EXPR_CALL, span);
+    call->as.call.name = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
+    interp_skip_ws(s, len, i);
+    if (*i < len && s[*i] == ')') { (*i)++; return call; }
+    while (*i < len) {
+        interp_skip_ws(s, len, i);
+        DsExpr *arg = parse_interp_simple_expr(s, len, i, span);
+        if (!arg) return call;
+        temp_expr_vec_push(&call->as.call.args, arg);
+        interp_skip_ws(s, len, i);
+        if (*i < len && s[*i] == ',') { (*i)++; continue; }
+        if (*i < len && s[*i] == ')') { (*i)++; return call; }
+        return call;
+    }
+    return call;
+}
+
+static DsExpr *parse_interp_simple_expr(const char *s, size_t len, size_t *i, DsSpan span) {
+    interp_skip_ws(s, len, i);
+    if (*i >= len) return NULL;
+    size_t start = *i;
+    if (s[*i] == '"') {
+        (*i)++;
+        while (*i < len) {
+            if (s[*i] == '\\' && *i + 1 < len) { *i += 2; continue; }
+            if (s[*i] == '"') { (*i)++; break; }
+            (*i)++;
+        }
+        DsExpr *expr = temp_expr_new(DS_EXPR_STRING, span);
+        expr->as.text = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
+        return expr;
+    }
+    if ((s[*i] == '-' && *i + 1 < len && s[*i + 1] >= '0' && s[*i + 1] <= '9') || (s[*i] >= '0' && s[*i] <= '9')) {
+        bool neg = false;
+        if (s[*i] == '-') { neg = true; (*i)++; start = *i; }
+        while (*i < len && s[*i] >= '0' && s[*i] <= '9') (*i)++;
+        DsExpr *int_expr = temp_expr_new(DS_EXPR_INT, span);
+        int_expr->as.text = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
+        if (!neg) return int_expr;
+        DsExpr *unary = temp_expr_new(DS_EXPR_UNARY, span);
+        unary->as.unary.op = (DsStr){ds_str_dup_range("-", 1), 1};
+        unary->as.unary.right = int_expr;
+        return unary;
+    }
+    DsStr name = {0};
+    if (!parse_interp_name(s, len, i, &name)) return NULL;
+    if (name.len == 4 && memcmp(name.data, "true", 4) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = true; return expr; }
+    if (name.len == 5 && memcmp(name.data, "false", 5) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
+    interp_skip_ws(s, len, i);
+    if (*i < len && s[*i] == '(') return parse_interp_call_after_name(s, len, i, name, span);
+    DsExpr *expr = temp_expr_new(DS_EXPR_IDENT, span);
+    expr->as.text = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
+    return expr;
+}
+
+static bool decoded_has_call_interpolation(DsStr decoded) {
+    for (size_t i = 0; i < decoded.len; i++) {
+        if (decoded.data[i] != '{') continue;
+        size_t j = i + 1;
+        DsStr name = {0};
+        if (!parse_interp_name(decoded.data, decoded.len, &j, &name)) continue;
+        interp_skip_ws(decoded.data, decoded.len, &j);
+        if (j < decoded.len && decoded.data[j] == '(') return true;
+    }
+    return false;
+}
+
+static void interp_push_literal(DsLowerExpr *out, const char *data, size_t len, DsSpan span) {
+    if (len == 0) return;
+    DsLowerExpr *part = expr_new(DS_LOWER_EXPR_STRING, span);
+    part->as.text = quoted_string_from_decoded(data, len);
+    lower_expr_vec_push(&out->as.interp.parts, part);
+}
+
+static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, DsStr decoded, SymKind *kind_out) {
+    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INTERP, expr->span);
+    size_t literal_start = 0;
+    for (size_t i = 0; i < decoded.len; i++) {
+        if (decoded.data[i] != '{') continue;
+        size_t j = i + 1;
+        interp_skip_ws(decoded.data, decoded.len, &j);
+        DsExpr *inner = parse_interp_simple_expr(decoded.data, decoded.len, &j, expr->span);
+        interp_skip_ws(decoded.data, decoded.len, &j);
+        if (inner && j < decoded.len && decoded.data[j] == '}') {
+            interp_push_literal(out, decoded.data + literal_start, i - literal_start, expr->span);
+            SymKind inner_kind = SYM_UNKNOWN;
+            DsLowerExpr *part = lower_expr(lower, inner, &inner_kind);
+            if (inner_kind != SYM_STRING && inner_kind != SYM_INT && inner_kind != SYM_BOOL && inner_kind != SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, expr->span, "interpolation expression must be scalar in v0.21.0");
+            }
+            lower_expr_vec_push(&out->as.interp.parts, part);
+            i = j;
+            literal_start = j + 1;
+            continue;
+        }
+        ds_diag_error(lower->diag, expr->span, "unsupported string interpolation; expected `{name}`, `{name.field}`, or `{name(args...)}`");
+        break;
+    }
+    interp_push_literal(out, decoded.data + literal_start, decoded.len - literal_start, expr->span);
+    *kind_out = SYM_STRING;
+    return out;
+}
+
 DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
+    DsStr decoded = {0};
+    if (lower_decode_string_text(expr->as.text, &decoded)) {
+        if (decoded_has_call_interpolation(decoded)) {
+            DsLowerExpr *out = lower_interpolated_expr(lower, expr, decoded, kind_out);
+            free(decoded.data);
+            return out;
+        }
+        free(decoded.data);
+    }
     validate_interpolation(lower, expr->as.text, expr->span);
     *kind_out = SYM_STRING;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, expr->span);
@@ -575,6 +752,7 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
             return sym ? sym->kind : SYM_UNKNOWN;
         }
         case DS_LOWER_EXPR_STRING: return SYM_STRING;
+        case DS_LOWER_EXPR_INTERP: return SYM_STRING;
         case DS_LOWER_EXPR_INT: return SYM_INT;
         case DS_LOWER_EXPR_BOOL: return SYM_BOOL;
         case DS_LOWER_EXPR_RUN: return SYM_COMMAND_RESULT;

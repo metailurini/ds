@@ -216,10 +216,25 @@ static int compile_string_expr(Program *p, const DsLowerExpr *expr) {
     return r;
 }
 
+static int compile_interp_expr(Program *p, const DsLowerExpr *expr) {
+    int r = new_reg(p);
+    Instr ins = {0};
+    ins.op = OP_INTERP_JOIN;
+    ins.span = expr->span;
+    ins.dst = r;
+    ins.arg_count = expr->as.interp.parts.len;
+    ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+    for (size_t i = 0; i < expr->as.interp.parts.len; i++) ins.args[i] = compile_expr(p, expr->as.interp.parts.items[i]);
+    emit_instr(p, ins);
+    return r;
+}
+
 static int compile_expr(Program *p, const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING:
             return compile_string_expr(p, expr);
+        case DS_LOWER_EXPR_INTERP:
+            return compile_interp_expr(p, expr);
         case DS_LOWER_EXPR_INT: {
             char *tmp = ds_str_dup_range(expr->as.text.data, expr->as.text.len);
             int64_t value = strtoll(tmp, NULL, 10);

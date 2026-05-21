@@ -207,6 +207,19 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 ip++;
                 break;
             }
+            case OP_INTERP_JOIN: {
+                DsString rendered;
+                ds_string_init(&rendered);
+                for (size_t i = 0; i < ins->arg_count; i++) {
+                    DsString piece;
+                    ds_value_to_string(&vm.regs[ins->args[i]], &piece);
+                    ds_string_append_range(&rendered, piece.data ? piece.data : "", piece.len);
+                    ds_string_free(&piece);
+                }
+                set_reg(&vm, ins->dst, ds_value_string_take(&rendered));
+                ip++;
+                break;
+            }
             case OP_RUN_CAPTURE: {
                 DsValue value;
                 if (run_capture(&vm, ins, &value) != 0) { rc = 1; goto done; }

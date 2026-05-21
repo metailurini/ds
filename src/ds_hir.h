@@ -30,6 +30,7 @@ typedef enum {
     DS_LOWER_EXPR_UNARY,
     DS_LOWER_EXPR_BINARY,
     DS_LOWER_EXPR_CALL,
+    DS_LOWER_EXPR_INTERP,
     DS_LOWER_EXPR_ARRAY,
     DS_LOWER_EXPR_MAP,
     DS_LOWER_EXPR_INDEX,
@@ -77,6 +78,7 @@ struct DsLowerExpr {
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
         struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; } call;
+        struct { DsLowerExprVec parts; } interp;
         struct { DsLowerExprVec elements; } array;
         struct { DsLowerMapEntryVec entries; } map;
         struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; } index;

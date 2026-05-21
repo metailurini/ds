@@ -31,6 +31,10 @@ void lower_expr_free(DsLowerExpr *expr) {
             for (size_t i = 0; i < expr->as.call.args.len; i++) lower_expr_free(expr->as.call.args.items[i]);
             free(expr->as.call.args.items);
             break;
+        case DS_LOWER_EXPR_INTERP:
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) lower_expr_free(expr->as.interp.parts.items[i]);
+            free(expr->as.interp.parts.items);
+            break;
         case DS_LOWER_EXPR_ARRAY:
             for (size_t i = 0; i < expr->as.array.elements.len; i++) lower_expr_free(expr->as.array.elements.items[i]);
             free(expr->as.array.elements.items);

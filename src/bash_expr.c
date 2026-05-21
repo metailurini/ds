@@ -17,6 +17,32 @@ static bool is_int_binary_op(DsStr op) {
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
 }
 
+static bool emit_double_quoted_literal(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    char *decoded = NULL;
+    size_t len = 0;
+    if (!decode_string_literal(e->diag, expr, &decoded, &len)) return false;
+    buf_append(out, "\"");
+    for (size_t i = 0; i < len; i++) {
+        char c = decoded[i];
+        if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
+        buf_append_len(out, &c, 1);
+    }
+    buf_append(out, "\"");
+    free(decoded);
+    return true;
+}
+
+static bool emit_interp_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    if (expr->as.interp.parts.len == 0) { buf_append(out, "\"\""); return true; }
+    for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
+        const DsLowerExpr *part = expr->as.interp.parts.items[i];
+        if (part->kind == DS_LOWER_EXPR_STRING) {
+            if (!emit_double_quoted_literal(e, part, out)) return false;
+        } else if (!emit_value_expr(e, part, out)) return false;
+    }
+    return true;
+}
+
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
@@ -26,6 +52,8 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         case DS_LOWER_EXPR_STRING:
             return emit_interpolated_string(e, expr, out);
+        case DS_LOWER_EXPR_INTERP:
+            return emit_interp_expr(e, expr, out);
         case DS_LOWER_EXPR_INT:
             buf_append_len(out, expr->as.text.data, expr->as.text.len);
             return true;
@@ -179,6 +207,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_INDEX:
         case DS_LOWER_EXPR_BINARY:
         case DS_LOWER_EXPR_UNARY:
+        case DS_LOWER_EXPR_INTERP:
             return emit_value_expr(e, expr, out);
         default:
             ds_diag_error(e->diag, expr->span, "unsupported condition operand for Bash emission");

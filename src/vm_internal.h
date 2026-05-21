@@ -15,6 +15,7 @@ typedef enum {
     OP_BINARY,
     OP_COMPARE,
     OP_INTERPOLATE,
+    OP_INTERP_JOIN,
     OP_RUN_CAPTURE,
     OP_GET_FIELD,
     OP_JUMP,

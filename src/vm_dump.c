@@ -31,6 +31,7 @@ const char *op_name(OpCode op) {
         case OP_BINARY: return "BINARY";
         case OP_COMPARE: return "COMPARE";
         case OP_INTERPOLATE: return "INTERPOLATE";
+        case OP_INTERP_JOIN: return "INTERP_JOIN";
         case OP_RUN_CAPTURE: return "RUN_CAPTURE";
         case OP_GET_FIELD: return "GET_FIELD";
         case OP_JUMP: return "JUMP";
@@ -177,6 +178,11 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_BINARY: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
+            case OP_INTERP_JOIN:
+                fprintf(out, " r%d, join(", ins->dst);
+                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                fputc(')', out);
+                break;
             case OP_RUN_CAPTURE:
                 fprintf(out, " r%d,", ins->dst);
                 print_instr_command(out, ins);

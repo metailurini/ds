@@ -15,6 +15,7 @@ static const char *lower_value_type_name(DsLowerValueKind kind);
 static const char *expr_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING: return "string";
+        case DS_LOWER_EXPR_INTERP: return "string";
         case DS_LOWER_EXPR_INT: return "int";
         case DS_LOWER_EXPR_BOOL: return "bool";
         case DS_LOWER_EXPR_ARRAY: return "array";

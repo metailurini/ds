@@ -1,0 +1,15 @@
+# v0.21.0: scalar function returns, checked integer arithmetic, and
+# expression-backed interpolation.
+
+fn double(n) {
+  return n * 2
+}
+
+fn label(n) {
+  return "double={double(n)}"
+}
+
+let value = double(21)
+let message = label(value / 3)
+
+echo $message

@@ -381,6 +381,11 @@ static bool expr_reaches_function(Lower *lower, const DsLowerExpr *expr, size_t 
         case DS_LOWER_EXPR_INDEX:
             return expr_reaches_function(lower, expr->as.index.object, target_index, seen, cycle_span) ||
                    expr_reaches_function(lower, expr->as.index.index, target_index, seen, cycle_span);
+        case DS_LOWER_EXPR_INTERP:
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
+                if (expr_reaches_function(lower, expr->as.interp.parts.items[i], target_index, seen, cycle_span)) return true;
+            }
+            return false;
         case DS_LOWER_EXPR_IDENT:
         case DS_LOWER_EXPR_STRING:
         case DS_LOWER_EXPR_INT:
