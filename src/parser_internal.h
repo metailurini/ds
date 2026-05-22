@@ -143,7 +143,8 @@ static inline bool parser_expect(Parser *p, DsTokenKind kind, const char *messag
 static inline bool parser_is_identifier_like(DsTokenKind kind) {
     return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_IMPORT || kind == DS_TOK_ARG ||
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
-           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN || kind == DS_TOK_FN;
+           kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN || kind == DS_TOK_FN ||
+           kind == DS_TOK_DEFER || kind == DS_TOK_TRAP;
 }
 
 static inline void parser_case_pattern_vec_push(DsCasePatternVec *vec, DsCasePattern pattern) {

@@ -35,6 +35,8 @@ typedef enum {
     DS_TOK_TEST,
     DS_TOK_ASSERT,
     DS_TOK_RETURN,
+    DS_TOK_DEFER,
+    DS_TOK_TRAP,
     DS_TOK_COLON,
     DS_TOK_COMMA,
     DS_TOK_EQUAL,

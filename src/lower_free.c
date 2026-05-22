@@ -118,6 +118,10 @@ void lower_stmt_free(DsLowerStmt *stmt) {
         case DS_LOWER_STMT_RETURN:
             lower_expr_free(stmt->as.return_stmt.value);
             break;
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            lower_stmt_free(stmt->as.handler_stmt.body);
+            break;
     }
     free(stmt);
 }

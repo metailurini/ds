@@ -245,6 +245,8 @@ static bool stmt_uses_run(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_run(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_run(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_run(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_run(stmt->as.handler_stmt.body);
     }
     return false;
 }
@@ -274,6 +276,9 @@ static bool stmt_uses_pipeline_run(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_RETURN:
             return expr_uses_pipeline_run(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt_uses_pipeline_run(stmt->as.handler_stmt.body);
     }
     return false;
 }
@@ -301,6 +306,9 @@ static bool stmt_has_command(const DsLowerStmt *stmt) {
             return false;
         case DS_LOWER_STMT_RETURN:
             return expr_uses_run(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt_has_command(stmt->as.handler_stmt.body);
     }
     return false;
 }
@@ -333,6 +341,8 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_stdlib(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_stdlib(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_stdlib(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_stdlib(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD: return command_uses_stdlib(&stmt->as.cmd_stmt);
     }
     return false;
@@ -359,6 +369,8 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_collection_index(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_collection_index(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_collection_index(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_collection_index(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
             return false;
@@ -387,6 +399,8 @@ static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_map_literal(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_map_literal(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_map_literal(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_map_literal(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
             return false;
@@ -444,6 +458,8 @@ static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_int_helpers(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_int_helpers(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_int_helpers(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_int_helpers(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD: return command_uses_int_helpers(&stmt->as.cmd_stmt);
         case DS_LOWER_STMT_CALL:
         case DS_LOWER_STMT_BREAK:
@@ -478,6 +494,8 @@ static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH: return expr_uses_function_value_helpers(stmt->as.push_stmt.value);
         case DS_LOWER_STMT_ASSERT: return expr_uses_function_value_helpers(stmt->as.assert_stmt.condition);
         case DS_LOWER_STMT_RETURN: return expr_uses_function_value_helpers(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_function_value_helpers(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
         case DS_LOWER_STMT_BREAK:
@@ -490,6 +508,44 @@ static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
 bool program_uses_function_value_helpers(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_function_value_helpers(program->functions.items[i].body)) return true;
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_function_value_helpers(program->statements.items[i])) return true;
+    return false;
+}
+
+static bool stmt_uses_handlers(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return true;
+        case DS_LOWER_STMT_IF:
+            return stmt_uses_handlers(stmt->as.if_stmt.then_branch) || stmt_uses_handlers(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_handlers(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY:
+            return stmt_uses_handlers(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE:
+            return stmt_uses_handlers(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_handlers(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_LET:
+        case DS_LOWER_STMT_ASSIGN:
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+        case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_ASSERT:
+        case DS_LOWER_STMT_RETURN:
+            return false;
+    }
+    return false;
+}
+
+bool program_uses_handlers(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_handlers(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_handlers(program->statements.items[i])) return true;
     return false;
 }
 
@@ -521,6 +577,9 @@ static bool stmt_uses_case(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_ASSERT:
         case DS_LOWER_STMT_RETURN:
             return false;
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt_uses_case(stmt->as.handler_stmt.body);
     }
     return false;
 }

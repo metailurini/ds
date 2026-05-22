@@ -440,6 +440,9 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
             return expr_reaches_function(lower, stmt->as.assert_stmt.condition, target_index, seen, cycle_span);
         case DS_LOWER_STMT_RETURN:
             return expr_reaches_function(lower, stmt->as.return_stmt.value, target_index, seen, cycle_span);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt_reaches_function(lower, stmt->as.handler_stmt.body, target_index, seen, cycle_span);
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:

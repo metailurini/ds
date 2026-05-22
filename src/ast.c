@@ -6,6 +6,15 @@ static void indent(FILE *out, int level) {
     for (int i = 0; i < level; i++) fputs("  ", out);
 }
 
+static const char *handler_signal_name(DsHandlerSignal signal) {
+    switch (signal) {
+        case DS_HANDLER_EXIT: return "EXIT";
+        case DS_HANDLER_INT: return "INT";
+        case DS_HANDLER_TERM: return "TERM";
+    }
+    return "EXIT";
+}
+
 static void print_expr(const DsExpr *expr, FILE *out, int level) {
     if (!expr) {
         indent(out, level);
@@ -209,6 +218,14 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fputs("ReturnStmt\n", out);
             print_expr(stmt->as.return_stmt.value, out, level + 1);
             break;
+        case DS_STMT_DEFER:
+            fprintf(out, "DeferStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
+            print_stmt(stmt->as.handler_stmt.body, out, level + 1);
+            break;
+        case DS_STMT_TRAP:
+            fprintf(out, "TrapStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
+            print_stmt(stmt->as.handler_stmt.body, out, level + 1);
+            break;
     }
 }
 
@@ -380,6 +397,10 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_RETURN:
             free_expr(stmt->as.return_stmt.value);
+            break;
+        case DS_STMT_DEFER:
+        case DS_STMT_TRAP:
+            free_stmt(stmt->as.handler_stmt.body);
             break;
     }
     free(stmt);

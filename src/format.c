@@ -220,6 +220,15 @@ static void format_params(Formatter *fmt, const DsFnParamVec *params) {
     }
 }
 
+static const char *format_handler_signal(DsHandlerSignal signal) {
+    switch (signal) {
+        case DS_HANDLER_EXIT: return "EXIT";
+        case DS_HANDLER_INT: return "INT";
+        case DS_HANDLER_TERM: return "TERM";
+    }
+    return "EXIT";
+}
+
 static void format_redirect(Formatter *fmt, const DsRedirect *redirect) {
     if (redirect->kind == DS_REDIRECT_NONE) return;
     append_cstr(fmt, " ");
@@ -355,6 +364,23 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             format_expr(fmt, stmt->as.return_stmt.value);
             append_cstr(fmt, "\n");
             break;
+        case DS_STMT_DEFER:
+            append_cstr(fmt, "defer");
+            if (stmt->as.handler_stmt.signal != DS_HANDLER_EXIT) {
+                append_cstr(fmt, " on: \"");
+                append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
+                append_cstr(fmt, "\"");
+            }
+            format_block_after_header(fmt, stmt->as.handler_stmt.body, level);
+            append_cstr(fmt, "\n");
+            break;
+        case DS_STMT_TRAP:
+            append_cstr(fmt, "trap \"");
+            append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
+            append_cstr(fmt, "\"");
+            format_block_after_header(fmt, stmt->as.handler_stmt.body, level);
+            append_cstr(fmt, "\n");
+            break;
     }
 }
 
@@ -375,6 +401,8 @@ static int top_stmt_group(const DsStmt *stmt) {
         case DS_STMT_PUSH:
         case DS_STMT_ASSERT:
         case DS_STMT_RETURN: return 2;
+        case DS_STMT_DEFER:
+        case DS_STMT_TRAP: return 3;
         case DS_STMT_IF:
         case DS_STMT_FOR:
         case DS_STMT_WHILE:

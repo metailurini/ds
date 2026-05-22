@@ -1,9 +1,16 @@
 #include "vm_internal.h"
 
 #include <stdbool.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static volatile sig_atomic_t ds_vm_pending_signal = 0;
+
+static void ds_vm_signal_handler(int sig) {
+    ds_vm_pending_signal = sig;
+}
 
 static bool int_add_checked(int64_t a, int64_t b, int64_t *out) {
     if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) return false;
@@ -60,6 +67,22 @@ static void set_reg(Vm *vm, int reg, DsValue value) {
     vm->regs[reg] = value;
 }
 
+static void vm_register_handler(Vm *vm, DsHandlerSignal signal, size_t target, bool is_trap) {
+    if (is_trap) {
+        for (size_t i = 0; i < vm->handler_len; i++) {
+            if (vm->handlers[i].is_trap && vm->handlers[i].signal == signal) {
+                vm->handlers[i].target = target;
+                return;
+            }
+        }
+    }
+    if (vm->handler_len == vm->handler_cap) {
+        vm->handler_cap = vm->handler_cap ? vm->handler_cap * 2 : 8;
+        vm->handlers = (VmHandler *)ds_xrealloc(vm->handlers, vm->handler_cap * sizeof(VmHandler));
+    }
+    vm->handlers[vm->handler_len++] = (VmHandler){signal, target, is_trap};
+}
+
 int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag, DsVmOptions options) {
     (void)source;
     Program p;
@@ -76,11 +99,32 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
     ensure_regs(&vm);
 
     int rc = 0;
+    void (*old_int)(int) = NULL;
+    void (*old_term)(int) = NULL;
+    bool signal_hooks_installed = false;
     int bind_rc = bind_script_args(&vm, lowered, argc, argv);
     if (bind_rc == 2) { rc = 0; goto done; }
     if (bind_rc != 0) { rc = bind_rc; goto done; }
     size_t ip = 0;
+    bool handler_mode = false;
+    int final_rc = 0;
+    size_t cleanup_cursor = 0;
+    bool cleanup_trap_done = false;
+    DsHandlerSignal cleanup_signal = DS_HANDLER_EXIT;
+
+    old_int = signal(SIGINT, ds_vm_signal_handler);
+    old_term = signal(SIGTERM, ds_vm_signal_handler);
+    signal_hooks_installed = true;
+
+dispatch_loop:
     while (ip < p.instr_len) {
+        if (!handler_mode && ds_vm_pending_signal) {
+            int sig = ds_vm_pending_signal;
+            ds_vm_pending_signal = 0;
+            cleanup_signal = sig == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
+            rc = sig == SIGTERM ? 143 : 130;
+            goto done;
+        }
         Instr *ins = &p.instrs[ip];
         trace_vm_instr(&vm, ip, ins);
         switch (ins->op) {
@@ -387,6 +431,14 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
                 ip = return_ip;
                 break;
             }
+            case OP_REGISTER_HANDLER:
+                vm_register_handler(&vm, (DsHandlerSignal)ins->a, (size_t)ins->target, ins->b != 0);
+                ip++;
+                break;
+            case OP_END_HANDLER:
+                if (handler_mode) goto cleanup_handler_done;
+                ip++;
+                break;
             case OP_RETURN:
                 rc = ins->target;
                 goto done;
@@ -397,11 +449,56 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
     }
 
 done:
+    if (!vm.cleanup_running && vm.handler_len > 0) {
+        vm.cleanup_running = true;
+        final_rc = rc;
+        cleanup_cursor = vm.handler_len;
+        cleanup_trap_done = false;
+    cleanup_next:
+        if (!cleanup_trap_done) {
+            cleanup_trap_done = true;
+            for (size_t i = 0; i < vm.handler_len; i++) {
+                if (vm.handlers[i].signal == cleanup_signal && vm.handlers[i].is_trap) {
+                    ip = vm.handlers[i].target;
+                    rc = 0;
+                    handler_mode = true;
+                    goto dispatch_loop;
+                }
+            }
+        }
+        while (cleanup_cursor > 0) {
+            cleanup_cursor--;
+            if (vm.handlers[cleanup_cursor].signal == cleanup_signal && !vm.handlers[cleanup_cursor].is_trap) {
+                ip = vm.handlers[cleanup_cursor].target;
+                rc = 0;
+                handler_mode = true;
+                goto dispatch_loop;
+            }
+        }
+        if (cleanup_signal != DS_HANDLER_EXIT) {
+            cleanup_signal = DS_HANDLER_EXIT;
+            cleanup_cursor = vm.handler_len;
+            cleanup_trap_done = false;
+            goto cleanup_next;
+        }
+        rc = final_rc;
+        goto cleanup_done;
+    cleanup_handler_done:
+        handler_mode = false;
+        if (rc != 0) final_rc = rc;
+        goto cleanup_next;
+    }
+cleanup_done:
+    if (signal_hooks_installed) {
+        signal(SIGINT, old_int);
+        signal(SIGTERM, old_term);
+    }
     for (int i = 0; i < p.next_reg; i++) ds_value_free(&vm.regs[i]);
     free(vm.regs);
     free(vm.return_ips);
     free(vm.return_dsts);
     free(vm.return_scopes);
+    free(vm.handlers);
     scope_free_chain(vm.scope);
     program_free(&p);
     return rc;

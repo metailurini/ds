@@ -372,6 +372,57 @@ static DsStmt *parse_assert(Parser *p) {
     return stmt;
 }
 
+static bool parse_handler_signal(Parser *p, const char *form, DsHandlerSignal *signal) {
+    if (!parser_expect(p, DS_TOK_STRING, form[0] == 't' ? "expected signal string after `trap`" : "expected signal string after `defer on:`")) return false;
+    DsToken *tok = parser_previous(p);
+    DsStr decoded = {0};
+    bool ok = parser_decode_string_literal(tok->text, &decoded);
+    if (!ok) {
+        ds_diag_error(p->diag, tok->span, "%s signal must be a string literal", form);
+        return false;
+    }
+    if (decoded.len == 4 && memcmp(decoded.data, "EXIT", 4) == 0) *signal = DS_HANDLER_EXIT;
+    else if (decoded.len == 3 && memcmp(decoded.data, "INT", 3) == 0) *signal = DS_HANDLER_INT;
+    else if (decoded.len == 4 && memcmp(decoded.data, "TERM", 4) == 0) *signal = DS_HANDLER_TERM;
+    else {
+        ds_diag_error(p->diag, tok->span, "unsupported %s signal `%.*s`; supported signals are EXIT, INT, and TERM", form, (int)decoded.len, decoded.data);
+        free(decoded.data);
+        return false;
+    }
+    free(decoded.data);
+    return true;
+}
+
+static DsStmt *parse_defer(Parser *p) {
+    DsToken *start = parser_previous(p);
+    DsHandlerSignal signal = DS_HANDLER_EXIT;
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 2 && memcmp(parser_peek(p)->text.data, "on", 2) == 0) {
+        parser_advance(p);
+        if (!parser_expect(p, DS_TOK_COLON, "expected `:` after `defer on`")) return NULL;
+        if (!parse_handler_signal(p, "defer on:", &signal)) return NULL;
+    }
+    if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after defer handler")) return NULL;
+    DsStmt *body = parse_block(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_DEFER, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
+    stmt->as.handler_stmt.signal = signal;
+    stmt->as.handler_stmt.body = body;
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
+static DsStmt *parse_trap(Parser *p) {
+    DsToken *start = parser_previous(p);
+    DsHandlerSignal signal = DS_HANDLER_EXIT;
+    if (!parse_handler_signal(p, "trap", &signal)) return NULL;
+    if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after trap signal")) return NULL;
+    DsStmt *body = parse_block(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_TRAP, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
+    stmt->as.handler_stmt.signal = signal;
+    stmt->as.handler_stmt.body = body;
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
 
 DsStmt *parse_stmt(Parser *p) {
     if (parser_advance_if(p, DS_TOK_IMPORT)) return parse_import_stmt(p, false, false);
@@ -395,6 +446,8 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||
         ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS) || parser_next_at(p, DS_TOK_STAR) || parser_next_at(p, DS_TOK_SLASH) || parser_next_at(p, DS_TOK_PERCENT)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
     if (parser_advance_if(p, DS_TOK_RETURN)) return parse_return(p);
+    if (parser_advance_if(p, DS_TOK_DEFER)) return parse_defer(p);
+    if (parser_advance_if(p, DS_TOK_TRAP)) return parse_trap(p);
     if (parser_advance_if(p, DS_TOK_IF)) return parse_if(p);
     if (parser_advance_if(p, DS_TOK_FOR)) return parse_for(p);
     if (parser_advance_if(p, DS_TOK_WHILE)) return parse_while(p);

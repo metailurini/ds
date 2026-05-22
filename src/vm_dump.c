@@ -51,6 +51,8 @@ const char *op_name(OpCode op) {
         case OP_ASSERT: return "ASSERT";
         case OP_RETURN_VALUE: return "RETURN_VALUE";
         case OP_RETURN_FUNC: return "RETURN_FUNC";
+        case OP_REGISTER_HANDLER: return "REGISTER_HANDLER";
+        case OP_END_HANDLER: return "END_HANDLER";
         case OP_RETURN: return "RETURN";
         case OP_NOP: return "NOP";
     }
@@ -232,6 +234,11 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_ASSERT: fprintf(out, " r%d", ins->a); break;
             case OP_RETURN_VALUE: fprintf(out, " r%d", ins->a); break;
             case OP_RETURN_FUNC: break;
+            case OP_REGISTER_HANDLER:
+                fprintf(out, " %s %s -> %d", ins->b ? "trap" : "defer",
+                        ins->a == DS_HANDLER_INT ? "INT" : (ins->a == DS_HANDLER_TERM ? "TERM" : "EXIT"), ins->target);
+                break;
+            case OP_END_HANDLER: break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
         }

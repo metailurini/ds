@@ -443,6 +443,41 @@ static bool run_test_helper_command(Vm *vm, const VmProcessSpec *spec, int *out_
     return true;
 }
 
+static bool run_control_command(Vm *vm, const VmProcessSpec *spec, int *out_code) {
+    *out_code = 0;
+    if (spec->capture || spec->argv.len == 0) return false;
+    const char *name = spec->argv.items[0];
+    if (strcmp(name, "fail") != 0 && strcmp(name, "exit") != 0) return false;
+    if (vm->options.test_mode) return run_test_helper_command(vm, spec, out_code);
+    if (spec->redirect.kind != DS_REDIRECT_NONE) {
+        ds_diag_error(vm->diag, spec->span, "`%s` does not support redirection", name);
+        *out_code = 1;
+        return true;
+    }
+    if (strcmp(name, "fail") == 0) {
+        DsString message;
+        append_test_helper_message(&message, spec, 1);
+        if (message.len > 0) ds_diag_error(vm->diag, spec->span, "%.*s", (int)message.len, message.data);
+        else ds_diag_error(vm->diag, spec->span, "fail");
+        ds_string_free(&message);
+        *out_code = 1;
+        return true;
+    }
+    if (spec->argv.len != 2) {
+        ds_diag_error(vm->diag, spec->span, "`exit` expects exactly one integer code");
+        *out_code = 1;
+        return true;
+    }
+    int code = 0;
+    if (!parse_exit_code_arg(spec->argv.items[1], &code)) {
+        ds_diag_error(vm->diag, spec->span, "`exit` code must be an integer from 0 to 255");
+        *out_code = 1;
+        return true;
+    }
+    *out_code = code;
+    return true;
+}
+
 static void process_spec_free(VmProcessSpec *spec) {
     argv_free(&spec->argv);
 }
@@ -779,7 +814,7 @@ int run_command(Vm *vm, Instr *ins) {
     VmProcessSpec spec;
     if (!process_spec_from_instr(vm, ins, false, &spec)) return 1;
     int helper_code = 0;
-    if (run_test_helper_command(vm, &spec, &helper_code)) {
+    if (run_control_command(vm, &spec, &helper_code)) {
         process_spec_free(&spec);
         return helper_code;
     }

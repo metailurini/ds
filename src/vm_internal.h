@@ -35,6 +35,8 @@ typedef enum {
     OP_ASSERT,
     OP_RETURN_VALUE,
     OP_RETURN_FUNC,
+    OP_REGISTER_HANDLER,
+    OP_END_HANDLER,
     OP_RETURN,
     OP_NOP
 } OpCode;
@@ -109,6 +111,12 @@ struct VmScope {
 };
 
 typedef struct {
+    DsHandlerSignal signal;
+    size_t target;
+    bool is_trap;
+} VmHandler;
+
+typedef struct {
     Program *program;
     DsValue *regs;
     VmScope *scope;
@@ -121,6 +129,10 @@ typedef struct {
     size_t return_cap;
     int *return_dsts;
     VmScope **return_scopes;
+    VmHandler *handlers;
+    size_t handler_len;
+    size_t handler_cap;
+    bool cleanup_running;
 } Vm;
 
 void program_free(Program *p);

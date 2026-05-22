@@ -45,6 +45,8 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 4 && strncmp(text, "test", 4) == 0) return DS_TOK_TEST;
     if (len == 6 && strncmp(text, "assert", 6) == 0) return DS_TOK_ASSERT;
     if (len == 6 && strncmp(text, "return", 6) == 0) return DS_TOK_RETURN;
+    if (len == 5 && strncmp(text, "defer", 5) == 0) return DS_TOK_DEFER;
+    if (len == 4 && strncmp(text, "trap", 4) == 0) return DS_TOK_TRAP;
     return DS_TOK_IDENT;
 }
 
@@ -92,6 +94,8 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_TEST: return "TEST";
         case DS_TOK_ASSERT: return "ASSERT";
         case DS_TOK_RETURN: return "RETURN";
+        case DS_TOK_DEFER: return "DEFER";
+        case DS_TOK_TRAP: return "TRAP";
         case DS_TOK_COLON: return "COLON";
         case DS_TOK_COMMA: return "COMMA";
         case DS_TOK_EQUAL: return "EQUAL";

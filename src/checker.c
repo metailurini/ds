@@ -317,6 +317,10 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
         case DS_STMT_RETURN:
             check_expr(c, stmt->as.return_stmt.value);
             break;
+        case DS_STMT_DEFER:
+        case DS_STMT_TRAP:
+            check_block(c, stmt->as.handler_stmt.body, depth + 1);
+            break;
     }
 }
 

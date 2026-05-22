@@ -74,8 +74,16 @@ typedef enum {
     DS_STMT_PUSH,
     DS_STMT_TEST,
     DS_STMT_ASSERT
-    ,DS_STMT_RETURN
+    ,DS_STMT_RETURN,
+    DS_STMT_DEFER,
+    DS_STMT_TRAP
 } DsStmtKind;
+
+typedef enum {
+    DS_HANDLER_EXIT,
+    DS_HANDLER_INT,
+    DS_HANDLER_TERM
+} DsHandlerSignal;
 
 typedef struct DsStmt DsStmt;
 
@@ -190,6 +198,7 @@ struct DsStmt {
         struct { DsStr name; DsStmt *body; } test_stmt;
         struct { DsExpr *condition; } assert_stmt;
         struct { DsExpr *value; } return_stmt;
+        struct { DsHandlerSignal signal; DsStmt *body; } handler_stmt;
     } as;
 };
 

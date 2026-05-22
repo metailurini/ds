@@ -2,7 +2,7 @@
 
 This document is the user-facing snapshot after the completed `v0.20.0` Wave 2
 stabilization cleanup pass and the completed `v0.21.0` function-value/arithmetic
-implementation and test pass. It is not a replacement for the roadmap or
+implementation and the initial `v0.22.0` process-cleanup implementation pass. It is not a replacement for the roadmap or
 language catalog; it summarizes what users can rely on today and what is still
 deliberately deferred.
 
@@ -36,7 +36,7 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented through the
-`v0.21.0` implementation pass:
+`v0.22.0` implementation pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -78,6 +78,7 @@ The production runtime supports the language slice implemented through the
   those values are indexed or iterated;
 - kind-aware Bash `case` parity for known indexed array values and array `for`
   loop variables with known string/int/bool element kinds;
+- stackable `defer { ... }` and `defer on: "EXIT"|"INT"|"TERM" { ... }` cleanup handlers, plus replacement-style `trap "EXIT"|"INT"|"TERM" { ... }`;
 - formatted string interpolation with scoped string/int specifiers and
   triple-quoted multi-line string literals.
 
@@ -168,6 +169,7 @@ milestones:
 - formatter configuration, warning suppression comments, workspace formatting,
   and range formatting;
 - editor/LSP integration;
+- arbitrary signal names, numeric signal syntax, handler removal, and job-control/process-group APIs;
 - additional shell backends or native compilation.
 
 Unsupported forms should fail clearly instead of partially working in only one
@@ -224,11 +226,14 @@ return, arithmetic, and expression interpolation path.
 The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
 diagnostic, formatting, example, and generated-Bash boundary behavior.
 
+`v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers and checks for pending signals between bytecode instructions; emitted Bash installs standalone traps. Deep job-control behavior such as process groups and forwarding signals through long-running child process trees remains out of scope.
+
 Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag for both defaulted and explicit arguments that are validated against the default kind, so defaulted parameters can participate in kind-aware `case` matching without VM/Bash coercion drift. Required unknown-kind parameters remain unknown until typed parameters or a broader runtime type-tag design is deliberately added.
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
-array-loop lowering model, and scalar return transport are the safe pieces to
-build on. The next planned feature wave starts with `v0.22.0` process-control
-cleanup. Map iteration, nested collections, formatter trivia preservation,
-warning suppression, logical shell operators, and advanced pipeline forms remain
-out of scope unless their own milestones explicitly pull them in.
+array-loop lowering model, scalar return transport, and process-level cleanup
+model are the safe pieces to build on. The next planned feature wave starts
+with `v0.23.0` regex, ranges, and membership. Map iteration, nested
+collections, formatter trivia preservation, warning suppression, logical shell
+operators, advanced pipeline forms, and deeper job-control behavior remain out
+of scope unless their own milestones explicitly pull them in.

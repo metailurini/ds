@@ -690,6 +690,15 @@ calls; command-word interpolation supports legacy variable/field interpolation
 and integer arithmetic, while direct function calls in command words must be
 bound first.
 
+
+## Cleanup and signal runtime
+
+The v0.22.0 cleanup model is process-level and registration-based. Reaching a `defer` statement registers a stackable handler for a signal; plain `defer` is the same signal class as `defer on: "EXIT"`. Reaching a `trap` statement installs one replacement handler for that signal, so a later `trap "EXIT" { ... }` replaces an earlier one. Supported signal names are the string literals `"EXIT"`, `"INT"`, and `"TERM"`.
+
+On normal completion, explicit `exit`, `fail`, or direct-command failure, the runtime runs the `EXIT` trap first when present, then `EXIT` defers in last-in, first-out order. On `INT` or `TERM`, the runtime runs the matching trap first, then matching defers in last-in, first-out order, then the `EXIT` cleanup sequence. The original status is preserved when cleanup succeeds; handler failures can replace the final status, and explicit `exit N` in emitted Bash follows Bash's process exit behavior while the cleanup guard prevents recursive handler execution.
+
+The VM implements cleanup without relying on Bash by lowering handler registration to bytecode and executing registered handler bytecode during shutdown. It installs lightweight `INT` and `TERM` signal handlers and observes pending signals between bytecode instructions. Generated Bash emits standalone trap dispatchers and handler functions under the reserved `__ds_` namespace. Process groups, job control, background child management, and broad signal-forwarding semantics remain deferred.
+
 ## Testing strategy
 
 Runtime primitives must have direct C tests.

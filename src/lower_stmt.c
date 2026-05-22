@@ -333,6 +333,13 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             return out;
         }
+        case DS_STMT_DEFER:
+        case DS_STMT_TRAP: {
+            DsLowerStmt *out = stmt_new(stmt->kind == DS_STMT_DEFER ? DS_LOWER_STMT_DEFER : DS_LOWER_STMT_TRAP, stmt->span);
+            out->as.handler_stmt.signal = stmt->as.handler_stmt.signal;
+            out->as.handler_stmt.body = lower_block(lower, stmt->as.handler_stmt.body, true);
+            return out;
+        }
         case DS_STMT_TEST:
             return stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
         case DS_STMT_BLOCK:

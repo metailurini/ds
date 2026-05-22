@@ -116,11 +116,20 @@ bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
             if (j < decoded.len && decoded.data[j] == '}') { i = j; continue; }
         }
         bool maybe_arith = false;
+        bool has_arith_op = false;
+        for (size_t scan = start; scan < decoded.len && decoded.data[scan] != '}'; scan++) {
+            char ac = decoded.data[scan];
+            if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') {
+                has_arith_op = true;
+                break;
+            }
+        }
         size_t k = start;
         while (k < decoded.len && decoded.data[k] != '}') {
             char ac = decoded.data[k];
             if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') maybe_arith = true;
             if ((ac >= 'A' && ac <= 'Z') || (ac >= 'a' && ac <= 'z') || ac == '_') {
+                if (!has_arith_op) break;
                 size_t name_start = k++;
                 while (k < decoded.len && ((decoded.data[k] >= 'A' && decoded.data[k] <= 'Z') || (decoded.data[k] >= 'a' && decoded.data[k] <= 'z') || (decoded.data[k] >= '0' && decoded.data[k] <= '9') || decoded.data[k] == '_')) k++;
                 if (k < decoded.len && decoded.data[k] == '(') {

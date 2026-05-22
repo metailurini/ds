@@ -502,7 +502,7 @@ exit 1
 
 
 # -----------------------------------------------------------------------------
-# 23. Defer / cleanup [v0.11.0+] [candidate]
+# 23. Defer / cleanup [v0.22.0] [implemented]
 # -----------------------------------------------------------------------------
 
 let tmp = temp.dir()
@@ -513,18 +513,22 @@ defer {
 
 echo "working in {tmp}"
 
-# EXIT-style defer is planned for v0.11.0+.
-# Signal-specific defer and trap are planned for v0.22.0.
-#
-# defer on: "INT" {
-#   echo "interrupted, cleaning up"
-#   exit 1
-# }
-#
-# defer on: "TERM" {
-#   echo "terminated"
-#   exit 1
-# }
+# Plain `defer` is EXIT cleanup and runs in LIFO order. Signal-specific
+# cleanup is available for the portable EXIT/INT/TERM subset.
+
+defer on: "EXIT" {
+  echo "leaving"
+}
+
+defer on: "INT" {
+  echo "interrupted, cleaning up"
+  exit 130
+}
+
+defer on: "TERM" {
+  echo "terminated"
+  exit 143
+}
 
 
 # -----------------------------------------------------------------------------
@@ -665,23 +669,30 @@ echo "{body}"
 
 
 # -----------------------------------------------------------------------------
-# 29. Signal handling [v0.22.0] [candidate]
+# 29. Signal traps [v0.22.0] [implemented]
 # -----------------------------------------------------------------------------
 
-# Signal-specific defer and trap expand the v0.11.0+ EXIT-only defer model.
+# `trap` is a lower-level replacement-style handler for the same supported
+# signal set. On dispatch, the matching trap runs first, then matching defers in
+# LIFO order, then EXIT cleanup.
 
-defer on: "INT" {
-  echo "interrupted, cleaning up"
-  exit 1
+trap "INT" {
+  echo "caught interrupt"
+  exit 130
 }
 
-defer on: "TERM" {
-  echo "terminated"
-  exit 1
+trap "TERM" {
+  echo "caught termination"
+  exit 143
 }
 
-# trap is a lower-level escape hatch for cases defer cannot express.
-# Semantics and exact syntax are defined by the v0.22.0 milestone spec.
+trap "EXIT" {
+  echo "low-level exit handler"
+}
+
+# `defer` handlers are stackable and run in last-in, first-out order. Repeated
+# `trap` handlers replace the previous trap for the same signal. Supported
+# signal literals are exactly "EXIT", "INT", and "TERM" in v0.22.0.
 
 
 # -----------------------------------------------------------------------------

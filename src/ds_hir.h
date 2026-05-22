@@ -99,7 +99,9 @@ typedef enum {
     DS_LOWER_STMT_CASE,
     DS_LOWER_STMT_PUSH,
     DS_LOWER_STMT_ASSERT
-    ,DS_LOWER_STMT_RETURN
+    ,DS_LOWER_STMT_RETURN,
+    DS_LOWER_STMT_DEFER,
+    DS_LOWER_STMT_TRAP
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
@@ -210,6 +212,7 @@ struct DsLowerStmt {
         struct { DsStr name; DsLowerExpr *value; } push_stmt;
         struct { DsLowerExpr *condition; } assert_stmt;
         struct { DsLowerExpr *value; } return_stmt;
+        struct { DsHandlerSignal signal; DsLowerStmt *body; } handler_stmt;
         DsCommand cmd_stmt;
     } as;
 };

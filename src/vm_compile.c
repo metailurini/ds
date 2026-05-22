@@ -679,6 +679,27 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             emit_instr(p, ins);
             break;
         }
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: {
+            Instr reg = {0};
+            reg.op = OP_REGISTER_HANDLER;
+            reg.span = stmt->span;
+            reg.a = (int)stmt->as.handler_stmt.signal;
+            reg.b = stmt->kind == DS_LOWER_STMT_TRAP ? 1 : 0;
+            size_t reg_pos = emit_instr(p, reg);
+            Instr skip = {0};
+            skip.op = OP_JUMP;
+            skip.span = stmt->span;
+            size_t skip_pos = emit_instr(p, skip);
+            p->instrs[reg_pos].target = (int)p->instr_len;
+            compile_scoped_block(p, stmt->as.handler_stmt.body);
+            Instr end = {0};
+            end.op = OP_END_HANDLER;
+            end.span = stmt->span;
+            emit_instr(p, end);
+            p->instrs[skip_pos].target = (int)p->instr_len;
+            break;
+        }
     }
 }
 

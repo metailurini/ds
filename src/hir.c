@@ -49,6 +49,15 @@ static void print_escaped(FILE *out, const char *data, size_t len) {
 static void dump_expr(FILE *out, const DsLowerExpr *expr, int level);
 static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level);
 
+static const char *handler_signal_name(DsHandlerSignal signal) {
+    switch (signal) {
+        case DS_HANDLER_EXIT: return "EXIT";
+        case DS_HANDLER_INT: return "INT";
+        case DS_HANDLER_TERM: return "TERM";
+    }
+    return "EXIT";
+}
+
 static void print_literal_expr(FILE *out, const DsLowerExpr *expr) {
     if (!expr) {
         fputs("<default>", out);
@@ -267,6 +276,14 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
         case DS_LOWER_STMT_RETURN:
             fputs("Return", out); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.return_stmt.value, level + 1);
+            break;
+        case DS_LOWER_STMT_DEFER:
+            fprintf(out, "Defer %s", handler_signal_name(stmt->as.handler_stmt.signal)); print_span(out, stmt->span); fputc('\n', out);
+            dump_block(out, stmt->as.handler_stmt.body, level + 1);
+            break;
+        case DS_LOWER_STMT_TRAP:
+            fprintf(out, "Trap %s", handler_signal_name(stmt->as.handler_stmt.signal)); print_span(out, stmt->span); fputc('\n', out);
+            dump_block(out, stmt->as.handler_stmt.body, level + 1);
             break;
     }
 }

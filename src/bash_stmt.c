@@ -12,6 +12,15 @@ bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
 
 static const char *lower_value_type_name(DsLowerValueKind kind);
 
+static const char *handler_signal_name(DsHandlerSignal signal) {
+    switch (signal) {
+        case DS_HANDLER_EXIT: return "EXIT";
+        case DS_HANDLER_INT: return "INT";
+        case DS_HANDLER_TERM: return "TERM";
+    }
+    return "EXIT";
+}
+
 static const char *expr_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING: return "string";
@@ -603,6 +612,23 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             buf_append(&e->out, "return 0\n\n");
             return true;
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: {
+            size_t id = e->handler_counter++;
+            const char *sig = handler_signal_name(stmt->as.handler_stmt.signal);
+            emit_indent(&e->out, indent);
+            buf_appendf(&e->out, "__ds_handler_%zu() {\n", id);
+            if (!emit_block_body(e, stmt->as.handler_stmt.body, indent + 1)) return false;
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "}\n");
+            emit_indent(&e->out, indent);
+            if (stmt->kind == DS_LOWER_STMT_TRAP) {
+                buf_appendf(&e->out, "__ds_trap_%s=__ds_handler_%zu\n\n", sig, id);
+            } else {
+                buf_appendf(&e->out, "__ds_defer_%s+=(__ds_handler_%zu)\n\n", sig, id);
+            }
+            return true;
+        }
     }
     return true;
 }

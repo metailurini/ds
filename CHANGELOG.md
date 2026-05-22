@@ -6,13 +6,20 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
-# v0.22.0 - Process Control and Signal Handling (planned)
+# v0.22.0 - Process Control and Signal Handling
 
-Planned:
-- Add EXIT-style `defer` cleanup blocks with deterministic VM/Bash ordering.
-- Add signal-specific `defer on: "INT"` and `defer on: "TERM"` handlers.
-- Add lower-level `trap "SIGNAL" { ... }` for the scoped `EXIT`/`INT`/`TERM` signal set.
-- Preserve standalone Bash emission, cleanup final-status rules, imports, script args, and handler diagnostics for the supported subset.
+- Implemented process-level `defer` cleanup blocks for VM execution and emitted
+  standalone Bash.
+- Added `defer on: "EXIT"`, `defer on: "INT"`, and `defer on: "TERM"` for the
+  scoped portable signal set.
+- Added replacement-style `trap "EXIT"`, `trap "INT"`, and `trap "TERM"`
+  handlers that run before matching defers.
+- Preserved deterministic cleanup ordering: signal trap, signal defers in LIFO
+  order, then EXIT cleanup.
+- Added VM bytecode/runtime support and standalone Bash cleanup helpers without
+  adding calls back to `ds`.
+- Updated docs for the implemented scope. The dedicated v0.22 automated test
+  suite was intentionally left for a separate test pass.
 
 # v0.21.0 - Function Values and Arithmetic
 
@@ -72,8 +79,6 @@ Planned:
 - Promoted command ownership to a pipeline-aware stage model shared by AST, HIR, formatter, checker, VM, and Bash emission.
 
 Deferred: logical `&&`/`||`, grouping/subshells, background pipelines, process substitution, here-documents/here-strings, per-stage redirection, pipeline expressions outside command syntax, structured per-stage status arrays, multiline pipeline continuation syntax, and Windows shell semantics remain out of scope.
-
-# Changelog
 
 # v0.17.0 - Control Flow Completion
 
