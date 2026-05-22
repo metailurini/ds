@@ -6,6 +6,25 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.4 - Foreground Direct-Command Signal Runtime
+
+- Extended the v0.22 signal coverage to non-cooperative foreground direct
+  commands for both `INT` and `TERM` in VM execution and emitted standalone
+  Bash.
+- Verified conventional signal statuses: `130` for `INT` and `143` for
+  `TERM`.
+- Verified cleanup ordering for direct-command signals: matching signal trap,
+  matching signal defers in LIFO order, then `EXIT` trap and `EXIT` defers in
+  LIFO order.
+- Fixed emitted Bash direct-command handling so signal exits route through ds
+  cleanup instead of leaking Bash job-control messages such as `Terminated`.
+- Hardened the signal harness to launch runners through Python in a new process
+  session instead of a shell background job, keeping `INT` trappable for
+  emitted Bash tests.
+- Fixed emitted Bash cleanup stack iteration and direct-command helper failure
+  handling so non-exiting cleanup handler failures still allow older cleanup
+  handlers to run.
+
 # v0.22.3 - Deterministic Signal Harness
 
 - Added a reusable v0.22 signal-test harness that runs VM and emitted-Bash

@@ -549,6 +549,44 @@ bool program_uses_handlers(const DsLowerProgram *program) {
     return false;
 }
 
+static bool stmt_uses_signal_handlers(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt->as.handler_stmt.signal == DS_HANDLER_INT || stmt->as.handler_stmt.signal == DS_HANDLER_TERM || stmt_uses_signal_handlers(stmt->as.handler_stmt.body);
+        case DS_LOWER_STMT_IF:
+            return stmt_uses_signal_handlers(stmt->as.if_stmt.then_branch) || stmt_uses_signal_handlers(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_signal_handlers(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY:
+            return stmt_uses_signal_handlers(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE:
+            return stmt_uses_signal_handlers(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_signal_handlers(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_LET:
+        case DS_LOWER_STMT_ASSIGN:
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+        case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_ASSERT:
+        case DS_LOWER_STMT_RETURN:
+            return false;
+    }
+    return false;
+}
+
+bool program_uses_signal_handlers(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_signal_handlers(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_signal_handlers(program->statements.items[i])) return true;
+    return false;
+}
+
 static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
     if (!expr) return false;
     if (expr->kind == DS_LOWER_EXPR_IDENT) return true;

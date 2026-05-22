@@ -705,14 +705,16 @@ Cleanup runs for normal completion, explicit `exit`, explicit `fail`, command
 failure, and the supported `INT`/`TERM` paths. The deterministic v0.22.1 cleanup
 core covers the non-signal cases first, v0.22.2 locks down the `INT`/`TERM`
 syntax, diagnostics, formatting, lowering visibility, and emitted-Bash helper
-shape without sending real OS signals, and v0.22.3 adds the deterministic
+shape without sending real OS signals, v0.22.3 adds the deterministic
 process-session signal harness with the smallest cooperative `TERM`
-direct-command proof for VM and emitted Bash. Broader asynchronous signal
-runtime coverage is stabilized in later v0.22 slices.
+direct-command proof for VM and emitted Bash, and v0.22.4 extends that
+harness to non-cooperative foreground direct commands for both `INT` and
+`TERM`. Pipeline asynchronous signal runtime coverage is stabilized in later
+v0.22 slices.
 
 On normal completion, explicit `exit`, `fail`, or direct-command failure, the runtime runs the `EXIT` trap first when present, then `EXIT` defers in last-in, first-out order. On `INT` or `TERM`, the runtime runs the matching trap first, then matching defers in last-in, first-out order, then the `EXIT` cleanup sequence. The original status is preserved when cleanup succeeds; handler failures can replace the final status, and explicit `exit N` in emitted Bash follows Bash's process exit behavior while the cleanup guard prevents recursive handler execution.
 
-The VM implements cleanup without relying on Bash by lowering handler registration to bytecode and executing registered handler bytecode during shutdown. It installs lightweight `INT` and `TERM` signal handlers, observes pending signals between bytecode instructions, and now also classifies interrupted foreground direct commands while waiting for child processes. During VM command execution, child commands and pipelines are placed in a foreground process group when possible; an `INT` or `TERM` observed by the parent is forwarded to that group, and a child terminated by `INT` or `TERM` runs the matching ds cleanup path instead of degrading into a generic command-failure diagnostic. Generated Bash emits standalone trap dispatchers and handler functions under the reserved `__ds_` namespace. Background child management, arbitrary job-control APIs, and broad signal-forwarding semantics outside foreground commands remain deferred.
+The VM implements cleanup without relying on Bash by lowering handler registration to bytecode and executing registered handler bytecode during shutdown. It installs lightweight `INT` and `TERM` signal handlers, observes pending signals between bytecode instructions, and now also classifies interrupted foreground direct commands while waiting for child processes. During VM command execution, child commands and pipelines are placed in a foreground process group when possible; an `INT` or `TERM` observed by the parent is forwarded to that group, and a child terminated by `INT` or `TERM` runs the matching ds cleanup path instead of degrading into a generic command-failure diagnostic. Generated Bash emits standalone trap dispatchers and handler functions under the reserved `__ds_` namespace. For foreground direct commands, generated Bash runs the command through a cleanup-aware helper so `INT` and `TERM` exits become ds signal cleanup events instead of generic command failures or shell job-control messages. Background child management, arbitrary job-control APIs, pipeline signal parity, and broad signal-forwarding semantics outside foreground commands remain deferred.
 
 ## Testing strategy
 

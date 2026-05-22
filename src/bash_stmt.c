@@ -89,6 +89,23 @@ static bool is_control_command(const DsCommand *command, const char *name) {
     return str_eq(first, name);
 }
 
+static bool can_emit_direct_signal_command(const DsCommand *command) {
+    return command && command->stages.len == 1 && command->redirect.kind == DS_REDIRECT_NONE && command->stages.items[0].words.len > 0;
+}
+
+static bool emit_direct_signal_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "__ds_run_direct_command ");
+    emit_source_loc(&e->out, e->source, span);
+    for (size_t i = 0; i < command->stages.items[0].words.len; i++) {
+        buf_append(&e->out, " ");
+        if (!emit_command_word(e, command->stages.items[0].words.items[i], &e->out)) return false;
+    }
+    if (e->handler_depth > 0) buf_append(&e->out, " || return $?\n\n");
+    else buf_append(&e->out, "\n\n");
+    return true;
+}
+
 static bool emit_control_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
     const char *helper = is_control_command(command, "exit") ? "__ds_control_exit" : "__ds_control_fail";
     emit_indent(&e->out, indent);
@@ -495,6 +512,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             buf_append(&e->out, "\n");
             if (e->has_cleanup_helpers && (is_control_command(&stmt->as.cmd_stmt, "fail") || is_control_command(&stmt->as.cmd_stmt, "exit"))) {
                 return emit_control_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
+            }
+            if (e->has_signal_handlers && can_emit_direct_signal_command(&stmt->as.cmd_stmt)) {
+                return emit_direct_signal_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
             emit_indent(&e->out, indent);
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;

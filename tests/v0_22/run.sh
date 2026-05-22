@@ -108,10 +108,7 @@ run_and_signal() {
   local rc_file="$TMP/${name}.rc"
   local script="$TMP/${name}.sh"
   local run_dir
-  local pid=""
-  local ready=0
-  local done=0
-  local stat=""
+  local -a cmd
 
   : >"$out"
   : >"$err"
@@ -119,15 +116,13 @@ run_and_signal() {
 
   case "$mode" in
     vm)
-      setsid bash -c 'cd "$1" && exec "$2" run "$3"' _ "$run_dir" "$DS" "$fixture" >"$out" 2>"$err" &
-      pid=$!
+      cmd=("$DS" run "$fixture")
       ;;
     bash)
       run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
       run_ok "${name}_bash_n" bash -n "$script"
       assert_not_matches "$script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' "$name emitted Bash does not call ds"
-      setsid bash -c 'cd "$1" && exec bash "$2"' _ "$run_dir" "$script" >"$out" 2>"$err" &
-      pid=$!
+      cmd=(bash "$script")
       ;;
     *)
       fail "$name unknown signal harness mode: $mode"
@@ -135,67 +130,87 @@ run_and_signal() {
   esac
 
   # Signal tests never use self-signaling fixtures: the harness owns process
-  # lifetime. It waits for an explicit marker, then signals the isolated process
+  # lifetime. Python launches the runner in a new session without going through
+  # a shell background job, which keeps INT trappable for emitted Bash scripts.
+  # The harness waits for an explicit marker, then signals the isolated process
   # group so the foreground child and the ds/Bash runner observe the same event.
-  for _ in $(seq 1 200); do
-    if grep -qx 'ready' "$out"; then
-      ready=1
-      break
-    fi
-    if ! kill -0 "$pid" 2>/dev/null; then
-      break
-    fi
-    sleep 0.05
-  done
-
-  if [ "$ready" -ne 1 ]; then
-    kill -KILL -- "-$pid" 2>/dev/null || true
-    set +e
-    wait "$pid" 2>/dev/null
-    set -e
-    echo "--- $out" >&2
-    cat "$out" >&2 || true
-    echo "--- $err" >&2
-    cat "$err" >&2 || true
-    fail "$name did not print ready before signal"
-  fi
-
-  if ! kill -"$signal" -- "-$pid" 2>/dev/null; then
-    echo "--- $out" >&2
-    cat "$out" >&2 || true
-    echo "--- $err" >&2
-    cat "$err" >&2 || true
-    fail "$name could not signal process group"
-  fi
-
-  for _ in $(seq 1 200); do
-    if ! stat=$(ps -p "$pid" -o stat= 2>/dev/null); then
-      done=1
-      break
-    fi
-    case "$stat" in
-      *Z*) done=1; break ;;
-    esac
-    sleep 0.05
-  done
-
-  if [ "$done" -ne 1 ]; then
-    kill -KILL -- "-$pid" 2>/dev/null || true
-    set +e
-    wait "$pid" 2>/dev/null
-    set -e
-    echo "--- $out" >&2
-    cat "$out" >&2 || true
-    echo "--- $err" >&2
-    cat "$err" >&2 || true
-    fail "$name did not exit after $signal"
-  fi
-
   set +e
-  wait "$pid"
-  local rc=$?
+  python3 - "$run_dir" "$out" "$err" "$rc_file" "$signal" "${cmd[@]}" <<'PYSIGNAL'
+import os
+import signal
+import subprocess
+import sys
+import time
+
+run_dir, out_path, err_path, rc_path, sig_name = sys.argv[1:6]
+cmd = sys.argv[6:]
+
+signum = getattr(signal, "SIG" + sig_name)
+
+def preexec():
+    os.setsid()
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+with open(out_path, "ab", buffering=0) as out, open(err_path, "ab", buffering=0) as err:
+    proc = subprocess.Popen(cmd, cwd=run_dir, stdout=out, stderr=err, preexec_fn=preexec)
+
+ready = False
+for _ in range(200):
+    try:
+        with open(out_path, "r", encoding="utf-8", errors="replace") as f:
+            if any(line.rstrip("\n") == "ready" for line in f):
+                ready = True
+                break
+    except FileNotFoundError:
+        pass
+    if proc.poll() is not None:
+        break
+    time.sleep(0.05)
+
+if not ready:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=2)
+    sys.exit(90)
+
+try:
+    os.killpg(proc.pid, signum)
+except ProcessLookupError:
+    sys.exit(91)
+
+try:
+    rc = proc.wait(timeout=10)
+except subprocess.TimeoutExpired:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=2)
+    sys.exit(92)
+
+if rc < 0:
+    rc = 128 + (-rc)
+with open(rc_path, "w", encoding="utf-8") as f:
+    f.write(str(rc))
+PYSIGNAL
+  local harness_rc=$?
   set -e
-  printf '%s' "$rc" >"$rc_file"
+
+  if [ "$harness_rc" -ne 0 ]; then
+    echo "--- $out" >&2
+    cat "$out" >&2 || true
+    echo "--- $err" >&2
+    cat "$err" >&2 || true
+    case "$harness_rc" in
+      90) fail "$name did not print ready before signal" ;;
+      91) fail "$name could not signal process group" ;;
+      92) fail "$name did not exit after $signal" ;;
+      *) fail "$name signal harness failed with exit $harness_rc" ;;
+    esac
+  fi
 
   assert_status "$name" "$expected_status"
   assert_same_text "$expected_stdout" "$out" "$name stdout"
@@ -349,6 +364,8 @@ assert_not_matches "$TMP/signal_shape.sh" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)
 # INT/TERM matrices, pipelines, and process-tree semantics are later slices.
 assert_contains docs/roadmap.md 'v0.22.3 — Deterministic Signal Harness' 'roadmap names v0.22.3 slice'
 assert_contains docs/roadmap.md 'signal the process group' 'roadmap documents process-group signal harnessing'
+assert_contains docs/roadmap.md 'v0.22.4 — Foreground Direct-Command Signal Runtime' 'roadmap names v0.22.4 slice'
+assert_contains docs/roadmap.md 'Preserve conventional final statuses: `130` for `INT`, `143` for `TERM`' 'roadmap documents direct-command signal statuses'
 
 write_fixture "$FIX/term_direct_command.ds" <<'DS'
 trap "TERM" {
@@ -379,6 +396,80 @@ SH
 chmod +x "$FIX/ready_sleep"
 run_and_signal signal_vm_term_direct vm TERM "$FIX/term_direct_command.ds" 143 $'ready\nterm-trap\nexit-trap\nexit-defer\n'
 run_and_signal signal_bash_term_direct bash TERM "$FIX/term_direct_command.ds" 143 $'ready\nterm-trap\nexit-trap\nexit-defer\n'
+
+# v0.22.4 foreground direct-command runtime. These fixtures use a child that
+# does not install its own signal trap, so cleanup can only be correct when the
+# VM/Bash runner observes INT/TERM while waiting on a foreground command,
+# forwards or shares the signal with that command, and routes the event through
+# ds cleanup instead of a generic command-failure path.
+cat >"$FIX/ready_exec_sleep" <<'SH'
+#!/usr/bin/env bash
+echo ready
+exec sleep 30
+SH
+chmod +x "$FIX/ready_exec_sleep"
+
+write_fixture "$FIX/term_direct_runtime.ds" <<'DS'
+trap "TERM" {
+  echo term-trap
+}
+
+defer on: "TERM" {
+  echo term-defer-first
+}
+
+defer on: "TERM" {
+  echo term-defer-second
+}
+
+trap "EXIT" {
+  echo exit-trap
+}
+
+defer {
+  echo exit-defer-first
+}
+
+defer {
+  echo exit-defer-second
+}
+
+./ready_exec_sleep
+echo after
+DS
+run_and_signal signal_vm_term_direct_runtime vm TERM "$FIX/term_direct_runtime.ds" 143 $'ready\nterm-trap\nterm-defer-second\nterm-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+run_and_signal signal_bash_term_direct_runtime bash TERM "$FIX/term_direct_runtime.ds" 143 $'ready\nterm-trap\nterm-defer-second\nterm-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+
+write_fixture "$FIX/int_direct_runtime.ds" <<'DS'
+trap "INT" {
+  echo int-trap
+}
+
+defer on: "INT" {
+  echo int-defer-first
+}
+
+defer on: "INT" {
+  echo int-defer-second
+}
+
+trap "EXIT" {
+  echo exit-trap
+}
+
+defer {
+  echo exit-defer-first
+}
+
+defer {
+  echo exit-defer-second
+}
+
+./ready_exec_sleep
+echo after
+DS
+run_and_signal signal_vm_int_direct_runtime vm INT "$FIX/int_direct_runtime.ds" 130 $'ready\nint-trap\nint-defer-second\nint-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+run_and_signal signal_bash_int_direct_runtime bash INT "$FIX/int_direct_runtime.ds" 130 $'ready\nint-trap\nint-defer-second\nint-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
 
 # Deterministic VM/Bash cleanup core parity.
 write_fixture "$FIX/plain_exit.ds" <<'DS'
