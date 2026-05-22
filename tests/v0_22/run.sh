@@ -368,6 +368,13 @@ assert_contains docs/roadmap.md 'v0.22.4 — Foreground Direct-Command Signal Ru
 assert_contains docs/roadmap.md 'Preserve conventional final statuses: `130` for `INT`, `143` for `TERM`' 'roadmap documents direct-command signal statuses'
 assert_contains docs/roadmap.md 'v0.22.5 — Foreground Pipeline Signal Runtime' 'roadmap names v0.22.5 slice'
 assert_contains docs/roadmap.md 'Ensure the signal harness does not hang when pipeline children hold inherited' 'roadmap documents pipeline signal harness boundary'
+assert_contains docs/roadmap.md 'v0.22.6 — Handler Context and Final v0.22 Documentation' 'roadmap names v0.22.6 slice'
+assert_contains docs/runtime.md 'Handler context values such as a `$LINENO`-equivalent are explicitly deferred' 'runtime docs defer handler context'
+assert_contains docs/status.md '`v0.22.6` finalizes the v0.22 documentation contract' 'status documents v0.22.6 completion'
+assert_contains docs/status.md 'handler context values such as line numbers remain deferred' 'status documents deferred handler context'
+assert_contains docs/language.ds '$LINENO`-equivalent are not available yet' 'language catalog defers handler context'
+assert_contains docs/milestones/v0.22.6-completion.md 'Landed across v0.22.0 through v0.22.6' 'completion note summarizes landed v0.22 slices'
+assert_contains docs/milestones/v0.22.6-completion.md 'Handler context values such as a `$LINENO`-equivalent' 'completion note defers handler context'
 
 write_fixture "$FIX/term_direct_command.ds" <<'DS'
 trap "TERM" {

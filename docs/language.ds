@@ -530,6 +530,12 @@ defer on: "TERM" {
   exit 143
 }
 
+# Handler registration is process-scope. Handlers may use globals, script
+# arguments, imports, and function calls, but function-local captures and direct
+# `return` from handlers are rejected. Handler context values such as a
+# `$LINENO`-equivalent are not available yet; they remain deferred until VM and
+# emitted Bash can share one portable source-location model.
+
 
 # -----------------------------------------------------------------------------
 # 23. Safer deletion [deferred] [candidate]

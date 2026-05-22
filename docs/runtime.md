@@ -701,6 +701,12 @@ function has returned and VM/Bash parity cannot safely preserve that local scope
 yet. Direct `return` from cleanup handlers is rejected; use `exit` when a
 handler must choose a process-level final status.
 
+Handler context values such as a `$LINENO`-equivalent are explicitly deferred in
+the finalized v0.22 supported subset. The VM and emitted Bash do not currently
+expose a portable cleanup-context object or line-number variable to handlers;
+adding one needs a shared source-location model that remains stable across
+lowering, imports, formatting, and generated Bash.
+
 Cleanup runs for normal completion, explicit `exit`, explicit `fail`, command
 failure, and the supported `INT`/`TERM` paths. The deterministic v0.22.1 cleanup
 core covers the non-signal cases first, v0.22.2 locks down the `INT`/`TERM`
@@ -710,7 +716,9 @@ process-session signal harness with the smallest cooperative `TERM`
 direct-command proof for VM and emitted Bash, v0.22.4 extends that
 harness to non-cooperative foreground direct commands for both `INT` and
 `TERM`, and v0.22.5 extends the same supported signal contract to simple
-foreground pipelines.
+foreground pipelines. v0.22.6 closes the milestone by documenting the final
+supported, rejected, deferred, and out-of-scope cleanup/signal behavior without
+adding new handler-context syntax.
 
 On normal completion, explicit `exit`, `fail`, or direct-command failure, the runtime runs the `EXIT` trap first when present, then `EXIT` defers in last-in, first-out order. On `INT` or `TERM`, the runtime runs the matching trap first, then matching defers in last-in, first-out order, then the `EXIT` cleanup sequence. The original status is preserved when cleanup succeeds; handler failures can replace the final status, and explicit `exit N` in emitted Bash follows Bash's process exit behavior while the cleanup guard prevents recursive handler execution.
 

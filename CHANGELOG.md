@@ -6,6 +6,24 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.6 - Handler Context and Final v0.22 Documentation
+
+- Finalized the staged v0.22 cleanup/signal documentation after the cleanup
+  core, signal syntax surface, deterministic harness, direct-command signal
+  runtime, and simple foreground-pipeline signal runtime were stabilized.
+- Documented the final supported subset: process-scope `defer`/`trap` handlers
+  for `EXIT`, `INT`, and `TERM`; VM/Bash parity for normal completion,
+  explicit `exit`, explicit `fail`, direct command failure, captured command
+  failure, foreground direct-command signals, and simple foreground-pipeline
+  signals.
+- Reaffirmed rejected behavior for function-local handler captures and direct
+  `return` from cleanup handlers.
+- Explicitly deferred handler context values such as a `$LINENO`-equivalent
+  until VM execution and emitted Bash share a portable source-location model.
+- Kept background jobs, async/wait primitives, public job-control APIs,
+  arbitrary signals, handler removal APIs, and shell-grade process-tree
+  management out of scope.
+
 # v0.22.5 - Foreground Pipeline Signal Runtime
 
 - Extended foreground signal-runtime coverage from direct commands to simple
