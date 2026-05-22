@@ -6,6 +6,22 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.5 - Foreground Pipeline Signal Runtime
+
+- Extended foreground signal-runtime coverage from direct commands to simple
+  foreground pipelines for both VM execution and emitted standalone Bash.
+- Verified VM/Bash parity for `INT` and `TERM` pipelines, preserving statuses
+  `130` and `143`.
+- Verified pipeline cleanup ordering matches direct commands: matching signal
+  trap, matching signal defers in LIFO order, then `EXIT` trap and `EXIT`
+  defers in LIFO order.
+- Fixed emitted Bash pipeline signal handling so signal exits route through ds
+  cleanup instead of leaking Bash job-control messages such as `Terminated` or
+  degrading into generic pipeline failures.
+- Kept support limited to foreground pipeline statements; background pipelines,
+  async/wait primitives, and shell-grade process-tree management remain out of
+  scope.
+
 # v0.22.4 - Foreground Direct-Command Signal Runtime
 
 - Extended the v0.22 signal coverage to non-cooperative foreground direct

@@ -106,6 +106,23 @@ static bool emit_direct_signal_command(BashEmitter *e, const DsCommand *command,
     return true;
 }
 
+static bool emit_signal_pipeline(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
+    EmitBuf pipeline = {0};
+    if (!emit_command_pipeline(e, command, &pipeline, span)) {
+        free(pipeline.data);
+        return false;
+    }
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "__ds_run_pipeline ");
+    emit_source_loc(&e->out, e->source, span);
+    buf_append(&e->out, " ");
+    bash_single_quote(&e->out, pipeline.data ? pipeline.data : "", pipeline.len);
+    free(pipeline.data);
+    if (e->handler_depth > 0) buf_append(&e->out, " || return $?\n\n");
+    else buf_append(&e->out, "\n\n");
+    return true;
+}
+
 static bool emit_control_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
     const char *helper = is_control_command(command, "exit") ? "__ds_control_exit" : "__ds_control_fail";
     emit_indent(&e->out, indent);
@@ -515,6 +532,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             if (e->has_signal_handlers && can_emit_direct_signal_command(&stmt->as.cmd_stmt)) {
                 return emit_direct_signal_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
+            }
+            if (e->has_signal_handlers && stmt->as.cmd_stmt.stages.len > 1) {
+                return emit_signal_pipeline(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
             emit_indent(&e->out, indent);
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;

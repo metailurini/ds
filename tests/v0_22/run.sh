@@ -366,6 +366,8 @@ assert_contains docs/roadmap.md 'v0.22.3 — Deterministic Signal Harness' 'road
 assert_contains docs/roadmap.md 'signal the process group' 'roadmap documents process-group signal harnessing'
 assert_contains docs/roadmap.md 'v0.22.4 — Foreground Direct-Command Signal Runtime' 'roadmap names v0.22.4 slice'
 assert_contains docs/roadmap.md 'Preserve conventional final statuses: `130` for `INT`, `143` for `TERM`' 'roadmap documents direct-command signal statuses'
+assert_contains docs/roadmap.md 'v0.22.5 — Foreground Pipeline Signal Runtime' 'roadmap names v0.22.5 slice'
+assert_contains docs/roadmap.md 'Ensure the signal harness does not hang when pipeline children hold inherited' 'roadmap documents pipeline signal harness boundary'
 
 write_fixture "$FIX/term_direct_command.ds" <<'DS'
 trap "TERM" {
@@ -470,6 +472,73 @@ echo after
 DS
 run_and_signal signal_vm_int_direct_runtime vm INT "$FIX/int_direct_runtime.ds" 130 $'ready\nint-trap\nint-defer-second\nint-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
 run_and_signal signal_bash_int_direct_runtime bash INT "$FIX/int_direct_runtime.ds" 130 $'ready\nint-trap\nint-defer-second\nint-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+
+# v0.22.5 foreground pipeline runtime. These use the same non-cooperative
+# sleeper as v0.22.4, but route it through a simple foreground pipeline. The
+# runner must classify INT/TERM as signal cleanup, preserve 130/143, avoid
+# generic pipeline-failure diagnostics, and avoid hanging when pipeline stages
+# inherit the harness stdout/stderr files.
+write_fixture "$FIX/term_pipeline_runtime.ds" <<'DS'
+trap "TERM" {
+  echo term-trap
+}
+
+defer on: "TERM" {
+  echo term-defer-first
+}
+
+defer on: "TERM" {
+  echo term-defer-second
+}
+
+trap "EXIT" {
+  echo exit-trap
+}
+
+defer {
+  echo exit-defer-first
+}
+
+defer {
+  echo exit-defer-second
+}
+
+./ready_exec_sleep | cat
+echo after
+DS
+run_and_signal signal_vm_term_pipeline_runtime vm TERM "$FIX/term_pipeline_runtime.ds" 143 $'ready\nterm-trap\nterm-defer-second\nterm-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+run_and_signal signal_bash_term_pipeline_runtime bash TERM "$FIX/term_pipeline_runtime.ds" 143 $'ready\nterm-trap\nterm-defer-second\nterm-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+
+write_fixture "$FIX/int_pipeline_runtime.ds" <<'DS'
+trap "INT" {
+  echo int-trap
+}
+
+defer on: "INT" {
+  echo int-defer-first
+}
+
+defer on: "INT" {
+  echo int-defer-second
+}
+
+trap "EXIT" {
+  echo exit-trap
+}
+
+defer {
+  echo exit-defer-first
+}
+
+defer {
+  echo exit-defer-second
+}
+
+./ready_exec_sleep | cat
+echo after
+DS
+run_and_signal signal_vm_int_pipeline_runtime vm INT "$FIX/int_pipeline_runtime.ds" 130 $'ready\nint-trap\nint-defer-second\nint-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+run_and_signal signal_bash_int_pipeline_runtime bash INT "$FIX/int_pipeline_runtime.ds" 130 $'ready\nint-trap\nint-defer-second\nint-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
 
 # Deterministic VM/Bash cleanup core parity.
 write_fixture "$FIX/plain_exit.ds" <<'DS'
