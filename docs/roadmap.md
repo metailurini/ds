@@ -17,7 +17,10 @@ major.minor.patch
 Before `1.0.0`:
 
 - `0.x.0` means planned milestone work.
-- `0.x.y` means bug fix, docs fix, or test fix for `0.x.0`.
+- `0.x.y` usually means bug fix, docs fix, or test fix for `0.x.0`.
+- For unusually large or OS-sensitive milestones, `0.x.y` may also be used as
+  an intentionally scoped stabilization slice of `0.x.0`, provided the roadmap
+  names the slice and keeps it inside the parent milestone's product scope.
 - `1.0.0` means the first stable and fully functional language release.
 
 It is acceptable to have many pre-`1.0.0` versions, including `0.100.0`, before declaring stability.
@@ -896,17 +899,25 @@ let result = factorial(6)
 
 ---
 
-### v0.22.0 — Process Control and Signal Handling
+### v0.22.0 — Process Cleanup Contract Foundation
 
-**Purpose:** give scripts safe cleanup and signal awareness. `defer` covers the EXIT case but real scripts also need to handle interruption, errors, and termination cleanly.
+**Purpose:** split the original process-control milestone into smaller,
+verifiable slices. This foundation version defines the cleanup contract before
+real signal delivery is treated as production-grade behavior.
 
 **Scope:**
 
-- Expand `defer` to support signal-specific handlers: `defer on: "INT" { ... }`, `defer on: "TERM" { ... }`.
-- Add `trap` as a lower-level escape hatch for cases `defer` cannot express.
-- Expose `$LINENO`-equivalent context in error handlers.
-- Define clear semantics for what happens when a deferred block itself fails.
-- Implement in VM mode and Bash emission.
+- Add process-scope `defer { ... }` cleanup handlers.
+- Add `trap "EXIT" { ... }` as the explicit process-exit handler form.
+- Define cleanup ordering for normal completion, command failure, explicit
+  `exit`, and explicit `fail`.
+- Define handler-failure behavior: non-exiting handler failures record a failing
+  status but do not skip remaining cleanup.
+- Reject unsupported handler control flow clearly, especially direct `return`
+  from cleanup handlers.
+- Reject function-local captures in process-scope handlers until capture
+  semantics are deliberately designed.
+- Implement the foundation behavior in VM mode and emitted standalone Bash.
 
 **Expected syntax:**
 
@@ -915,23 +926,217 @@ defer {
   remove tmp, recursive: true
 }
 
-defer on: "INT" {
-  echo "interrupted, cleaning up"
-  exit 1
+trap "EXIT" {
+  echo "done"
 }
 ```
 
 **Out of scope:**
 
-- No background job control or async execution.
-- No coprocesses.
-- No full POSIX signal set unless emission to Bash is straightforward.
+- No `INT` or `TERM` real signal delivery yet.
+- No foreground child process-group management.
+- No background job control, async execution, or coprocesses.
+- No function-local RAII-style cleanup.
+- No `$LINENO`-equivalent handler context yet.
 
 **Expected outputs:**
 
-- Signal handler VM and Bash emission tests.
-- Parity tests for EXIT, INT, and TERM cases.
-- Docs explaining when to use `defer` vs `trap`.
+- VM/Bash parity tests for normal completion, command failure, `exit`, and
+  `fail` cleanup.
+- Formatter, checker, HIR/bytecode, and Bash-emission tests for the foundation
+  syntax.
+- Docs explaining the process-scope cleanup contract and the unsupported
+  function-local capture rule.
+
+---
+
+### v0.22.1 — Cleanup Core Test Stabilization
+
+**Purpose:** make the non-signal cleanup behavior boring and fully covered
+before adding asynchronous OS signal tests.
+
+**Scope:**
+
+- Implement the v0.22.0 test plan for parser, formatter, checker, VM, Bash
+  emission, and parity cases that do not require real OS signals.
+- Cover cleanup ordering across multiple defers and `trap "EXIT"`.
+- Cover handler failure continuing to older cleanup handlers.
+- Cover explicit handler `exit` overriding later cleanup where the contract says
+  execution must stop.
+- Cover unsupported constructs with targeted diagnostics, including unsupported
+  signal names, direct `return` in handlers, and function-local captures.
+- Fix any VM/Bash parity bugs exposed by those deterministic tests.
+
+**Out of scope:**
+
+- No real `SIGINT`/`SIGTERM` delivery tests.
+- No process-group signal forwarding.
+- No new user-facing syntax beyond the v0.22.0 foundation.
+
+**Expected outputs:**
+
+- `tests/v0_22/` deterministic cleanup suite wired into aggregate tests.
+- Stable VM/Bash parity for the cleanup core.
+- Docs updated only if the implementation contract differs from the written
+  v0.22.0 contract.
+
+---
+
+### v0.22.2 — Signal Syntax and Diagnostic Surface
+
+**Purpose:** add the user-facing `INT`/`TERM` handler surface while keeping
+runtime signal delivery intentionally limited and easy to reason about.
+
+**Scope:**
+
+- Add `defer on: "INT" { ... }` and `defer on: "TERM" { ... }` parsing,
+  formatting, HIR lowering, bytecode visibility, and Bash-emission structure.
+- Add `trap "INT" { ... }` and `trap "TERM" { ... }` as replacement-style
+  signal handlers.
+- Define and test registration semantics without relying on long-running child
+  processes.
+- Reject unsupported signals with clear diagnostics.
+- Keep VM and Bash behavior aligned for registration, replacement, ordering,
+  and emitted helper shape.
+
+**Out of scope:**
+
+- No claim that foreground child commands are interrupted reliably yet.
+- No pipelines or process-group forwarding tests yet.
+- No arbitrary POSIX signal set.
+
+**Expected outputs:**
+
+- Parser/formatter/checker/emitter tests for `INT` and `TERM` handler syntax.
+- Golden or structural tests proving Bash helpers are emitted only when needed.
+- Docs explaining supported signal names and the distinction between `defer on:`
+  and `trap`.
+
+---
+
+### v0.22.3 — Deterministic Signal Harness
+
+**Purpose:** build a reliable test harness for asynchronous signal behavior
+before expanding signal runtime coverage.
+
+**Scope:**
+
+- Add one reusable test helper for running VM and emitted-Bash scripts in an
+  isolated process session.
+- Wait for a deterministic `ready` marker before sending `INT` or `TERM`.
+- Send signals to the script process group when appropriate.
+- Capture stdout, stderr, and final status without hanging on child-held pipes.
+- Add timeout cleanup that kills leftover process groups and temp files.
+- Prove the harness with the smallest possible direct-command `TERM` fixture.
+
+**Out of scope:**
+
+- No broad signal matrix yet.
+- No pipeline signal cases yet.
+- No background jobs or process-tree ownership APIs.
+
+**Expected outputs:**
+
+- A reusable signal-test helper in `tests/v0_22/run.sh` or a shared test helper
+  file.
+- One stable VM `TERM` direct-command signal test.
+- One stable emitted-Bash `TERM` direct-command signal test.
+- Clear comments documenting why tests signal the process group instead of using
+  self-signaling fixtures.
+
+---
+
+### v0.22.4 — Foreground Direct-Command Signal Runtime
+
+**Purpose:** make real `INT`/`TERM` cleanup reliable for foreground direct
+commands in both execution backends.
+
+**Scope:**
+
+- Route observed `SIGINT` and `SIGTERM` while waiting on a foreground command
+  into the cleanup engine.
+- Preserve conventional final statuses: `130` for `INT`, `143` for `TERM`.
+- Avoid misleading generic command-failure diagnostics for signal-triggered
+  termination.
+- Forward supported signals to the foreground command process group where the
+  runtime owns one.
+- Keep emitted Bash behavior aligned with VM behavior for direct commands.
+
+**Out of scope:**
+
+- No pipeline signal parity yet.
+- No nested process supervisors or shell-grade job control.
+- No background jobs.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for direct-command `INT` and `TERM` cleanup.
+- Tests for ordering: signal trap, defers in LIFO order, then `EXIT` trap.
+- Docs clarifying the supported foreground direct-command behavior.
+
+---
+
+### v0.22.5 — Foreground Pipeline Signal Runtime
+
+**Purpose:** extend the proven direct-command signal behavior to simple
+foreground pipelines without expanding into general job control.
+
+**Scope:**
+
+- Classify `INT`/`TERM` termination from simple foreground pipelines as signal
+  cleanup instead of ordinary command failure.
+- Preserve final statuses and cleanup ordering consistently with direct
+  commands.
+- Keep emitted Bash and VM behavior aligned for the supported pipeline subset.
+- Ensure the signal harness does not hang when pipeline children hold inherited
+  stdout/stderr pipes.
+
+**Out of scope:**
+
+- No background pipelines.
+- No asynchronous pipelines or `wait` primitives.
+- No shell-grade process-tree management beyond the supported foreground
+  pipeline subset.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for one or two simple foreground pipeline `INT`/`TERM`
+  cases.
+- Regression tests proving direct-command signal behavior from v0.22.4 remains
+  stable.
+- Docs updated with the precise supported pipeline subset.
+
+---
+
+### v0.22.6 — Handler Context and Final v0.22 Documentation
+
+**Purpose:** finish the original v0.22 documentation promise only after the
+cleanup and signal behavior is stable.
+
+**Scope:**
+
+- Add the smallest useful `$LINENO`-equivalent context for cleanup/error
+  handlers if it can be implemented consistently in VM and emitted Bash.
+- If handler context is not ready, explicitly defer it with a reason and remove
+  any overclaiming docs.
+- Audit `docs/language.ds`, `docs/runtime.md`, `docs/status.md`, and changelog
+  entries against the final v0.22 supported subset.
+- Ensure examples avoid unsupported function-local captures, background jobs,
+  arbitrary signals, and async behavior.
+
+**Out of scope:**
+
+- No rich stack traces or structured exception objects.
+- No arbitrary signal metadata.
+- No expansion beyond the finalized v0.22 cleanup/signal subset.
+
+**Expected outputs:**
+
+- Final v0.22 docs that distinguish supported, rejected, deferred, and out-of-
+  scope behavior.
+- A concise completion note explaining which original v0.22 goals landed across
+  v0.22.0 through v0.22.6.
+- Full v0.22 aggregate test pass.
 
 ---
 
