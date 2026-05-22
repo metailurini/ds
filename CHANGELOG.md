@@ -6,6 +6,22 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.2 - Signal Syntax and Diagnostic Surface
+
+- Extended the v0.22 focused suite with deterministic `INT`/`TERM` syntax
+  coverage without adding real OS signal-delivery tests.
+- Covered tokens, AST, HIR, bytecode/debug output, formatter normalization, and
+  emitted-Bash helper structure for `defer on: "INT"`, `defer on: "TERM"`,
+  `trap "INT"`, and `trap "TERM"`.
+- Added diagnostic coverage for unsupported `defer on:` signals, unsupported
+  `trap` signals, lowercase signal names, and malformed non-string signal
+  syntax.
+- Verified emitted Bash declares and registers signal-specific defer stacks,
+  replacement trap slots, and standalone `INT`/`TERM` shell traps without
+  calling back into `ds`.
+- Kept foreground child interruption, process-group signaling, and asynchronous
+  signal harnessing assigned to later v0.22 slices.
+
 # v0.22.1 - Cleanup Core Test Stabilization
 
 - Added the deterministic `tests/v0_22/run.sh` cleanup-core suite and wired it

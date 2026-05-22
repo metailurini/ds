@@ -703,7 +703,9 @@ handler must choose a process-level final status.
 
 Cleanup runs for normal completion, explicit `exit`, explicit `fail`, command
 failure, and the supported `INT`/`TERM` paths. The deterministic v0.22.1 cleanup
-core covers the non-signal cases first; asynchronous OS signal delivery is
+core covers the non-signal cases first, and v0.22.2 locks down the `INT`/`TERM`
+syntax, diagnostics, formatting, lowering visibility, and emitted-Bash helper
+shape without sending real OS signals. Asynchronous OS signal delivery is
 stabilized in later v0.22 slices.
 
 On normal completion, explicit `exit`, `fail`, or direct-command failure, the runtime runs the `EXIT` trap first when present, then `EXIT` defers in last-in, first-out order. On `INT` or `TERM`, the runtime runs the matching trap first, then matching defers in last-in, first-out order, then the `EXIT` cleanup sequence. The original status is preserved when cleanup succeeds; handler failures can replace the final status, and explicit `exit N` in emitted Bash follows Bash's process exit behavior while the cleanup guard prevents recursive handler execution.

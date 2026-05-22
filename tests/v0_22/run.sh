@@ -104,15 +104,20 @@ assert_parity() {
 FIX="$TMP/fixtures with spaces"
 mkdir -p "$FIX"
 
-# Build wiring and docs for the v0.22.1 deterministic slice.
+# Build wiring and docs for the staged v0.22 slices completed so far.
 assert_contains Makefile '0-22' 'TEST_VERSIONS contains v0.22'
 assert_matches Makefile '^TEST_VERSIONS := .*0-21 0-22($| )' 'v0.22 follows v0.21 in TEST_VERSIONS'
 assert_contains docs/roadmap.md 'v0.22.1 — Cleanup Core Test Stabilization' 'roadmap names v0.22.1 slice'
 assert_contains docs/roadmap.md 'No real `SIGINT`/`SIGTERM` delivery tests' 'roadmap excludes real signals for v0.22.1'
+assert_contains docs/roadmap.md 'v0.22.2 — Signal Syntax and Diagnostic Surface' 'roadmap names v0.22.2 slice'
+assert_contains docs/roadmap.md 'No claim that foreground child commands are interrupted reliably yet' 'roadmap bounds v0.22.2 runtime claims'
 assert_contains docs/runtime.md 'Handler registration is process-scope' 'runtime docs document process-scope handlers'
 assert_contains docs/runtime.md 'Cleanup runs for normal completion' 'runtime docs document cleanup triggers'
+assert_contains docs/runtime.md 'Supported signal names are the string literals `"EXIT"`, `"INT"`, and `"TERM"`' 'runtime docs list supported signal literals'
 assert_contains docs/language.ds 'defer {' 'language catalog documents defer'
 assert_contains docs/language.ds 'trap "EXIT"' 'language catalog documents trap EXIT'
+assert_contains docs/language.ds 'trap "INT"' 'language catalog documents trap INT'
+assert_contains docs/language.ds 'trap "TERM"' 'language catalog documents trap TERM'
 assert_contains docs/language.ds 'function-local variables' 'language catalog documents local capture rejection'
 
 # Syntax shape and formatter checks without exercising real OS signals.
@@ -152,6 +157,91 @@ DS
 run_fail unformatted_fmt_check "$DS" fmt --check "$FIX/unformatted.ds"
 run_ok unformatted_fmt_write "$DS" fmt --write "$FIX/unformatted.ds"
 assert_same "$FIX/shape.ds" "$FIX/unformatted.ds" 'formatter normalizes cleanup handler syntax'
+
+# Signal syntax and diagnostic surface for v0.22.2. These tests intentionally
+# avoid real OS signal delivery; they prove the user-facing INT/TERM language
+# surface, diagnostics, and emitted-helper structure only.
+write_fixture "$FIX/signal_shape.ds" <<'DS'
+defer on: "INT" {
+  echo int-defer
+}
+
+defer on: "TERM" {
+  echo term-defer
+}
+
+trap "INT" {
+  echo int-trap-1
+}
+
+trap "INT" {
+  echo int-trap-2
+}
+
+trap "TERM" {
+  echo term-trap
+}
+
+trap "EXIT" {
+  echo exit-trap
+}
+
+echo body
+DS
+run_ok signal_shape_tokens "$DS" tokens "$FIX/signal_shape.ds"
+assert_contains "$TMP/signal_shape_tokens.out" 'STRING         "\"INT\""' 'tokens include INT signal literal'
+assert_contains "$TMP/signal_shape_tokens.out" 'STRING         "\"TERM\""' 'tokens include TERM signal literal'
+run_ok signal_shape_ast "$DS" ast "$FIX/signal_shape.ds"
+assert_contains "$TMP/signal_shape_ast.out" 'DeferStmt INT' 'AST includes INT defer handler'
+assert_contains "$TMP/signal_shape_ast.out" 'DeferStmt TERM' 'AST includes TERM defer handler'
+assert_contains "$TMP/signal_shape_ast.out" 'TrapStmt INT' 'AST includes INT trap handler'
+assert_contains "$TMP/signal_shape_ast.out" 'TrapStmt TERM' 'AST includes TERM trap handler'
+run_ok signal_shape_hir "$DS" hir "$FIX/signal_shape.ds"
+assert_contains "$TMP/signal_shape_hir.out" 'Defer INT' 'HIR includes INT defer handler'
+assert_contains "$TMP/signal_shape_hir.out" 'Defer TERM' 'HIR includes TERM defer handler'
+assert_contains "$TMP/signal_shape_hir.out" 'Trap INT' 'HIR includes INT trap handler'
+assert_contains "$TMP/signal_shape_hir.out" 'Trap TERM' 'HIR includes TERM trap handler'
+run_ok signal_shape_bytecode "$DS" bytecode "$FIX/signal_shape.ds"
+assert_contains "$TMP/signal_shape_bytecode.out" 'REGISTER_HANDLER defer INT' 'bytecode registers INT defer handler'
+assert_contains "$TMP/signal_shape_bytecode.out" 'REGISTER_HANDLER defer TERM' 'bytecode registers TERM defer handler'
+assert_contains "$TMP/signal_shape_bytecode.out" 'REGISTER_HANDLER trap INT' 'bytecode registers INT trap handler'
+assert_contains "$TMP/signal_shape_bytecode.out" 'REGISTER_HANDLER trap TERM' 'bytecode registers TERM trap handler'
+run_ok signal_shape_fmt_check "$DS" fmt --check "$FIX/signal_shape.ds"
+
+write_fixture "$FIX/unformatted_signal.ds" <<'DS'
+defer on:"INT"{echo int-defer}
+
+defer on:"TERM"{echo term-defer}
+
+trap "INT"{echo int-trap-1}
+
+trap "INT"{echo int-trap-2}
+
+trap "TERM"{echo term-trap}
+
+trap "EXIT"{echo exit-trap}
+
+echo body
+DS
+run_fail unformatted_signal_fmt_check "$DS" fmt --check "$FIX/unformatted_signal.ds"
+run_ok unformatted_signal_fmt_write "$DS" fmt --write "$FIX/unformatted_signal.ds"
+assert_same "$FIX/signal_shape.ds" "$FIX/unformatted_signal.ds" 'formatter normalizes INT/TERM handler syntax'
+
+run_ok signal_shape_emit "$DS" emit bash "$FIX/signal_shape.ds" -o "$TMP/signal_shape.sh"
+run_ok signal_shape_bash_n bash -n "$TMP/signal_shape.sh"
+assert_contains "$TMP/signal_shape.sh" 'declare -a __ds_defer_EXIT=() __ds_defer_INT=() __ds_defer_TERM=()' 'Bash helper declares signal defer stacks'
+assert_contains "$TMP/signal_shape.sh" 'trap '\''__ds_run_signal INT 130'\'' INT' 'Bash helper installs INT trap'
+assert_contains "$TMP/signal_shape.sh" 'trap '\''__ds_run_signal TERM 143'\'' TERM' 'Bash helper installs TERM trap'
+assert_contains "$TMP/signal_shape.sh" '__ds_defer_INT+=' 'Bash emission registers INT defer stack entry'
+assert_contains "$TMP/signal_shape.sh" '__ds_defer_TERM+=' 'Bash emission registers TERM defer stack entry'
+assert_contains "$TMP/signal_shape.sh" '__ds_trap_INT=' 'Bash emission registers INT trap replacement slot'
+assert_contains "$TMP/signal_shape.sh" '__ds_trap_TERM=' 'Bash emission registers TERM trap replacement slot'
+assert_matches "$TMP/signal_shape.sh" '^__ds_trap_INT=__ds_handler_[0-9]+$' 'Bash emission has INT trap assignment'
+if [ "$(grep -c '^__ds_trap_INT=__ds_handler_' "$TMP/signal_shape.sh")" -ne 2 ]; then
+  fail 'Bash emission keeps two INT trap assignments so later replacement is visible'
+fi
+pass 'Bash emission keeps two INT trap assignments so later replacement is visible'
+assert_not_matches "$TMP/signal_shape.sh" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' 'signal emitted Bash does not call ds'
 
 # Deterministic VM/Bash cleanup core parity.
 write_fixture "$FIX/plain_exit.ds" <<'DS'
@@ -306,6 +396,24 @@ defer on: "HUP" { echo nope }
 DS
 assert_check_fails unsupported_signal "$FIX/unsupported_signal.ds" 'unsupported defer on: signal `HUP`'
 assert_emit_fails unsupported_signal "$FIX/unsupported_signal.ds" 'unsupported defer on: signal `HUP`'
+
+write_fixture "$FIX/unsupported_trap_signal.ds" <<'DS'
+trap "HUP" { echo nope }
+DS
+assert_check_fails unsupported_trap_signal "$FIX/unsupported_trap_signal.ds" 'unsupported trap signal `HUP`'
+assert_emit_fails unsupported_trap_signal "$FIX/unsupported_trap_signal.ds" 'unsupported trap signal `HUP`'
+
+write_fixture "$FIX/lowercase_signal.ds" <<'DS'
+defer on: "int" { echo nope }
+DS
+assert_check_fails lowercase_signal "$FIX/lowercase_signal.ds" 'unsupported defer on: signal `int`'
+assert_emit_fails lowercase_signal "$FIX/lowercase_signal.ds" 'unsupported defer on: signal `int`'
+
+write_fixture "$FIX/missing_signal_string.ds" <<'DS'
+defer on: INT { echo nope }
+DS
+run_fail missing_signal_string_check "$DS" check "$FIX/missing_signal_string.ds"
+assert_diag "$TMP/missing_signal_string_check.err" 'expected signal string after `defer on:`' 'missing signal string diagnostic'
 
 write_fixture "$FIX/return_in_handler.ds" <<'DS'
 fn setup() {
