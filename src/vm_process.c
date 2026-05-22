@@ -5,11 +5,13 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <unistd.h>
 
 static void print_trace_escaped(FILE *out, const char *data) {
@@ -520,6 +522,72 @@ static bool fd_set_cloexec(int fd) {
     return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
+static bool vm_signal_is_cleanup_signal(int sig) {
+    return sig == SIGINT || sig == SIGTERM;
+}
+
+static bool vm_command_was_interrupted(const Vm *vm, int code) {
+    return (vm->interrupted_signal == SIGINT && code == 130) ||
+           (vm->interrupted_signal == SIGTERM && code == 143);
+}
+
+static void vm_forward_signal_to_child_group(Vm *vm, pid_t pgid, int sig) {
+    if (!vm_signal_is_cleanup_signal(sig)) return;
+    vm_note_interrupted_signal(vm, sig);
+    if (pgid > 0) kill(-pgid, sig);
+}
+
+static void vm_note_wait_status_signal(Vm *vm, int status) {
+    if (WIFSIGNALED(status)) vm_note_interrupted_signal(vm, WTERMSIG(status));
+}
+
+static void vm_restore_terminal_pgrp(int tty_fd, pid_t shell_pgid) {
+    if (tty_fd >= 0 && shell_pgid > 0) {
+        void (*old_ttou)(int) = signal(SIGTTOU, SIG_IGN);
+        tcsetpgrp(tty_fd, shell_pgid);
+        signal(SIGTTOU, old_ttou);
+    }
+}
+
+static bool vm_make_foreground_group(pid_t pgid, int *tty_fd, pid_t *shell_pgid) {
+    *tty_fd = -1;
+    *shell_pgid = -1;
+    if (pgid <= 0) return false;
+    setpgid(pgid, pgid);
+    if (isatty(STDIN_FILENO)) {
+        pid_t current = tcgetpgrp(STDIN_FILENO);
+        pid_t self = getpgrp();
+        if (current == self) {
+            void (*old_ttou)(int) = signal(SIGTTOU, SIG_IGN);
+            if (tcsetpgrp(STDIN_FILENO, pgid) == 0) {
+                *tty_fd = STDIN_FILENO;
+                *shell_pgid = self;
+            }
+            signal(SIGTTOU, old_ttou);
+        }
+    }
+    return true;
+}
+
+static bool vm_wait_foreground_child(Vm *vm, pid_t pid, pid_t pgid, const VmProcessSpec *spec, int *status) {
+    int tty_fd = -1;
+    pid_t shell_pgid = -1;
+    vm_make_foreground_group(pgid, &tty_fd, &shell_pgid);
+    while (waitpid(pid, status, 0) < 0) {
+        if (errno == EINTR) {
+            int sig = vm_take_pending_signal();
+            if (sig) vm_forward_signal_to_child_group(vm, pgid, sig);
+            continue;
+        }
+        vm_restore_terminal_pgrp(tty_fd, shell_pgid);
+        ds_diag_error(vm->diag, spec->span, "failed waiting for command `%s`: %s", spec->argv.items[0], strerror(errno));
+        return false;
+    }
+    vm_restore_terminal_pgrp(tty_fd, shell_pgid);
+    vm_note_wait_status_signal(vm, *status);
+    return true;
+}
+
 static bool process_exec_error_pipe(Vm *vm, const VmProcessSpec *spec, int pipe_fds[2]) {
     pipe_fds[0] = -1;
     pipe_fds[1] = -1;
@@ -605,9 +673,11 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     }
 
     if (pid == 0) {
+        setpgid(0, 0);
         close(exec_error_pipe[0]);
         process_child_exec(spec, redirect_fd, out_fp, err_fp);
     }
+    setpgid(pid, pid);
 
     close(exec_error_pipe[1]);
     spec->exec_error_fd = -1;
@@ -616,13 +686,10 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     ssize_t exec_error_len = read(exec_error_pipe[0], &exec_errno, sizeof(exec_errno));
     close(exec_error_pipe[0]);
     int status = 0;
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno != EINTR) {
-            ds_diag_error(vm->diag, spec->span, "failed waiting for command `%s`: %s", spec->argv.items[0], strerror(errno));
-            if (out_fp) fclose(out_fp);
-            if (err_fp) fclose(err_fp);
-            return false;
-        }
+    if (!vm_wait_foreground_child(vm, pid, pid, spec, &status)) {
+        if (out_fp) fclose(out_fp);
+        if (err_fp) fclose(err_fp);
+        return false;
     }
     result->code = process_status_code(status);
 
@@ -742,6 +809,7 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
     }
     for (size_t i = 0; i < n; i++) specs[i].exec_error_fd = exec_error_pipe[1];
 
+    pid_t pgid = -1;
     for (size_t i = 0; i < n; i++) {
         pids[i] = fork();
         if (pids[i] < 0) {
@@ -750,9 +818,13 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
             goto cleanup;
         }
         if (pids[i] == 0) {
+            if (i == 0) setpgid(0, 0);
+            else if (pgid > 0) setpgid(0, pgid);
             close(exec_error_pipe[0]);
             pipeline_child_exec(specs, n, i, pipes, redirect_fd, &ins->redirect, out_fp, err_fp);
         }
+        if (i == 0) pgid = pids[i];
+        if (pgid > 0) setpgid(pids[i], pgid);
     }
 
     close(exec_error_pipe[1]); exec_error_pipe[1] = -1;
@@ -763,17 +835,26 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
     ssize_t exec_error_len = read(exec_error_pipe[0], &exec_errno, sizeof(exec_errno));
     close(exec_error_pipe[0]); exec_error_pipe[0] = -1;
 
+    int tty_fd = -1;
+    pid_t shell_pgid = -1;
+    if (pgid > 0) vm_make_foreground_group(pgid, &tty_fd, &shell_pgid);
     for (size_t i = 0; i < n; i++) {
         int status = 0;
         while (waitpid(pids[i], &status, 0) < 0) {
-            if (errno != EINTR) {
-                ds_diag_error(vm->diag, ins->span, "failed waiting for pipeline stage `%s`: %s", specs[i].argv.len ? specs[i].argv.items[0] : "<stage>", strerror(errno));
-                ok = false;
-                goto cleanup;
+            if (errno == EINTR) {
+                int sig = vm_take_pending_signal();
+                if (sig) vm_forward_signal_to_child_group(vm, pgid, sig);
+                continue;
             }
+            ds_diag_error(vm->diag, ins->span, "failed waiting for pipeline stage `%s`: %s", specs[i].argv.len ? specs[i].argv.items[0] : "<stage>", strerror(errno));
+            vm_restore_terminal_pgrp(tty_fd, shell_pgid);
+            ok = false;
+            goto cleanup;
         }
+        vm_note_wait_status_signal(vm, status);
         codes[i] = process_status_code(status);
     }
+    vm_restore_terminal_pgrp(tty_fd, shell_pgid);
     result->code = pipefail_status(codes, n);
     if (!capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
         ds_diag_error(vm->diag, ins->span, "failed to launch pipeline command: %s", strerror(exec_errno));
@@ -807,7 +888,7 @@ int run_command(Vm *vm, Instr *ins) {
         VmProcessResult result;
         bool ok = process_execute_pipeline(vm, ins, false, &result);
         int code = ok ? result.code : 1;
-        if (ok && code != 0 && !vm->diag->has_error) ds_diag_error(vm->diag, ins->span, "pipeline failed with exit %d", code);
+        if (ok && code != 0 && !vm->diag->has_error && !vm_command_was_interrupted(vm, code)) ds_diag_error(vm->diag, ins->span, "pipeline failed with exit %d", code);
         process_result_free(&result);
         return code;
     }
@@ -821,7 +902,7 @@ int run_command(Vm *vm, Instr *ins) {
     VmProcessResult result;
     bool ok = process_execute(vm, &spec, &result);
     int code = ok ? result.code : 1;
-    if (ok && code != 0 && !vm->diag->has_error) {
+    if (ok && code != 0 && !vm->diag->has_error && !vm_command_was_interrupted(vm, code)) {
         ds_diag_error(vm->diag, ins->span, "command `%s` failed with exit %d", spec.argv.len > 0 ? spec.argv.items[0] : "<command>", code);
     }
     process_result_free(&result);

@@ -16,6 +16,9 @@ Planned:
   handlers that run before matching defers.
 - Preserved deterministic cleanup ordering: signal trap, signal defers in LIFO
   order, then EXIT cleanup.
+- Hardened VM foreground command/pipeline interruption so `INT`/`TERM` during a
+  long-running child process runs signal-specific cleanup and forwards the
+  observed signal to the child process group when possible.
 - Added VM bytecode/runtime support and standalone Bash cleanup helpers without
   adding calls back to `ds`.
 - Updated docs for the implemented scope. The dedicated v0.22 automated test

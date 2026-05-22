@@ -133,6 +133,7 @@ typedef struct {
     size_t handler_len;
     size_t handler_cap;
     bool cleanup_running;
+    int interrupted_signal;
 } Vm;
 
 void program_free(Program *p);
@@ -159,6 +160,9 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
 int run_command(Vm *vm, Instr *ins);
 int run_capture(Vm *vm, Instr *ins, DsValue *out_value);
 bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
+
+int vm_take_pending_signal(void);
+void vm_note_interrupted_signal(Vm *vm, int sig);
 
 bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out);
 

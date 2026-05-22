@@ -12,6 +12,16 @@ static void ds_vm_signal_handler(int sig) {
     ds_vm_pending_signal = sig;
 }
 
+int vm_take_pending_signal(void) {
+    int sig = ds_vm_pending_signal;
+    ds_vm_pending_signal = 0;
+    return sig;
+}
+
+void vm_note_interrupted_signal(Vm *vm, int sig) {
+    if (sig == SIGINT || sig == SIGTERM) vm->interrupted_signal = sig;
+}
+
 static bool int_add_checked(int64_t a, int64_t b, int64_t *out) {
     if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) return false;
     *out = a + b;
@@ -119,8 +129,8 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
 dispatch_loop:
     while (ip < p.instr_len) {
         if (!handler_mode && ds_vm_pending_signal) {
-            int sig = ds_vm_pending_signal;
-            ds_vm_pending_signal = 0;
+            int sig = vm_take_pending_signal();
+            vm_note_interrupted_signal(&vm, sig);
             cleanup_signal = sig == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
             rc = sig == SIGTERM ? 143 : 130;
             goto done;
@@ -302,7 +312,12 @@ dispatch_loop:
             case OP_RUN_CMD:
                 rc = run_command(&vm, ins);
                 if (vm.test_done) goto done;
-                if (rc != 0) goto done;
+                if (rc != 0) {
+                    if (vm.interrupted_signal == SIGINT || vm.interrupted_signal == SIGTERM) {
+                        cleanup_signal = vm.interrupted_signal == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
+                    }
+                    goto done;
+                }
                 ip++;
                 break;
             case OP_CALL: {
@@ -452,6 +467,9 @@ done:
     if (!vm.cleanup_running && vm.handler_len > 0) {
         vm.cleanup_running = true;
         final_rc = rc;
+        if (vm.interrupted_signal == SIGINT || vm.interrupted_signal == SIGTERM) {
+            cleanup_signal = vm.interrupted_signal == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
+        }
         cleanup_cursor = vm.handler_len;
         cleanup_trap_done = false;
     cleanup_next:
