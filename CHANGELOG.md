@@ -6,6 +6,20 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.3 - Deterministic Signal Harness
+
+- Added a reusable v0.22 signal-test harness that runs VM and emitted-Bash
+  scripts in isolated process sessions, waits for a deterministic `ready`
+  marker, signals the process group, captures stdout/stderr/status through
+  files, and kills leftovers on timeout.
+- Proved the harness with the smallest direct-command `TERM` fixture in both
+  VM execution and emitted standalone Bash.
+- Kept the fixture cooperative so this slice validates harness determinism
+  without expanding the broader signal-runtime matrix assigned to v0.22.4 and
+  later slices.
+- Fixed emitted Bash signal cleanup under `set -u` by avoiding same-command
+  `local` initialization that referenced the signal name before assignment.
+
 # v0.22.2 - Signal Syntax and Diagnostic Surface
 
 - Extended the v0.22 focused suite with deterministic `INT`/`TERM` syntax

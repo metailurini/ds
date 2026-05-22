@@ -101,6 +101,107 @@ assert_parity() {
   fi
 }
 
+run_and_signal() {
+  local name="$1" mode="$2" signal="$3" fixture="$4" expected_status="$5" expected_stdout="$6"
+  local out="$TMP/${name}.out"
+  local err="$TMP/${name}.err"
+  local rc_file="$TMP/${name}.rc"
+  local script="$TMP/${name}.sh"
+  local run_dir
+  local pid=""
+  local ready=0
+  local done=0
+  local stat=""
+
+  : >"$out"
+  : >"$err"
+  run_dir="$(dirname "$fixture")"
+
+  case "$mode" in
+    vm)
+      setsid bash -c 'cd "$1" && exec "$2" run "$3"' _ "$run_dir" "$DS" "$fixture" >"$out" 2>"$err" &
+      pid=$!
+      ;;
+    bash)
+      run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
+      run_ok "${name}_bash_n" bash -n "$script"
+      assert_not_matches "$script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' "$name emitted Bash does not call ds"
+      setsid bash -c 'cd "$1" && exec bash "$2"' _ "$run_dir" "$script" >"$out" 2>"$err" &
+      pid=$!
+      ;;
+    *)
+      fail "$name unknown signal harness mode: $mode"
+      ;;
+  esac
+
+  # Signal tests never use self-signaling fixtures: the harness owns process
+  # lifetime. It waits for an explicit marker, then signals the isolated process
+  # group so the foreground child and the ds/Bash runner observe the same event.
+  for _ in $(seq 1 200); do
+    if grep -qx 'ready' "$out"; then
+      ready=1
+      break
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      break
+    fi
+    sleep 0.05
+  done
+
+  if [ "$ready" -ne 1 ]; then
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    set +e
+    wait "$pid" 2>/dev/null
+    set -e
+    echo "--- $out" >&2
+    cat "$out" >&2 || true
+    echo "--- $err" >&2
+    cat "$err" >&2 || true
+    fail "$name did not print ready before signal"
+  fi
+
+  if ! kill -"$signal" -- "-$pid" 2>/dev/null; then
+    echo "--- $out" >&2
+    cat "$out" >&2 || true
+    echo "--- $err" >&2
+    cat "$err" >&2 || true
+    fail "$name could not signal process group"
+  fi
+
+  for _ in $(seq 1 200); do
+    if ! stat=$(ps -p "$pid" -o stat= 2>/dev/null); then
+      done=1
+      break
+    fi
+    case "$stat" in
+      *Z*) done=1; break ;;
+    esac
+    sleep 0.05
+  done
+
+  if [ "$done" -ne 1 ]; then
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    set +e
+    wait "$pid" 2>/dev/null
+    set -e
+    echo "--- $out" >&2
+    cat "$out" >&2 || true
+    echo "--- $err" >&2
+    cat "$err" >&2 || true
+    fail "$name did not exit after $signal"
+  fi
+
+  set +e
+  wait "$pid"
+  local rc=$?
+  set -e
+  printf '%s' "$rc" >"$rc_file"
+
+  assert_status "$name" "$expected_status"
+  assert_same_text "$expected_stdout" "$out" "$name stdout"
+  assert_same_text '' "$err" "$name stderr"
+}
+
 FIX="$TMP/fixtures with spaces"
 mkdir -p "$FIX"
 
@@ -242,6 +343,42 @@ if [ "$(grep -c '^__ds_trap_INT=__ds_handler_' "$TMP/signal_shape.sh")" -ne 2 ];
 fi
 pass 'Bash emission keeps two INT trap assignments so later replacement is visible'
 assert_not_matches "$TMP/signal_shape.sh" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' 'signal emitted Bash does not call ds'
+
+# v0.22.3 deterministic signal harness. This slice adds the reusable harness
+# and only the smallest direct-command TERM fixture for each backend. Broader
+# INT/TERM matrices, pipelines, and process-tree semantics are later slices.
+assert_contains docs/roadmap.md 'v0.22.3 — Deterministic Signal Harness' 'roadmap names v0.22.3 slice'
+assert_contains docs/roadmap.md 'signal the process group' 'roadmap documents process-group signal harnessing'
+
+write_fixture "$FIX/term_direct_command.ds" <<'DS'
+trap "TERM" {
+  echo term-trap
+}
+
+defer {
+  echo exit-defer
+}
+
+trap "EXIT" {
+  echo exit-trap
+}
+
+./ready_sleep
+echo after
+DS
+cat >"$FIX/ready_sleep" <<'SH'
+#!/usr/bin/env bash
+child=''
+trap 'if [ -n "$child" ]; then kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi; exit 143' TERM
+echo ready
+sleep 30 &
+child=$!
+wait "$child" 2>/dev/null || exit $?
+echo child-after
+SH
+chmod +x "$FIX/ready_sleep"
+run_and_signal signal_vm_term_direct vm TERM "$FIX/term_direct_command.ds" 143 $'ready\nterm-trap\nexit-trap\nexit-defer\n'
+run_and_signal signal_bash_term_direct bash TERM "$FIX/term_direct_command.ds" 143 $'ready\nterm-trap\nexit-trap\nexit-defer\n'
 
 # Deterministic VM/Bash cleanup core parity.
 write_fixture "$FIX/plain_exit.ds" <<'DS'
