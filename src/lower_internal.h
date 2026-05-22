@@ -25,6 +25,7 @@ typedef struct {
     char *name;
     SymKind kind;
     SymKind element_kind;
+    int function_depth;
 } Symbol;
 
 typedef struct Scope Scope;
@@ -41,6 +42,8 @@ typedef struct {
     DsLowerProgram *program;
     int loop_depth;
     int function_depth;
+    int handler_depth;
+    int handler_function_depth;
     DsLowerFn *current_function;
 } Lower;
 
@@ -55,6 +58,7 @@ void scope_init(Scope *scope, Scope *parent);
 void scope_free(Scope *scope);
 Symbol *scope_find_current(Scope *scope, DsStr name);
 Symbol *scope_find(Scope *scope, DsStr name);
+bool lower_validate_handler_capture(Lower *lower, const Symbol *sym, DsStr name, DsSpan span);
 void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span);
 void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span);
 

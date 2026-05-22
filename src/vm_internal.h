@@ -133,6 +133,7 @@ typedef struct {
     size_t handler_len;
     size_t handler_cap;
     bool cleanup_running;
+    bool control_exit_requested;
     int interrupted_signal;
 } Vm;
 

@@ -693,6 +693,9 @@ trap "EXIT" {
 # `defer` handlers are stackable and run in last-in, first-out order. Repeated
 # `trap` handlers replace the previous trap for the same signal. Supported
 # signal literals are exactly "EXIT", "INT", and "TERM" in v0.22.0.
+# Process-level handlers may be registered from functions only when the handler
+# does not capture function-local variables. Direct `return` from a cleanup
+# handler is rejected; use `exit` for process-level cleanup status instead.
 
 
 # -----------------------------------------------------------------------------

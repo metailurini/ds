@@ -203,9 +203,12 @@ static void emit_cleanup_helpers(BashEmitter *e) {
     buf_append(&e->out,
         "declare -a __ds_defer_EXIT=() __ds_defer_INT=() __ds_defer_TERM=()\n"
         "__ds_trap_EXIT=\n__ds_trap_INT=\n__ds_trap_TERM=\n__ds_cleanup_running=false\n"
-        "__ds_run_stack_lifo() { local __ds_arr=$1 __ds_i __ds_fn; eval \"__ds_i=\\${#${__ds_arr}[@]}\"; while ((__ds_i > 0)); do ((__ds_i--)); eval \"__ds_fn=\\${${__ds_arr}[__ds_i]}\"; \"$__ds_fn\"; done; }\n"
-        "__ds_run_cleanup() { local __ds_rc=${1:-0}; if $__ds_cleanup_running; then exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then \"$__ds_trap_EXIT\" || __ds_rc=$?; fi; __ds_run_stack_lifo __ds_defer_EXIT || __ds_rc=$?; exit \"$__ds_rc\"; }\n"
-        "__ds_run_signal() { local __ds_sig=$1 __ds_rc=$2 __ds_trap=__ds_trap_${__ds_sig} __ds_stack=__ds_defer_${__ds_sig}; if $__ds_cleanup_running; then exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; local __ds_fn=\"${!__ds_trap:-}\"; if [[ -n \"$__ds_fn\" ]]; then \"$__ds_fn\" || __ds_rc=$?; fi; __ds_run_stack_lifo \"$__ds_stack\" || __ds_rc=$?; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then \"$__ds_trap_EXIT\" || __ds_rc=$?; fi; __ds_run_stack_lifo __ds_defer_EXIT || __ds_rc=$?; exit \"$__ds_rc\"; }\n"
+        "__ds_fail() { local __ds_loc=$1 __ds_code=$2; echo \"$__ds_loc: error: command failed with exit $__ds_code\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return \"$__ds_code\"; fi; exit \"$__ds_code\"; }\n"
+        "__ds_control_fail() { local __ds_loc=$1; shift; local __ds_msg=\"$*\"; if [[ -n \"$__ds_msg\" ]]; then echo \"$__ds_loc: error: $__ds_msg\" >&2; else echo \"$__ds_loc: error: fail\" >&2; fi; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; }\n"
+        "__ds_control_exit() { local __ds_loc=$1; shift; if (( $# != 1 )); then echo \"$__ds_loc: error: `exit` expects exactly one integer code\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; fi; if [[ ! \"$1\" =~ ^[0-9]+$ ]] || (( $1 < 0 || $1 > 255 )); then echo \"$__ds_loc: error: `exit` code must be an integer from 0 to 255\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; fi; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return \"$1\"; fi; exit \"$1\"; }\n"
+        "__ds_run_stack_lifo() { local __ds_arr=$1 __ds_i __ds_fn __ds_code __ds_status=0; eval \"__ds_i=\\${#${__ds_arr}[@]}\"; while ((__ds_i > 0)); do ((__ds_i--)); eval \"__ds_fn=\\${${__ds_arr}[__ds_i]}\"; set +e; \"$__ds_fn\"; __ds_code=$?; set -e; if (( __ds_code != 0 )); then __ds_status=$__ds_code; fi; done; return \"$__ds_status\"; }\n"
+        "__ds_run_cleanup() { local __ds_rc=${1:-0} __ds_code; if $__ds_cleanup_running; then exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then set +e; \"$__ds_trap_EXIT\"; __ds_code=$?; set -e; (( __ds_code == 0 )) || __ds_rc=$__ds_code; fi; __ds_run_stack_lifo __ds_defer_EXIT || __ds_rc=$?; exit \"$__ds_rc\"; }\n"
+        "__ds_run_signal() { local __ds_sig=$1 __ds_rc=$2 __ds_trap=__ds_trap_${__ds_sig} __ds_stack=__ds_defer_${__ds_sig} __ds_code; if $__ds_cleanup_running; then exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; local __ds_fn=\"${!__ds_trap:-}\"; if [[ -n \"$__ds_fn\" ]]; then set +e; \"$__ds_fn\"; __ds_code=$?; set -e; (( __ds_code == 0 )) || __ds_rc=$__ds_code; fi; __ds_run_stack_lifo \"$__ds_stack\" || __ds_rc=$?; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then set +e; \"$__ds_trap_EXIT\"; __ds_code=$?; set -e; (( __ds_code == 0 )) || __ds_rc=$__ds_code; fi; __ds_run_stack_lifo __ds_defer_EXIT || __ds_rc=$?; exit \"$__ds_rc\"; }\n"
         "trap '__ds_run_cleanup \"$?\"' EXIT\n"
         "trap '__ds_run_signal INT 130' INT\n"
         "trap '__ds_run_signal TERM 143' TERM\n\n");
@@ -228,6 +231,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_int_helpers = program_uses_int_helpers(lowered);
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
+    e.has_cleanup_helpers = needs_cleanup_helpers;
     if (needs_map_guard || needs_stdlib) {
         buf_append(&e.out, "if (( BASH_VERSINFO[0] < 4 )); then\n");
         if (needs_map_guard) buf_append(&e.out, "  echo \"${0##*/}: error: v0.10.0 maps require Bash 4 or newer\" >&2\n");
@@ -248,10 +252,10 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     }
 
     emit_script_args(&e, lowered);
-    if (needs_cleanup_helpers) emit_cleanup_helpers(&e);
     if (needs_int_helpers) emit_int_helpers(&e);
     if (needs_function_value_helpers) emit_function_value_helpers(&e);
     if (needs_debug) emit_debug_helpers(&e);
+    if (needs_cleanup_helpers) emit_cleanup_helpers(&e);
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
     if (needs_collection_helpers) emit_collection_helpers(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);

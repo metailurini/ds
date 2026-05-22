@@ -81,6 +81,29 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
     return "unknown";
 }
 
+static bool is_control_command(const DsCommand *command, const char *name) {
+    if (!command || command->stages.len != 1) return false;
+    if (command->redirect.kind != DS_REDIRECT_NONE) return false;
+    if (command->stages.items[0].words.len == 0) return false;
+    DsStr first = command->stages.items[0].words.items[0].text;
+    return str_eq(first, name);
+}
+
+static bool emit_control_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
+    const char *helper = is_control_command(command, "exit") ? "__ds_control_exit" : "__ds_control_fail";
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, helper);
+    buf_append(&e->out, " ");
+    emit_source_loc(&e->out, e->source, span);
+    for (size_t i = 1; i < command->stages.items[0].words.len; i++) {
+        buf_append(&e->out, " ");
+        if (!emit_command_word(e, command->stages.items[0].words.items[i], &e->out)) return false;
+    }
+    if (e->handler_depth > 0) buf_append(&e->out, "; return $?\n\n");
+    else buf_append(&e->out, "\n\n");
+    return true;
+}
+
 static const char *lower_value_type_name(DsLowerValueKind kind) {
     switch (kind) {
         case DS_LOWER_VALUE_BOOL: return "bool";
@@ -470,16 +493,24 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             if (!emit_trace_redirect_args(e, &stmt->as.cmd_stmt.redirect, &e->out)) return false;
             buf_append(&e->out, "\n");
+            if (e->has_cleanup_helpers && (is_control_command(&stmt->as.cmd_stmt, "fail") || is_control_command(&stmt->as.cmd_stmt, "exit"))) {
+                return emit_control_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
+            }
             emit_indent(&e->out, indent);
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
             if (stmt->as.cmd_stmt.stages.len > 1) {
                 buf_append(&e->out, " || { __ds_code=$?; printf '%s: error: pipeline failed with exit %s\\n' ");
                 emit_source_loc(&e->out, e->source, stmt->span);
-                buf_append(&e->out, " \"$__ds_code\" >&2; exit \"$__ds_code\"; }\n\n");
+                buf_append(&e->out, " \"$__ds_code\" >&2; ");
+                if (e->handler_depth > 0) buf_append(&e->out, "return \"$__ds_code\"; }");
+                else buf_append(&e->out, "exit \"$__ds_code\"; }");
+                buf_append(&e->out, "\n\n");
             } else {
                 buf_append(&e->out, " || __ds_fail ");
                 emit_source_loc(&e->out, e->source, stmt->span);
-                buf_append(&e->out, " \"$?\"\n\n");
+                buf_append(&e->out, " \"$?\"");
+                if (e->handler_depth > 0) buf_append(&e->out, " || return $?\n\n");
+                else buf_append(&e->out, "\n\n");
             }
             return true;
 
@@ -618,7 +649,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             const char *sig = handler_signal_name(stmt->as.handler_stmt.signal);
             emit_indent(&e->out, indent);
             buf_appendf(&e->out, "__ds_handler_%zu() {\n", id);
+            e->handler_depth++;
             if (!emit_block_body(e, stmt->as.handler_stmt.body, indent + 1)) return false;
+            e->handler_depth--;
             emit_indent(&e->out, indent);
             buf_append(&e->out, "}\n");
             emit_indent(&e->out, indent);

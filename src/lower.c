@@ -6,7 +6,7 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     Scope root;
     scope_init(&root, NULL);
     DsLowerProgram *program = (DsLowerProgram *)ds_xcalloc(1, sizeof(DsLowerProgram));
-    Lower lower = {diag, &root, program, 0, 0, NULL};
+    Lower lower = {diag, &root, program, 0, 0, 0, 0, NULL};
     program->span = ast->span;
     program->has_script = ast->has_script;
     if (ast->has_script) {

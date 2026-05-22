@@ -476,6 +476,7 @@ static bool run_control_command(Vm *vm, const VmProcessSpec *spec, int *out_code
         *out_code = 1;
         return true;
     }
+    vm->control_exit_requested = true;
     *out_code = code;
     return true;
 }

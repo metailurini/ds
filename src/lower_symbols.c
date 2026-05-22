@@ -92,6 +92,7 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     if (current && current->kind == SYM_TOPLEVEL_PREDECLARED) {
         current->kind = kind;
         current->element_kind = element_kind;
+        current->function_depth = lower->function_depth;
         return;
     }
     if (scope_find_current(scope, name)) {
@@ -105,7 +106,18 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     scope->items[scope->len].name = ds_str_dup_range(name.data, name.len);
     scope->items[scope->len].kind = kind;
     scope->items[scope->len].element_kind = element_kind;
+    scope->items[scope->len].function_depth = lower->function_depth;
     scope->len++;
+}
+
+bool lower_validate_handler_capture(Lower *lower, const Symbol *sym, DsStr name, DsSpan span) {
+    if (!lower || !sym) return true;
+    if (lower->handler_depth <= 0 || lower->handler_function_depth <= 0) return true;
+    if (sym->function_depth <= 0 || sym->function_depth > lower->handler_function_depth) return true;
+    ds_diag_error(lower->diag, span,
+                  "cleanup handler captures function-local variable `%.*s`; function-local handler captures are deferred in v0.22.0 because VM and standalone Bash cannot preserve the local scope after the function returns",
+                  (int)name.len, name.data);
+    return false;
 }
 
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {

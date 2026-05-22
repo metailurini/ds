@@ -83,6 +83,7 @@ bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 free(decoded.data);
                 return false;
             }
+            lower_validate_handler_capture(lower, sym, name, span);
             SymKind value_kind = sym->kind;
             if (j < decoded.len && decoded.data[j] == '.') {
                 size_t field_start = ++j;
@@ -144,6 +145,7 @@ bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
                     free(decoded.data);
                     return false;
                 }
+                lower_validate_handler_capture(lower, asym, aname, span);
                 if (asym->kind != SYM_INT) {
                     ds_diag_error(lower->diag, span, "arithmetic interpolation operands must be integers in v0.21.0");
                     free(decoded.data);
@@ -344,6 +346,7 @@ DsLowerExpr *lower_ident_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a variable in v0.9.0",
                       (int)expr->as.text.len, expr->as.text.data);
     } else {
+        lower_validate_handler_capture(lower, sym, expr->as.text, expr->span);
         *kind_out = sym->kind;
     }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_IDENT, expr->span);
@@ -1008,6 +1011,7 @@ bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
             ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
             return false;
         }
+        lower_validate_handler_capture(lower, sym, name, span);
         if (name_len + 1 < word.len) {
             char suffix = word.data[name_len + 1];
             if ((sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) && (suffix == '[' || suffix == '.')) {
@@ -1047,6 +1051,7 @@ bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
                 ds_diag_error(lower->diag, name_span, "unknown command variable `%.*s`", (int)name.len, name.data);
                 return false;
             }
+            lower_validate_handler_capture(lower, sym, name, span);
             if (sym->kind != SYM_COMMAND_RESULT) {
                 if (sym->kind == SYM_MAP) {
                     ds_diag_error(lower->diag, field_span, "map field command arguments are deferred in v0.10.0; bind the field to a variable first");

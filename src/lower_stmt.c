@@ -165,6 +165,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 ds_diag_error(lower->diag, stmt->span, "assignment target `%.*s` is not defined; use `let` to declare variables", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);
             } else if (sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) {
                 ds_diag_error(lower->diag, stmt->span, "collection reassignment is deferred in v0.17.0");
+            } else {
+                lower_validate_handler_capture(lower, sym, stmt->as.assign_stmt.name, stmt->span);
             }
             SymKind value_kind = SYM_UNKNOWN;
             out->as.assign_stmt.value = lower_expr(lower, stmt->as.assign_stmt.value, &value_kind);
@@ -294,6 +296,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 ds_diag_error(lower->diag, stmt->span, "unknown array `%.*s`", (int)stmt->as.push_stmt.name.len, stmt->as.push_stmt.name.data);
             } else if (sym->kind != SYM_ARRAY && sym->kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) {
                 ds_diag_error(lower->diag, stmt->span, "`push` requires an array variable in v0.10.0");
+            } else {
+                lower_validate_handler_capture(lower, sym, stmt->as.push_stmt.name, stmt->span);
             }
             SymKind value_kind = SYM_UNKNOWN;
             out->as.push_stmt.value = lower_expr(lower, stmt->as.push_stmt.value, &value_kind);
@@ -312,6 +316,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         }
         case DS_STMT_RETURN: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
+            if (lower->handler_depth > 0) {
+                ds_diag_error(lower->diag, stmt->span, "`return` from a cleanup handler is not supported in v0.22.0; move the return into a function called by the handler or use `exit`");
+            }
             if (lower->function_depth <= 0 || !lower->current_function) {
                 ds_diag_error(lower->diag, stmt->span, "`return` is only allowed inside a function");
             }
@@ -337,7 +344,13 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         case DS_STMT_TRAP: {
             DsLowerStmt *out = stmt_new(stmt->kind == DS_STMT_DEFER ? DS_LOWER_STMT_DEFER : DS_LOWER_STMT_TRAP, stmt->span);
             out->as.handler_stmt.signal = stmt->as.handler_stmt.signal;
+            int saved_handler_depth = lower->handler_depth;
+            int saved_handler_function_depth = lower->handler_function_depth;
+            lower->handler_depth++;
+            lower->handler_function_depth = lower->function_depth;
             out->as.handler_stmt.body = lower_block(lower, stmt->as.handler_stmt.body, true);
+            lower->handler_depth = saved_handler_depth;
+            lower->handler_function_depth = saved_handler_function_depth;
             return out;
         }
         case DS_STMT_TEST:

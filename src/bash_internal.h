@@ -25,6 +25,8 @@ typedef struct {
     SymbolVec symbols;
     EmitBuf out;
     int function_depth;
+    int handler_depth;
+    bool has_cleanup_helpers;
     size_t temp_counter;
     size_t handler_counter;
     bool needs_case_types;

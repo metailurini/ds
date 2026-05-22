@@ -19,6 +19,12 @@ Planned:
 - Hardened VM foreground command/pipeline interruption so `INT`/`TERM` during a
   long-running child process runs signal-specific cleanup and forwards the
   observed signal to the child process group when possible.
+- Fixed explicit `fail`/`exit` parity for emitted Bash when cleanup handlers are
+  present, including `exit 0` stopping execution before later statements.
+- Rejected unsupported function-local handler captures and direct `return` from
+  cleanup handlers before VM execution or Bash emission.
+- Kept remaining cleanup running after a non-exiting handler fails, while
+  preserving the failure status as the final status.
 - Added VM bytecode/runtime support and standalone Bash cleanup helpers without
   adding calls back to `ds`.
 - Updated docs for the implemented scope. The dedicated v0.22 automated test

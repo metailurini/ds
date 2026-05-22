@@ -312,7 +312,7 @@ dispatch_loop:
             case OP_RUN_CMD:
                 rc = run_command(&vm, ins);
                 if (vm.test_done) goto done;
-                if (rc != 0) {
+                if (vm.control_exit_requested || rc != 0) {
                     if (vm.interrupted_signal == SIGINT || vm.interrupted_signal == SIGTERM) {
                         cleanup_signal = vm.interrupted_signal == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
                     }
@@ -464,6 +464,7 @@ dispatch_loop:
     }
 
 done:
+    if (vm.cleanup_running && handler_mode) goto cleanup_handler_done;
     if (!vm.cleanup_running && vm.handler_len > 0) {
         vm.cleanup_running = true;
         final_rc = rc;
@@ -503,7 +504,8 @@ done:
         goto cleanup_done;
     cleanup_handler_done:
         handler_mode = false;
-        if (rc != 0) final_rc = rc;
+        if (vm.control_exit_requested || rc != 0) final_rc = rc;
+        vm.control_exit_requested = false;
         goto cleanup_next;
     }
 cleanup_done:
