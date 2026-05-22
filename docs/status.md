@@ -1,8 +1,9 @@
 # Current Status
 
 This document is the user-facing snapshot after the completed `v0.20.0` Wave 2
-stabilization cleanup pass and the completed `v0.21.0` function-value/arithmetic
-implementation and the initial `v0.22.0` process-cleanup implementation pass. It is not a replacement for the roadmap or
+stabilization cleanup pass, the completed `v0.21.0` function-value/arithmetic
+implementation, the initial `v0.22.0` process-cleanup implementation pass, and
+the `v0.22.1` deterministic cleanup-core test stabilization pass. It is not a replacement for the roadmap or
 language catalog; it summarizes what users can rely on today and what is still
 deliberately deferred.
 
@@ -35,8 +36,8 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 
 ## Production language support
 
-The production runtime supports the language slice implemented through the
-`v0.22.0` implementation pass:
+The production runtime supports the language slice implemented and stabilized
+through the `v0.22.1` deterministic cleanup-core pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -226,7 +227,7 @@ return, arithmetic, and expression interpolation path.
 The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
 diagnostic, formatting, example, and generated-Bash boundary behavior.
 
-`v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers, checks for pending signals between bytecode instructions, and treats interrupted foreground commands/pipelines as signal cleanup events while forwarding observed `INT`/`TERM` to the foreground child process group when possible. Emitted Bash installs standalone traps. Background jobs, public job-control/process-group APIs, and broad signal-forwarding semantics outside foreground commands remain out of scope.
+`v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. `v0.22.1` stabilizes the deterministic non-signal cleanup core with VM/Bash parity tests for normal completion, explicit `exit`, explicit `fail`, direct command failure, captured command failure, `trap "EXIT"` replacement, handler failure continuation, handler `exit` status override, imports, script args, and function calls from handlers. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers, checks for pending signals between bytecode instructions, and treats interrupted foreground commands/pipelines as signal cleanup events while forwarding observed `INT`/`TERM` to the foreground child process group when possible. Emitted Bash installs standalone traps. Real OS signal harnessing remains split into later v0.22 stabilization slices; background jobs, public job-control/process-group APIs, and broad signal-forwarding semantics outside foreground commands remain out of scope.
 
 Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag for both defaulted and explicit arguments that are validated against the default kind, so defaulted parameters can participate in kind-aware `case` matching without VM/Bash coercion drift. Required unknown-kind parameters remain unknown until typed parameters or a broader runtime type-tag design is deliberately added.
 

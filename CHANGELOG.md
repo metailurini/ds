@@ -6,6 +6,26 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.1 - Cleanup Core Test Stabilization
+
+- Added the deterministic `tests/v0_22/run.sh` cleanup-core suite and wired it
+  into aggregate version tests.
+- Covered parser/token/AST/HIR/bytecode shape, formatter normalization,
+  checker/emitter diagnostics, VM/Bash parity, imports, script args, function
+  calls from handlers, and Bash-emission helper boundaries for the non-signal
+  cleanup contract.
+- Covered normal completion, explicit `exit`, explicit `fail`, direct command
+  failure, captured command failure, `trap "EXIT"` replacement, `defer` LIFO
+  ordering, handler failure continuation, handler `exit` status override, and
+  normal completion skipping `INT`/`TERM` handlers.
+- Fixed VM cleanup final-status preservation so explicit `exit N` is not
+  overwritten by successful cleanup handlers.
+- Fixed emitted Bash cleanup helper status tracking so an explicit handler
+  `exit 0` is distinct from ordinary handler success and can intentionally
+  override an earlier non-zero status.
+- Kept real `SIGINT`/`SIGTERM` delivery tests out of this slice; those remain
+  assigned to later v0.22 signal-harness/runtime slices.
+
 # v0.22.0 - Process Control and Signal Handling
 
 - Implemented process-level `defer` cleanup blocks for VM execution and emitted
@@ -27,8 +47,8 @@ Planned:
   preserving the failure status as the final status.
 - Added VM bytecode/runtime support and standalone Bash cleanup helpers without
   adding calls back to `ds`.
-- Updated docs for the implemented scope. The dedicated v0.22 automated test
-  suite was intentionally left for a separate test pass.
+- Updated docs for the implemented scope. The dedicated real-signal harness
+  remains assigned to later v0.22 stabilization slices.
 
 # v0.21.0 - Function Values and Arithmetic
 

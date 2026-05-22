@@ -468,6 +468,7 @@ done:
     if (!vm.cleanup_running && vm.handler_len > 0) {
         vm.cleanup_running = true;
         final_rc = rc;
+        vm.control_exit_requested = false;
         if (vm.interrupted_signal == SIGINT || vm.interrupted_signal == SIGTERM) {
             cleanup_signal = vm.interrupted_signal == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
         }
