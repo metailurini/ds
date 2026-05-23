@@ -9,7 +9,7 @@ BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17 0-18 0-19 0-20 0-21 0-22 0-23
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
-.PHONY: all clean check smoke test $(TEST_TARGETS) asan ubsan
+.PHONY: all clean check smoke test $(TEST_TARGETS) asan ubsan test-asan test-ubsan
 
 all: $(BIN)
 
@@ -41,10 +41,14 @@ asan:
 	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" all
 	ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test
 
+test-asan: asan
+
 ubsan:
 	$(MAKE) clean
 	$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" all
 	DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test
+
+test-ubsan: ubsan
 
 smoke: $(BIN)
 	./$(BIN) tokens examples/basic.ds

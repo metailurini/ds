@@ -213,6 +213,10 @@ let parts = "api,web".split(",")
 if "web" in parts { echo split }
 file.write("items.txt", "a\nb\n")
 if "b" in lines("items.txt") { echo lines }
+file.write("a.item", "a\n")
+file.write("b.item", "b\n")
+if "b.item" in glob("*.item") { echo glob }
+if "a.item" in glob!("*.item") { echo glob-bang }
 let ok = app in allowed
 echo "known={ok}"
 if (app in allowed) && true { echo and }
@@ -233,7 +237,7 @@ fn show(v) {
 }
 show(is_allowed("web"))
 DS
-assert_parity membership "$member" 0 $'yes\nint\nbool\nempty\nkind\nliteral\nsplit\nlines\nknown=true\nand\nwhile\ncase-yes\narg-yes\n'
+assert_parity membership "$member" 0 $'yes\nint\nbool\nempty\nkind\nliteral\nsplit\nlines\nglob\nglob-bang\nknown=true\nand\nwhile\ncase-yes\narg-yes\n'
 
 # Membership diagnostics.
 for item in \
