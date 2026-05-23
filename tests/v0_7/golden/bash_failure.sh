@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+__ds_error() { echo "${0##*/}: error: $1" >&2; exit 1; }
+
 __ds_trace_quote() {
   local __ds_q=$1
   __ds_q=${__ds_q//\\/\\\\}
@@ -27,7 +29,6 @@ __ds_fail() {
   exit "$__ds_code"
 }
 
-__ds_error() { echo "${0##*/}: error: $1" >&2; exit 1; }
 __ds_capture() {
   local __ds_prefix=$1
   shift

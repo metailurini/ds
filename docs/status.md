@@ -1,16 +1,10 @@
 # Current Status
 
-This document is the user-facing snapshot after the completed `v0.20.0` Wave 2
-stabilization cleanup pass, the completed `v0.21.0` function-value/arithmetic
-implementation, the initial `v0.22.0` process-cleanup implementation pass, the
-`v0.22.1` deterministic cleanup-core test stabilization pass, the
-`v0.22.2` signal syntax/diagnostic surface pass, the `v0.22.3` deterministic
-signal-harness pass, the `v0.22.4` foreground direct-command signal-runtime
-pass, the `v0.22.5` foreground pipeline signal-runtime pass, and the
-`v0.22.6` final handler-context/documentation pass, and the final v0.22
-test-plan audit. This is a post-implementation and test pass snapshot, not a
-replacement for the roadmap or language catalog; it summarizes what users can
-rely on today and what is still deliberately deferred.
+This document is the user-facing snapshot after the completed implementation
+surface through `v0.23.0` and the `v0.24.0` pre-1.0 hardening pass. It is a
+support matrix, not a replacement for the roadmap or language catalog: it
+summarizes what users can rely on today, what is test-only or tooling-only, and
+what is deliberately deferred, rejected, or out of scope for `1.0.0`.
 
 ## Command support
 
@@ -29,6 +23,9 @@ ds bytecode <file.ds>
 ds emit bash <file.ds> -o <file.sh>
 ```
 
+There are no hidden production commands in `v0.24.0`; this milestone hardens
+the existing CLI surface instead of adding a new language command.
+
 `tokens` and `ast` are root-file frontend/debug views. They read only the file
 passed on the command line and show the import statement as syntax instead of
 composing imported files.
@@ -39,7 +36,7 @@ relative to the importing file, loaded once per root program, and placed before
 the importing file's executable statements. `fmt` formats the root source file
 that was passed to it; it does not rewrite imported files or format a workspace.
 
-## Production language support
+## Production language support intended for 1.0.0
 
 The production runtime supports the language slice implemented and stabilized
 through the `v0.22.6` final v0.22 documentation pass and the completed `v0.23.0`
@@ -98,7 +95,9 @@ regex/range/membership implementation and test pass:
 
 Every supported production feature is expected to run in the VM and emit
 standalone Bash. Generated Bash must not call the `ds` binary or depend on the C
-runtime to execute.
+runtime to execute. Generated helper functions use the reserved `__ds_`
+namespace, are emitted deterministically, and should not be duplicated in a
+single generated script.
 
 `case $target { ... }` is not valid expression syntax; `$name` remains reserved
 for command arguments.
@@ -110,6 +109,16 @@ for command arguments.
 Normal `ds run`, direct script execution, and normal `emit bash` ignore test
 blocks. Inside tests, `fail "message"` fails the active test, `exit 0` stops it
 as a pass, and non-zero `exit` fails it.
+
+Test blocks are not a production scripting construct and are not emitted as a
+runtime test harness in standalone Bash.
+
+## Tooling-only and debug views
+
+`tokens`, `ast`, `hir`, and `bytecode` are development/debug views. They are
+stable enough for project tests, but they are not a user-facing runtime API.
+`tokens` and `ast` are root-file views; `hir` and `bytecode` use the composed
+import-aware path.
 
 ## Formatter and checker behavior
 
@@ -153,6 +162,7 @@ The current examples are the public tour of implemented behavior:
 - `examples/control-flow.ds`
 - `examples/pipeline.ds`
 - `examples/strings.ds`
+- `examples/filtering.ds`
 - `examples/stdlib.ds`
 - `examples/vm.ds`
 - `examples/function-values.ds`
@@ -191,6 +201,38 @@ milestones:
 
 Unsupported forms should fail clearly instead of partially working in only one
 backend.
+
+## Rejected and out-of-scope behavior
+
+Some syntax is intentionally not part of the `1.0.0` boundary unless a later
+roadmap change says otherwise:
+
+- heredocs, here-strings, process substitution, and command substitution syntax;
+- command-level `&&`/`||`, background jobs, async/wait primitives, and public
+  job-control APIs;
+- alternate shell backends such as zsh, fish, POSIX sh, or native compilation;
+- classes, inheritance, macros, packages, remote imports, and broad application
+  framework features.
+
+Expression-level `&&` and `||` are supported inside ds expressions; command
+operators with the same spelling remain unsupported shell syntax.
+
+## Host environment assumptions
+
+The VM executes commands using the host process environment. Examples and tests
+assume a Unix-like environment with `sh`, `printf`, `grep`, `sort`, `tr`, and
+standard file utilities available. Emitted scripts target Bash; generated Bash
+uses Bash 4+ guards when associative arrays or other Bash-4-only behavior is
+required. Regex behavior is constrained to the conservative VM/Bash-compatible
+subset documented in `docs/runtime.md`.
+
+## 1.0.0 checklist
+
+The executable release checklist lives in `docs/release-checklist.md`. It covers
+support-matrix sign-off, VM/Bash parity, generated-Bash standalone behavior,
+examples, docs, diagnostics, formatter/checker behavior, sanitizer/ownership
+confidence, deferred/rejected feature sign-off, packaging/release notes, and
+known limitations accepted for `1.0.0`.
 
 ## Internal cleanup state
 
@@ -250,10 +292,9 @@ Because required function parameters remain untyped until the function-value wav
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 array-loop lowering model, scalar return transport, and process-level cleanup
 model are the safe pieces to build on. The latest feature wave adds scoped
-`v0.23.0` regex, ranges, and membership. Map iteration, nested
-collections, formatter trivia preservation, warning suppression, logical shell
-command-level logical shell operators, deeper job-control behavior, and advanced
-pipeline forms remain out of scope unless their own milestones explicitly pull
-them in.
-advanced pipeline forms remain deferred beyond the current simple foreground
-pipeline support.
+`v0.23.0` regex, ranges, and membership. `v0.24.0` hardens documentation,
+examples, diagnostics, sanitizer expectations, and generated-Bash helper hygiene
+without adding production syntax. Map iteration, nested collections, formatter
+trivia preservation, warning suppression, command-level shell logical operators,
+deeper job-control behavior, and advanced pipeline forms remain out of scope
+unless their own milestones explicitly pull them in.

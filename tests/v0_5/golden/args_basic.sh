@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+__ds_error() { echo "${0##*/}: error: $1" >&2; exit 1; }
+
 __ds_usage() {
   cat <<'__DS_USAGE__'
 Usage: args_basic.ds <app> [options]
@@ -16,7 +18,6 @@ Options:
 __DS_USAGE__
 }
 
-__ds_error() { echo "${0##*/}: error: $1" >&2; exit 1; }
 __ds_parse_int() {
   [[ "$1" =~ ^[+-]?[0-9]+$ ]] || return 1
   [[ "$1" != "+" && "$1" != "-" ]] || return 1

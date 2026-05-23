@@ -1,3 +1,18 @@
+# v0.24.0 - Cleanup: Pre-1.0 Hardening
+
+- Added `docs/release-checklist.md` as the executable `1.0.0` release boundary
+  for support-matrix, VM/Bash parity, generated-Bash standalone behavior,
+  examples, docs, diagnostics, formatter/checker, sanitizer/ownership,
+  deferred/rejected features, and release-note sign-offs.
+- Updated the user-facing support matrix to reflect the implemented surface
+  through `v0.23.0` plus the `v0.24.0` hardening pass without adding new
+  production syntax.
+- Hardened generated Bash helper hygiene by deduplicating common `__ds_error`
+  and plain command failure helper emission across helper families.
+- Reconciled the v0.24 broad parity fixture with the current v0.21 command-word
+  interpolation rule: bind function-call results before interpolating them into
+  command words.
+
 # v0.23.0 - Regex, Ranges, and Membership
 
 - Added kind-aware `in` membership checks for scalar arrays, including array

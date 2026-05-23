@@ -78,7 +78,6 @@ static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
 static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
     if (!program->has_script) return;
     emit_script_usage(e, program);
-    buf_append(&e->out, "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n");
     buf_append(&e->out, "__ds_parse_int() {\n");
     buf_append(&e->out, "  [[ \"$1\" =~ ^[+-]?[0-9]+$ ]] || return 1\n");
     buf_append(&e->out, "  [[ \"$1\" != \"+\" && \"$1\" != \"-\" ]] || return 1\n");
@@ -199,6 +198,18 @@ static void emit_function_value_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_function_value_helpers_source());
 }
 
+static void emit_error_helper(BashEmitter *e) {
+    buf_append(&e->out, "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n\n");
+}
+
+static void emit_plain_command_fail_helper(BashEmitter *e) {
+    buf_append(&e->out, "__ds_fail() {\n");
+    buf_append(&e->out, "  local __ds_loc=$1 __ds_code=$2\n");
+    buf_append(&e->out, "  echo \"$__ds_loc: error: command failed with exit $__ds_code\" >&2\n");
+    buf_append(&e->out, "  exit \"$__ds_code\"\n");
+    buf_append(&e->out, "}\n\n");
+}
+
 static void emit_cleanup_helpers(BashEmitter *e) {
     buf_append(&e->out, "declare -a __ds_defer_EXIT=() __ds_defer_INT=() __ds_defer_TERM=()\n");
     buf_append(&e->out, "__ds_trap_EXIT=\n__ds_trap_INT=\n__ds_trap_TERM=\n__ds_cleanup_running=false\n__ds_handler_exit_requested=false\n__ds_stack_exit_requested=false\n__ds_stack_status=0\n__ds_foreground_pid=\n");
@@ -234,6 +245,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
     bool needs_signal_handlers = program_uses_signal_handlers(lowered);
+    bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers || program_uses_run(lowered) || needs_collection_helpers || needs_stdlib;
     e.has_cleanup_helpers = needs_cleanup_helpers;
     e.has_signal_handlers = needs_signal_handlers;
     if (needs_map_guard) {
@@ -254,11 +266,13 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
         }
     }
 
+    if (needs_error_helper) emit_error_helper(&e);
     emit_script_args(&e, lowered);
     if (needs_int_helpers) emit_int_helpers(&e);
     if (needs_function_value_helpers) emit_function_value_helpers(&e);
     if (needs_debug) emit_debug_helpers(&e);
     if (needs_cleanup_helpers) emit_cleanup_helpers(&e);
+    else if (needs_debug) emit_plain_command_fail_helper(&e);
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
     if (needs_collection_helpers) emit_collection_helpers(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);

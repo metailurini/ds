@@ -21,17 +21,11 @@ const char *ds_bash_debug_helpers_source(void) {
         "    esac\n"
         "  done\n"
         "  printf '\\n' >&2\n"
-        "}\n"
-        "__ds_fail() {\n"
-        "  local __ds_loc=$1 __ds_code=$2\n"
-        "  echo \"$__ds_loc: error: command failed with exit $__ds_code\" >&2\n"
-        "  exit \"$__ds_code\"\n"
-        "}\n\n";
+        "}\n";
 }
 
 const char *ds_bash_int_helpers_source(void) {
     return
-        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_int_check() {\n"
         "  [[ \"$1\" =~ ^[+-]?[0-9]+$ ]] || return 1\n"
         "  [[ \"$1\" != '+' && \"$1\" != '-' ]] || return 1\n"
@@ -63,7 +57,6 @@ const char *ds_bash_int_helpers_source(void) {
 
 const char *ds_bash_function_value_helpers_source(void) {
     return
-        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_call_value() {\n"
         "  local __ds_fn=\"$1\" __ds_tmpdir __ds_stdout __ds_stderr __ds_code __ds_data\n"
         "  shift\n"
@@ -84,7 +77,6 @@ const char *ds_bash_function_value_helpers_source(void) {
 
 const char *ds_bash_command_result_helpers_source(void) {
     return
-        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_capture() {\n"
         "  local __ds_prefix=$1\n"
         "  shift\n"
@@ -118,7 +110,6 @@ const char *ds_bash_command_result_helpers_source(void) {
 
 const char *ds_bash_collection_helpers_source(void) {
     return
-        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_array_get() {\n"
         "  local __ds_name=$1 __ds_index=$2 __ds_len\n"
         "  [[ \"$__ds_index\" =~ ^[0-9]+$ ]] || __ds_error \"array index $__ds_index is not an int\"\n"
@@ -137,7 +128,6 @@ const char *ds_bash_collection_helpers_source(void) {
 
 const char *ds_bash_stdlib_helpers_source(void) {
     return
-        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_stdlib_file_exists() { [[ -e \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_file_is_file() { [[ -f \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_dir_exists() { [[ -d \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
@@ -167,7 +157,6 @@ const char *ds_bash_stdlib_helpers_source(void) {
 
 const char *ds_bash_string_helpers_source(void) {
     return
-        "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_string_trim() { local s=\"$1\"; s=\"${s#${s%%[!$' \\t\\r\\n']*}}\"; s=\"${s%${s##*[!$' \\t\\r\\n']}}\"; printf '%s' \"$s\"; }\n"
         "__ds_string_upper() { printf '%s' \"$1\" | LC_ALL=C tr '[:lower:]' '[:upper:]'; }\n"
         "__ds_string_lower() { printf '%s' \"$1\" | LC_ALL=C tr '[:upper:]' '[:lower:]'; }\n"

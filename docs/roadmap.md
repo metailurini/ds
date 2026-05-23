@@ -1190,6 +1190,7 @@ feature-integration milestone before pre-1.0 hardening.
 **Expected outputs:**
 
 - `docs/status.md`.
+- `docs/release-checklist.md`.
 - Full regression/parity test pass across all versions.
 - A clear 1.0.0 release checklist.
 

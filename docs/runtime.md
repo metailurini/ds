@@ -882,3 +882,23 @@ Unsupported regex constructs such as lookaround, backreferences, named captures,
 inline flags, lazy quantifiers, Unicode classes, runtime patterns, and multiline
 literals are rejected during checking/lowering or emission so VM execution and
 standalone Bash do not silently diverge.
+
+## v0.24.0 pre-1.0 hardening runtime notes
+
+`v0.24.0` does not add production syntax. It hardens the existing runtime and
+emission contract before the `1.0.0` release checklist:
+
+- VM execution and emitted Bash remain the required parity pair for every
+  supported production feature.
+- Generated Bash is standalone and must not invoke `ds` or depend on the C
+  runtime after emission.
+- Generated helper functions remain in the reserved `__ds_` namespace. The
+  common `__ds_error` and plain-command failure helpers are emitted once when
+  needed instead of being repeated by each helper family.
+- Bash-version guards remain required for Bash-4-only behavior such as
+  associative-array-backed maps.
+- Unsupported or deferred constructs should fail in checking/lowering/emission
+  before user commands run or invalid Bash is written.
+- Sanitizer-backed aggregate runs are part of the release checklist for source
+  buffers, diagnostics, HIR/bytecode, VM values, command captures, cleanup
+  handler state, and Bash emission buffers.
