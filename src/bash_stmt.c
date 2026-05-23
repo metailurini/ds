@@ -295,7 +295,7 @@ static bool emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const D
     buf_append(&e->out, "\n");
 
     emit_indent(&e->out, indent);
-    buf_append(&e->out, "{ ");
+    buf_append(&e->out, "{ if [[ -t 0 ]]; then exec </dev/null; fi; ");
     if (!emit_command_pipeline_stages(e, command, &e->out)) return false;
     buf_appendf(&e->out, " ; } >\"$__ds_stdout_%zu\" 2>\"$__ds_stderr_%zu\"\n", id, id);
     emit_indent(&e->out, indent);
@@ -560,9 +560,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 return emit_signal_pipeline(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
             emit_indent(&e->out, indent);
+            bool is_multi = stmt->as.cmd_stmt.stages.len > 1;
+            if (is_multi) buf_append(&e->out, "( if [[ -t 0 ]]; then exec </dev/null; fi; ");
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
-            if (stmt->as.cmd_stmt.stages.len > 1) {
-                buf_append(&e->out, " || { __ds_code=$?; printf '%s: error: pipeline failed with exit %s\\n' ");
+            if (is_multi) {
+                buf_append(&e->out, " ) || { __ds_code=$?; printf '%s: error: pipeline failed with exit %s\\n' ");
                 emit_source_loc(&e->out, e->source, stmt->span);
                 buf_append(&e->out, " \"$__ds_code\" >&2; ");
                 if (e->handler_depth > 0) buf_append(&e->out, "return \"$__ds_code\"; }");

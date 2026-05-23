@@ -736,7 +736,12 @@ static bool redirect_wants_stderr(DsRedirectKind kind) {
 
 static void pipeline_child_exec(VmProcessSpec *specs, size_t stage_count, size_t idx, int (*pipes)[2], int redirect_fd, const DsRedirect *pipeline_redirect, FILE *out_fp, FILE *err_fp) {
     VmProcessSpec *spec = &specs[idx];
-    if (idx > 0) dup2(pipes[idx - 1][0], STDIN_FILENO);
+    if (idx > 0) {
+        dup2(pipes[idx - 1][0], STDIN_FILENO);
+    } else if (isatty(STDIN_FILENO)) {
+        int devnull = open("/dev/null", O_RDONLY);
+        if (devnull >= 0) { dup2(devnull, STDIN_FILENO); close(devnull); }
+    }
     if (idx + 1 < stage_count) {
         dup2(pipes[idx][1], STDOUT_FILENO);
     } else if (spec->capture) {
