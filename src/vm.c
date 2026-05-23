@@ -12,6 +12,15 @@ static void ds_vm_signal_handler(int sig) {
     ds_vm_pending_signal = sig;
 }
 
+static bool vm_install_signal_handler(int sig, struct sigaction *old_action) {
+    struct sigaction action;
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = ds_vm_signal_handler;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    return sigaction(sig, &action, old_action) == 0;
+}
+
 int vm_take_pending_signal(void) {
     int sig = ds_vm_pending_signal;
     ds_vm_pending_signal = 0;
@@ -109,9 +118,12 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
     ensure_regs(&vm);
 
     int rc = 0;
-    void (*old_int)(int) = NULL;
-    void (*old_term)(int) = NULL;
-    bool signal_hooks_installed = false;
+    struct sigaction old_int;
+    struct sigaction old_term;
+    memset(&old_int, 0, sizeof(old_int));
+    memset(&old_term, 0, sizeof(old_term));
+    bool int_installed = false;
+    bool term_installed = false;
     int bind_rc = bind_script_args(&vm, lowered, argc, argv);
     if (bind_rc == 2) { rc = 0; goto done; }
     if (bind_rc != 0) { rc = bind_rc; goto done; }
@@ -122,9 +134,8 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
     bool cleanup_trap_done = false;
     DsHandlerSignal cleanup_signal = DS_HANDLER_EXIT;
 
-    old_int = signal(SIGINT, ds_vm_signal_handler);
-    old_term = signal(SIGTERM, ds_vm_signal_handler);
-    signal_hooks_installed = true;
+    int_installed = vm_install_signal_handler(SIGINT, &old_int);
+    term_installed = vm_install_signal_handler(SIGTERM, &old_term);
 
 dispatch_loop:
     while (ip < p.instr_len) {
@@ -510,10 +521,8 @@ done:
         goto cleanup_next;
     }
 cleanup_done:
-    if (signal_hooks_installed) {
-        signal(SIGINT, old_int);
-        signal(SIGTERM, old_term);
-    }
+    if (int_installed) sigaction(SIGINT, &old_int, NULL);
+    if (term_installed) sigaction(SIGTERM, &old_term, NULL);
     for (int i = 0; i < p.next_reg; i++) ds_value_free(&vm.regs[i]);
     free(vm.regs);
     free(vm.return_ips);

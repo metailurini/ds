@@ -221,8 +221,14 @@ FIX="$TMP/fixtures with spaces"
 mkdir -p "$FIX"
 
 # Build wiring and docs for the staged v0.22 slices completed so far.
+[ -f docs/milestones/v0.22.0-spec.md ] || fail 'v0.22 spec exists'
+pass 'v0.22 spec exists'
+[ -f docs/milestones/v0.22.0-test-plan.md ] || fail 'v0.22 test plan exists'
+pass 'v0.22 test plan exists'
 assert_contains Makefile '0-22' 'TEST_VERSIONS contains v0.22'
 assert_matches Makefile '^TEST_VERSIONS := .*0-21 0-22($| )' 'v0.22 follows v0.21 in TEST_VERSIONS'
+assert_contains README.md 'v0.22.0-spec.md' 'README important files mention v0.22 spec'
+assert_contains README.md 'v0.22.0-test-plan.md' 'README important files mention v0.22 test plan'
 assert_contains docs/roadmap.md 'v0.22.1 — Cleanup Core Test Stabilization' 'roadmap names v0.22.1 slice'
 assert_contains docs/roadmap.md 'No real `SIGINT`/`SIGTERM` delivery tests' 'roadmap excludes real signals for v0.22.1'
 assert_contains docs/roadmap.md 'v0.22.2 — Signal Syntax and Diagnostic Surface' 'roadmap names v0.22.2 slice'
@@ -449,6 +455,33 @@ echo after
 DS
 run_and_signal signal_vm_term_direct_runtime vm TERM "$FIX/term_direct_runtime.ds" 143 $'ready\nterm-trap\nterm-defer-second\nterm-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
 run_and_signal signal_bash_term_direct_runtime bash TERM "$FIX/term_direct_runtime.ds" 143 $'ready\nterm-trap\nterm-defer-second\nterm-defer-first\nexit-trap\nexit-defer-second\nexit-defer-first\n'
+
+write_fixture "$FIX/int_explicit_status.ds" <<'DS'
+defer on: "INT" {
+  echo interrupted
+  exit 77
+}
+
+./ready_exec_sleep
+echo after
+DS
+run_and_signal signal_vm_int_explicit_status vm INT "$FIX/int_explicit_status.ds" 77 $'ready\ninterrupted\n'
+run_and_signal signal_bash_int_explicit_status bash INT "$FIX/int_explicit_status.ds" 77 $'ready\ninterrupted\n'
+
+write_fixture "$FIX/int_trap_replacement_runtime.ds" <<'DS'
+trap "INT" {
+  echo first
+}
+
+trap "INT" {
+  echo second
+}
+
+./ready_exec_sleep
+echo after
+DS
+run_and_signal signal_vm_int_trap_replacement vm INT "$FIX/int_trap_replacement_runtime.ds" 130 $'ready\nsecond\n'
+run_and_signal signal_bash_int_trap_replacement bash INT "$FIX/int_trap_replacement_runtime.ds" 130 $'ready\nsecond\n'
 
 write_fixture "$FIX/int_direct_runtime.ds" <<'DS'
 trap "INT" {
@@ -839,22 +872,26 @@ let sig = "INT"
 defer on: sig { echo nope }
 DS
 assert_check_fails dynamic_defer_signal "$FIX/dynamic_defer_signal.ds" 'expected signal string after `defer on:`'
+assert_emit_fails dynamic_defer_signal "$FIX/dynamic_defer_signal.ds" 'expected signal string after `defer on:`'
 
 write_fixture "$FIX/dynamic_trap_signal.ds" <<'DS'
 let sig = "TERM"
 trap sig { echo nope }
 DS
 assert_check_fails dynamic_trap_signal "$FIX/dynamic_trap_signal.ds" 'expected signal string after `trap`'
+assert_emit_fails dynamic_trap_signal "$FIX/dynamic_trap_signal.ds" 'expected signal string after `trap`'
 
 write_fixture "$FIX/numeric_defer_signal.ds" <<'DS'
 defer on: 2 { echo nope }
 DS
 assert_check_fails numeric_defer_signal "$FIX/numeric_defer_signal.ds" 'expected signal string after `defer on:`'
+assert_emit_fails numeric_defer_signal "$FIX/numeric_defer_signal.ds" 'expected signal string after `defer on:`'
 
 write_fixture "$FIX/numeric_trap_signal.ds" <<'DS'
 trap 15 { echo nope }
 DS
 assert_check_fails numeric_trap_signal "$FIX/numeric_trap_signal.ds" 'expected signal string after `trap`'
+assert_emit_fails numeric_trap_signal "$FIX/numeric_trap_signal.ds" 'expected signal string after `trap`'
 
 write_fixture "$FIX/missing_defer_colon.ds" <<'DS'
 defer on "INT" { echo nope }
@@ -923,6 +960,8 @@ echo body
 DS
 run_ok no_handlers_emit "$DS" emit bash "$FIX/no_handlers.ds" -o "$TMP/no_handlers.sh"
 assert_not_contains "$TMP/no_handlers.sh" '__ds_run_cleanup' 'no cleanup helper emitted without handlers'
+assert_not_contains "$TMP/no_handlers.sh" '__ds_run_signal' 'no signal dispatcher emitted without handlers'
+assert_not_contains "$TMP/no_handlers.sh" 'trap '\''' 'no trap dispatcher emitted without handlers'
 assert_not_matches "$TMP/no_handlers.sh" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' 'no-handler emitted Bash does not call ds'
 
 run_ok explicit_fail_emit_again "$DS" emit bash "$FIX/explicit_fail.ds" -o "$TMP/explicit_fail_again.sh"
