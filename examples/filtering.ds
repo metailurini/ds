@@ -1,0 +1,17 @@
+let apps = ["api", "web", "worker"]
+let selected = ["api", "web"]
+
+for app in apps {
+  if app in selected {
+    echo "selected={app}"
+  }
+}
+
+for retry in 1..3 {
+  echo "retry={retry}"
+}
+
+let branch = "release/v0.23"
+if branch matches /^release\// {
+  echo "release branch"
+}

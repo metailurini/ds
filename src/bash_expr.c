@@ -23,6 +23,79 @@ static bool is_int_binary_op(DsStr op) {
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
 }
 
+static const char *lower_value_type_name(DsLowerValueKind kind);
+
+static const char *expr_type_name(const DsLowerExpr *expr) {
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INTERP:
+            return "string";
+        case DS_LOWER_EXPR_INT:
+            return "int";
+        case DS_LOWER_EXPR_BOOL:
+            return "bool";
+        case DS_LOWER_EXPR_ARRAY:
+            return "array";
+        case DS_LOWER_EXPR_MAP:
+            return "map";
+        case DS_LOWER_EXPR_RUN:
+            return "command_result";
+        case DS_LOWER_EXPR_BINARY:
+            return is_int_binary_op(expr->as.binary.op) ? "int" : "bool";
+        case DS_LOWER_EXPR_UNARY:
+            if (str_eq(expr->as.unary.op, "!")) return "bool";
+            if (str_eq(expr->as.unary.op, "-")) return "int";
+            return "unknown";
+        case DS_LOWER_EXPR_CALL:
+            if (ds_stdlib_is_name(expr->as.call.name)) {
+                const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
+                if (!helper) return "unknown";
+                switch (helper->return_kind) {
+                    case DS_STDLIB_RETURN_BOOL: return "bool";
+                    case DS_STDLIB_RETURN_INT: return "int";
+                    case DS_STDLIB_RETURN_STRING: return "string";
+                    case DS_STDLIB_RETURN_ARRAY: return "array";
+                    case DS_STDLIB_RETURN_MAP: return "map";
+                    case DS_STDLIB_RETURN_COMMAND_RESULT: return "command_result";
+                    case DS_STDLIB_RETURN_STATEMENT_ONLY: return "unknown";
+                }
+            }
+            return lower_value_type_name(expr->as.call.return_kind);
+        case DS_LOWER_EXPR_FIELD: {
+            const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
+            if (!desc) return "unknown";
+            switch (desc->kind) {
+                case DS_COMMAND_RESULT_FIELD_STRING: return "string";
+                case DS_COMMAND_RESULT_FIELD_INT: return "int";
+                case DS_COMMAND_RESULT_FIELD_BOOL: return "bool";
+            }
+            return "unknown";
+        }
+        case DS_LOWER_EXPR_INDEX:
+            return lower_value_type_name(expr->as.index.element_kind);
+        case DS_LOWER_EXPR_IDENT:
+        case DS_LOWER_EXPR_REGEX:
+        case DS_LOWER_EXPR_RANGE:
+        case DS_LOWER_EXPR_ERROR:
+            return "unknown";
+    }
+    return "unknown";
+}
+
+static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    (void)e;
+    if (expr->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, " \"${");
+        emit_type_var_name(out, expr->as.text);
+        buf_append(out, ":-unknown}\"");
+        return true;
+    }
+    buf_append(out, " ");
+    const char *type = expr_type_name(expr);
+    bash_single_quote(out, type, strlen(type));
+    return true;
+}
+
 static const char *lower_value_type_name(DsLowerValueKind kind) {
     switch (kind) {
         case DS_LOWER_VALUE_BOOL: return "bool";
@@ -244,7 +317,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             if (expr->as.call.is_user_function) {
                 buf_append(out, "\"$(__ds_call_value ");
                 emit_fn_name(out, expr->as.call.name);
-                if (!emit_call_args(e, &expr->as.call.args, out)) return false;
+                if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;
                 buf_append(out, ")\"");
                 return true;
             }
@@ -268,7 +341,8 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            if (str_eq(expr->as.binary.op, "in") || str_eq(expr->as.binary.op, "matches")) {
+            if (str_eq(expr->as.binary.op, "in") || str_eq(expr->as.binary.op, "matches") ||
+                str_eq(expr->as.binary.op, "&&") || str_eq(expr->as.binary.op, "||")) {
                 buf_append(out, "$(if ");
                 if (!emit_condition(e, expr, out)) return false;
                 buf_append(out, "; then printf true; else printf false; fi)");
@@ -504,6 +578,15 @@ bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
     for (size_t i = 0; i < args->len; i++) {
         buf_append(out, " ");
         if (!emit_call_arg_expr(e, args->items[i], out)) return false;
+    }
+    return true;
+}
+
+bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
+    for (size_t i = 0; i < args->len; i++) {
+        buf_append(out, " ");
+        if (!emit_call_arg_expr(e, args->items[i], out)) return false;
+        if (!emit_user_call_arg_type(e, args->items[i], out)) return false;
     }
     return true;
 }

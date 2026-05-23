@@ -832,3 +832,53 @@ or Bash-only string behavior. The same lowered element-kind metadata is carried
 into standalone Bash `case` emission, so known indexed array selectors and array
 `for` loop variables are matched as strings, ints, or bools instead of being
 collapsed to strings. Unknown element kinds remain unknown. Function parameters with literal defaults carry that default's static kind through the single lowered function body, and emitted Bash assigns the matching parameter type tag when the default branch is used, so defaulted string parameters can use string methods and defaulted string/int/bool parameters can be used as kind-aware `case` selectors. Required untyped parameters and explicit runtime argument kind propagation remain unknown until typed parameters or a runtime type-tag design is deliberately added.
+
+## v0.23.0 regex, range, and membership runtime
+
+### Membership equality
+
+`v0.23.0` implements `needle in array` for arrays whose element kind is one of
+the supported scalar kinds: `string`, `int`, or `bool`. Membership uses exact
+ds value equality, not substring matching, Bash glob matching, or string-only
+coercion. The VM evaluates the left operand once, evaluates the right operand
+once, then scans the array using kind-aware comparisons, so string `"2"`, int
+`2`, and bool-like strings such as `"true"` remain distinct values.
+
+Generated Bash preserves the same contract with value-kind sidecars for arrays
+and membership operands. Empty arrays are supported as always-false membership
+sources. Map membership, command-result membership, range membership, regex
+membership, and arbitrary iterable membership remain deferred until the language
+has a broader iterable/value model.
+
+### Range loop semantics
+
+`v0.23.0` implements `for n in start..end { ... }` as an inclusive integer loop
+source. Range expressions are not first-class values in this milestone; they are
+accepted only in `for` loop-source position. Both bounds must be integers. The
+VM evaluates the start expression once before the loop and the end expression
+once before the loop, binds the loop variable as an `int`, and iterates upward
+while `start <= end`. A range whose start is greater than its end runs zero
+iterations instead of counting down.
+
+Generated Bash uses arithmetic loop constructs with temporary bound variables
+rather than brace expansion, so runtime bounds, arithmetic bounds, and supported
+scalar-returning function-call bounds keep VM/Bash parity. Open-ended,
+half-open, stepped, reverse-counting, non-integer, and value-position ranges are
+rejected before execution or emission.
+
+### Regex subset
+
+`v0.23.0` implements `string matches /pattern/` and `string matches /pattern/i`
+with search semantics: patterns match anywhere unless they are anchored by `^`
+or `$`. Regex literals are accepted only as the right operand of `matches`, and
+runtime-constructed regex strings remain deferred. The supported subset is the
+portable POSIX-ERE-shaped surface shared by the VM implementation and Bash
+`[[ string =~ regex ]]`: literal characters except unescaped `/` and newline,
+escaped `/`, escaped backslash, anchors, `.`, character classes, groups,
+alternation, and `*`, `+`, `?`, `{m}`, and `{m,n}` quantifiers. The only flag in
+this milestone is trailing `/i` for case-insensitive matching.
+
+Unsupported regex constructs such as lookaround, backreferences, named captures,
+inline flags, lazy quantifiers, Unicode classes, runtime patterns, and multiline
+literals are rejected during checking/lowering or emission so VM execution and
+standalone Bash do not silently diverge.

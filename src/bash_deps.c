@@ -513,8 +513,10 @@ static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_RETURN: return expr_uses_function_value_helpers(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP: return stmt_uses_function_value_helpers(stmt->as.handler_stmt.body);
-        case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) if (expr_uses_function_value_helpers(stmt->as.call_stmt.args.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
             return false;

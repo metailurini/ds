@@ -74,7 +74,21 @@ void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {
     if (scope_find_current(lower->scope, stmt->as.let_stmt.name)) {
         return;
     }
-    scope_define(lower, lower->scope, stmt->as.let_stmt.name, SYM_TOPLEVEL_PREDECLARED, stmt->span);
+    SymKind element_kind = SYM_UNKNOWN;
+    if (stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_EXPR_ARRAY) {
+        element_kind = SYM_UNKNOWN;
+        for (size_t i = 0; i < stmt->as.let_stmt.value->as.array.elements.len; i++) {
+            const DsExpr *elem = stmt->as.let_stmt.value->as.array.elements.items[i];
+            SymKind current = SYM_UNKNOWN;
+            if (elem->kind == DS_EXPR_STRING) current = SYM_STRING;
+            else if (elem->kind == DS_EXPR_INT) current = SYM_INT;
+            else if (elem->kind == DS_EXPR_BOOL) current = SYM_BOOL;
+            else { element_kind = SYM_UNKNOWN; break; }
+            if (i == 0) element_kind = current;
+            else if (element_kind != current) { element_kind = SYM_UNKNOWN; break; }
+        }
+    }
+    scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, SYM_TOPLEVEL_PREDECLARED, element_kind, stmt->span);
 }
 
 typedef struct {

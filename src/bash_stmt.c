@@ -226,15 +226,17 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
             buf_append(&e->out, "\n");
         }
         emit_indent(&e->out, 1);
-        buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i);
+        buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i * 2);
         emit_var_name(&e->out, param->name);
-        buf_appendf(&e->out, "=\"${%zu}\"", i + 1);
+        buf_appendf(&e->out, "=\"${%zu}\"", i * 2 + 1);
         if (e->needs_case_types) {
             buf_append(&e->out, "; ");
             emit_type_var_name(&e->out, param->name);
             buf_append(&e->out, "=");
+            buf_appendf(&e->out, "\"${%zu:-", i * 2 + 2);
             const char *type = param->has_default ? lower_value_type_name(param->default_kind) : "unknown";
-            bash_single_quote(&e->out, type, strlen(type));
+            buf_append(&e->out, type);
+            buf_append(&e->out, "}\"");
         }
         buf_append(&e->out, "; else ");
         emit_var_name(&e->out, param->name);
@@ -579,7 +581,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             if (ds_stdlib_is_name(stmt->as.call_stmt.name)) emit_stdlib_helper_name(&e->out, stmt->as.call_stmt.name);
             else emit_fn_name(&e->out, stmt->as.call_stmt.name);
-            if (!emit_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
+            if (ds_stdlib_is_name(stmt->as.call_stmt.name)) {
+                if (!emit_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
+            } else {
+                if (!emit_user_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
+            }
             buf_append(&e->out, "\n\n");
             return true;
 

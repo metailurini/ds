@@ -62,6 +62,7 @@ bool emit_call_arg_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
+bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
 bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out);

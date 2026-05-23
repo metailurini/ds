@@ -42,8 +42,8 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented and stabilized
-through the `v0.22.6` final v0.22 documentation pass and the initial `v0.23.0`
-regex/range/membership implementation pass:
+through the `v0.22.6` final v0.22 documentation pass and the completed `v0.23.0`
+regex/range/membership implementation and test pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and

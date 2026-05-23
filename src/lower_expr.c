@@ -294,6 +294,14 @@ void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExp
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs);
 
+static bool ast_binary_op_is_comparison_like(const DsExpr *expr) {
+    if (!expr || expr->kind != DS_EXPR_BINARY) return false;
+    return lower_str_eq(expr->as.binary.op, "in") || lower_str_eq(expr->as.binary.op, "matches") ||
+           lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
+           lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
+           lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=");
+}
+
 DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind left_kind = SYM_UNKNOWN;
     SymKind right_kind = SYM_UNKNOWN;
@@ -306,9 +314,17 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     out->as.binary.op = str_clone(expr->as.binary.op);
     out->as.binary.right = right;
     out->as.binary.left_kind = lower_value_kind_from_sym(left_kind);
+    if (ast_binary_op_is_comparison_like(expr) &&
+        (ast_binary_op_is_comparison_like(expr->as.binary.left) || ast_binary_op_is_comparison_like(expr->as.binary.right))) {
+        ds_diag_error(lower->diag, expr->span, "ambiguous comparison chain in v0.23.0; add parentheses around `in`, `matches`, or comparison operands");
+    }
     if (lower_str_eq(expr->as.binary.op, "in")) {
         if (right_kind != SYM_ARRAY && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `in` must be an array in v0.23.0");
         SymKind element_kind = infer_array_element_kind(lower, right);
+        bool empty_array_literal = right && right->kind == DS_LOWER_EXPR_ARRAY && right->as.array.elements.len == 0;
+        if (right && right->kind == DS_LOWER_EXPR_ARRAY && element_kind == SYM_UNKNOWN && !empty_array_literal) {
+            ds_diag_error(lower->diag, expr->as.binary.right->span, "`in` over heterogeneous or unknown-element arrays is deferred in v0.23.0");
+        }
         if (right_kind == SYM_ARRAY && element_kind != SYM_UNKNOWN && !is_scalar_sym_kind(element_kind)) ds_diag_error(lower->diag, expr->span, "`in` supports only scalar arrays in v0.23.0");
         out->as.binary.right_element_kind = lower_value_kind_from_sym(element_kind);
         *kind_out = SYM_BOOL;
@@ -375,7 +391,7 @@ DsLowerExpr *lower_ident_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
                       (int)expr->as.text.len, expr->as.text.data);
     } else {
         lower_validate_handler_capture(lower, sym, expr->as.text, expr->span);
-        *kind_out = sym->kind;
+        *kind_out = sym->kind == SYM_TOPLEVEL_PREDECLARED ? SYM_UNKNOWN : sym->kind;
     }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_IDENT, expr->span);
     out->as.text = str_clone(expr->as.text);
@@ -479,6 +495,22 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
         expr->as.text = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
         return expr;
     }
+    if (s[*i] == '/') {
+        (*i)++;
+        bool terminated = false;
+        while (*i < len) {
+            if (s[*i] == '\\' && *i + 1 < len) { *i += 2; continue; }
+            if (s[*i] == '/') { (*i)++; terminated = true; break; }
+            if (s[*i] == '\n' || s[*i] == '\r') break;
+            (*i)++;
+        }
+        if (terminated) {
+            while (*i < len && ((s[*i] >= 'A' && s[*i] <= 'Z') || (s[*i] >= 'a' && s[*i] <= 'z'))) (*i)++;
+        }
+        DsExpr *expr = temp_expr_new(DS_EXPR_REGEX, span);
+        expr->as.regex = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
+        return expr;
+    }
     if ((s[*i] == '-' && *i + 1 < len && s[*i + 1] >= '0' && s[*i + 1] <= '9') || (s[*i] >= '0' && s[*i] <= '9')) {
         bool neg = false;
         if (s[*i] == '-') { neg = true; (*i)++; start = *i; }
@@ -506,6 +538,8 @@ static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *
     interp_skip_ws(s, len, &i);
     if (i >= len) return false;
     if (i + 1 < len) {
+        if (s[i] == '|' && s[i + 1] == '|') { *op = (DsStr){"||", 2}; *left_bp = 1; *right_bp = 2; return true; }
+        if (s[i] == '&' && s[i + 1] == '&') { *op = (DsStr){"&&", 2}; *left_bp = 2; *right_bp = 3; return true; }
         if (s[i] == '*' && s[i + 1] == '*') { *op = (DsStr){"**", 2}; *left_bp = 7; *right_bp = 6; return true; }
         if (s[i] == '=' && s[i + 1] == '=') { *op = (DsStr){"==", 2}; *left_bp = 3; *right_bp = 4; return true; }
         if (s[i] == '!' && s[i + 1] == '=') { *op = (DsStr){"!=", 2}; *left_bp = 3; *right_bp = 4; return true; }
@@ -515,6 +549,12 @@ static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *
     if (s[i] == '*' || s[i] == '/' || s[i] == '%') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 5; *right_bp = 6; return true; }
     if (s[i] == '+' || s[i] == '-') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 4; *right_bp = 5; return true; }
     if (s[i] == '>' || s[i] == '<') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 3; *right_bp = 4; return true; }
+    if (i + 2 <= len && memcmp(s + i, "in", 2) == 0 && (i == 0 || !interp_is_ident_char(s[i - 1])) && (i + 2 == len || !interp_is_ident_char(s[i + 2]))) {
+        *op = (DsStr){"in", 2}; *left_bp = 3; *right_bp = 4; return true;
+    }
+    if (i + 7 <= len && memcmp(s + i, "matches", 7) == 0 && (i == 0 || !interp_is_ident_char(s[i - 1])) && (i + 7 == len || !interp_is_ident_char(s[i + 7]))) {
+        *op = (DsStr){"matches", 7}; *left_bp = 3; *right_bp = 4; return true;
+    }
     return false;
 }
 
@@ -562,6 +602,8 @@ static bool decoded_needs_expr_interpolation(DsStr decoded) {
         if (j < decoded.len && decoded.data[j] == '(') return true;
         while (j < decoded.len && decoded.data[j] != '}') {
             if (decoded.data[j] == '+' || decoded.data[j] == '-' || decoded.data[j] == '*' || decoded.data[j] == '/' || decoded.data[j] == '%' || decoded.data[j] == '<' || decoded.data[j] == '>' || decoded.data[j] == '=') return true;
+            if (j + 2 <= decoded.len && memcmp(decoded.data + j, "in", 2) == 0 && (j == 0 || !interp_is_ident_char(decoded.data[j - 1])) && (j + 2 == decoded.len || !interp_is_ident_char(decoded.data[j + 2]))) return true;
+            if (j + 7 <= decoded.len && memcmp(decoded.data + j, "matches", 7) == 0 && (j == 0 || !interp_is_ident_char(decoded.data[j - 1])) && (j + 7 == decoded.len || !interp_is_ident_char(decoded.data[j + 7]))) return true;
             j++;
         }
     }

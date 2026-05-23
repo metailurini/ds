@@ -11,6 +11,8 @@ typedef struct {
     bool ok;
 } Formatter;
 
+static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec);
+
 static void append_str(Formatter *fmt, DsStr s) {
     if (!fmt->ok) return;
     fmt->ok = ds_string_append_range(&fmt->out, s.data, s.len);
@@ -64,6 +66,8 @@ static int expr_prec(const DsExpr *expr) {
     if (!expr) return 99;
     switch (expr->kind) {
         case DS_EXPR_BINARY:
+            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "||", 2) == 0) return 0;
+            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "&&", 2) == 0) return 0;
             if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "in", 2) == 0) return 1;
             if (expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0) return 1;
             if (expr->as.binary.op.len == 2 &&
@@ -83,7 +87,28 @@ static int expr_prec(const DsExpr *expr) {
     }
 }
 
-static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec);
+static bool expr_binary_op_is(const DsExpr *expr, const char *op) {
+    if (!expr || expr->kind != DS_EXPR_BINARY) return false;
+    size_t len = strlen(op);
+    return expr->as.binary.op.len == len && memcmp(expr->as.binary.op.data, op, len) == 0;
+}
+
+static bool expr_binary_op_is_logical(const DsExpr *expr) {
+    return expr_binary_op_is(expr, "&&") || expr_binary_op_is(expr, "||");
+}
+
+static bool expr_binary_op_is_comparison_like(const DsExpr *expr) {
+    if (!expr || expr->kind != DS_EXPR_BINARY) return false;
+    if (expr_binary_op_is_logical(expr)) return false;
+    return expr_prec(expr) <= 2;
+}
+
+static void format_logical_operand(Formatter *fmt, const DsExpr *expr, int prec) {
+    bool parens = expr_binary_op_is_comparison_like(expr);
+    if (parens) append_cstr(fmt, "(");
+    format_expr_prec(fmt, expr, prec);
+    if (parens) append_cstr(fmt, ")");
+}
 
 static void format_expr_list(Formatter *fmt, const DsExprVec *args) {
     for (size_t i = 0; i < args->len; i++) {
@@ -140,11 +165,13 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             format_expr_prec(fmt, expr->as.unary.right, prec);
             break;
         case DS_EXPR_BINARY:
-            format_expr_prec(fmt, expr->as.binary.left, prec);
+            if (expr_binary_op_is_logical(expr)) format_logical_operand(fmt, expr->as.binary.left, prec);
+            else format_expr_prec(fmt, expr->as.binary.left, prec);
             append_cstr(fmt, " ");
             append_str(fmt, expr->as.binary.op);
             append_cstr(fmt, " ");
-            format_expr_prec(fmt, expr->as.binary.right, prec + 1);
+            if (expr_binary_op_is_logical(expr)) format_logical_operand(fmt, expr->as.binary.right, prec + 1);
+            else format_expr_prec(fmt, expr->as.binary.right, prec + 1);
             break;
         case DS_EXPR_CALL:
             if (expr->as.call.name.len > 7 && memcmp(expr->as.call.name.data, "string.", 7) == 0 && expr->as.call.args.len > 0) {
