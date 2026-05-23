@@ -6,6 +6,19 @@ Planned:
 - Add conservative regex literals and `matches` expressions with VM/Bash parity.
 - Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
 
+# v0.22.7 - Final v0.22 Test-Plan Audit
+
+- Re-audited `tests/v0_22/run.sh` against the original v0.22.0 test plan and
+  filled deterministic coverage gaps for cleanup side effects, imported signal
+  handlers, imported signal diagnostics, function-registered handlers,
+  handler control flow, v0.21 arithmetic/return interaction, test-block handler
+  isolation, empty/numeric/dynamic/malformed signal diagnostics, and background
+  command rejection.
+- Fixed emitted Bash cleanup stack iteration so helper-local loop variables no
+  longer shadow user variables used inside cleanup handlers.
+- Updated the v0.22 spec and test-plan status to reflect that the focused suite
+  is now implemented and wired into `make test-v0-22`.
+
 # v0.22.6 - Handler Context and Final v0.22 Documentation
 
 - Finalized the staged v0.22 cleanup/signal documentation after the cleanup

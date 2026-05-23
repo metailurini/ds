@@ -375,6 +375,7 @@ assert_contains docs/status.md 'handler context values such as line numbers rema
 assert_contains docs/language.ds '$LINENO`-equivalent are not available yet' 'language catalog defers handler context'
 assert_contains docs/milestones/v0.22.6-completion.md 'Landed across v0.22.0 through v0.22.6' 'completion note summarizes landed v0.22 slices'
 assert_contains docs/milestones/v0.22.6-completion.md 'Handler context values such as a `$LINENO`-equivalent' 'completion note defers handler context'
+assert_contains docs/milestones/v0.22.0-spec.md 'Tests added: `tests/v0_22/run.sh`' 'v0.22 spec completion review records tests'
 
 write_fixture "$FIX/term_direct_command.ds" <<'DS'
 trap "TERM" {
@@ -694,6 +695,108 @@ echo body
 DS
 assert_parity import_cleanup "$FIX/import_main.ds" 0 $'body\nmain-cleanup\nlib-cleanup\n'
 
+write_fixture "$FIX/import_signal_lib.ds" <<'DS'
+defer on: "TERM" { echo lib-term }
+DS
+write_fixture "$FIX/import_signal_main.ds" <<'DS'
+import "./import_signal_lib.ds"
+defer on: "TERM" { echo main-term }
+trap "EXIT" { echo exit-trap }
+./ready_exec_sleep
+echo after
+DS
+run_and_signal signal_vm_imported_term vm TERM "$FIX/import_signal_main.ds" 143 $'ready\nmain-term\nlib-term\nexit-trap\n'
+run_and_signal signal_bash_imported_term bash TERM "$FIX/import_signal_main.ds" 143 $'ready\nmain-term\nlib-term\nexit-trap\n'
+
+write_fixture "$FIX/import_bad_signal_lib.ds" <<'DS'
+defer on: "QUIT" { echo bad }
+DS
+write_fixture "$FIX/import_bad_signal_main.ds" <<'DS'
+import "./import_bad_signal_lib.ds"
+echo body
+DS
+assert_check_fails import_bad_signal "$FIX/import_bad_signal_main.ds" 'unsupported defer on: signal `QUIT`'
+assert_emit_fails import_bad_signal "$FIX/import_bad_signal_main.ds" 'unsupported defer on: signal `QUIT`'
+
+write_fixture "$FIX/function_registered_handler.ds" <<'DS'
+fn register() {
+  defer { echo from-function }
+}
+
+register()
+echo body
+DS
+assert_parity function_registered_handler "$FIX/function_registered_handler.ds" 0 $'body\nfrom-function\n'
+
+write_fixture "$FIX/handler_control_flow.ds" <<'DS'
+let xs = ["a", "b"]
+let i = 0
+
+defer {
+  while i < 2 {
+    case xs[i] {
+      "a" { echo A }
+      "b" { echo B }
+      _ { echo other }
+    }
+    i = i + 1
+  }
+}
+
+echo body
+DS
+assert_parity handler_control_flow "$FIX/handler_control_flow.ds" 0 $'body\nA\nB\n'
+
+write_fixture "$FIX/handler_arithmetic_return.ds" <<'DS'
+fn code() {
+  return 40 + 2
+}
+
+defer {
+  let c = code()
+  echo "code={c}"
+}
+
+echo body
+DS
+assert_parity handler_arithmetic_return "$FIX/handler_arithmetic_return.ds" 0 $'body\ncode=42\n'
+
+write_fixture "$FIX/cleanup_side_effect.ds" <<'DS'
+file.write("marker.txt", "body")
+
+defer {
+  rm "marker.txt"
+}
+
+if file.exists("marker.txt") {
+  echo exists
+}
+DS
+assert_parity cleanup_side_effect "$FIX/cleanup_side_effect.ds" 0 $'exists\n'
+[ ! -e "$TMP/cleanup_side_effect_vm_work/marker.txt" ] || fail 'VM cleanup side effect removed marker file'
+pass 'VM cleanup side effect removed marker file'
+[ ! -e "$TMP/cleanup_side_effect_bash_work/marker.txt" ] || fail 'Bash cleanup side effect removed marker file'
+pass 'Bash cleanup side effect removed marker file'
+
+write_fixture "$FIX/test_block_cleanup.ds" <<'DS'
+test "one" {
+  defer { echo one-cleanup }
+  assert true
+}
+
+test "two" {
+  assert true
+}
+DS
+run_ok test_block_cleanup "$DS" test "$FIX/test_block_cleanup.ds"
+assert_contains "$TMP/test_block_cleanup.out" 'one-cleanup' 'test-block cleanup runs for registering test'
+assert_contains "$TMP/test_block_cleanup.out" 'ok   one' 'test-block first test passes'
+assert_contains "$TMP/test_block_cleanup.out" 'ok   two' 'test-block second test passes'
+if [ "$(grep -c 'one-cleanup' "$TMP/test_block_cleanup.out")" -ne 1 ]; then
+  fail 'test-block cleanup must not leak into later tests'
+fi
+pass 'test-block cleanup does not leak into later tests'
+
 # Unsupported deterministic diagnostics.
 write_fixture "$FIX/unsupported_signal.ds" <<'DS'
 defer on: "HUP" { echo nope }
@@ -712,6 +815,76 @@ defer on: "int" { echo nope }
 DS
 assert_check_fails lowercase_signal "$FIX/lowercase_signal.ds" 'unsupported defer on: signal `int`'
 assert_emit_fails lowercase_signal "$FIX/lowercase_signal.ds" 'unsupported defer on: signal `int`'
+
+write_fixture "$FIX/empty_signal.ds" <<'DS'
+defer on: "" { echo nope }
+DS
+assert_check_fails empty_signal "$FIX/empty_signal.ds" 'unsupported defer on: signal ``'
+assert_emit_fails empty_signal "$FIX/empty_signal.ds" 'unsupported defer on: signal ``'
+
+write_fixture "$FIX/kill_signal.ds" <<'DS'
+defer on: "KILL" { echo nope }
+DS
+assert_check_fails kill_signal "$FIX/kill_signal.ds" 'unsupported defer on: signal `KILL`'
+assert_emit_fails kill_signal "$FIX/kill_signal.ds" 'unsupported defer on: signal `KILL`'
+
+write_fixture "$FIX/stop_trap_signal.ds" <<'DS'
+trap "STOP" { echo nope }
+DS
+assert_check_fails stop_trap_signal "$FIX/stop_trap_signal.ds" 'unsupported trap signal `STOP`'
+assert_emit_fails stop_trap_signal "$FIX/stop_trap_signal.ds" 'unsupported trap signal `STOP`'
+
+write_fixture "$FIX/dynamic_defer_signal.ds" <<'DS'
+let sig = "INT"
+defer on: sig { echo nope }
+DS
+assert_check_fails dynamic_defer_signal "$FIX/dynamic_defer_signal.ds" 'expected signal string after `defer on:`'
+
+write_fixture "$FIX/dynamic_trap_signal.ds" <<'DS'
+let sig = "TERM"
+trap sig { echo nope }
+DS
+assert_check_fails dynamic_trap_signal "$FIX/dynamic_trap_signal.ds" 'expected signal string after `trap`'
+
+write_fixture "$FIX/numeric_defer_signal.ds" <<'DS'
+defer on: 2 { echo nope }
+DS
+assert_check_fails numeric_defer_signal "$FIX/numeric_defer_signal.ds" 'expected signal string after `defer on:`'
+
+write_fixture "$FIX/numeric_trap_signal.ds" <<'DS'
+trap 15 { echo nope }
+DS
+assert_check_fails numeric_trap_signal "$FIX/numeric_trap_signal.ds" 'expected signal string after `trap`'
+
+write_fixture "$FIX/missing_defer_colon.ds" <<'DS'
+defer on "INT" { echo nope }
+DS
+assert_check_fails missing_defer_colon "$FIX/missing_defer_colon.ds" 'expected `:` after `defer on`'
+
+write_fixture "$FIX/missing_defer_block.ds" <<'DS'
+defer on: "INT"
+DS
+assert_check_fails missing_defer_block "$FIX/missing_defer_block.ds" 'expected `{` after defer handler'
+
+write_fixture "$FIX/missing_trap_block.ds" <<'DS'
+trap "INT"
+DS
+assert_check_fails missing_trap_block "$FIX/missing_trap_block.ds" 'expected `{` after trap signal'
+
+write_fixture "$FIX/missing_trap_string.ds" <<'DS'
+trap { echo nope }
+DS
+assert_check_fails missing_trap_string "$FIX/missing_trap_string.ds" 'expected signal string after `trap`'
+
+write_fixture "$FIX/multiple_trap_signals.ds" <<'DS'
+trap "INT", "TERM" { echo nope }
+DS
+assert_check_fails multiple_trap_signals "$FIX/multiple_trap_signals.ds" 'expected `{` after trap signal'
+
+write_fixture "$FIX/background_command.ds" <<'DS'
+sleep 1 &
+DS
+assert_check_fails background_command "$FIX/background_command.ds" 'logical/background command operators are not supported'
 
 write_fixture "$FIX/missing_signal_string.ds" <<'DS'
 defer on: INT { echo nope }
