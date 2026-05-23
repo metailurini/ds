@@ -119,6 +119,116 @@ assert_vm_bash_same() {
   fi
 }
 
+run_and_signal() {
+  local name="$1" mode="$2" signal="$3" fixture="$4" expected_status="$5" expected_stdout="$6"
+  local out="$TMP/${name}.out"
+  local err="$TMP/${name}.err"
+  local rc_file="$TMP/${name}.rc"
+  local script="$TMP/${name}.sh"
+  local run_dir
+  local -a cmd
+
+  : >"$out"
+  : >"$err"
+  run_dir="$(dirname "$fixture")"
+
+  case "$mode" in
+    vm)
+      cmd=("$DS" run "$fixture")
+      ;;
+    bash)
+      run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
+      run_ok "${name}_bash_n" bash -n "$script"
+      assert_not_matches "$script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' "$name emitted Bash does not call ds"
+      cmd=(bash "$script")
+      ;;
+    *)
+      fail "$name unknown signal harness mode: $mode"
+      ;;
+  esac
+
+  set +e
+  python3 - "$run_dir" "$out" "$err" "$rc_file" "$signal" "${cmd[@]}" <<'PYSIGNAL'
+import os
+import signal
+import subprocess
+import sys
+import time
+
+run_dir, out_path, err_path, rc_path, sig_name = sys.argv[1:6]
+cmd = sys.argv[6:]
+signum = getattr(signal, "SIG" + sig_name)
+
+def preexec():
+    os.setsid()
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+with open(out_path, "ab", buffering=0) as out, open(err_path, "ab", buffering=0) as err:
+    proc = subprocess.Popen(cmd, cwd=run_dir, stdout=out, stderr=err, preexec_fn=preexec)
+
+ready = False
+for _ in range(200):
+    try:
+        with open(out_path, "r", encoding="utf-8", errors="replace") as f:
+            if any(line.rstrip("\n") == "ready" for line in f):
+                ready = True
+                break
+    except FileNotFoundError:
+        pass
+    if proc.poll() is not None:
+        break
+    time.sleep(0.05)
+
+if not ready:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=2)
+    sys.exit(90)
+
+try:
+    os.killpg(proc.pid, signum)
+except ProcessLookupError:
+    sys.exit(91)
+
+try:
+    rc = proc.wait(timeout=10)
+except subprocess.TimeoutExpired:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=2)
+    sys.exit(92)
+
+if rc < 0:
+    rc = 128 + (-rc)
+with open(rc_path, "w", encoding="utf-8") as f:
+    f.write(str(rc))
+PYSIGNAL
+  local harness_rc=$?
+  set -e
+
+  if [ "$harness_rc" -ne 0 ]; then
+    echo "--- $out" >&2
+    cat "$out" >&2 || true
+    echo "--- $err" >&2
+    cat "$err" >&2 || true
+    case "$harness_rc" in
+      90) fail "$name did not print ready before signal" ;;
+      91) fail "$name could not signal process group" ;;
+      92) fail "$name did not exit after $signal" ;;
+      *) fail "$name signal harness failed with exit $harness_rc" ;;
+    esac
+  fi
+
+  assert_status "$name" "$expected_status"
+  assert_same_text "$expected_stdout" "$out" "$name stdout"
+  assert_same_text '' "$err" "$name stderr"
+}
+
 assert_no_duplicate_helper_defs() {
   local script="$1" name="$2"
   local defs dupes
@@ -203,32 +313,41 @@ assert_contains docs/status.md 'additional shell backends or native compilation'
 
 # 2. Examples audit.
 for example in \
-  examples/basic.ds \
   examples/command-result.ds \
   examples/functions.ds \
-  examples/collections.ds \
   examples/control-flow.ds \
   examples/pipeline.ds \
   examples/strings.ds \
-  examples/vm.ds \
-  examples/function-values.ds \
-  examples/filtering.ds; do
+  examples/function-values.ds; do
+  name="example_$(basename "$example" .ds | tr '-' '_')"
+  run_ok "${name}_check" "$DS" check "$example"
+  run_ok "${name}_fmt_check" "$DS" fmt --check "$example"
+  assert_vm_bash_same "$name" "$ROOT/$example" 0
+done
+for example in \
+  examples/basic.ds \
+  examples/collections.ds \
+  examples/filtering.ds \
+  examples/vm.ds; do
   name="example_$(basename "$example" .ds | tr '-' '_')"
   run_ok "${name}_check" "$DS" check "$example"
   assert_vm_bash_same "$name" "$ROOT/$example" 0
 done
 run_ok example_import_main_check "$DS" check examples/import-main.ds
+run_ok example_import_main_fmt_check "$DS" fmt --check examples/import-main.ds
 assert_vm_bash_same example_import_main "$ROOT/examples/import-main.ds" 0
+run_ok example_import_lib_check "$DS" check examples/import-lib.ds
+run_ok example_import_lib_fmt_check "$DS" fmt --check examples/import-lib.ds
+assert_vm_bash_same example_import_lib "$ROOT/examples/import-lib.ds" 0
 run_ok example_args_check "$DS" check examples/args.ds
+run_ok example_args_fmt_check "$DS" fmt --check examples/args.ds
 assert_parity example_args "$ROOT/examples/args.ds" 0 $'Deploying api to prod\nretries=2\nforce enabled\n' api --target prod --retries 2 --force
 run_ok example_redirection_check "$DS" check examples/redirection.ds
+run_ok example_redirection_fmt_check "$DS" fmt --check examples/redirection.ds
 redirection="$ROOT/examples/redirection.ds"
 assert_parity example_redirection "$redirection" 0 $'build output written to build.log\n'
 run_ok example_stdlib_check "$DS" check examples/stdlib.ds
-stdlib_script="$TMP/stdlib.sh"
-run_ok example_stdlib_emit "$DS" emit bash examples/stdlib.ds -o "$stdlib_script"
-run_ok example_stdlib_bash_n bash -n "$stdlib_script"
-assert_not_matches "$stdlib_script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' 'stdlib example Bash does not call ds'
+assert_vm_bash_same example_stdlib "$ROOT/examples/stdlib.ds" 0
 run_fail example_bad_check "$DS" check examples/bad.ds
 assert_diag "$TMP/example_bad_check.err" 'expected expression' 'bad example diagnostic'
 run_fail example_bad_emit "$DS" emit bash examples/bad.ds -o "$TMP/bad.sh"
@@ -332,6 +451,47 @@ cleanup_script="$TMP/cleanup.sh"
 run_ok cleanup_emit "$DS" emit bash "$cleanup" -o "$cleanup_script"
 run_ok cleanup_bash_n bash -n "$cleanup_script"
 assert_contains "$cleanup_script" 'trap' 'cleanup Bash contains traps'
+
+# Reuse the deterministic v0.22 signal-harness shape to keep v0.24 honest
+# about foreground direct commands and simple foreground pipelines.
+cat >"$FIX/ready_exec_sleep" <<'SH'
+#!/usr/bin/env bash
+echo ready
+exec sleep 5
+SH
+chmod +x "$FIX/ready_exec_sleep"
+
+signal_direct="$FIX/signal_direct.ds"
+write_fixture "$signal_direct" <<'DS'
+trap "TERM" { echo term-trap }
+defer on: "TERM" { echo term-defer }
+trap "INT" { echo int-trap }
+defer on: "INT" { echo int-defer }
+trap "EXIT" { echo exit-trap }
+defer { echo exit-defer }
+./ready_exec_sleep
+echo after
+DS
+run_and_signal signal_vm_term_direct_v0_24 vm TERM "$signal_direct" 143 $'ready\nterm-trap\nterm-defer\nexit-trap\nexit-defer\n'
+run_and_signal signal_bash_term_direct_v0_24 bash TERM "$signal_direct" 143 $'ready\nterm-trap\nterm-defer\nexit-trap\nexit-defer\n'
+run_and_signal signal_vm_int_direct_v0_24 vm INT "$signal_direct" 130 $'ready\nint-trap\nint-defer\nexit-trap\nexit-defer\n'
+run_and_signal signal_bash_int_direct_v0_24 bash INT "$signal_direct" 130 $'ready\nint-trap\nint-defer\nexit-trap\nexit-defer\n'
+
+signal_pipeline="$FIX/signal_pipeline.ds"
+write_fixture "$signal_pipeline" <<'DS'
+trap "TERM" { echo term-trap }
+defer on: "TERM" { echo term-defer }
+trap "INT" { echo int-trap }
+defer on: "INT" { echo int-defer }
+trap "EXIT" { echo exit-trap }
+defer { echo exit-defer }
+./ready_exec_sleep | cat
+echo after
+DS
+run_and_signal signal_vm_term_pipeline_v0_24 vm TERM "$signal_pipeline" 143 $'ready\nterm-trap\nterm-defer\nexit-trap\nexit-defer\n'
+run_and_signal signal_bash_term_pipeline_v0_24 bash TERM "$signal_pipeline" 143 $'ready\nterm-trap\nterm-defer\nexit-trap\nexit-defer\n'
+run_and_signal signal_vm_int_pipeline_v0_24 vm INT "$signal_pipeline" 130 $'ready\nint-trap\nint-defer\nexit-trap\nexit-defer\n'
+run_and_signal signal_bash_int_pipeline_v0_24 bash INT "$signal_pipeline" 130 $'ready\nint-trap\nint-defer\nexit-trap\nexit-defer\n'
 
 # 6. Test-runner integration.
 test_blocks="$FIX/test_blocks.ds"
@@ -472,6 +632,11 @@ let x = 1 / 0
 echo "x={x}"
 DS
 assert_parity div_zero "$div_zero" 1 $'cleanup\n'
+assert_contains "$TMP/div_zero_vm.err" 'division or modulo by zero' 'VM div-zero diagnostic text'
+assert_contains "$TMP/div_zero_vm.err" ': error:' 'VM div-zero diagnostic shape'
+assert_contains "$TMP/div_zero_vm.err" '^' 'VM div-zero diagnostic caret'
+assert_contains "$TMP/div_zero_bash.err" 'division or modulo by zero' 'Bash div-zero diagnostic text'
+assert_contains "$TMP/div_zero_bash.err" ': error:' 'Bash div-zero diagnostic shape'
 mod_zero="$FIX/mod_zero.ds"
 write_fixture "$mod_zero" <<'DS'
 defer { echo cleanup }
@@ -479,6 +644,11 @@ let x = 1 % 0
 echo "x={x}"
 DS
 assert_parity mod_zero "$mod_zero" 1 $'cleanup\n'
+assert_contains "$TMP/mod_zero_vm.err" 'division or modulo by zero' 'VM mod-zero diagnostic text'
+assert_contains "$TMP/mod_zero_vm.err" ': error:' 'VM mod-zero diagnostic shape'
+assert_contains "$TMP/mod_zero_vm.err" '^' 'VM mod-zero diagnostic caret'
+assert_contains "$TMP/mod_zero_bash.err" 'division or modulo by zero' 'Bash mod-zero diagnostic text'
+assert_contains "$TMP/mod_zero_bash.err" ': error:' 'Bash mod-zero diagnostic shape'
 missing_return="$FIX/missing_return.ds"
 write_fixture "$missing_return" <<'DS'
 fn bad(flag = true) {
@@ -522,6 +692,11 @@ sh -c "printf fail >&2; exit 4"
 echo after
 DS
 assert_parity plain_fail "$plain_fail" 4 $'cleanup\n'
+assert_contains "$TMP/plain_fail_vm.err" 'fail' 'VM plain failure preserves command stderr'
+assert_contains "$TMP/plain_fail_vm.err" 'error: command' 'VM plain failure diagnostic shape'
+assert_contains "$TMP/plain_fail_vm.err" '^' 'VM plain failure diagnostic caret'
+assert_contains "$TMP/plain_fail_bash.err" 'fail' 'Bash plain failure preserves command stderr'
+assert_contains "$TMP/plain_fail_bash.err" 'error: command' 'Bash plain failure diagnostic shape'
 
 # 12. Cleanup and signal static regressions.
 cleanup_order="$FIX/cleanup_order.ds"
