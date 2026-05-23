@@ -16,6 +16,7 @@ static bool expr_uses_run(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_run(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_run(expr->as.binary.left) || expr_uses_run(expr->as.binary.right);
+        case DS_LOWER_EXPR_RANGE: return expr_uses_run(expr->as.range.start) || expr_uses_run(expr->as.range.end);
         case DS_LOWER_EXPR_CALL:
             for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_run(expr->as.call.args.items[i])) return true;
             return false;
@@ -40,6 +41,7 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_pipeline_run(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_pipeline_run(expr->as.binary.left) || expr_uses_pipeline_run(expr->as.binary.right);
+        case DS_LOWER_EXPR_RANGE: return expr_uses_pipeline_run(expr->as.range.start) || expr_uses_pipeline_run(expr->as.range.end);
         case DS_LOWER_EXPR_CALL:
             for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_pipeline_run(expr->as.call.args.items[i])) return true;
             return false;
@@ -80,6 +82,7 @@ static bool expr_uses_stdlib(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_stdlib(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_stdlib(expr->as.binary.left) || expr_uses_stdlib(expr->as.binary.right);
+        case DS_LOWER_EXPR_RANGE: return expr_uses_stdlib(expr->as.range.start) || expr_uses_stdlib(expr->as.range.end);
         case DS_LOWER_EXPR_INTERP:
             for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_stdlib(expr->as.interp.parts.items[i])) return true;
             return false;
@@ -111,6 +114,7 @@ static bool expr_uses_collection_index(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_collection_index(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_collection_index(expr->as.binary.left) || expr_uses_collection_index(expr->as.binary.right);
+        case DS_LOWER_EXPR_RANGE: return expr_uses_collection_index(expr->as.range.start) || expr_uses_collection_index(expr->as.range.end);
         case DS_LOWER_EXPR_CALL:
             for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_collection_index(expr->as.call.args.items[i])) return true;
             return false;
@@ -132,6 +136,7 @@ static bool expr_uses_map_literal(const DsLowerExpr *expr) {
             return false;
         case DS_LOWER_EXPR_UNARY: return expr_uses_map_literal(expr->as.unary.right);
         case DS_LOWER_EXPR_BINARY: return expr_uses_map_literal(expr->as.binary.left) || expr_uses_map_literal(expr->as.binary.right);
+        case DS_LOWER_EXPR_RANGE: return expr_uses_map_literal(expr->as.range.start) || expr_uses_map_literal(expr->as.range.end);
         case DS_LOWER_EXPR_CALL:
             for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_map_literal(expr->as.call.args.items[i])) return true;
             return false;
@@ -192,6 +197,8 @@ static bool expr_uses_int_helpers(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_INTERP:
             for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_int_helpers(expr->as.interp.parts.items[i])) return true;
             return false;
+        case DS_LOWER_EXPR_RANGE:
+            return expr_uses_int_helpers(expr->as.range.start) || expr_uses_int_helpers(expr->as.range.end);
         default:
             return false;
     }
@@ -218,6 +225,8 @@ static bool expr_uses_function_value_helpers(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_INTERP:
             for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_function_value_helpers(expr->as.interp.parts.items[i])) return true;
             return false;
+        case DS_LOWER_EXPR_RANGE:
+            return expr_uses_function_value_helpers(expr->as.range.start) || expr_uses_function_value_helpers(expr->as.range.end);
         default: return false;
     }
 }

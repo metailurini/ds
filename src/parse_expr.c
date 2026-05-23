@@ -2,21 +2,23 @@
 
 static int precedence(DsTokenKind kind) {
     switch (kind) {
+        case DS_TOK_OR_OR: return 1;
+        case DS_TOK_AND_AND: return 2;
         case DS_TOK_IN:
-        case DS_TOK_MATCHES: return 1;
+        case DS_TOK_MATCHES: return 3;
         case DS_TOK_EQUAL_EQUAL:
-        case DS_TOK_BANG_EQUAL: return 1;
-        case DS_TOK_DOT_DOT: return 2;
+        case DS_TOK_BANG_EQUAL: return 3;
+        case DS_TOK_DOT_DOT: return 3;
         case DS_TOK_GREATER:
         case DS_TOK_GREATER_EQUAL:
         case DS_TOK_LESS:
-        case DS_TOK_LESS_EQUAL: return 2;
+        case DS_TOK_LESS_EQUAL: return 4;
         case DS_TOK_PLUS:
-        case DS_TOK_MINUS: return 3;
+        case DS_TOK_MINUS: return 5;
         case DS_TOK_STAR:
         case DS_TOK_SLASH:
-        case DS_TOK_PERCENT: return 4;
-        case DS_TOK_STAR_STAR: return 5;
+        case DS_TOK_PERCENT: return 6;
+        case DS_TOK_STAR_STAR: return 7;
         default: return 0;
     }
 }

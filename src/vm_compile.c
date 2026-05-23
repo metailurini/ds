@@ -330,6 +330,84 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             return r;
         }
         case DS_LOWER_EXPR_BINARY: {
+            if ((expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "&&", 2) == 0) ||
+                (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "||", 2) == 0)) {
+                bool is_and = expr->as.binary.op.data[0] == '&';
+                int r = new_reg(p);
+                int left = compile_expr(p, expr->as.binary.left);
+                Instr left_false = {0};
+                left_false.op = OP_JUMP_IF_FALSE;
+                left_false.span = expr->as.binary.left->span;
+                left_false.a = left;
+                size_t left_false_pos = emit_instr(p, left_false);
+
+                if (!is_and) {
+                    Instr load_true = {0};
+                    load_true.op = OP_LOAD_CONST;
+                    load_true.span = expr->span;
+                    load_true.dst = r;
+                    load_true.a = add_const(p, ds_value_bool(true));
+                    emit_instr(p, load_true);
+                    Instr jump_end = {0};
+                    jump_end.op = OP_JUMP;
+                    jump_end.span = expr->span;
+                    size_t true_jump_pos = emit_instr(p, jump_end);
+                    p->instrs[left_false_pos].target = (int)p->instr_len;
+                    int right = compile_expr(p, expr->as.binary.right);
+                    Instr right_false = {0};
+                    right_false.op = OP_JUMP_IF_FALSE;
+                    right_false.span = expr->as.binary.right->span;
+                    right_false.a = right;
+                    size_t right_false_pos = emit_instr(p, right_false);
+                    Instr load_true_right = {0};
+                    load_true_right.op = OP_LOAD_CONST;
+                    load_true_right.span = expr->span;
+                    load_true_right.dst = r;
+                    load_true_right.a = add_const(p, ds_value_bool(true));
+                    emit_instr(p, load_true_right);
+                    Instr jump_end_right = {0};
+                    jump_end_right.op = OP_JUMP;
+                    jump_end_right.span = expr->span;
+                    size_t right_true_jump_pos = emit_instr(p, jump_end_right);
+                    p->instrs[right_false_pos].target = (int)p->instr_len;
+                    Instr load_false = {0};
+                    load_false.op = OP_LOAD_CONST;
+                    load_false.span = expr->span;
+                    load_false.dst = r;
+                    load_false.a = add_const(p, ds_value_bool(false));
+                    emit_instr(p, load_false);
+                    p->instrs[true_jump_pos].target = (int)p->instr_len;
+                    p->instrs[right_true_jump_pos].target = (int)p->instr_len;
+                    return r;
+                }
+
+                int right = compile_expr(p, expr->as.binary.right);
+                Instr right_false = {0};
+                right_false.op = OP_JUMP_IF_FALSE;
+                right_false.span = expr->as.binary.right->span;
+                right_false.a = right;
+                size_t right_false_pos = emit_instr(p, right_false);
+                Instr load_true = {0};
+                load_true.op = OP_LOAD_CONST;
+                load_true.span = expr->span;
+                load_true.dst = r;
+                load_true.a = add_const(p, ds_value_bool(true));
+                emit_instr(p, load_true);
+                Instr jump_end = {0};
+                jump_end.op = OP_JUMP;
+                jump_end.span = expr->span;
+                size_t true_jump_pos = emit_instr(p, jump_end);
+                p->instrs[left_false_pos].target = (int)p->instr_len;
+                p->instrs[right_false_pos].target = (int)p->instr_len;
+                Instr load_false = {0};
+                load_false.op = OP_LOAD_CONST;
+                load_false.span = expr->span;
+                load_false.dst = r;
+                load_false.a = add_const(p, ds_value_bool(false));
+                emit_instr(p, load_false);
+                p->instrs[true_jump_pos].target = (int)p->instr_len;
+                return r;
+            }
             int left = compile_expr(p, expr->as.binary.left);
             int right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);

@@ -33,6 +33,8 @@ typedef enum {
     DS_TOK_CONTINUE,
     DS_TOK_CASE,
     DS_TOK_PIPE,
+    DS_TOK_AND_AND,
+    DS_TOK_OR_OR,
     DS_TOK_TEST,
     DS_TOK_ASSERT,
     DS_TOK_RETURN,

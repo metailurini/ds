@@ -1,10 +1,16 @@
-# v0.23.0 - Regex, Ranges, and Membership (planned)
+# v0.23.0 - Regex, Ranges, and Membership
 
-Planned:
-- Add kind-aware `in` membership checks for scalar arrays.
-- Add inclusive integer range loop sources with `for n in start..end`.
-- Add conservative regex literals and `matches` expressions with VM/Bash parity.
-- Keep heredocs, regex captures/replacement, runtime regex patterns, range values, stepped/reverse ranges, and map membership deferred.
+- Added kind-aware `in` membership checks for scalar arrays, including array
+  literals, named arrays, and known standard-library string-array results such
+  as `.split(...)`, `lines(...)`, `glob(...)`, and `glob!(...)`.
+- Added inclusive integer range loop sources with `for n in start..end`,
+  including variable, arithmetic, and supported scalar function-call bounds.
+- Added conservative regex literals and `matches` expressions with VM/Bash
+  parity, including trailing `/i` case-insensitive matching.
+- Added scoped expression-level `&&` and `||` so v0.23 filter predicates can be
+  composed without falling back to shell command operators.
+- Kept heredocs, regex captures/replacement, runtime regex patterns, range
+  values, stepped/reverse ranges, and map membership deferred.
 
 # v0.22.7 - Final v0.22 Test-Plan Audit
 

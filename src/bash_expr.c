@@ -80,14 +80,14 @@ static void emit_membership_left_type(const DsLowerExpr *left, DsLowerValueKind 
 }
 
 static bool emit_membership_compare(BashEmitter *e, const DsLowerExpr *left, DsLowerValueKind left_kind, DsLowerValueKind elem_kind, const DsLowerExpr *elem, EmitBuf *out) {
+    (void)e;
+    (void)left;
+    (void)left_kind;
     buf_append(out, "[[ ");
-    emit_membership_left_type(left, left_kind, out);
-    buf_append(out, " == ");
+    buf_append(out, "$__ds_needle_type == ");
     const char *elem_type = lower_value_type_name(elem_kind);
     bash_single_quote(out, elem_type, strlen(elem_type));
-    buf_append(out, " && ");
-    if (!emit_condition_operand(e, left, out)) return false;
-    buf_append(out, " == ");
+    buf_append(out, " && \"$__ds_needle\" == ");
     if (elem) {
         if (!emit_condition_operand(e, elem, out)) return false;
     } else {
@@ -102,8 +102,12 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     const DsLowerExpr *right = expr->as.binary.right;
     DsLowerValueKind left_kind = expr->as.binary.left_kind;
     DsLowerValueKind elem_kind = expr->as.binary.right_element_kind;
+    buf_append(out, "{ __ds_needle=");
+    if (!emit_value_expr(e, left, out)) return false;
+    buf_append(out, "; __ds_needle_type=");
+    emit_membership_left_type(left, left_kind, out);
+    buf_append(out, "; ");
     if (right->kind == DS_LOWER_EXPR_ARRAY) {
-        buf_append(out, "{ ");
         if (right->as.array.elements.len == 0) { buf_append(out, "false; }"); return true; }
         for (size_t i = 0; i < right->as.array.elements.len; i++) {
             if (i > 0) buf_append(out, " || ");
@@ -121,25 +125,34 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
         buf_append(out, "; }");
         return true;
     }
-    buf_append(out, "{ __ds_found=false; __ds_i=0; for __ds_item in ");
+    if (right->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(right->as.call.name) && stdlib_returns_array(right->as.call.name)) {
+        size_t temp_id = e->temp_counter++;
+        buf_appendf(out, "__ds_found=false; __ds_i=0; __ds_iter_%zu=$(mktemp); ", temp_id);
+        emit_stdlib_helper_name(out, right->as.call.name);
+        if (!emit_call_args(e, &right->as.call.args, out)) return false;
+        buf_appendf(out, " >\"$__ds_iter_%zu\"; while IFS= read -r __ds_item; do [[ ", temp_id);
+        buf_append(out, "$__ds_needle_type == ");
+        const char *elem_type = lower_value_type_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
+        bash_single_quote(out, elem_type, strlen(elem_type));
+        buf_appendf(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done <\"$__ds_iter_%zu\"; rm -f \"$__ds_iter_%zu\"; [[ $__ds_found == true ]]; }", temp_id, temp_id);
+        return true;
+    }
+    buf_append(out, "__ds_found=false; __ds_i=0; for __ds_item in ");
     if (right->kind == DS_LOWER_EXPR_IDENT) {
         buf_append(out, "\"${"); emit_var_name(out, right->as.text); buf_append(out, "[@]}\"");
     } else {
-        ds_diag_error(e->diag, right->span, "Bash emission supports `in` over named arrays and array literals in v0.23.0");
+        ds_diag_error(e->diag, right->span, "Bash emission supports `in` over named arrays, array literals, and known stdlib string-array results in v0.23.0");
         return false;
     }
     buf_append(out, "; do [[ ");
-    emit_membership_left_type(left, left_kind, out);
-    buf_append(out, " == ");
+    buf_append(out, "$__ds_needle_type == ");
     if (elem_kind == DS_LOWER_VALUE_UNKNOWN) {
         buf_append(out, "\"${"); emit_elem_type_var_name(out, right->as.text); buf_append(out, "[$__ds_i]:-unknown}\"");
     } else {
         const char *elem_type = lower_value_type_name(elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
     }
-    buf_append(out, " && ");
-    if (!emit_condition_operand(e, left, out)) return false;
-    buf_append(out, " == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done; [[ $__ds_found == true ]]; }");
+    buf_append(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done; [[ $__ds_found == true ]]; }");
     return true;
 }
 
@@ -395,12 +408,37 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         buf_append(out, expr->as.boolean ? "true" : "false");
         return true;
     }
-    if (expr->kind == DS_LOWER_EXPR_CALL &&
-        (ds_stdlib_is_name(expr->as.call.name) || expr->as.call.return_kind == DS_LOWER_VALUE_BOOL)) {
-        buf_append(out, "[[ ");
-        if (!emit_value_expr(e, expr, out)) return false;
-        buf_append(out, " == true ]]");
-        return true;
+    if (expr->kind == DS_LOWER_EXPR_CALL) {
+        DsLowerValueKind kind = expr->as.call.return_kind;
+        if (ds_stdlib_is_name(expr->as.call.name)) {
+            const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
+            if (helper) {
+                switch (helper->return_kind) {
+                    case DS_STDLIB_RETURN_BOOL: kind = DS_LOWER_VALUE_BOOL; break;
+                    case DS_STDLIB_RETURN_INT: kind = DS_LOWER_VALUE_INT; break;
+                    case DS_STDLIB_RETURN_STRING: kind = DS_LOWER_VALUE_STRING; break;
+                    default: break;
+                }
+            }
+        }
+        if (kind == DS_LOWER_VALUE_BOOL) {
+            buf_append(out, "[[ ");
+            if (!emit_value_expr(e, expr, out)) return false;
+            buf_append(out, " == true ]]");
+            return true;
+        }
+        if (kind == DS_LOWER_VALUE_INT) {
+            buf_append(out, "[[ ");
+            if (!emit_value_expr(e, expr, out)) return false;
+            buf_append(out, " != 0 ]]");
+            return true;
+        }
+        if (kind == DS_LOWER_VALUE_STRING) {
+            buf_append(out, "[[ -n ");
+            if (!emit_value_expr(e, expr, out)) return false;
+            buf_append(out, " ]]");
+            return true;
+        }
     }
     if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "!")) {
         buf_append(out, "! ");
@@ -421,6 +459,14 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             negate = true;
         }
         if (!op) {
+            if (str_eq(expr->as.binary.op, "&&") || str_eq(expr->as.binary.op, "||")) {
+                buf_append(out, "{ ");
+                if (!emit_condition(e, expr->as.binary.left, out)) return false;
+                buf_append(out, str_eq(expr->as.binary.op, "&&") ? "; } && { " : "; } || { ");
+                if (!emit_condition(e, expr->as.binary.right, out)) return false;
+                buf_append(out, "; }");
+                return true;
+            }
             if (str_eq(expr->as.binary.op, "in")) return emit_membership_condition(e, expr, out);
             if (str_eq(expr->as.binary.op, "matches")) {
                 DsStr pattern = {0}; bool insensitive = false;

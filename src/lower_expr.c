@@ -320,6 +320,16 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         *kind_out = SYM_BOOL;
         return out;
     }
+    if (lower_str_eq(expr->as.binary.op, "&&") || lower_str_eq(expr->as.binary.op, "||")) {
+        if (left_kind == SYM_ARRAY || left_kind == SYM_MAP || left_kind == SYM_COMMAND_RESULT) {
+            ds_diag_error(lower->diag, expr->as.binary.left->span, "logical operator `%.*s` requires scalar operands in v0.23.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+        }
+        if (right_kind == SYM_ARRAY || right_kind == SYM_MAP || right_kind == SYM_COMMAND_RESULT) {
+            ds_diag_error(lower->diag, expr->as.binary.right->span, "logical operator `%.*s` requires scalar operands in v0.23.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+        }
+        *kind_out = SYM_BOOL;
+        return out;
+    }
     if (lower_str_eq(expr->as.binary.op, "+")) {
         if (left_kind == SYM_INT && right_kind == SYM_INT) *kind_out = SYM_INT;
         else if (left_kind == SYM_STRING && right_kind == SYM_STRING) {
@@ -978,6 +988,7 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
                 lower_str_eq(expr->as.binary.op, "*") || lower_str_eq(expr->as.binary.op, "/") ||
                 lower_str_eq(expr->as.binary.op, "%") || lower_str_eq(expr->as.binary.op, "**")) return SYM_INT;
             if (lower_str_eq(expr->as.binary.op, "in") || lower_str_eq(expr->as.binary.op, "matches") ||
+                lower_str_eq(expr->as.binary.op, "&&") || lower_str_eq(expr->as.binary.op, "||") ||
                 lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
                 lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
                 lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) return SYM_BOOL;

@@ -548,7 +548,7 @@ delete_forever "dangerous-path"
 
 
 # -----------------------------------------------------------------------------
-# 24. Regex, ranges, and membership [v0.23.0] [candidate]
+# 24. Regex, ranges, and membership [v0.23.0] [implemented]
 # -----------------------------------------------------------------------------
 
 # v0.23.0 implements a conservative regex/membership/range surface with VM/Bash
@@ -568,6 +568,14 @@ for n in 1..10 {
 
 let allowed = ["api", "web", "worker"]
 let known_app = app in allowed
+
+if (app in allowed) && ("release/123" matches /^release\//) {
+  echo "deployable"
+}
+
+if "web" in "api,web,worker".split(",") {
+  echo "known from split"
+}
 
 # Capture values, regex replacement/splitting, runtime regex strings, range
 # values, reverse/stepped/half-open ranges, and membership over maps or unknown

@@ -93,6 +93,8 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_CONTINUE: return "CONTINUE";
         case DS_TOK_CASE: return "CASE";
         case DS_TOK_PIPE: return "PIPE";
+        case DS_TOK_AND_AND: return "AND_AND";
+        case DS_TOK_OR_OR: return "OR_OR";
         case DS_TOK_TEST: return "TEST";
         case DS_TOK_ASSERT: return "ASSERT";
         case DS_TOK_RETURN: return "RETURN";
@@ -349,9 +351,11 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
 
         DsTokenKind kind = DS_TOK_UNKNOWN;
         size_t len = 1;
-        if (c == '|' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_OUT; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_OUT_APPEND; len = 3; } }
+        if (c == '|' && i + 1 < source->len && source->data[i + 1] == '|') { kind = DS_TOK_OR_OR; len = 2; }
+        else if (c == '|' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_OUT; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_OUT_APPEND; len = 3; } }
         else if (c == '|') { kind = DS_TOK_PIPE; len = 1; }
         else if (c == '!' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_ERR; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_ERR_APPEND; len = 3; } }
+        else if (c == '&' && i + 1 < source->len && source->data[i + 1] == '&') { kind = DS_TOK_AND_AND; len = 2; }
         else if (c == '&' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_ALL; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_ALL_APPEND; len = 3; } }
         else if (c == '=' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_EQUAL_EQUAL; len = 2; }
         else if (c == '!' && i + 1 < source->len && source->data[i + 1] == '=') { kind = DS_TOK_BANG_EQUAL; len = 2; }

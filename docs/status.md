@@ -88,12 +88,13 @@ regex/range/membership implementation pass:
 - stackable `defer { ... }` and `defer on: "EXIT"|"INT"|"TERM" { ... }` cleanup handlers, plus replacement-style `trap "EXIT"|"INT"|"TERM" { ... }`;
 - formatted string interpolation with scoped string/int specifiers and
   triple-quoted multi-line string literals;
-- exact `in` membership checks over scalar arrays, including array literals and
-  named arrays;
+- exact `in` membership checks over scalar arrays, including array literals,
+  named arrays, and known standard-library string-array results;
 - conservative regex `matches` expressions with `/pattern/` and `/pattern/i`
   literals;
 - inclusive integer range loop sources, for example `for n in 1..3 { ... }`,
-  with zero iterations when the start is greater than the end.
+  with zero iterations when the start is greater than the end and with bounds
+  evaluated once before the loop.
 
 Every supported production feature is expected to run in the VM and emit
 standalone Bash. Generated Bash must not call the `ds` binary or depend on the C
@@ -170,8 +171,10 @@ milestones:
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;
-- regex and membership operators;
-- ranges, slices, index assignment, and nested collections;
+- regex captures/replacement, runtime regex strings, and regex/glob case
+  patterns;
+- first-class range values, stepped/reverse ranges, slices, index assignment,
+  and nested collections;
 - map iteration;
 - passing whole collection values directly to functions or commands;
 - direct collection access inside command words without first binding a scalar;
@@ -249,5 +252,6 @@ array-loop lowering model, scalar return transport, and process-level cleanup
 model are the safe pieces to build on. The latest feature wave adds scoped
 `v0.23.0` regex, ranges, and membership. Map iteration, nested
 collections, formatter trivia preservation, warning suppression, logical shell
-operators, deeper job-control behavior, and advanced pipeline forms remain out
-of scope unless their own milestones explicitly pull them in.
+command-level logical shell operators, deeper job-control behavior, and advanced
+pipeline forms remain out of scope unless their own milestones explicitly pull
+them in.
