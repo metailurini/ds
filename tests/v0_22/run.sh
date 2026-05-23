@@ -421,7 +421,7 @@ run_and_signal signal_bash_term_direct bash TERM "$FIX/term_direct_command.ds" 1
 cat >"$FIX/ready_exec_sleep" <<'SH'
 #!/usr/bin/env bash
 echo ready
-exec sleep 30
+exec sleep 5
 SH
 chmod +x "$FIX/ready_exec_sleep"
 

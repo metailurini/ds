@@ -20,7 +20,7 @@ for line in lines("/tmp/ds-stdlib-example.txt") {
   echo $line
 }
 
-let matches = glob("/tmp/ds-stdlib-example*.txt")
-for match in matches {
+let globbed = glob("/tmp/ds-stdlib-example*.txt")
+for match in globbed {
   echo $match
 }

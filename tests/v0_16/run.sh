@@ -566,8 +566,7 @@ done
 
 unsupported_cases=(
   'unknown_string_method|let x = "a".regex_replace("a", "b")|unknown string method'
-  'regex_matches|if "a" matches "a" { echo "yes" }|expected `{` after if condition'
-  'membership_in|if "a" in ["a"] { echo "yes" }|expected `{` after if condition'
+  'regex_matches|if "a" matches "a" { echo "yes" }|right operand of `matches` must be a regex literal'
   'direct_env|echo env.PATH|unknown command variable `env`'
   'map_iteration|for k in { a: 1 } { echo $k }|expected iterable expression after `in`'
   'nested_collection|let xs = [[1]]|nested collections are deferred'

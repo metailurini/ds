@@ -255,3 +255,5 @@ collections, formatter trivia preservation, warning suppression, logical shell
 command-level logical shell operators, deeper job-control behavior, and advanced
 pipeline forms remain out of scope unless their own milestones explicitly pull
 them in.
+advanced pipeline forms remain deferred beyond the current simple foreground
+pipeline support.

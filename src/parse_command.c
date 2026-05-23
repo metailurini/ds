@@ -6,12 +6,17 @@ static bool is_word_separator(Parser *p) {
 
 static bool is_unsupported_command_operator(const DsToken *tok) {
     if (tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 && tok->text.data[0] == '&') return true;
+    if (tok->kind == DS_TOK_AND_AND || tok->kind == DS_TOK_OR_OR) return true;
     return tok->kind == DS_TOK_GREATER || tok->kind == DS_TOK_GREATER_EQUAL || tok->kind == DS_TOK_LESS || tok->kind == DS_TOK_LESS_EQUAL;
 }
 
 static void report_unsupported_command_operator(Parser *p, const DsToken *tok) {
-    if (tok->text.len == 1 && tok->text.data[0] == '&') {
-        ds_diag_error(p->diag, tok->span, "logical/background command operators are not supported in v0.18.0");
+    if (tok->kind == DS_TOK_OR_OR) {
+        ds_diag_error(p->diag, tok->span, "logical OR `||` is not supported in command syntax");
+        return;
+    }
+    if ((tok->kind == DS_TOK_UNKNOWN && tok->text.len == 1 && tok->text.data[0] == '&') || tok->kind == DS_TOK_AND_AND || tok->kind == DS_TOK_OR_OR) {
+        ds_diag_error(p->diag, tok->span, "logical/background command operators are not supported in command syntax");
     } else {
         ds_diag_error(p->diag, tok->span, "unsupported command operator `%.*s`; use `|` for pipelines or `|>`, `|>>`, `!>`, `!>>`, `&>`, or `&>>` for whole-command redirection", (int)tok->text.len, tok->text.data);
     }
