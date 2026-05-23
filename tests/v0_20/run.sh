@@ -445,8 +445,7 @@ echo "{label:trim}"
 DS
 assert_vm_bash_parity_args format_guards "$FIX/format_guards.ds" 0 ''
 script="$TMP/format_guards.sh"
-[ "$(grep -c 'BASH_VERSINFO' "$script")" -ge 1 ] || fail 'format guards emits Bash 4 guard path'
-pass 'format guards emits Bash 4 guard path'
+assert_not_contains "$script" 'BASH_VERSINFO' 'format helpers do not require Bash 4 guard'
 assert_not_contains "$script" '__ds_run_pipeline' 'string-only program does not emit pipeline helper'
 
 write_fixture "$FIX/triple.ds" <<'DS'
@@ -620,8 +619,7 @@ for helper in __ds_string_trim __ds_string_lower __ds_string_split __ds_string_u
   [ "$count" = 1 ] || fail "$helper emitted $count times"
   pass "$helper emitted once"
 done
-[ "$(grep -c 'BASH_VERSINFO' "$TMP/helper_combo.sh" | tr -d ' ')" = 1 ] || fail 'Bash 4 guard emitted once'
-pass 'Bash 4 guard emitted once'
+assert_not_contains "$TMP/helper_combo.sh" 'BASH_VERSINFO' 'string/pipeline helper combo does not require Bash 4 guard'
 
 mkdir -p "$FIX/import_helpers"
 write_fixture "$FIX/import_helpers/lib.ds" <<'DS'

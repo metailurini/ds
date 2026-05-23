@@ -169,8 +169,8 @@ const char *ds_bash_string_helpers_source(void) {
     return
         "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n"
         "__ds_string_trim() { local s=\"$1\"; s=\"${s#${s%%[!$' \\t\\r\\n']*}}\"; s=\"${s%${s##*[!$' \\t\\r\\n']}}\"; printf '%s' \"$s\"; }\n"
-        "__ds_string_upper() { local s=\"$1\"; printf '%s' \"${s^^}\"; }\n"
-        "__ds_string_lower() { local s=\"$1\"; printf '%s' \"${s,,}\"; }\n"
+        "__ds_string_upper() { printf '%s' \"$1\" | LC_ALL=C tr '[:lower:]' '[:upper:]'; }\n"
+        "__ds_string_lower() { printf '%s' \"$1\" | LC_ALL=C tr '[:upper:]' '[:lower:]'; }\n"
         "__ds_string_replace() { [[ -n \"$2\" ]] || __ds_error 'replace with an empty source is unsupported in v0.19.0'; local s=\"$1\" from=\"$2\" to=\"$3\" out= i=0 flen=${#2}; while (( i < ${#s} )); do if [[ \"${s:i:flen}\" == \"$from\" ]]; then out+=\"$to\"; i=$((i + flen)); else out+=\"${s:i:1}\"; i=$((i + 1)); fi; done; printf '%s' \"$out\"; }\n"
         "__ds_string_contains() { local s=\"$1\" sub=\"$2\" i=0 slen=${#2}; if [[ -z \"$sub\" ]]; then printf true; return; fi; while (( i + slen <= ${#s} )); do [[ \"${s:i:slen}\" == \"$sub\" ]] && { printf true; return; }; i=$((i + 1)); done; printf false; }\n"
         "__ds_string_starts_with() { local s=\"$1\" pre=\"$2\"; [[ \"${s:0:${#pre}}\" == \"$pre\" ]] && printf true || printf false; }\n"

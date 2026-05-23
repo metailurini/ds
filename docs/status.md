@@ -58,8 +58,8 @@ through the `v0.22.6` final v0.22 documentation pass:
   `!>>`, `&>`, and `&>>`;
 - top-level `fn` declarations with positional parameters and trailing literal
   defaults;
-- statement-style function calls and scalar value-returning function calls in
-  expressions;
+- statement-style function calls, scalar function return values, and scalar
+  value-returning function calls in expressions;
 - `return expr` inside function bodies for scalar string/int/bool values, with
   conservative same-kind/all-paths validation before a function can be used as a
   value;

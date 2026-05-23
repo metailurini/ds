@@ -310,7 +310,11 @@ cp "$FIX/basic_messy.ds" "$FIX/write_target.ds"
 chmod 754 "$FIX/write_target.ds"
 run_ok fmt_write "$DS" fmt --write "$FIX/write_target.ds"
 assert_same "$FIX/basic_expected.ds" "$FIX/write_target.ds" 'fmt --write rewrites file'
-perm="$(stat -c '%a' "$FIX/write_target.ds")"
+if perm="$(stat -c '%a' "$FIX/write_target.ds" 2>/dev/null)"; then
+  :
+else
+  perm="$(stat -f '%Lp' "$FIX/write_target.ds")"
+fi
 [ "$perm" = 754 ] || fail "fmt --write should preserve permissions, got $perm"
 pass 'fmt --write preserves permissions'
 run_ok fmt_write_idempotent "$DS" fmt -w "$FIX/write_target.ds"

@@ -453,8 +453,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
                 buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_append(&e->out, "mapfile -t ");
+                buf_append(&e->out, "while IFS= read -r __ds_line; do ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "+=(\"$__ds_line\"); done");
                 buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"", temp_id);

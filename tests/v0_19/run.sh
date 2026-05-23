@@ -36,7 +36,7 @@ capture_env_in_dir() {
   local name="$1" dir="$2"; shift 2
   mkdir -p "$dir"
   set +e
-  (cd "$dir" && env LC_ALL=C PATH="$FAKEBIN:/usr/bin:/bin" "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
+  (cd "$dir" && env LC_ALL=C PATH="$FAKEBIN:$PATH" "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
   local rc=$?
   set -e
   printf '%s' "$rc" >"$TMP/$name.rc"
@@ -71,7 +71,7 @@ assert_diag() {
 
 run_env_ok() {
   local name="$1"; shift
-  env LC_ALL=C PATH="$FAKEBIN:/usr/bin:/bin" "$@" >"$TMP/$name.out" 2>"$TMP/$name.err" || {
+  env LC_ALL=C PATH="$FAKEBIN:$PATH" "$@" >"$TMP/$name.out" 2>"$TMP/$name.err" || {
     cat "$TMP/$name.out" >&2 || true
     cat "$TMP/$name.err" >&2 || true
     fail "$name: expected success"
@@ -357,7 +357,7 @@ assert_same_text 'lib=LIB
 helper_count="$(grep -c '^__ds_string_upper()' "$TMP/imports.sh" || true)"
 [ "$helper_count" = 1 ] || fail "expected upper helper exactly once, got $helper_count"
 pass 'Bash helper emitted once for import fixture'
-assert_contains "$TMP/imports.sh" 'BASH_VERSINFO' 'upper/lower interpolation emits Bash 4 helper guard'
+assert_not_contains "$TMP/imports.sh" 'BASH_VERSINFO' 'upper/lower interpolation stays Bash 3 compatible without helper guard'
 assert_not_contains "$TMP/imports.sh" '${__ds_lib_name^^}' 'upper interpolation uses guarded helper instead of inline Bash 4 expansion'
 
 write_fixture "$FIX/short_colon_fragments.ds" <<'DS'
@@ -372,7 +372,7 @@ DS
 run_ok short_colon_check "$DS" check "$FIX/short_colon_fragments.ds"
 run_ok short_colon_emit "$DS" emit bash "$FIX/short_colon_fragments.ds" -o "$TMP/short_colon.sh"
 run_ok short_colon_bash_n bash -n "$TMP/short_colon.sh"
-assert_contains "$TMP/short_colon.sh" 'BASH_VERSINFO' 'short colon fragments with upper format still emit helper guard'
+assert_not_contains "$TMP/short_colon.sh" 'BASH_VERSINFO' 'short colon fragments with upper format stay Bash 3 compatible without helper guard'
 
 write_fixture "$FIX/function_param_rejected.ds" <<'DS'
 fn show(name) {
