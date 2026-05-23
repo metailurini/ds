@@ -108,10 +108,10 @@ let quotient = count / 2
 let remainder = count % 3
 let power = 2 ** 8
 
-# Membership operator is planned for v0.23.0.
+# Membership operator is implemented in v0.23.0 for scalar arrays.
 let known = app in ["api", "web", "worker"]
 
-# Regex match is planned for v0.23.0.
+# Regex match is implemented in v0.23.0 for conservative regex literals.
 let has_error = "ERROR: failed" matches /error|failed/i
 
 
@@ -399,11 +399,10 @@ case target {
 
 # String binary `+` remains deferred for Bash parity; use interpolation.
 
-# Integer range loop sources are planned for v0.23.0; `lines` is implemented in v0.11.0.
-#
-# for n in 1..10 {
-#   echo "{n}"
-# }
+# Integer range loop sources are implemented in v0.23.0; `lines` is implemented in v0.11.0.
+for n in 1..10 {
+  echo "{n}"
+}
 
 
 # -----------------------------------------------------------------------------
@@ -552,7 +551,7 @@ delete_forever "dangerous-path"
 # 24. Regex, ranges, and membership [v0.23.0] [candidate]
 # -----------------------------------------------------------------------------
 
-# v0.23.0 plans a conservative regex/membership/range surface with VM/Bash
+# v0.23.0 implements a conservative regex/membership/range surface with VM/Bash
 # parity. Regex literals are scoped to `matches`, ranges are scoped to `for`
 # loop sources, and membership is scoped to scalar arrays.
 

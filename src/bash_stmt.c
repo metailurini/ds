@@ -27,8 +27,10 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_INTERP: return "string";
         case DS_LOWER_EXPR_INT: return "int";
         case DS_LOWER_EXPR_BOOL: return "bool";
+        case DS_LOWER_EXPR_REGEX: return "unknown";
         case DS_LOWER_EXPR_ARRAY: return "array";
         case DS_LOWER_EXPR_MAP: return "map";
+        case DS_LOWER_EXPR_RANGE: return "unknown";
         case DS_LOWER_EXPR_RUN: return "command_result";
         case DS_LOWER_EXPR_BINARY:
             if (str_eq(expr->as.binary.op, "+") || str_eq(expr->as.binary.op, "-") || str_eq(expr->as.binary.op, "*") || str_eq(expr->as.binary.op, "/") || str_eq(expr->as.binary.op, "%") || str_eq(expr->as.binary.op, "**")) return "int";
@@ -156,6 +158,11 @@ static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
+static void emit_elem_type_var_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_elem_type_");
+    buf_append_len(out, name.data, name.len);
+}
+
 static void emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl) {
     if (!e->needs_case_types) return;
     emit_indent(&e->out, indent);
@@ -181,6 +188,19 @@ static void emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLo
         bash_single_quote(&e->out, type, strlen(type));
     }
     buf_append(&e->out, "\n");
+    if (value->kind == DS_LOWER_EXPR_ARRAY) {
+        emit_indent(&e->out, indent);
+        if (local_decl) buf_append(&e->out, "local -a ");
+        else buf_append(&e->out, "declare -a ");
+        emit_elem_type_var_name(&e->out, name);
+        buf_append(&e->out, "=(");
+        for (size_t i = 0; i < value->as.array.elements.len; i++) {
+            if (i) buf_append(&e->out, " ");
+            const char *type = expr_type_name(value->as.array.elements.items[i]);
+            bash_single_quote(&e->out, type, strlen(type));
+        }
+        buf_append(&e->out, ")\n");
+    }
 }
 
 bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
@@ -610,6 +630,35 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"\n\n", temp_id);
             }
+            return true;
+        }
+
+        case DS_LOWER_STMT_FOR_RANGE: {
+            size_t temp_id = e->temp_counter++;
+            emit_indent(&e->out, indent);
+            buf_appendf(&e->out, "__ds_range_start_%zu=", temp_id);
+            if (!emit_value_expr(e, stmt->as.for_stmt.iterable->as.range.start, &e->out)) return false;
+            buf_append(&e->out, "\n");
+            emit_indent(&e->out, indent);
+            buf_appendf(&e->out, "__ds_range_end_%zu=", temp_id);
+            if (!emit_value_expr(e, stmt->as.for_stmt.iterable->as.range.end, &e->out)) return false;
+            buf_append(&e->out, "\n");
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "for (( ");
+            emit_var_name(&e->out, stmt->as.for_stmt.name);
+            buf_appendf(&e->out, "=__ds_range_start_%zu; ", temp_id);
+            emit_var_name(&e->out, stmt->as.for_stmt.name);
+            buf_appendf(&e->out, "<=__ds_range_end_%zu; ", temp_id);
+            emit_var_name(&e->out, stmt->as.for_stmt.name);
+            buf_append(&e->out, "++ )); do\n");
+            size_t mark = e->symbols.len;
+            DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
+            symbol_vec_push(&e->symbols, copy);
+            emit_type_assignment(e, stmt->as.for_stmt.name, "int", indent + 1, false);
+            if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
+            symbols_truncate(&e->symbols, mark);
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "done\n\n");
             return true;
         }
 

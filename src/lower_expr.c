@@ -292,16 +292,34 @@ void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExp
 }
 
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
+DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs);
 
 DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind left_kind = SYM_UNKNOWN;
     SymKind right_kind = SYM_UNKNOWN;
     DsLowerExpr *left = lower_expr(lower, expr->as.binary.left, &left_kind);
-    DsLowerExpr *right = lower_expr(lower, expr->as.binary.right, &right_kind);
+    DsLowerExpr *right = NULL;
+    if (lower_str_eq(expr->as.binary.op, "matches") && expr->as.binary.right->kind == DS_EXPR_REGEX) right = lower_regex_expr(lower, expr->as.binary.right, &right_kind, true);
+    else right = lower_expr(lower, expr->as.binary.right, &right_kind);
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_BINARY, expr->span);
     out->as.binary.left = left;
     out->as.binary.op = str_clone(expr->as.binary.op);
     out->as.binary.right = right;
+    out->as.binary.left_kind = lower_value_kind_from_sym(left_kind);
+    if (lower_str_eq(expr->as.binary.op, "in")) {
+        if (right_kind != SYM_ARRAY && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `in` must be an array in v0.23.0");
+        SymKind element_kind = infer_array_element_kind(lower, right);
+        if (right_kind == SYM_ARRAY && element_kind != SYM_UNKNOWN && !is_scalar_sym_kind(element_kind)) ds_diag_error(lower->diag, expr->span, "`in` supports only scalar arrays in v0.23.0");
+        out->as.binary.right_element_kind = lower_value_kind_from_sym(element_kind);
+        *kind_out = SYM_BOOL;
+        return out;
+    }
+    if (lower_str_eq(expr->as.binary.op, "matches")) {
+        if (left_kind != SYM_STRING && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "left operand of `matches` must be a string in v0.23.0");
+        if (expr->as.binary.right->kind != DS_EXPR_REGEX) ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `matches` must be a regex literal in v0.23.0");
+        *kind_out = SYM_BOOL;
+        return out;
+    }
     if (lower_str_eq(expr->as.binary.op, "+")) {
         if (left_kind == SYM_INT && right_kind == SYM_INT) *kind_out = SYM_INT;
         else if (left_kind == SYM_STRING && right_kind == SYM_STRING) {
@@ -610,6 +628,55 @@ DsLowerExpr *lower_bool_expr(const DsExpr *expr, SymKind *kind_out) {
     return out;
 }
 
+static bool regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
+    *insensitive = false;
+    if (lit.len < 3 || lit.data[0] != '/') return false;
+    size_t end = 0;
+    for (size_t i = 1; i < lit.len; i++) {
+        if (lit.data[i] == '\\') { i++; continue; }
+        if (lit.data[i] == '/') { end = i; break; }
+    }
+    if (!end) return false;
+    pattern->data = lit.data + 1;
+    pattern->len = end - 1;
+    if (pattern->len == 0) return false;
+    if (end + 1 < lit.len) {
+        if (end + 2 == lit.len && lit.data[end + 1] == 'i') *insensitive = true;
+        else return false;
+    }
+    return true;
+}
+
+static void validate_regex_literal(Lower *lower, const DsExpr *expr) {
+    DsStr pat = {0}; bool insensitive = false;
+    if (!regex_literal_parts(expr->as.regex, &pat, &insensitive)) {
+        ds_diag_error(lower->diag, expr->span, "invalid regex literal; v0.23.0 supports `/pattern/` and `/pattern/i`");
+        return;
+    }
+    (void)insensitive;
+    for (size_t i = 0; i < pat.len; i++) {
+        char c = pat.data[i];
+        if (c == '\\' && i + 1 < pat.len) {
+            char n = pat.data[i + 1];
+            if (n == 'p' || n == 'P' || n == 'b' || n == 'd' || n == 'D' || n == 's' || n == 'S' || n == 'w' || n == 'W' || (n >= '1' && n <= '9')) ds_diag_error(lower->diag, expr->span, "unsupported regex escape in v0.23.0");
+            i++;
+        } else if (c == '(' && i + 1 < pat.len && pat.data[i + 1] == '?') {
+            ds_diag_error(lower->diag, expr->span, "lookaround, inline flags, and non-POSIX regex groups are deferred in v0.23.0");
+        } else if ((c == '*' || c == '+' || c == '?' || c == '}') && i + 1 < pat.len && pat.data[i + 1] == '?') {
+            ds_diag_error(lower->diag, expr->span, "lazy regex quantifiers are deferred in v0.23.0");
+        }
+    }
+}
+
+DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs) {
+    validate_regex_literal(lower, expr);
+    if (!allowed_matches_rhs) ds_diag_error(lower->diag, expr->span, "regex literals are only supported as the right operand of `matches` in v0.23.0");
+    *kind_out = SYM_UNKNOWN;
+    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_REGEX, expr->span);
+    out->as.regex = str_clone(expr->as.regex);
+    return out;
+}
+
 DsLowerExpr *lower_run_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     if (expr->as.run.stages.len == 0) {
         ds_diag_error(lower->diag, expr->span, "expected command after `run`");
@@ -902,6 +969,7 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_INTERP: return SYM_STRING;
         case DS_LOWER_EXPR_INT: return SYM_INT;
         case DS_LOWER_EXPR_BOOL: return SYM_BOOL;
+        case DS_LOWER_EXPR_REGEX: return SYM_UNKNOWN;
         case DS_LOWER_EXPR_RUN: return SYM_COMMAND_RESULT;
         case DS_LOWER_EXPR_UNARY:
             return lower_str_eq(expr->as.unary.op, "-") ? SYM_INT : SYM_BOOL;
@@ -909,7 +977,8 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
             if (lower_str_eq(expr->as.binary.op, "+") || lower_str_eq(expr->as.binary.op, "-") ||
                 lower_str_eq(expr->as.binary.op, "*") || lower_str_eq(expr->as.binary.op, "/") ||
                 lower_str_eq(expr->as.binary.op, "%") || lower_str_eq(expr->as.binary.op, "**")) return SYM_INT;
-            if (lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
+            if (lower_str_eq(expr->as.binary.op, "in") || lower_str_eq(expr->as.binary.op, "matches") ||
+                lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
                 lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
                 lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) return SYM_BOOL;
             return SYM_UNKNOWN;
@@ -930,6 +999,7 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
             }
             return SYM_UNKNOWN;
         case DS_LOWER_EXPR_ERROR: return SYM_UNKNOWN;
+        case DS_LOWER_EXPR_RANGE: return SYM_UNKNOWN;
     }
     return SYM_UNKNOWN;
 }
@@ -965,6 +1035,8 @@ DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
             return lower_int_expr(lower, expr, kind_out);
         case DS_EXPR_BOOL:
             return lower_bool_expr(expr, kind_out);
+        case DS_EXPR_REGEX:
+            return lower_regex_expr(lower, expr, kind_out, false);
         case DS_EXPR_RUN:
             return lower_run_expr(lower, expr, kind_out);
         case DS_EXPR_FIELD:
@@ -981,6 +1053,15 @@ DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
             return lower_map_expr(lower, expr, kind_out);
         case DS_EXPR_INDEX:
             return lower_index_expr(lower, expr, kind_out);
+        case DS_EXPR_RANGE: {
+            ds_diag_error(lower->diag, expr->span, "range syntax is only supported as a `for` loop source in v0.23.0");
+            DsLowerExpr *out = expr_new(DS_LOWER_EXPR_RANGE, expr->span);
+            SymKind tmp = SYM_UNKNOWN;
+            out->as.range.start = lower_expr(lower, expr->as.range.start, &tmp);
+            out->as.range.end = lower_expr(lower, expr->as.range.end, &tmp);
+            *kind_out = SYM_UNKNOWN;
+            return out;
+        }
         case DS_EXPR_ERROR:
             return expr_new(DS_LOWER_EXPR_ERROR, expr->span);
     }

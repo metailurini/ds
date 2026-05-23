@@ -38,6 +38,7 @@ static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 2 && strncmp(text, "fn", 2) == 0) return DS_TOK_FN;
     if (len == 3 && strncmp(text, "for", 3) == 0) return DS_TOK_FOR;
     if (len == 2 && strncmp(text, "in", 2) == 0) return DS_TOK_IN;
+    if (len == 7 && strncmp(text, "matches", 7) == 0) return DS_TOK_MATCHES;
     if (len == 5 && strncmp(text, "while", 5) == 0) return DS_TOK_WHILE;
     if (len == 5 && strncmp(text, "break", 5) == 0) return DS_TOK_BREAK;
     if (len == 8 && strncmp(text, "continue", 8) == 0) return DS_TOK_CONTINUE;
@@ -86,6 +87,7 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_FN: return "FN";
         case DS_TOK_FOR: return "FOR";
         case DS_TOK_IN: return "IN";
+        case DS_TOK_MATCHES: return "MATCHES";
         case DS_TOK_WHILE: return "WHILE";
         case DS_TOK_BREAK: return "BREAK";
         case DS_TOK_CONTINUE: return "CONTINUE";
@@ -113,6 +115,8 @@ const char *ds_token_kind_name(DsTokenKind kind) {
         case DS_TOK_SLASH: return "SLASH";
         case DS_TOK_PERCENT: return "PERCENT";
         case DS_TOK_DOT: return "DOT";
+        case DS_TOK_DOT_DOT: return "DOT_DOT";
+        case DS_TOK_REGEX: return "REGEX";
         case DS_TOK_REDIRECT_OUT: return "REDIRECT_OUT";
         case DS_TOK_REDIRECT_OUT_APPEND: return "REDIRECT_OUT_APPEND";
         case DS_TOK_REDIRECT_ERR: return "REDIRECT_ERR";
@@ -135,6 +139,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
     size_t i = 0;
     int line = 1;
     int col = 1;
+    bool expect_regex = false;
 
     while (i < source->len) {
         char c = source->data[i];
@@ -174,6 +179,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             DsLoc end = {i, line, col};
             DsTokenKind kind = keyword_kind(source->data + start, i - start);
             add_token(out, source, kind, source->data + start, i - start, start_loc, end);
+            expect_regex = kind == DS_TOK_MATCHES;
             continue;
         }
 
@@ -296,6 +302,51 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             continue;
         }
 
+        if (expect_regex && c == '/') {
+            size_t start = i;
+            int start_col = col;
+            DsLoc start_loc = {start, line, start_col};
+            i++;
+            col++;
+            bool terminated = false;
+            bool empty = true;
+            while (i < source->len) {
+                char ch = source->data[i];
+                if (ch == '\n') break;
+                if (ch == '\\') {
+                    if (i + 1 >= source->len || source->data[i + 1] == '\n') break;
+                    empty = false;
+                    i += 2;
+                    col += 2;
+                    continue;
+                }
+                if (ch == '/') {
+                    i++;
+                    col++;
+                    terminated = true;
+                    break;
+                }
+                empty = false;
+                i++;
+                col++;
+            }
+            if (terminated && i < source->len && isalpha((unsigned char)source->data[i])) {
+                if (source->data[i] == 'i') { i++; col++; }
+                while (i < source->len && isalpha((unsigned char)source->data[i])) { i++; col++; }
+            }
+            DsLoc end = {i, line, col};
+            if (!terminated) {
+                ds_diag_error(diag, (DsSpan){start_loc, end, source}, "unterminated regex literal");
+                while (i < source->len && source->data[i] != '\n') { i++; col++; }
+                expect_regex = false;
+                continue;
+            }
+            if (empty) ds_diag_error(diag, (DsSpan){start_loc, end, source}, "empty regex literals are not supported in v0.23.0");
+            add_token(out, source, DS_TOK_REGEX, source->data + start, i - start, start_loc, end);
+            expect_regex = false;
+            continue;
+        }
+
         DsTokenKind kind = DS_TOK_UNKNOWN;
         size_t len = 1;
         if (c == '|' && i + 1 < source->len && source->data[i + 1] == '>') { kind = DS_TOK_REDIRECT_OUT; len = 2; if (i + 2 < source->len && source->data[i + 2] == '>') { kind = DS_TOK_REDIRECT_OUT_APPEND; len = 3; } }
@@ -318,6 +369,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         else if (c == '*') kind = DS_TOK_STAR;
         else if (c == '/') kind = DS_TOK_SLASH;
         else if (c == '%') kind = DS_TOK_PERCENT;
+        else if (c == '.' && i + 1 < source->len && source->data[i + 1] == '.') { kind = DS_TOK_DOT_DOT; len = 2; }
         else if (c == '.') kind = DS_TOK_DOT;
         else if (c == '{') kind = DS_TOK_LBRACE;
         else if (c == '}') kind = DS_TOK_RBRACE;
@@ -328,6 +380,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
 
         DsLoc end = {i + len, line, col + (int)len};
         add_token(out, source, kind, source->data + i, len, loc, end);
+        expect_regex = false;
         /*
          * Keep otherwise unknown printable characters as tokens instead of
          * failing in the lexer. Command statements are intentionally shell-like

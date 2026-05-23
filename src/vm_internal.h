@@ -14,6 +14,8 @@ typedef enum {
     OP_NOT,
     OP_BINARY,
     OP_COMPARE,
+    OP_MEMBERSHIP,
+    OP_REGEX_MATCH,
     OP_INTERPOLATE,
     OP_INTERP_JOIN,
     OP_RUN_CAPTURE,
@@ -31,6 +33,7 @@ typedef enum {
     OP_GET_INDEX,
     OP_PUSH_ARRAY,
     OP_FOR_ARRAY,
+    OP_FOR_RANGE,
     OP_RESET_FOR,
     OP_ASSERT,
     OP_RETURN_VALUE,
@@ -84,6 +87,7 @@ typedef struct {
     size_t stage_count;
     DsRedirect redirect;
     size_t loop_index;
+    int64_t loop_current;
     bool loop_active;
 } Instr;
 

@@ -214,17 +214,30 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             return out;
         }
         case DS_STMT_FOR: {
-            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_FOR_ARRAY, stmt->span);
+            DsLowerStmt *out = stmt_new(stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_RANGE ? DS_LOWER_STMT_FOR_RANGE : DS_LOWER_STMT_FOR_ARRAY, stmt->span);
             out->as.for_stmt.name = str_clone(stmt->as.for_stmt.key_name);
             if (stmt->as.for_stmt.has_value_name) {
                 ds_diag_error(lower->diag, stmt->span, "map iteration is deferred in v0.10.0; use direct map access instead");
             }
-            SymKind iterable_kind = SYM_UNKNOWN;
-            out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
-            if (!stmt->as.for_stmt.has_value_name && iterable_kind != SYM_ARRAY && iterable_kind != SYM_UNKNOWN) {
-                ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
+            SymKind element_kind = SYM_UNKNOWN;
+            if (out->kind == DS_LOWER_STMT_FOR_RANGE) {
+                const DsExpr *range = stmt->as.for_stmt.iterable;
+                DsLowerExpr *lowered_range = expr_new(DS_LOWER_EXPR_RANGE, range->span);
+                SymKind start_kind = SYM_UNKNOWN, end_kind = SYM_UNKNOWN;
+                lowered_range->as.range.start = lower_expr(lower, range->as.range.start, &start_kind);
+                lowered_range->as.range.end = lower_expr(lower, range->as.range.end, &end_kind);
+                if (start_kind != SYM_INT && start_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, range->as.range.start->span, "range start must be an int in v0.23.0");
+                if (end_kind != SYM_INT && end_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, range->as.range.end->span, "range end must be an int in v0.23.0");
+                out->as.for_stmt.iterable = lowered_range;
+                element_kind = SYM_INT;
+            } else {
+                SymKind iterable_kind = SYM_UNKNOWN;
+                out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
+                if (!stmt->as.for_stmt.has_value_name && iterable_kind != SYM_ARRAY && iterable_kind != SYM_UNKNOWN) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
+                }
+                element_kind = infer_array_element_kind(lower, out->as.for_stmt.iterable);
             }
-            SymKind element_kind = infer_array_element_kind(lower, out->as.for_stmt.iterable);
             out->as.for_stmt.element_kind = lower_value_kind_from_sym(element_kind);
             Scope local;
             scope_init(&local, lower->scope);

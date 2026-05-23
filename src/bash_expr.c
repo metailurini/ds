@@ -1,6 +1,7 @@
 #include "bash_internal.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 static bool result_field_is_bool(DsStr field) {
     const DsCommandResultField *desc = ds_command_result_field_lookup(field);
@@ -12,9 +13,134 @@ static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
+static void emit_elem_type_var_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_elem_type_");
+    buf_append_len(out, name.data, name.len);
+}
+
 static bool is_int_binary_op(DsStr op) {
     return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
+}
+
+static const char *lower_value_type_name(DsLowerValueKind kind) {
+    switch (kind) {
+        case DS_LOWER_VALUE_BOOL: return "bool";
+        case DS_LOWER_VALUE_INT: return "int";
+        case DS_LOWER_VALUE_STRING: return "string";
+        case DS_LOWER_VALUE_ARRAY: return "array";
+        case DS_LOWER_VALUE_MAP: return "map";
+        case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
+        case DS_LOWER_VALUE_UNKNOWN: return "unknown";
+    }
+    return "unknown";
+}
+
+static bool regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
+    *insensitive = false;
+    if (lit.len < 3 || lit.data[0] != '/') return false;
+    size_t end = 0;
+    for (size_t i = 1; i < lit.len; i++) {
+        if (lit.data[i] == '\\') { i++; continue; }
+        if (lit.data[i] == '/') { end = i; break; }
+    }
+    if (!end) return false;
+    pattern->data = lit.data + 1;
+    pattern->len = end - 1;
+    if (end + 1 < lit.len) {
+        if (end + 2 == lit.len && lit.data[end + 1] == 'i') *insensitive = true;
+        else return false;
+    }
+    return true;
+}
+
+static bool emit_bash_regex_quoted(EmitBuf *out, DsStr pattern) {
+    char *decoded = malloc(pattern.len + 1);
+    if (!decoded) return false;
+    size_t len = 0;
+    for (size_t i = 0; i < pattern.len; i++) {
+        char c = pattern.data[i];
+        if (c == '\\' && i + 1 < pattern.len && pattern.data[i + 1] == '/') { decoded[len++] = '/'; i++; }
+        else decoded[len++] = c;
+    }
+    bash_single_quote(out, decoded, len);
+    free(decoded);
+    return true;
+}
+
+static void emit_membership_left_type(const DsLowerExpr *left, DsLowerValueKind left_kind, EmitBuf *out) {
+    if (left_kind != DS_LOWER_VALUE_UNKNOWN) {
+        const char *type = lower_value_type_name(left_kind);
+        bash_single_quote(out, type, strlen(type));
+    } else if (left->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, "\"${"); emit_type_var_name(out, left->as.text); buf_append(out, ":-unknown}\"");
+    } else {
+        buf_append(out, "'unknown'");
+    }
+}
+
+static bool emit_membership_compare(BashEmitter *e, const DsLowerExpr *left, DsLowerValueKind left_kind, DsLowerValueKind elem_kind, const DsLowerExpr *elem, EmitBuf *out) {
+    buf_append(out, "[[ ");
+    emit_membership_left_type(left, left_kind, out);
+    buf_append(out, " == ");
+    const char *elem_type = lower_value_type_name(elem_kind);
+    bash_single_quote(out, elem_type, strlen(elem_type));
+    buf_append(out, " && ");
+    if (!emit_condition_operand(e, left, out)) return false;
+    buf_append(out, " == ");
+    if (elem) {
+        if (!emit_condition_operand(e, elem, out)) return false;
+    } else {
+        buf_append(out, "\"$__ds_item\"");
+    }
+    buf_append(out, " ]]");
+    return true;
+}
+
+static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    const DsLowerExpr *left = expr->as.binary.left;
+    const DsLowerExpr *right = expr->as.binary.right;
+    DsLowerValueKind left_kind = expr->as.binary.left_kind;
+    DsLowerValueKind elem_kind = expr->as.binary.right_element_kind;
+    if (right->kind == DS_LOWER_EXPR_ARRAY) {
+        buf_append(out, "{ ");
+        if (right->as.array.elements.len == 0) { buf_append(out, "false; }"); return true; }
+        for (size_t i = 0; i < right->as.array.elements.len; i++) {
+            if (i > 0) buf_append(out, " || ");
+            DsLowerExpr *elem = right->as.array.elements.items[i];
+            DsLowerValueKind literal_kind = DS_LOWER_VALUE_UNKNOWN;
+            switch (elem->kind) {
+                case DS_LOWER_EXPR_BOOL: literal_kind = DS_LOWER_VALUE_BOOL; break;
+                case DS_LOWER_EXPR_INT: literal_kind = DS_LOWER_VALUE_INT; break;
+                case DS_LOWER_EXPR_STRING:
+                case DS_LOWER_EXPR_INTERP: literal_kind = DS_LOWER_VALUE_STRING; break;
+                default: literal_kind = elem_kind; break;
+            }
+            if (!emit_membership_compare(e, left, left_kind, literal_kind, elem, out)) return false;
+        }
+        buf_append(out, "; }");
+        return true;
+    }
+    buf_append(out, "{ __ds_found=false; __ds_i=0; for __ds_item in ");
+    if (right->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, "\"${"); emit_var_name(out, right->as.text); buf_append(out, "[@]}\"");
+    } else {
+        ds_diag_error(e->diag, right->span, "Bash emission supports `in` over named arrays and array literals in v0.23.0");
+        return false;
+    }
+    buf_append(out, "; do [[ ");
+    emit_membership_left_type(left, left_kind, out);
+    buf_append(out, " == ");
+    if (elem_kind == DS_LOWER_VALUE_UNKNOWN) {
+        buf_append(out, "\"${"); emit_elem_type_var_name(out, right->as.text); buf_append(out, "[$__ds_i]:-unknown}\"");
+    } else {
+        const char *elem_type = lower_value_type_name(elem_kind);
+        bash_single_quote(out, elem_type, strlen(elem_type));
+    }
+    buf_append(out, " && ");
+    if (!emit_condition_operand(e, left, out)) return false;
+    buf_append(out, " == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done; [[ $__ds_found == true ]]; }");
+    return true;
 }
 
 static bool emit_double_quoted_literal(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
@@ -129,6 +255,12 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
+            if (str_eq(expr->as.binary.op, "in") || str_eq(expr->as.binary.op, "matches")) {
+                buf_append(out, "$(if ");
+                if (!emit_condition(e, expr, out)) return false;
+                buf_append(out, "; then printf true; else printf false; fi)");
+                return true;
+            }
             ds_diag_error(e->diag, expr->span, "unsupported binary value expression for Bash emission in v0.17.0");
             return false;
         case DS_LOWER_EXPR_UNARY:
@@ -202,6 +334,9 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
             return true;
+        case DS_LOWER_EXPR_REGEX:
+            ds_diag_error(e->diag, expr->span, "regex literals are only emitted as part of `matches` in v0.23.0");
+            return false;
         case DS_LOWER_EXPR_FIELD:
         case DS_LOWER_EXPR_CALL:
         case DS_LOWER_EXPR_INDEX:
@@ -286,6 +421,24 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             negate = true;
         }
         if (!op) {
+            if (str_eq(expr->as.binary.op, "in")) return emit_membership_condition(e, expr, out);
+            if (str_eq(expr->as.binary.op, "matches")) {
+                DsStr pattern = {0}; bool insensitive = false;
+                if (expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX || !regex_literal_parts(expr->as.binary.right->as.regex, &pattern, &insensitive)) {
+                    ds_diag_error(e->diag, expr->span, "right operand of `matches` must be a regex literal in v0.23.0");
+                    return false;
+                }
+                if (insensitive) buf_append(out, "{ __ds_regex=");
+                else buf_append(out, "{ __ds_regex=");
+                if (!emit_bash_regex_quoted(out, pattern)) return false;
+                if (insensitive) buf_append(out, "; __ds_old_nocasematch=$(shopt -p nocasematch || true); shopt -s nocasematch; [[ ");
+                else buf_append(out, "; [[ ");
+                if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
+                buf_append(out, " =~ $__ds_regex");
+                if (insensitive) buf_append(out, " ]]; __ds_match_rc=$?; eval \"$__ds_old_nocasematch\"; [[ $__ds_match_rc -eq 0 ]]; }");
+                else buf_append(out, " ]]; }");
+                return true;
+            }
             ds_diag_error(e->diag, expr->span, "operator `%.*s` cannot be emitted in a Bash condition in v0.2.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
             return false;
         }

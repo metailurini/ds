@@ -1,7 +1,10 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "vm_internal.h"
 
 #include <stdbool.h>
 #include <signal.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,6 +73,37 @@ static bool int_pow_checked(int64_t base, int64_t exp, int64_t *out) {
         if (exp > 0 && !int_mul_checked(factor, factor, &factor)) return false;
     }
     *out = result;
+    return true;
+}
+
+static bool value_exact_equal(const DsValue *a, const DsValue *b) {
+    if (a->kind != b->kind) return false;
+    return ds_value_compare(a, b) == 0;
+}
+
+static bool regex_literal_to_pattern(const DsValue *lit, DsString *pattern, int *flags) {
+    ds_string_init(pattern);
+    *flags = REG_EXTENDED;
+    if (lit->kind != DS_VALUE_STRING || lit->as.string.len < 3 || lit->as.string.data[0] != '/') return false;
+    const char *s = lit->as.string.data;
+    size_t len = lit->as.string.len;
+    size_t i = 1;
+    for (; i < len; i++) {
+        char c = s[i];
+        if (c == '\\' && i + 1 < len) {
+            char n = s[++i];
+            if (n == '/') ds_string_append_char(pattern, '/');
+            else { ds_string_append_char(pattern, '\\'); ds_string_append_char(pattern, n); }
+            continue;
+        }
+        if (c == '/') break;
+        ds_string_append_char(pattern, c);
+    }
+    if (i >= len || s[i] != '/' || pattern->len == 0) return false;
+    if (i + 1 < len) {
+        if (i + 2 == len && s[i + 1] == 'i') *flags |= REG_ICASE;
+        else return false;
+    }
     return true;
 }
 
@@ -265,6 +299,35 @@ dispatch_loop:
                 ip++;
                 break;
             }
+            case OP_MEMBERSHIP: {
+                DsValue *needle = &vm.regs[ins->a];
+                DsValue *haystack = &vm.regs[ins->b];
+                if (haystack->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "right operand of `in` must be an array"); rc = 1; goto done; }
+                bool found = false;
+                for (size_t i = 0; i < haystack->as.array.len; i++) {
+                    DsValue *item = (DsValue *)haystack->as.array.items[i];
+                    if (value_exact_equal(needle, item)) { found = true; break; }
+                }
+                set_reg(&vm, ins->dst, ds_value_bool(found));
+                ip++;
+                break;
+            }
+            case OP_REGEX_MATCH: {
+                DsValue *text = &vm.regs[ins->a];
+                DsValue *lit = &vm.regs[ins->b];
+                if (text->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "left operand of `matches` must be a string"); rc = 1; goto done; }
+                DsString pattern; int flags = REG_EXTENDED;
+                if (!regex_literal_to_pattern(lit, &pattern, &flags)) { ds_diag_error(diag, ins->span, "invalid regex literal"); rc = 1; goto done; }
+                regex_t re;
+                int err = regcomp(&re, pattern.data ? pattern.data : "", flags);
+                if (err != 0) { ds_diag_error(diag, ins->span, "invalid regex pattern"); ds_string_free(&pattern); rc = 1; goto done; }
+                int match = regexec(&re, text->as.string.data ? text->as.string.data : "", 0, NULL, 0);
+                regfree(&re);
+                ds_string_free(&pattern);
+                set_reg(&vm, ins->dst, ds_value_bool(match == 0));
+                ip++;
+                break;
+            }
             case OP_INTERPOLATE: {
                 DsString rendered;
                 if (!interpolate_string(&vm, &p.consts[ins->a].as.string, &rendered, ins->span)) { rc = 1; goto done; }
@@ -407,12 +470,26 @@ dispatch_loop:
                 ip++;
                 break;
             }
+            case OP_FOR_RANGE: {
+                DsValue *start = &vm.regs[ins->a];
+                DsValue *end = &vm.regs[ins->b];
+                if (start->kind != DS_VALUE_INT || end->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "range bounds must be ints"); rc = 1; goto done; }
+                if (!ins->loop_active) { ins->loop_active = true; ins->loop_current = start->as.integer; }
+                if (ins->loop_current > end->as.integer) { ins->loop_active = false; ip = (size_t)ins->target; break; }
+                vm_push_scope(&vm);
+                DsStr key = {ins->name, strlen(ins->name)};
+                ds_map_set(&vm.scope->vars, key, ds_value_int(ins->loop_current));
+                ins->loop_current++;
+                ip++;
+                break;
+            }
             case OP_RESET_FOR: {
                 if (ins->target >= 0 && (size_t)ins->target < p.instr_len) {
                     Instr *for_ins = &p.instrs[ins->target];
-                    if (for_ins->op == OP_FOR_ARRAY) {
+                    if (for_ins->op == OP_FOR_ARRAY || for_ins->op == OP_FOR_RANGE) {
                         for_ins->loop_active = false;
                         for_ins->loop_index = 0;
+                        for_ins->loop_current = 0;
                     }
                 }
                 ip++;

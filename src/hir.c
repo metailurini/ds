@@ -143,6 +143,8 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
             fputs("Int ", out); print_str(out, expr->as.text); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_BOOL:
             fprintf(out, "Bool %s", expr->as.boolean ? "true" : "false"); print_span(out, expr->span); fputc('\n', out); break;
+        case DS_LOWER_EXPR_REGEX:
+            fputs("Regex ", out); print_str(out, expr->as.regex); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_RUN:
             fputs("Run ", out); dump_command(out, &expr->as.run); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_FIELD:
@@ -175,6 +177,11 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
             fputs("Index", out); if (expr->as.index.object_is_array) fputs(" array", out); if (expr->as.index.object_is_map) fputs(" map", out); print_span(out, expr->span); fputc('\n', out);
             dump_expr(out, expr->as.index.object, level + 1);
             dump_expr(out, expr->as.index.index, level + 1);
+            break;
+        case DS_LOWER_EXPR_RANGE:
+            fputs("Range", out); print_span(out, expr->span); fputc('\n', out);
+            dump_expr(out, expr->as.range.start, level + 1);
+            dump_expr(out, expr->as.range.end, level + 1);
             break;
         case DS_LOWER_EXPR_ERROR:
             fputs("ErrorExpr", out); print_span(out, expr->span); fputc('\n', out); break;
@@ -219,6 +226,12 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             break;
         case DS_LOWER_STMT_FOR_ARRAY:
             fputs("For ", out); print_str(out, stmt->as.for_stmt.name); fputs(" in", out); print_span(out, stmt->span); fputc('\n', out);
+            dump_expr(out, stmt->as.for_stmt.iterable, level + 1);
+            indent(out, level + 1); fputs("Body\n", out);
+            dump_block(out, stmt->as.for_stmt.body, level + 2);
+            break;
+        case DS_LOWER_STMT_FOR_RANGE:
+            fputs("ForRange ", out); print_str(out, stmt->as.for_stmt.name); fputs(" in", out); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.for_stmt.iterable, level + 1);
             indent(out, level + 1); fputs("Body\n", out);
             dump_block(out, stmt->as.for_stmt.body, level + 2);

@@ -8,6 +8,7 @@ typedef enum {
     DS_EXPR_STRING,
     DS_EXPR_INT,
     DS_EXPR_BOOL,
+    DS_EXPR_REGEX,
     DS_EXPR_RUN,
     DS_EXPR_FIELD,
     DS_EXPR_UNARY,
@@ -16,6 +17,7 @@ typedef enum {
     DS_EXPR_ARRAY,
     DS_EXPR_MAP,
     DS_EXPR_INDEX,
+    DS_EXPR_RANGE,
     DS_EXPR_ERROR
 } DsExprKind;
 
@@ -46,6 +48,7 @@ struct DsExpr {
     union {
         DsStr text;
         bool boolean;
+        DsStr regex;
         DsCommand run;
         struct { DsExpr *object; DsStr field; } field;
         struct { DsStr op; DsExpr *right; } unary;
@@ -54,6 +57,7 @@ struct DsExpr {
         struct { DsExprVec elements; } array;
         struct { DsMapEntryVec entries; } map;
         struct { DsExpr *object; DsExpr *index; } index;
+        struct { DsExpr *start; DsExpr *end; } range;
     } as;
 };
 

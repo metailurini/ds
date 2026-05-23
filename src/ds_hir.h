@@ -25,6 +25,7 @@ typedef enum {
     DS_LOWER_EXPR_STRING,
     DS_LOWER_EXPR_INT,
     DS_LOWER_EXPR_BOOL,
+    DS_LOWER_EXPR_REGEX,
     DS_LOWER_EXPR_RUN,
     DS_LOWER_EXPR_FIELD,
     DS_LOWER_EXPR_UNARY,
@@ -34,6 +35,7 @@ typedef enum {
     DS_LOWER_EXPR_ARRAY,
     DS_LOWER_EXPR_MAP,
     DS_LOWER_EXPR_INDEX,
+    DS_LOWER_EXPR_RANGE,
     DS_LOWER_EXPR_ERROR
 } DsLowerExprKind;
 
@@ -73,15 +75,17 @@ struct DsLowerExpr {
     union {
         DsStr text;
         bool boolean;
+        DsStr regex;
         DsCommand run;
         struct { DsLowerExpr *object; DsStr field; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
-        struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; } binary;
+        struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_element_kind; } binary;
         struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; } call;
         struct { DsLowerExprVec parts; } interp;
         struct { DsLowerExprVec elements; } array;
         struct { DsLowerMapEntryVec entries; } map;
         struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; } index;
+        struct { DsLowerExpr *start; DsLowerExpr *end; } range;
     } as;
 };
 
@@ -93,6 +97,7 @@ typedef enum {
     DS_LOWER_STMT_CMD,
     DS_LOWER_STMT_CALL,
     DS_LOWER_STMT_FOR_ARRAY,
+    DS_LOWER_STMT_FOR_RANGE,
     DS_LOWER_STMT_WHILE,
     DS_LOWER_STMT_BREAK,
     DS_LOWER_STMT_CONTINUE,

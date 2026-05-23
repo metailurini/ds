@@ -42,7 +42,8 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support
 
 The production runtime supports the language slice implemented and stabilized
-through the `v0.22.6` final v0.22 documentation pass:
+through the `v0.22.6` final v0.22 documentation pass and the initial `v0.23.0`
+regex/range/membership implementation pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -86,7 +87,13 @@ through the `v0.22.6` final v0.22 documentation pass:
   loop variables with known string/int/bool element kinds;
 - stackable `defer { ... }` and `defer on: "EXIT"|"INT"|"TERM" { ... }` cleanup handlers, plus replacement-style `trap "EXIT"|"INT"|"TERM" { ... }`;
 - formatted string interpolation with scoped string/int specifiers and
-  triple-quoted multi-line string literals.
+  triple-quoted multi-line string literals;
+- exact `in` membership checks over scalar arrays, including array literals and
+  named arrays;
+- conservative regex `matches` expressions with `/pattern/` and `/pattern/i`
+  literals;
+- inclusive integer range loop sources, for example `for n in 1..3 { ... }`,
+  with zero iterations when the start is greater than the end.
 
 Every supported production feature is expected to run in the VM and emit
 standalone Bash. Generated Bash must not call the `ds` binary or depend on the C
@@ -239,8 +246,8 @@ Because required function parameters remain untyped until the function-value wav
 
 The cleaned CLI program boundary, existing block/function/test scoping rules,
 array-loop lowering model, scalar return transport, and process-level cleanup
-model are the safe pieces to build on. The next planned feature wave starts
-with `v0.23.0` regex, ranges, and membership. Map iteration, nested
+model are the safe pieces to build on. The latest feature wave adds scoped
+`v0.23.0` regex, ranges, and membership. Map iteration, nested
 collections, formatter trivia preservation, warning suppression, logical shell
 operators, deeper job-control behavior, and advanced pipeline forms remain out
 of scope unless their own milestones explicitly pull them in.

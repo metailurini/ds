@@ -199,6 +199,8 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
         case DS_EXPR_IDENT:
             return ast_kind_env_find(env, expr->as.text, kind_out);
         case DS_EXPR_RUN:
+        case DS_EXPR_REGEX:
+        case DS_EXPR_RANGE:
         case DS_EXPR_FIELD:
         case DS_EXPR_ARRAY:
         case DS_EXPR_MAP:
@@ -391,8 +393,12 @@ static bool expr_reaches_function(Lower *lower, const DsLowerExpr *expr, size_t 
         case DS_LOWER_EXPR_INT:
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_RUN:
+        case DS_LOWER_EXPR_REGEX:
         case DS_LOWER_EXPR_ERROR:
             return false;
+        case DS_LOWER_EXPR_RANGE:
+            return expr_reaches_function(lower, expr->as.range.start, target_index, seen, cycle_span) ||
+                   expr_reaches_function(lower, expr->as.range.end, target_index, seen, cycle_span);
     }
     return false;
 }
@@ -419,6 +425,7 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
             }
             return false;
         case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_RANGE:
             if (expr_reaches_function(lower, stmt->as.for_stmt.iterable, target_index, seen, cycle_span)) return true;
             return stmt_reaches_function(lower, stmt->as.for_stmt.body, target_index, seen, cycle_span);
         case DS_LOWER_STMT_WHILE:

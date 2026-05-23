@@ -36,6 +36,9 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
         case DS_EXPR_BOOL:
             fprintf(out, "BoolExpr %s\n", expr->as.boolean ? "true" : "false");
             break;
+        case DS_EXPR_REGEX:
+            fprintf(out, "RegexExpr %.*s\n", (int)expr->as.regex.len, expr->as.regex.data);
+            break;
         case DS_EXPR_RUN:
             fputs("RunExpr\n", out);
             for (size_t s = 0; s < expr->as.run.stages.len; s++) {
@@ -81,6 +84,11 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             fputs("IndexExpr\n", out);
             print_expr(expr->as.index.object, out, level + 1);
             print_expr(expr->as.index.index, out, level + 1);
+            break;
+        case DS_EXPR_RANGE:
+            fputs("RangeExpr\n", out);
+            print_expr(expr->as.range.start, out, level + 1);
+            print_expr(expr->as.range.end, out, level + 1);
             break;
         case DS_EXPR_ERROR:
             fputs("ErrorExpr\n", out);
@@ -276,6 +284,9 @@ static void free_expr(DsExpr *expr) {
         case DS_EXPR_INT:
             free(expr->as.text.data);
             break;
+        case DS_EXPR_REGEX:
+            free(expr->as.regex.data);
+            break;
         case DS_EXPR_RUN:
             ds_command_free(&expr->as.run);
             break;
@@ -311,6 +322,10 @@ static void free_expr(DsExpr *expr) {
         case DS_EXPR_INDEX:
             free_expr(expr->as.index.object);
             free_expr(expr->as.index.index);
+            break;
+        case DS_EXPR_RANGE:
+            free_expr(expr->as.range.start);
+            free_expr(expr->as.range.end);
             break;
         case DS_EXPR_BOOL:
         case DS_EXPR_ERROR:

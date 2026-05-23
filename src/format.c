@@ -64,6 +64,8 @@ static int expr_prec(const DsExpr *expr) {
     if (!expr) return 99;
     switch (expr->kind) {
         case DS_EXPR_BINARY:
+            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "in", 2) == 0) return 1;
+            if (expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0) return 1;
             if (expr->as.binary.op.len == 2 &&
                 (memcmp(expr->as.binary.op.data, "==", 2) == 0 || memcmp(expr->as.binary.op.data, "!=", 2) == 0)) return 1;
             if ((expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '>' || expr->as.binary.op.data[0] == '<')) ||
@@ -72,6 +74,7 @@ static int expr_prec(const DsExpr *expr) {
             if (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) return 4;
             if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "**", 2) == 0) return 5;
             return 1;
+        case DS_EXPR_RANGE: return 2;
         case DS_EXPR_UNARY: return 5;
         case DS_EXPR_FIELD:
         case DS_EXPR_CALL:
@@ -119,6 +122,9 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             break;
         case DS_EXPR_BOOL:
             append_cstr(fmt, expr->as.boolean ? "true" : "false");
+            break;
+        case DS_EXPR_REGEX:
+            append_str(fmt, expr->as.regex);
             break;
         case DS_EXPR_RUN:
             append_cstr(fmt, "run ");
@@ -178,6 +184,11 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             append_cstr(fmt, "[");
             format_expr_prec(fmt, expr->as.index.index, 0);
             append_cstr(fmt, "]");
+            break;
+        case DS_EXPR_RANGE:
+            format_expr_prec(fmt, expr->as.range.start, prec);
+            append_cstr(fmt, "..");
+            format_expr_prec(fmt, expr->as.range.end, prec + 1);
             break;
         case DS_EXPR_ERROR:
             append_cstr(fmt, "<error>");

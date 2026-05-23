@@ -167,6 +167,7 @@ static void check_expr(Checker *c, const DsExpr *expr) {
             break;
         case DS_EXPR_INT:
         case DS_EXPR_BOOL:
+        case DS_EXPR_REGEX:
         case DS_EXPR_ERROR:
             break;
         case DS_EXPR_RUN:
@@ -194,6 +195,10 @@ static void check_expr(Checker *c, const DsExpr *expr) {
         case DS_EXPR_INDEX:
             check_expr(c, expr->as.index.object);
             check_expr(c, expr->as.index.index);
+            break;
+        case DS_EXPR_RANGE:
+            check_expr(c, expr->as.range.start);
+            check_expr(c, expr->as.range.end);
             break;
     }
 }

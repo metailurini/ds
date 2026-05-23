@@ -260,6 +260,18 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
+        case DS_LOWER_EXPR_REGEX: {
+            int r = new_reg(p);
+            Instr ins = {0};
+            ins.op = OP_LOAD_CONST;
+            ins.span = expr->span;
+            ins.dst = r;
+            DsString s; ds_string_init(&s);
+            ds_string_append_range(&s, expr->as.regex.data, expr->as.regex.len);
+            ins.a = add_const(p, ds_value_string_take(&s));
+            emit_instr(p, ins);
+            return r;
+        }
         case DS_LOWER_EXPR_IDENT: {
             int r = new_reg(p);
             Instr ins = {0};
@@ -322,7 +334,9 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             int right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-' || expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) ||
+            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "in", 2) == 0) ins.op = OP_MEMBERSHIP;
+            else if (expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0) ins.op = OP_REGEX_MATCH;
+            else ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-' || expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) ||
                      (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "**", 2) == 0) ? OP_BINARY : OP_COMPARE;
             ins.span = expr->span;
             ins.dst = r;
@@ -375,6 +389,8 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             emit_instr(p, ins);
             return r;
         }
+        case DS_LOWER_EXPR_RANGE:
+            return compile_expr(p, expr->as.range.start);
         case DS_LOWER_EXPR_CALL:
         {
             int r = new_reg(p);
@@ -500,6 +516,34 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             begin.op = OP_FOR_ARRAY;
             begin.span = stmt->span;
             begin.a = iterable;
+            begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
+            size_t begin_pos = emit_instr(p, begin);
+            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
+            p->scope_depth++;
+            compile_block(p, stmt->as.for_stmt.body);
+            Instr pop = {0};
+            pop.op = OP_POP_SCOPE;
+            pop.span = stmt->span;
+            emit_instr(p, pop);
+            p->scope_depth--;
+            Instr jump = {0};
+            jump.op = OP_JUMP;
+            jump.span = stmt->span;
+            jump.target = (int)begin_pos;
+            emit_instr(p, jump);
+            p->instrs[begin_pos].target = (int)p->instr_len;
+            (void)loop;
+            pop_loop(p, p->instr_len);
+            break;
+        }
+        case DS_LOWER_STMT_FOR_RANGE: {
+            int start = compile_expr(p, stmt->as.for_stmt.iterable->as.range.start);
+            int end = compile_expr(p, stmt->as.for_stmt.iterable->as.range.end);
+            Instr begin = {0};
+            begin.op = OP_FOR_RANGE;
+            begin.span = stmt->span;
+            begin.a = start;
+            begin.b = end;
             begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
             size_t begin_pos = emit_instr(p, begin);
             LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);

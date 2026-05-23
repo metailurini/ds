@@ -10,6 +10,9 @@ void lower_expr_free(DsLowerExpr *expr) {
         case DS_LOWER_EXPR_INT:
             free(expr->as.text.data);
             break;
+        case DS_LOWER_EXPR_REGEX:
+            free(expr->as.regex.data);
+            break;
         case DS_LOWER_EXPR_RUN:
             ds_command_free(&expr->as.run);
             break;
@@ -51,6 +54,10 @@ void lower_expr_free(DsLowerExpr *expr) {
             lower_expr_free(expr->as.index.index);
             free(expr->as.index.map_key.data);
             break;
+        case DS_LOWER_EXPR_RANGE:
+            lower_expr_free(expr->as.range.start);
+            lower_expr_free(expr->as.range.end);
+            break;
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_ERROR:
             break;
@@ -87,6 +94,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.call_stmt.args.items);
             break;
         case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_RANGE:
             free(stmt->as.for_stmt.name.data);
             lower_expr_free(stmt->as.for_stmt.iterable);
             lower_stmt_free(stmt->as.for_stmt.body);
