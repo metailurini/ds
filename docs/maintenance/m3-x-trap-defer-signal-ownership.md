@@ -699,3 +699,23 @@ Out of scope for M3.x:
 - async process management;
 - changing the user-facing syntax;
 - broad parser, VM, or Bash emitter rewrites.
+
+## Implementation result: M3.x ownership cleanup
+
+The first implementation cleanup moves the supported-signal policy out of the
+parser's semantic diagnostics and into lowering:
+
+- parser still requires the syntactic signal position to be a quoted string;
+- parser preserves unsupported quoted signal names in the AST as
+  `DS_HANDLER_INVALID` plus raw `signal_text`;
+- lowerer emits the source-language unsupported-signal diagnostic shared by
+  `check`, VM execution, and Bash emission;
+- VM and Bash continue to consume only accepted HIR handler declarations;
+- VM and Bash cleanup helpers now carry comments documenting the parity-sensitive
+  ordering invariant.
+
+This narrows Trap/defer behavior, Signal handling, and Handler context from Hell
+to Watch in `docs/concept-map.md`. Clear remains inappropriate because signal
+behavior is OS-sensitive, the Bash helper implementation is intentionally
+backend-specific, and future handler-context or job-control work can still cause
+ownership drift if it bypasses lowering/HIR validation.

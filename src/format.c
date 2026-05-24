@@ -263,6 +263,7 @@ static const char *format_handler_signal(DsHandlerSignal signal) {
         case DS_HANDLER_EXIT: return "EXIT";
         case DS_HANDLER_INT: return "INT";
         case DS_HANDLER_TERM: return "TERM";
+        case DS_HANDLER_INVALID: return "<invalid>";
     }
     return "EXIT";
 }
@@ -406,7 +407,8 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             append_cstr(fmt, "defer");
             if (stmt->as.handler_stmt.signal != DS_HANDLER_EXIT) {
                 append_cstr(fmt, " on: \"");
-                append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
+                if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) append_str(fmt, stmt->as.handler_stmt.signal_text);
+                else append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
                 append_cstr(fmt, "\"");
             }
             format_block_after_header(fmt, stmt->as.handler_stmt.body, level);
@@ -414,7 +416,8 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             break;
         case DS_STMT_TRAP:
             append_cstr(fmt, "trap \"");
-            append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
+            if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) append_str(fmt, stmt->as.handler_stmt.signal_text);
+            else append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
             append_cstr(fmt, "\"");
             format_block_after_header(fmt, stmt->as.handler_stmt.body, level);
             append_cstr(fmt, "\n");

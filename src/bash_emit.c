@@ -211,6 +211,11 @@ static void emit_plain_command_fail_helper(BashEmitter *e) {
 }
 
 static void emit_cleanup_helpers(BashEmitter *e) {
+    /*
+     * Trap/defer/signal parity boundary: emitted Bash consumes accepted HIR
+     * handlers only. These helpers implement the same cleanup order as the VM:
+     * signal trap, matching signal defers in LIFO order, then EXIT cleanup.
+     */
     buf_append(&e->out, "declare -a __ds_defer_EXIT=() __ds_defer_INT=() __ds_defer_TERM=()\n");
     buf_append(&e->out, "__ds_trap_EXIT=\n__ds_trap_INT=\n__ds_trap_TERM=\n__ds_cleanup_running=false\n__ds_handler_exit_requested=false\n__ds_stack_exit_requested=false\n__ds_stack_status=0\n__ds_foreground_pid=\n");
     buf_append(&e->out, "__ds_fail() { local __ds_loc=$1 __ds_code=$2; echo \"$__ds_loc: error: command failed with exit $__ds_code\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return \"$__ds_code\"; fi; exit \"$__ds_code\"; }\n");

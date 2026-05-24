@@ -576,6 +576,11 @@ dispatch_loop:
 done:
     if (vm.cleanup_running && handler_mode) goto cleanup_handler_done;
     if (!vm.cleanup_running && vm.handler_len > 0) {
+        /*
+         * Trap/defer/signal parity boundary: VM consumes accepted HIR handlers
+         * only. Cleanup order is trap for the active signal, matching defers in
+         * LIFO order, then EXIT trap/defers after signal cleanup.
+         */
         vm.cleanup_running = true;
         final_rc = rc;
         vm.control_exit_requested = false;

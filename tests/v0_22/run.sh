@@ -834,6 +834,8 @@ pass 'test-block cleanup does not leak into later tests'
 write_fixture "$FIX/unsupported_signal.ds" <<'DS'
 defer on: "HUP" { echo nope }
 DS
+run_ok unsupported_signal_ast "$DS" ast "$FIX/unsupported_signal.ds"
+assert_contains "$TMP/unsupported_signal_ast.out" 'DeferStmt HUP' 'parser preserves unsupported signal shape for lowerer diagnostics'
 assert_check_fails unsupported_signal "$FIX/unsupported_signal.ds" 'unsupported defer on: signal `HUP`'
 assert_emit_fails unsupported_signal "$FIX/unsupported_signal.ds" 'unsupported defer on: signal `HUP`'
 

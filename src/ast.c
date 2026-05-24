@@ -11,6 +11,7 @@ static const char *handler_signal_name(DsHandlerSignal signal) {
         case DS_HANDLER_EXIT: return "EXIT";
         case DS_HANDLER_INT: return "INT";
         case DS_HANDLER_TERM: return "TERM";
+        case DS_HANDLER_INVALID: return "<invalid>";
     }
     return "EXIT";
 }
@@ -227,11 +228,13 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             print_expr(stmt->as.return_stmt.value, out, level + 1);
             break;
         case DS_STMT_DEFER:
-            fprintf(out, "DeferStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
+            if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) fprintf(out, "DeferStmt %.*s\n", (int)stmt->as.handler_stmt.signal_text.len, stmt->as.handler_stmt.signal_text.data);
+            else fprintf(out, "DeferStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
             print_stmt(stmt->as.handler_stmt.body, out, level + 1);
             break;
         case DS_STMT_TRAP:
-            fprintf(out, "TrapStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
+            if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) fprintf(out, "TrapStmt %.*s\n", (int)stmt->as.handler_stmt.signal_text.len, stmt->as.handler_stmt.signal_text.data);
+            else fprintf(out, "TrapStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
             print_stmt(stmt->as.handler_stmt.body, out, level + 1);
             break;
     }
@@ -415,6 +418,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_DEFER:
         case DS_STMT_TRAP:
+            free(stmt->as.handler_stmt.signal_text.data);
             free_stmt(stmt->as.handler_stmt.body);
             break;
     }

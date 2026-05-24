@@ -54,6 +54,7 @@ static const char *handler_signal_name(DsHandlerSignal signal) {
         case DS_HANDLER_EXIT: return "EXIT";
         case DS_HANDLER_INT: return "INT";
         case DS_HANDLER_TERM: return "TERM";
+        case DS_HANDLER_INVALID: return "<invalid>";
     }
     return "EXIT";
 }

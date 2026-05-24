@@ -11,6 +11,21 @@ DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
     return stmt;
 }
 
+static bool lower_validate_handler_signal(Lower *lower, const DsStmt *stmt) {
+    if (stmt->as.handler_stmt.signal != DS_HANDLER_INVALID) return true;
+    /*
+     * Trap/defer/signal ownership: the parser preserves the quoted signal
+     * token as syntax, while lowering owns the language-level supported-signal
+     * set shared by VM and emitted Bash.
+     */
+    const char *form = stmt->kind == DS_STMT_TRAP ? "trap" : "defer on:";
+    DsStr text = stmt->as.handler_stmt.signal_text;
+    ds_diag_error(lower->diag, stmt->span,
+                  "unsupported %s signal `%.*s`; supported signals are EXIT, INT, and TERM",
+                  form, (int)text.len, text.data ? text.data : "");
+    return false;
+}
+
 DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CALL, stmt->span);
     out->as.call_stmt.name = str_clone(stmt->as.call_stmt.name);
@@ -638,6 +653,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         case DS_STMT_TRAP: {
             DsLowerStmt *out = stmt_new(stmt->kind == DS_STMT_DEFER ? DS_LOWER_STMT_DEFER : DS_LOWER_STMT_TRAP, stmt->span);
             out->as.handler_stmt.signal = stmt->as.handler_stmt.signal;
+            lower_validate_handler_signal(lower, stmt);
             int saved_handler_depth = lower->handler_depth;
             int saved_handler_function_depth = lower->handler_function_depth;
             lower->handler_depth++;

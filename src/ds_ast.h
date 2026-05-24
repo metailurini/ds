@@ -86,7 +86,8 @@ typedef enum {
 typedef enum {
     DS_HANDLER_EXIT,
     DS_HANDLER_INT,
-    DS_HANDLER_TERM
+    DS_HANDLER_TERM,
+    DS_HANDLER_INVALID
 } DsHandlerSignal;
 
 typedef struct DsStmt DsStmt;
@@ -202,7 +203,7 @@ struct DsStmt {
         struct { DsStr name; DsStmt *body; } test_stmt;
         struct { DsExpr *condition; } assert_stmt;
         struct { DsExpr *value; } return_stmt;
-        struct { DsHandlerSignal signal; DsStmt *body; } handler_stmt;
+        struct { DsHandlerSignal signal; DsStr signal_text; DsStmt *body; } handler_stmt;
     } as;
 };
 
