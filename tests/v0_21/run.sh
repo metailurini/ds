@@ -201,27 +201,35 @@ DS
 assert_check_fails bare_return "$FIX/bare_return.ds" 'expected expression after `return`'
 
 write_fixture "$FIX/return_array.ds" <<'DS'
-fn bad() {
+fn values() {
   return [1, 2]
 }
+let xs = values()
+let second = xs[1]
+echo "second={second}"
 DS
-assert_check_fails return_array "$FIX/return_array.ds" 'returning collections and command results is deferred'
-assert_emit_fails return_array "$FIX/return_array.ds" 'returning collections and command results is deferred'
+assert_vm_bash_parity_args return_array "$FIX/return_array.ds" 0 ''
 
 write_fixture "$FIX/return_command_result.ds" <<'DS'
-fn bad() {
+fn captured() {
   let r = run printf "x"
   return r
 }
+let r = captured()
+echo "out={r.stdout}"
+echo "status={r.status}"
 DS
-assert_check_fails return_command_result "$FIX/return_command_result.ds" 'returning collections and command results is deferred'
+assert_vm_bash_parity_args return_command_result "$FIX/return_command_result.ds" 0 ''
 
 write_fixture "$FIX/return_map.ds" <<'DS'
-fn bad() {
+fn service() {
   return { name: "api" }
 }
+let app = service()
+let name = app.name
+echo "name={name}"
 DS
-assert_check_fails return_map "$FIX/return_map.ds" 'returning collections and command results is deferred'
+assert_vm_bash_parity_args return_map "$FIX/return_map.ds" 0 ''
 
 write_fixture "$FIX/mixed_return.ds" <<'DS'
 fn maybe(flag = true) {
@@ -358,7 +366,8 @@ fn file_name() {
 
 printf "%s\n" "{file_name()}"
 DS
-assert_check_fails command_word_call_interp "$FIX/command_word_call_interp.ds" 'bound to a string expression first'
+assert_vm_bash_parity_args command_word_call_interp "$FIX/command_word_call_interp.ds" 0 ''
+assert_file_equals "$TMP/command_word_call_interp_vm.out" $'README.md\n' 'command word direct call interpolation stdout'
 
 # Recursive functions remain rejected by the existing cycle guard rather than hanging.
 write_fixture "$FIX/fact_recursion.ds" <<'DS'

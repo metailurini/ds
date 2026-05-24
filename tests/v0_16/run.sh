@@ -112,7 +112,7 @@ for phrase in \
   'tokens' 'ast' 'check' 'fmt' 'hir' 'bytecode' 'run' 'test' 'direct script execution' 'emit bash' \
   'standalone Bash' 'Test-only syntax' 'Comment-preserving formatting remains deferred' \
   'while' 'break' 'continue' 'case' 'function return values' 'string methods' \
-  'regex' 'membership' 'env.NAME' 'recursive `**`' 'map iteration' 'nested collections' 'v0.17.0'; do
+  'regex' 'membership' 'environment append/prepend shorthand' 'recursive `**`' 'map iteration' 'nested collections' 'v0.17.0'; do
   assert_contains docs/status.md "$phrase" "status documents $phrase"
 done
 assert_contains docs/architecture.md '`tokens` and `ast` are root-file frontend/debug views' 'architecture documents root-file command boundary'
@@ -567,7 +567,7 @@ done
 unsupported_cases=(
   'unknown_string_method|let x = "a".regex_replace("a", "b")|unknown string method'
   'regex_matches|if "a" matches "a" { echo "yes" }|right operand of `matches` must be a regex literal'
-  'direct_env|echo env.PATH|unknown command variable `env`'
+  'env_append|env.PATH += ":/tmp/bin"|environment assignment supports only `=`'
   'map_iteration|for k in { a: 1 } { echo $k }|expected iterable expression after `in`'
   'nested_collection|let xs = [[1]]|nested collections are deferred'
   'bash_if|if [ -f foo ]; then echo yes; fi|expected `]` to close array literal'

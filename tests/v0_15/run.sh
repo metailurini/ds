@@ -509,7 +509,7 @@ assert_contains "$TMP/glob_bad_formatted.err" 'recursive `**` glob patterns are 
 # Larger mixed fixture without comments: idempotent and behavior-preserving.
 write_fixture "$FIX/large.ds" <<'DS'
 script{arg app:string
-option env:string="dev"
+option stage:string="dev"
 flag verbose:bool=false}
 import "./lib.ds"
 fn banner(name="world"){echo "== {name} =="}
@@ -523,8 +523,8 @@ echo "result={result.stdout}"
 test "truth"{assert true}
 DS
 format_once_twice "$FIX/large.ds" large
-assert_behavior_preserved_vm "$FIX/large.ds" large_vm api --env prod --verbose
-assert_behavior_preserved_bash "$FIX/large.ds" large_bash api --env prod --verbose
+assert_behavior_preserved_vm "$FIX/large.ds" large_vm api --stage prod --verbose
+assert_behavior_preserved_bash "$FIX/large.ds" large_bash api --stage prod --verbose
 write_fixture "$FIX/large_test.ds" <<'DS'
 fn is_ok(){echo "ok"}
 test "first"{assert true}

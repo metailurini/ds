@@ -312,16 +312,16 @@ assert_same "$TMP/receivers_expected.out" "$TMP/receivers_vm.out" 'receivers VM 
 write_fixture "$FIX/script_args.ds" <<'DS'
 script {
   arg app: string
-  option env: string = " staging "
+  option stage: string = " staging "
 }
 
 echo "app={app:lower}"
-echo "env={env:trim}"
+echo "stage={stage:trim}"
 DS
-assert_vm_bash_env_parity script_args "$FIX/script_args.ds" 0 '' 'API' '--env' ' prod '
+assert_vm_bash_env_parity script_args "$FIX/script_args.ds" 0 '' 'API' '--stage' ' prod '
 cat >"$TMP/script_args_expected.out" <<'OUT'
 app=api
-env=prod
+stage=prod
 OUT
 assert_same "$TMP/script_args_expected.out" "$TMP/script_args_vm.out" 'script args VM stdout exact'
 

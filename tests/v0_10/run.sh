@@ -154,8 +154,8 @@ let services = ["api", "web"]
 let envs = ["dev", "prod"]
 
 for service in services {
-  for env in envs {
-    echo "{service}:{env}"
+  for target_env in envs {
+    echo "{service}:{target_env}"
   }
 }
 DS
@@ -163,8 +163,8 @@ DS
 write_fixture "$FIX/function_body.ds" <<'DS'
 fn deploy(name) {
   let envs = ["dev", "prod"]
-  for env in envs {
-    echo "{name}:{env}"
+  for target_env in envs {
+    echo "{name}:{target_env}"
   }
 }
 

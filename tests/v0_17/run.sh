@@ -233,7 +233,7 @@ for case_name in unknown index field env string_plus bool_plus missing_rhs; do
     unknown) printf 'unknown = 1\n' >"$file" ;;
     index) printf 'let xs = ["a"]\nxs[0] = "x"\n' >"$file" ;;
     field) printf 'let ports = { api: 3000 }\nports.api = 3001\n' >"$file" ;;
-    env) printf 'env.PATH = "bin"\n' >"$file" ;;
+    env) printf 'env.PATH += "bin"\n' >"$file" ;;
     string_plus) printf 'let name = "a"\nname += "b"\n' >"$file" ;;
     bool_plus) printf 'let ok = true\nok += 1\n' >"$file" ;;
     missing_rhs) printf 'let count = 1\ncount +=\n' >"$file" ;;
