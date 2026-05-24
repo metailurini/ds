@@ -261,6 +261,40 @@ static void lower_reject_nonportable_for_array_iterable(Lower *lower, DsSpan spa
                   "for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first");
 }
 
+static bool lower_return_value_has_portable_backend_representation(DsLowerValueKind return_kind, const DsLowerExpr *value) {
+    if (!value) return false;
+    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.is_user_function) return true;
+    switch (return_kind) {
+        case DS_LOWER_VALUE_ARRAY:
+            return value->kind == DS_LOWER_EXPR_ARRAY || value->kind == DS_LOWER_EXPR_IDENT;
+        case DS_LOWER_VALUE_MAP:
+            return value->kind == DS_LOWER_EXPR_MAP || value->kind == DS_LOWER_EXPR_IDENT;
+        case DS_LOWER_VALUE_COMMAND_RESULT:
+            return value->kind == DS_LOWER_EXPR_RUN || value->kind == DS_LOWER_EXPR_IDENT;
+        case DS_LOWER_VALUE_STRING:
+        case DS_LOWER_VALUE_INT:
+        case DS_LOWER_VALUE_BOOL:
+        case DS_LOWER_VALUE_UNKNOWN:
+            return true;
+    }
+    return false;
+}
+
+static void lower_validate_return_backend_representation(Lower *lower, const DsLowerStmt *stmt) {
+    if (!stmt || stmt->kind != DS_LOWER_STMT_RETURN) return;
+    /*
+     * Structured function returns are part of the VM/Bash ABI. The VM can
+     * carry arbitrary temporary structured values, but standalone Bash only has
+     * portable return payloads for literals, named values, run captures, and
+     * forwarded user-function calls. Keep that acceptance rule in lowering so
+     * backend emitters do not become semantic validators.
+     */
+    if (!lower_return_value_has_portable_backend_representation(stmt->as.return_stmt.return_kind, stmt->as.return_stmt.value)) {
+        ds_diag_error(lower->diag, stmt->as.return_stmt.value ? stmt->as.return_stmt.value->span : stmt->span,
+                      "structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity in v0.26.0; bind unsupported temporary values first");
+    }
+}
+
 static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     DsLowerCasePattern out;
     memset(&out, 0, sizeof(out));
@@ -549,6 +583,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     SymKind value_kind = SYM_UNKNOWN;
                     out->as.return_stmt.value = lower_expr(lower, &fake, &value_kind);
                     out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
+                    lower_validate_return_backend_representation(lower, out);
                     if (lower->current_function) {
                         DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
                         if (ret == DS_LOWER_VALUE_UNKNOWN) {
@@ -579,6 +614,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             SymKind value_kind = SYM_UNKNOWN;
             out->as.return_stmt.value = lower_expr(lower, stmt->as.return_stmt.value, &value_kind);
             out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
+            lower_validate_return_backend_representation(lower, out);
             if (lower->current_function) {
                 DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
                 if (ret == DS_LOWER_VALUE_UNKNOWN) {

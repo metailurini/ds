@@ -104,9 +104,10 @@ These concepts have the highest risk of becoming "kind of everywhere":
    accepted only when it has backend-neutral HIR/shared metadata and defined VM
    and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
    or currently rejected. Lowering now rejects temporary collection and
-   command-result field/index access, computed collection index expressions, and
-   nonportable temporary array loop iterables that previously reached VM but
-   failed Bash emission. Remaining risk is
+   command-result field/index access, computed collection index expressions,
+   nonportable temporary array loop iterables, and nonportable structured
+   function-return payloads that previously reached VM but failed Bash emission.
+   Remaining risk is
    enforcement drift during feature work, so keep it under **Watch** rather than
    treating it as vague ownership.
 7. **Diagnostics**: narrowed by `docs/diagnostics.md`. Every phase can emit
@@ -114,7 +115,8 @@ These concepts have the highest risk of becoming "kind of everywhere":
    syntax, lowerer reports semantic language misuse and unsupported parity forms,
    checker reports warnings, VM reports runtime/OS failures, and Bash emitter
    reports only artifact or accepted-HIR emission errors. Remaining risk is
-   backend `unsupported` diagnostics that may still need to move into lowering.
+   remaining backend `unsupported` diagnostics that need classification as
+   runtime failures, artifact failures, or defensive accepted-HIR invariants.
 
 ## Refactoring rules from this map
 

@@ -192,6 +192,11 @@ return positions, unsupported return kinds, and expression/statement call misuse
 
 Current maintenance rule: do not add a new return kind by teaching only VM or
 only Bash how to pass it. Add the HIR/value-kind contract first or reject it.
+Structured return payloads must have a portable backend representation before
+the function is accepted: literals, named values, `run` captures, and forwarded
+user-function calls are the current supported shapes. Other temporary structured
+values, such as direct stdlib array calls, are rejected by lowering until a
+portable VM/Bash return ABI exists.
 
 ### Command-result functions
 

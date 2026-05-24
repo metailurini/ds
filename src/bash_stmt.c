@@ -999,7 +999,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_FOR_ARRAY: {
             emit_indent(&e->out, indent);
             if (stmt->as.for_stmt.iterable->kind != DS_LOWER_EXPR_IDENT && !(stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.for_stmt.iterable->as.call.name))) {
-                ds_diag_error(e->diag, stmt->span, "Bash emission only supports looping over named arrays in v0.10.0");
+                /* Lowering rejects non-portable array iterables for VM/Bash parity. */
+                ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: array loop iterable should be named or a known stdlib array result after lowering");
                 return false;
             }
             size_t temp_id = 0;
@@ -1197,7 +1198,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_elem_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
                     buf_append(&e->out, "[@]}\")\n");
                 } else {
-                    ds_diag_error(e->diag, stmt->span, "Bash emission supports returning array literals, array variables, or forwarded array calls in v0.26.0");
+                    /* Lowering owns the structured-return portability gate. */
+                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: array return should be literal, named, or forwarded after lowering");
                     return false;
                 }
             } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_MAP) {
@@ -1223,7 +1225,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_map_value_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
                     buf_append(&e->out, "[$__ds_key]}\"; done\n");
                 } else {
-                    ds_diag_error(e->diag, stmt->span, "Bash emission supports returning map literals, map variables, or forwarded map calls in v0.26.0");
+                    /* Lowering owns the structured-return portability gate. */
+                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: map return should be literal, named, or forwarded after lowering");
                     return false;
                 }
             } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_COMMAND_RESULT) {
@@ -1250,7 +1253,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_failed '%s' \"$");
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_failed\"\n");
                 } else {
-                    ds_diag_error(e->diag, stmt->span, "Bash emission supports returning command results from run captures, variables, or forwarded calls in v0.26.0");
+                    /* Lowering owns the structured-return portability gate. */
+                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: command-result return should be run, named, or forwarded after lowering");
                     return false;
                 }
             } else {

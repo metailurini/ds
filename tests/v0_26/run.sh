@@ -714,6 +714,21 @@ assert_emit_fails function_array_loop_rejected "$FIX/function_array_loop_rejecte
 run_fail function_array_loop_rejected_run "$DS" run "$FIX/function_array_loop_rejected.ds"
 assert_diag "$TMP/function_array_loop_rejected_run.err" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity' 'function_array_loop_rejected run diagnostic'
 
+write_fixture "$FIX/stdlib_array_return_rejected.ds" <<'DS'
+fn files() {
+  return glob("*")
+}
+
+let xs = files()
+for x in xs {
+  echo "{x}"
+}
+DS
+assert_check_fails stdlib_array_return_rejected "$FIX/stdlib_array_return_rejected.ds" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity'
+assert_emit_fails stdlib_array_return_rejected "$FIX/stdlib_array_return_rejected.ds" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity'
+run_fail stdlib_array_return_rejected_run "$DS" run "$FIX/stdlib_array_return_rejected.ds"
+assert_diag "$TMP/stdlib_array_return_rejected_run.err" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity' 'stdlib_array_return_rejected run diagnostic'
+
 write_fixture "$FIX/index_assignment_rejected.ds" <<'DS'
 fn apps() {
   return ["api", "web"]

@@ -327,7 +327,8 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         case DS_LOWER_EXPR_FIELD:
             if (expr->as.field.object->kind != DS_LOWER_EXPR_IDENT) {
-                ds_diag_error(e->diag, expr->span, "unsupported command result field receiver for Bash emission");
+                /* Lowering rejects temporary field receivers for VM/Bash parity. */
+                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: field receiver should be a named binding after lowering");
                 return false;
             }
             {
@@ -341,11 +342,13 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         case DS_LOWER_EXPR_INDEX:
             if (expr->as.index.object->kind != DS_LOWER_EXPR_IDENT) {
-                ds_diag_error(e->diag, expr->span, "Bash emission only supports indexing named collections in v0.10.0");
+                /* Lowering rejects temporary collection receivers for VM/Bash parity. */
+                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index receiver should be a named binding after lowering");
                 return false;
             }
             if (!expr->as.index.object_is_array && !expr->as.index.object_is_map) {
-                ds_diag_error(e->diag, expr->span, "Bash emission needs a known collection kind for indexing in v0.10.0");
+                /* Lowering annotates accepted collection indexes with a known collection kind. */
+                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index should have a known collection kind after lowering");
                 return false;
             }
             buf_append(out, "\"$(");
@@ -364,7 +367,8 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 emit_var_name(out, expr->as.index.index->as.text);
                 buf_append(out, "\"");
             } else {
-                ds_diag_error(e->diag, expr->span, "unsupported Bash collection index expression in v0.10.0");
+                /* Lowering rejects computed indexes that Bash cannot render portably. */
+                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index expression should be literal or named after lowering");
                 return false;
             }
             buf_append(out, ")\"");
