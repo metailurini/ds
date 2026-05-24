@@ -450,6 +450,27 @@ Likely touched files during implementation:
 - `tests/v0_23/run.sh` for focused diagnostic ownership tests;
 - `docs/concept-map.md` only if implementation changes risk status further.
 
+## Implementation result
+
+The scoped implementation pass keeps the accepted regex surface unchanged and
+tightens ownership around the existing boundary:
+
+- `src/lower_expr.c` now performs the conservative source-language regex gate,
+  including a POSIX `regcomp` validation pass for accepted literal syntax. This
+  keeps invalid regex patterns from reaching VM/Bash as backend-specific
+  failures.
+- `src/vm.c` fallback regex diagnostics are worded as internal VM invariants
+  for accepted HIR, not source-language validation.
+- `src/bash_expr.c` fallback regex diagnostics are worded as internal Bash
+  invariants for accepted HIR, not source-language validation.
+- `tests/v0_23/run.sh` protects the boundary with an invalid POSIX-pattern
+  diagnostic through `check`, `emit bash`, and `run`, plus a regression proving
+  `string.replace` remains literal substring replacement rather than regex
+  replacement.
+
+No capture values, replacement APIs, runtime regex strings, regex split, or
+first-class regex values were added.
+
 ## Non-goals
 
 Out of scope for this maintenance line:

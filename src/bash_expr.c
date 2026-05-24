@@ -471,7 +471,8 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             buf_append(out, expr->as.boolean ? "true" : "false");
             return true;
         case DS_LOWER_EXPR_REGEX:
-            ds_diag_error(e->diag, expr->span, "regex literals are only emitted as part of `matches` in v0.23.0");
+            ds_diag_error(e->diag, expr->span,
+                          "internal Bash regex invariant failed: regex literal reached condition emission outside `matches`");
             return false;
         case DS_LOWER_EXPR_FIELD:
         case DS_LOWER_EXPR_CALL:
@@ -612,7 +613,8 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             if (str_eq(expr->as.binary.op, "matches")) {
                 DsStr pattern = {0}; bool insensitive = false;
                 if (expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX || !regex_literal_parts(expr->as.binary.right->as.regex, &pattern, &insensitive)) {
-                    ds_diag_error(e->diag, expr->span, "right operand of `matches` must be a regex literal in v0.23.0");
+                    ds_diag_error(e->diag, expr->span,
+                                  "internal Bash regex invariant failed: accepted `matches` HIR must carry a validated regex literal");
                     return false;
                 }
                 char left_temp_buf[64];

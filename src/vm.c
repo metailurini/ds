@@ -328,12 +328,12 @@ dispatch_loop:
             case OP_REGEX_MATCH: {
                 DsValue *text = &vm.regs[ins->a];
                 DsValue *lit = &vm.regs[ins->b];
-                if (text->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "left operand of `matches` must be a string"); rc = 1; goto done; }
+                if (text->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: accepted `matches` left operand must be a string"); rc = 1; goto done; }
                 DsString pattern; int flags = REG_EXTENDED;
-                if (!regex_literal_to_pattern(lit, &pattern, &flags)) { ds_diag_error(diag, ins->span, "invalid regex literal"); rc = 1; goto done; }
+                if (!regex_literal_to_pattern(lit, &pattern, &flags)) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: accepted `matches` right operand must be a regex literal"); rc = 1; goto done; }
                 regex_t re;
                 int err = regcomp(&re, pattern.data ? pattern.data : "", flags);
-                if (err != 0) { ds_diag_error(diag, ins->span, "invalid regex pattern"); ds_string_free(&pattern); rc = 1; goto done; }
+                if (err != 0) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: lowerer accepted an invalid regex pattern"); ds_string_free(&pattern); rc = 1; goto done; }
                 int match = regexec(&re, text->as.string.data ? text->as.string.data : "", 0, NULL, 0);
                 regfree(&re);
                 ds_string_free(&pattern);

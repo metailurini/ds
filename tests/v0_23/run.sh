@@ -72,6 +72,12 @@ assert_emit_fails() {
   assert_file_missing_or_empty "$TMP/${name}.sh" "$name no partial Bash"
 }
 
+assert_run_fails() {
+  local name="$1" fixture="$2" fragment="$3"
+  run_fail "${name}_run" "$DS" run "$fixture"
+  assert_diag "$TMP/${name}_run.err" "$fragment" "$name run diagnostic"
+}
+
 assert_fmt_check_fails() {
   local name="$1" fixture="$2"
   run_fail "${name}_fmt_check" "$DS" fmt --check "$fixture"
@@ -342,8 +348,10 @@ fn show(v) { if v { echo arg-match } }
 show(returns_match("x"))
 if "a/b" matches /a\/b/ { echo slash }
 if "a\\b" matches /a\\b/ { echo backslash }
+let literal_replace = "a[0-9]b".replace("[0-9]", "X")
+echo "replace={literal_replace}"
 DS
-assert_parity regex "$regex" 0 $'yes\nrelease\nservice\nclass\nquant\nsensitive\ninsensitive\nfirst\nrestored\nlet-ok\ninterp=true\nor-ok\ncase-match\narg-match\nslash\nbackslash\n'
+assert_parity regex "$regex" 0 $'yes\nrelease\nservice\nclass\nquant\nsensitive\ninsensitive\nfirst\nrestored\nlet-ok\ninterp=true\nor-ok\ncase-match\narg-match\nslash\nbackslash\nreplace=aXb\n'
 regex_script="$TMP/regex.sh"
 run_ok regex_emit_check "$DS" emit bash "$regex" -o "$regex_script"
 assert_matches "$regex_script" 'nocasematch' 'case-insensitive regex emission handles nocasematch'
@@ -365,13 +373,15 @@ for item in \
   'regex_lookahead|let ok = "x" matches /(?=x)/|deferred' \
   'regex_backref|let ok = "aa" matches /(a)\\1/|regex' \
   'regex_lazy|let ok = "abc" matches /a.*?c/|regex' \
-  'regex_unicode|let ok = "é" matches /\p{L}/|regex'; do
+  'regex_unicode|let ok = "é" matches /\p{L}/|regex' \
+  'regex_invalid_posix|let ok = "x" matches /[/|invalid regex pattern'; do
   IFS='|' read -r name src frag <<<"$item"
   f="$FIX/$name.ds"
   printf '%b\n' "$src" >"$f"
   assert_check_fails "$name" "$f" "$frag"
   assert_emit_fails "${name}_emit" "$f" "$frag"
 done
+assert_run_fails regex_invalid_posix_run "$FIX/regex_invalid_posix.ds" 'invalid regex pattern'
 regex_newline="$FIX/regex_newline.ds"
 printf 'let ok = "a" matches /a\nb/\n' >"$regex_newline"
 assert_check_fails regex_newline "$regex_newline" 'newline'

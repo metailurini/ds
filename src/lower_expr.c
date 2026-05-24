@@ -1,5 +1,6 @@
 #include "lower_internal.h"
 
+#include <regex.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -913,6 +914,20 @@ static void validate_regex_literal(Lower *lower, const DsExpr *expr) {
             ds_diag_error(lower->diag, expr->span, "lazy regex quantifiers are deferred in v0.23.0");
         }
     }
+
+    /*
+     * Regex acceptance is a lowerer-owned VM/Bash parity gate. The VM and Bash
+     * emitter both consume accepted regex HIR; they should only see patterns
+     * that have already passed the conservative v0.23 surface checks here.
+     */
+    char *tmp = (char *)ds_xcalloc(pat.len + 1, 1);
+    memcpy(tmp, pat.data, pat.len);
+    regex_t re;
+    int flags = REG_EXTENDED | (insensitive ? REG_ICASE : 0);
+    int err = regcomp(&re, tmp, flags);
+    if (err != 0) ds_diag_error(lower->diag, expr->span, "invalid regex pattern in v0.23.0");
+    else regfree(&re);
+    free(tmp);
 }
 
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs) {
