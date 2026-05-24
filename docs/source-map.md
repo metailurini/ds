@@ -6,7 +6,8 @@ outside this map, treat that as pressure to split, move, or document a new
 boundary before continuing feature work.
 
 Use this with `docs/architecture.md`, which explains the end-to-end pipeline and
-larger architectural rules, and `docs/concept-map.md`, which maps cross-cutting
+larger architectural rules, `docs/parity-contracts.md`, which defines the
+VM/Bash acceptance contract, and `docs/concept-map.md`, which maps cross-cutting
 language/runtime concepts to canonical homes. This file answers the narrower
 maintenance questions:
 
@@ -25,6 +26,10 @@ maintenance questions:
 - HIR files define the backend-facing contract. HIR should not contain
   backend-specific text fragments, VM registers, Bash helper bodies, or parser
   cursor state.
+- VM/Bash parity is a language acceptance rule, not a backend convenience. A
+  user-facing feature must have backend-neutral HIR/shared metadata and defined
+  VM and Bash behavior before it is accepted, unless `docs/parity-contracts.md`
+  explicitly documents a backend-specific, diagnostic-only, or rejected state.
 - VM files may know HIR, bytecode/private VM state, runtime values, subprocess
   behavior, and VM diagnostics. They should not parse source or revalidate
   language features already rejected by lowering except as defensive runtime

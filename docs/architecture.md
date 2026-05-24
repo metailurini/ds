@@ -47,6 +47,11 @@ Both execution backends consume HIR:
 ```
 
 If a feature cannot be represented in HIR and implemented by both backends, the feature is not ready.
+The detailed acceptance rule lives in `docs/parity-contracts.md`: a user-facing
+language feature is accepted only when it has a backend-neutral representation
+and defined behavior for both VM execution and standalone Bash emission, unless
+it is explicitly documented as VM-only, Bash-only, diagnostic-only, or currently
+rejected.
 
 ## Core runtime substrate
 

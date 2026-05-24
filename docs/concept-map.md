@@ -9,6 +9,7 @@ Use this together with:
 
 - `docs/source-map.md` for file-level ownership.
 - `docs/architecture.md` for the compiler/backend pipeline.
+- `docs/parity-contracts.md` for the VM/Bash acceptance contract.
 - `docs/language.ds` for the user-facing syntax catalog.
 - `docs/runtime.md` for VM/runtime substrate rules.
 
@@ -67,7 +68,7 @@ Risk labels:
 | Conditionals and boolean logic | HIR expression/statement forms | Lowerer for expression validity and type-like constraints | VM interpreter; Bash condition emitter | Language docs | VM/Bash parity tests; diagnostics | **Clear** |
 | Loops over iterables | HIR loop statement with iterable expression | Lowerer for iterable eligibility | VM interpreter/scope; Bash loop emission | Language docs | VM/Bash parity tests; diagnostics for non-iterables | **Watch** |
 | Imports/program composition | Loaded-program aggregate plus AST/HIR composed program | CLI program loader for source/import composition; parser for import syntax | All backends consume composed HIR | Architecture docs and language docs | CLI/check/run/emit tests; diagnostics for import failures | **Watch** |
-| Bash parity | HIR as contract plus shared metadata/helper catalogs | Lowerer should reject unsupported parity risks | VM backend and Bash backend independently execute same HIR | Architecture docs, release checklist, milestone specs | Every supported feature needs VM/Bash parity tests unless explicitly VM-only/internal | **Hell candidate** |
+| Bash parity | HIR as contract plus shared metadata/helper catalogs; see `docs/parity-contracts.md` | Lowerer rejects unsupported parity risks unless explicitly VM-only, Bash-only, diagnostic-only, or currently rejected | VM backend and Bash backend independently execute the same accepted HIR | `docs/parity-contracts.md`, architecture docs, release checklist, milestone specs | Every accepted feature needs VM tests, Bash parity tests, and diagnostics for unsupported forms unless explicitly scoped otherwise | **Watch** |
 | VM process execution | VM-private process spec/result around HIR commands | Lowerer validates language rules; VM validates OS/runtime failures | `vm_process.c` and VM interpreter | Runtime docs and architecture backend docs | VM tests plus Bash parity tests for observable behavior | **Watch** |
 | Bash helper selection | Bash dependency flags derived from HIR and stdlib metadata | Lowerer for language legality; Bash deps for helper need | Bash emitter/helpers | Architecture docs and source map | Bash emission tests, `bash -n`, parity tests | **Watch** |
 | Diagnostics | `DsDiag`/source spans attached by each phase | Owning phase: parser/lowerer/runtime/backend as appropriate | Diagnostic renderer/source manager | Architecture diagnostics section | Diagnostic tests per phase and feature | **Hell candidate** |
@@ -98,8 +99,11 @@ These concepts have the highest risk of becoming "kind of everywhere":
 5. **Mutable collections (`map` iteration, index assignment)**: collection value
    encoding already affects VM values and Bash helper sidecars. Mutation and map
    iteration need explicit HIR nodes and tests before adding syntax sugar.
-6. **Bash parity itself**: any feature not expressible in HIR with a Bash plan is
-   not ready. Parity is not a backend detail; it is a language acceptance rule.
+6. **Bash parity itself**: narrowed by `docs/parity-contracts.md`. A feature is
+   accepted only when it has backend-neutral HIR/shared metadata and defined VM
+   and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
+   or currently rejected. Remaining risk is enforcement drift during feature
+   work, so keep it under **Watch** rather than treating it as vague ownership.
 7. **Diagnostics**: every phase can emit diagnostics, but ownership must follow
    the rule being checked. Parser reports syntax, lowerer reports semantic
    language misuse, VM reports runtime/OS failures, and Bash emitter reports only
@@ -107,8 +111,9 @@ These concepts have the highest risk of becoming "kind of everywhere":
 
 ## Refactoring rules from this map
 
-- Do not add a backend-only feature path. Add or update the HIR representation
-  first, then wire VM and Bash from that representation.
+- Do not add a backend-only feature path unless `docs/parity-contracts.md`
+  explicitly documents it as VM-only or Bash-only. Otherwise add or update the
+  HIR representation first, then wire VM and Bash from that representation.
 - Do not let Bash helpers become canonical semantics. Helpers implement already
   validated HIR behavior for standalone scripts.
 - Do not let VM runtime values define source syntax. Runtime values execute HIR;
