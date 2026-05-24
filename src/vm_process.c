@@ -560,6 +560,13 @@ static bool vm_command_was_interrupted(const Vm *vm, int code) {
 }
 
 static void vm_forward_signal_to_child_group(Vm *vm, pid_t pgid, int sig) {
+    /*
+     * Trap/defer/signal parity boundary: foreground command/pipeline signal
+     * handling is VM process execution policy, not language validation. The
+     * lowerer has already accepted handler declarations; at runtime the VM only
+     * records INT/TERM for cleanup classification and forwards the signal to
+     * the foreground child process group when one exists.
+     */
     if (!vm_signal_is_cleanup_signal(sig)) return;
     vm_note_interrupted_signal(vm, sig);
     if (pgid > 0) kill(-pgid, sig);
@@ -598,6 +605,12 @@ static bool vm_make_foreground_group(pid_t pgid, int *tty_fd, pid_t *shell_pgid)
 }
 
 static bool vm_wait_foreground_child(Vm *vm, pid_t pid, pid_t pgid, const VmProcessSpec *spec, int *status) {
+    /*
+     * Direct foreground commands get their own process group when possible.
+     * If the ds runner observes INT/TERM while waiting, forward it to that
+     * group and let the VM cleanup dispatcher decide the final handler order
+     * and conventional status (130 for INT, 143 for TERM).
+     */
     int tty_fd = -1;
     pid_t shell_pgid = -1;
     vm_make_foreground_group(pgid, &tty_fd, &shell_pgid);
@@ -795,6 +808,11 @@ static void pipeline_child_exec(VmProcessSpec *specs, size_t stage_count, size_t
 }
 
 static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcessResult *result) {
+    /*
+     * Pipeline foreground-signal ownership mirrors direct commands: process
+     * code owns process groups, waits, forwarding, and pipefail status; cleanup
+     * handler legality and representation remain lowerer/HIR responsibilities.
+     */
     process_result_init(result);
     size_t n = ins->stage_count ? ins->stage_count : 1;
     VmProcessSpec *specs = (VmProcessSpec *)ds_xcalloc(n, sizeof(VmProcessSpec));

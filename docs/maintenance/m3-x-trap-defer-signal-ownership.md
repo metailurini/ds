@@ -719,3 +719,28 @@ to Watch in `docs/concept-map.md`. Clear remains inappropriate because signal
 behavior is OS-sensitive, the Bash helper implementation is intentionally
 backend-specific, and future handler-context or job-control work can still cause
 ownership drift if it bypasses lowering/HIR validation.
+
+## Implementation result: M3.x foreground signal audit
+
+A follow-up maintenance cleanup audits the remaining foreground direct-command,
+foreground pipeline, Bash cleanup-helper, and deterministic v0.22 test risks
+without changing the user-facing language surface:
+
+- VM direct-command waiting now has an explicit ownership comment documenting
+  that process groups, INT/TERM forwarding, and conventional 130/143 status
+  classification are VM process-execution concerns for accepted HIR;
+- VM pipeline execution now has an explicit ownership comment documenting that
+  pipe/process-group/wait/pipefail behavior belongs in VM process execution,
+  while handler legality remains lowerer/HIR-owned;
+- Bash direct-command and pipeline helper generation now has an explicit comment
+  documenting that generated helpers are runtime mechanics for accepted HIR and
+  must preserve the same cleanup/status contract as the VM;
+- `tests/v0_22/signal_runtime.sh` adds a focused deterministic signal runtime
+  target that exercises VM and emitted Bash direct commands and pipelines for
+  `INT` and `TERM` without requiring the whole long v0.22 suite;
+- `make test-v0-22-signal-runtime` runs that focused subset.
+
+No new signal names, handler contexts, job-control APIs, or syntax were added.
+The status remains Watch rather than Clear because OS signal delivery is still
+environment-sensitive and the broader monolithic `tests/v0_22/run.sh` remains a
+large integration suite.

@@ -9,7 +9,7 @@ BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17 0-18 0-19 0-20 0-21 0-22 0-23 0-24 0-25 0-26 0-27
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
-.PHONY: all clean check smoke test $(TEST_TARGETS) asan ubsan test-asan test-ubsan
+.PHONY: all clean check smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
 
 all: $(BIN)
 
@@ -35,6 +35,9 @@ test: $(BIN)
 
 $(TEST_TARGETS): $(BIN)
 	DS_SKIP_BUILD=1 ./tests/v$(subst -,_,$(patsubst test-v%,%,$@))/run.sh
+
+test-v0-22-signal-runtime: $(BIN)
+	DS_SKIP_BUILD=1 ./tests/v0_22/signal_runtime.sh
 
 asan:
 	$(MAKE) clean

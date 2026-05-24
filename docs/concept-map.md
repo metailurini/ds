@@ -87,12 +87,14 @@ These concepts have the highest risk of becoming "kind of everywhere":
    semantics, unsupported forms, and pre-materialization of supported scalar
    function-call interpolation; VM/Bash consume accepted command payloads. It is
    tracked under Watch because future command-word expansion can still drift.
-2. **Trap/defer/signal behavior**: M3.x now specifies and implements the first
-   ownership cleanup in `docs/maintenance/m3-x-trap-defer-signal-ownership.md`:
+2. **Trap/defer/signal behavior**: M3.x now specifies and implements focused
+   ownership cleanups in `docs/maintenance/m3-x-trap-defer-signal-ownership.md`:
    parser preserves handler syntax shape, lowerer owns supported-signal and
    handler-context diagnostics, HIR is the accepted handler contract, VM owns
-   cleanup/signal execution and foreground process classification, and Bash owns
-   standalone trap/helper emission. It remains Watch because signal behavior is
+   cleanup/signal execution and foreground process/pipeline classification, and
+   Bash owns standalone trap/helper emission. Focused signal-runtime tests now
+   cover direct-command and pipeline `INT`/`TERM` parity without running the
+   entire v0.22 integration suite. It remains Watch because signal behavior is
    OS-sensitive and future changes can still drift if they bypass the accepted
    HIR handler contract.
 3. **Regex expansion beyond conservative literals**: capture arrays, replacement,
