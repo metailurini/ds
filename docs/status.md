@@ -2,7 +2,7 @@
 
 This document is the user-facing snapshot after the completed implementation
 surface through `v0.23.0`, the `v0.24.0` pre-1.0 hardening pass, and the
-implementation-only `v0.25.0` scalar function value-return ABI pass. It is a
+completed `v0.25.0` scalar function value-return ABI pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
