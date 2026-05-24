@@ -295,6 +295,28 @@ static void lower_validate_return_backend_representation(Lower *lower, const DsL
     }
 }
 
+static void lower_validate_function_return_contract(Lower *lower, const DsStmt *src, DsLowerStmt *out, SymKind value_kind) {
+    /*
+     * Function return kind is a lowerer/HIR contract. Backends consume
+     * out->as.return_stmt.return_kind and may keep defensive invariants, but
+     * user-facing return-kind acceptance must be decided here.
+     */
+    out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
+    lower_validate_return_backend_representation(lower, out);
+
+    if (!lower->current_function) return;
+
+    DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
+    if (ret == DS_LOWER_VALUE_UNKNOWN) {
+        ds_diag_error(lower->diag, src->span, "function return value kind must be known in v0.21.0");
+    } else if (!lower->current_function->has_return) {
+        lower->current_function->has_return = true;
+        lower->current_function->return_kind = ret;
+    } else if (lower->current_function->return_kind != ret) {
+        ds_diag_error(lower->diag, src->span, "all return statements in a function must have the same value kind in v0.21.0");
+    }
+}
+
 static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     DsLowerCasePattern out;
     memset(&out, 0, sizeof(out));
@@ -582,19 +604,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     }
                     SymKind value_kind = SYM_UNKNOWN;
                     out->as.return_stmt.value = lower_expr(lower, &fake, &value_kind);
-                    out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
-                    lower_validate_return_backend_representation(lower, out);
-                    if (lower->current_function) {
-                        DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
-                        if (ret == DS_LOWER_VALUE_UNKNOWN) {
-                            ds_diag_error(lower->diag, stmt->span, "function return value kind must be known in v0.21.0");
-                        } else if (!lower->current_function->has_return) {
-                            lower->current_function->has_return = true;
-                            lower->current_function->return_kind = ret;
-                        } else if (lower->current_function->return_kind != ret) {
-                            ds_diag_error(lower->diag, stmt->span, "all return statements in a function must have the same value kind in v0.21.0");
-                        }
-                    }
+                    lower_validate_function_return_contract(lower, stmt, out, value_kind);
                     lower_stmt_vec_push(&block->as.block_stmt.statements, out);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     ds_command_free(&command_copy);
@@ -613,19 +623,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             SymKind value_kind = SYM_UNKNOWN;
             out->as.return_stmt.value = lower_expr(lower, stmt->as.return_stmt.value, &value_kind);
-            out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
-            lower_validate_return_backend_representation(lower, out);
-            if (lower->current_function) {
-                DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
-                if (ret == DS_LOWER_VALUE_UNKNOWN) {
-                    ds_diag_error(lower->diag, stmt->span, "function return value kind must be known in v0.21.0");
-                } else if (!lower->current_function->has_return) {
-                    lower->current_function->has_return = true;
-                    lower->current_function->return_kind = ret;
-                } else if (lower->current_function->return_kind != ret) {
-                    ds_diag_error(lower->diag, stmt->span, "all return statements in a function must have the same value kind in v0.21.0");
-                }
-            }
+            lower_validate_function_return_contract(lower, stmt, out, value_kind);
             return out;
         }
         case DS_STMT_DEFER:

@@ -44,7 +44,7 @@ Risk labels:
 | Captured command results | HIR expression with shared command-result metadata and runtime `DsValue` object | Lowerer | VM process execution; Bash command-result helpers | Language docs, architecture backend boundary docs | VM tests, Bash parity tests, field diagnostics | **Watch** |
 | Command-result fields | Shared descriptor table in command metadata, consumed through HIR | Lowerer for field validity | VM field reads/interpolation; Bash condition/expression helpers | Language docs and architecture command-result notes | Diagnostic tests plus VM/Bash parity field tests | **Watch** |
 | Command-result functions | Stdlib helper metadata plus HIR call expression/statement | Lowerer via stdlib metadata | `vm_stdlib.c`; Bash stdlib/helper emission | Language stdlib docs, runtime docs | VM tests, Bash parity tests, wrong-arity diagnostics | **Hell candidate** |
-| Function return kinds | Function declaration metadata and HIR return kind/value kind; see `docs/maintenance/m3-2-function-return-kinds.md` | Function collection/lowering | VM scope/function call path; Bash function emission | `docs/maintenance/m3-2-function-return-kinds.md`, language docs, and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Hell candidate** |
+| Function return kinds | Function declaration metadata and HIR return kind/value kind; see `docs/maintenance/m3-2-function-return-kinds.md` | Function collection/lowering | VM scope/function call path; Bash function emission | `docs/maintenance/m3-2-function-return-kinds.md`, language docs, and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Watch** |
 | Direct function-call interpolation in command words | HIR command word segment containing a validated expression result | Lowerer | VM command interpolation; Bash command rendering/quoting | Language docs and architecture command word rules | VM/Bash parity tests; diagnostics for unsupported return kinds | **Hell candidate** |
 | Pipeline behavior | HIR command/pipeline command payload | Parser for syntax; lowerer for semantic restrictions | VM process pipeline execution; Bash command emitter | Language docs and runtime/process docs | VM/Bash parity tests including stdout/stderr/status | **Hell candidate** |
 | Plain command execution | HIR command statement | Parser for command syntax; lowerer for command word validation | VM process execution; Bash command statement emission | Language docs, runtime docs | VM/Bash parity tests; failure/redirect diagnostics | **Watch** |
@@ -86,24 +86,25 @@ These concepts have the highest risk of becoming "kind of everywhere":
    VM process execution, Bash command rendering, and Bash quoting all touch it.
    Future work should make command-word segment representation explicit in HIR so
    backends do not rediscover expression/quoting rules.
-2. **Function return kinds**: function collection, call validation, statement vs
-   expression calls, command-result returns, collection returns, VM calls, and
-   Bash function emission all depend on one stable return-kind model. M3.2 now
-   has a focused maintenance contract in
-   `docs/maintenance/m3-2-function-return-kinds.md`; the concept remains Hell
-   until implementation cleanup proves lowerer-owned validation and backend-only
-   invariant diagnostics.
-3. **Trap/defer/signal behavior**: syntax, handler legality, global/process
+2. **Trap/defer/signal behavior**: syntax, handler legality, global/process
    scope, foreground process interaction, LIFO defer order, replacement trap
    order, VM signal runtime, and Bash `trap` semantics are all coupled. Keep
    handler semantics in HIR and reject backend-only shortcuts.
-4. **Regex expansion beyond conservative literals**: capture arrays, replacement,
+3. **Regex expansion beyond conservative literals**: capture arrays, replacement,
    split, and runtime regex strings need a parity strategy before implementation.
    Otherwise VM regex libraries and Bash regex rules will diverge.
-5. **Mutable collections (`map` iteration, index assignment)**: collection value
+4. **Mutable collections (`map` iteration, index assignment)**: collection value
    encoding already affects VM values and Bash helper sidecars. Mutation and map
    iteration need explicit HIR nodes and tests before adding syntax sugar.
-6. **Bash parity itself**: narrowed by `docs/parity-contracts.md`. A feature is
+
+Moved to **Watch** after maintenance cleanup:
+
+- **Function return kinds**: M3.2 centralizes return-statement validation in the
+  lowerer, removes the parser-side semantic `return`-outside-function diagnostic,
+  and documents Bash return helper failures as internal ABI invariants. Remaining
+  risk is drift when future command interpolation or structured-return features
+  add new call/return positions.
+5. **Bash parity itself**: narrowed by `docs/parity-contracts.md`. A feature is
    accepted only when it has backend-neutral HIR/shared metadata and defined VM
    and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
    or currently rejected. Lowering now rejects temporary collection and
@@ -113,7 +114,7 @@ These concepts have the highest risk of becoming "kind of everywhere":
    Remaining risk is
    enforcement drift during feature work, so keep it under **Watch** rather than
    treating it as vague ownership.
-7. **Diagnostics**: narrowed by `docs/diagnostics.md`. Every phase can emit
+6. **Diagnostics**: narrowed by `docs/diagnostics.md`. Every phase can emit
    diagnostics, but ownership must follow the rule being checked: parser reports
    syntax, lowerer reports semantic language misuse and unsupported parity forms,
    checker reports warnings, VM reports runtime/OS failures, and Bash emitter

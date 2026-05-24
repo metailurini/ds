@@ -17,8 +17,8 @@ Use this with:
 
 ## Current risk
 
-Function return kind is still a Hell candidate because it is not one isolated
-feature. It affects:
+Function return kind started this pass as a Hell candidate because it is not one
+isolated feature. It affects:
 
 - function declaration and signature collection;
 - return statement lowering;
@@ -36,6 +36,13 @@ The risk is not that the current implementation has no rules. The risk is that
 the rules are spread across several files and milestones, so future work can add
 a new return kind or call form by teaching one backend first and only later
 finding parity or diagnostic gaps.
+
+Implementation status after M3.2 cleanup: the concept is **Watch** in
+`docs/concept-map.md`. The lowerer is the source-language validation owner, the
+parser no longer emits the duplicate semantic `return`-outside-function
+diagnostic, and emitted Bash helper failures are documented as internal ABI
+invariants. Remaining risk is future drift when new command interpolation or
+structured-return surfaces add more call/return positions.
 
 ## Current implementation trace
 

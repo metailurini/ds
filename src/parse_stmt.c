@@ -204,7 +204,6 @@ static bool stmt_contains_assignment_operator(const Parser *p) {
 
 static DsStmt *parse_return(Parser *p) {
     DsToken *start = parser_previous(p);
-    if (p->function_depth <= 0) ds_diag_error(p->diag, start->span, "`return` is only allowed inside a function");
     if (parser_is_stmt_end(p)) {
         ds_diag_error(p->diag, start->span, "expected expression after `return`");
         parser_consume_statement_end(p);
@@ -568,13 +567,6 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_at(p, DS_TOK_RBRACE)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "unexpected `}`");
         parser_advance(p);
-        return NULL;
-    }
-    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 6 &&
-        memcmp(parser_peek(p)->text.data, "return", 6) == 0) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "function return values are deferred in v0.9.0");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-        parser_consume_statement_end(p);
         return NULL;
     }
     return parse_cmd(p);

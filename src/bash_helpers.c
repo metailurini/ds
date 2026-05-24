@@ -56,6 +56,12 @@ const char *ds_bash_int_helpers_source(void) {
 }
 
 const char *ds_bash_function_value_helpers_source(void) {
+    /*
+     * Function return kind is validated by lowering and carried in HIR. These
+     * helper diagnostics are emitted-script ABI invariants: they catch corrupted
+     * private payloads or impossible backend mismatches, not source-language
+     * return-kind errors.
+     */
     return
         "__ds_call_value_capture() {\n"
         "  local __ds_cv_expected=\"$1\" __ds_cv_fn=\"$2\" __ds_cv_tmpdir __ds_cv_stdout __ds_cv_stderr __ds_cv_code\n"
@@ -74,7 +80,7 @@ const char *ds_bash_function_value_helpers_source(void) {
         "  if [[ -s \"$__ds_cv_stdout\" ]]; then cat \"$__ds_cv_stdout\" >&2; rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'value-returning function produced stdout during expression capture'; fi\n"
         "  if [[ -z \"$__ds_return_type\" ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'value-returning function did not set an internal return payload'; fi\n"
         "  case \"$__ds_return_type\" in string|int|bool|null|array|map|command_result) ;; *) rm -rf \"$__ds_cv_tmpdir\"; __ds_error \"invalid internal function return type '$__ds_return_type'\" ;; esac\n"
-        "  if [[ \"$__ds_cv_expected\" != unknown && \"$__ds_cv_expected\" != \"$__ds_return_type\" ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error \"function returned $__ds_return_type where $__ds_cv_expected was expected\"; fi\n"
+        "  if [[ \"$__ds_cv_expected\" != unknown && \"$__ds_cv_expected\" != \"$__ds_return_type\" ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error \"internal function return kind mismatch: got $__ds_return_type but expected $__ds_cv_expected\"; fi\n"
         "  if [[ \"$__ds_return_type\" == int ]]; then __ds_int_check \"$__ds_return_value\" || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal int function return payload'; }; fi\n"
         "  if [[ \"$__ds_return_type\" == bool && \"$__ds_return_value\" != true && \"$__ds_return_value\" != false ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal bool function return payload'; fi\n"
         "  if [[ \"$__ds_return_type\" == array ]]; then declare -p __ds_return_array >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal array function return payload'; }; declare -p __ds_return_elem_type >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal array element-type function return payload'; }; fi\n"
