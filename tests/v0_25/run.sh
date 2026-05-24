@@ -206,6 +206,53 @@ DS
 assert_parity newline_string_return "$FIX/newline_string_return.ds" 0 $'[one\ntwo\n]\n'
 assert_not_matches "$TMP/newline_string_return.sh" '\$\(__ds_call_value '\''string'\''' 'newline let call avoids command substitution'
 
+write_fixture "$FIX/newline_string_equality.ds" <<'DS'
+fn block() {
+  return """api
+"""
+}
+
+if block() == """api
+""" {
+  echo "matched"
+} else {
+  echo "miss"
+}
+DS
+assert_parity newline_string_equality "$FIX/newline_string_equality.ds" 0 $'matched\n'
+assert_not_matches "$TMP/newline_string_equality.sh" '\[\[ "\$\(__ds_call_value '\''string'\''' 'newline equality call avoids condition command substitution'
+
+write_fixture "$FIX/newline_string_case_selector.ds" <<'DS'
+fn block() {
+  return """api
+"""
+}
+
+case block() {
+  """api
+""" { echo "matched" }
+  _ { echo "miss" }
+}
+DS
+assert_parity newline_string_case_selector "$FIX/newline_string_case_selector.ds" 0 $'matched\n'
+assert_not_matches "$TMP/newline_string_case_selector.sh" '\$\(__ds_call_value '\''string'\''' 'newline case selector avoids command substitution'
+
+write_fixture "$FIX/newline_string_function_argument.ds" <<'DS'
+fn block() {
+  return """api
+"""
+}
+
+fn echo_arg(x = "") {
+  return x
+}
+
+let value = echo_arg(block())
+echo "[{value}]"
+DS
+assert_parity newline_string_function_argument "$FIX/newline_string_function_argument.ds" 0 $'[api\n]\n'
+assert_not_matches "$TMP/newline_string_function_argument.sh" 'echo_arg "\$\(__ds_call_value '\''string'\''' 'newline user-function argument is pre-materialized'
+
 write_fixture "$FIX/int_return.ds" <<'DS'
 fn answer() {
   return 42
@@ -598,6 +645,17 @@ assert_parity no_payload_leak "$FIX/no_payload_leak.ds" 0 $'user:api\n'
 assert_not_contains "$TMP/no_payload_leak_bash.out" '__ds_return_' 'payload marker not visible on stdout'
 assert_not_contains "$TMP/no_payload_leak_bash.out" '__ds_call_value' 'helper text not visible on stdout'
 
+cp "$TMP/no_payload_leak.sh" "$TMP/malformed_payload_guard.sh"
+cat >>"$TMP/malformed_payload_guard.sh" <<'BASH'
+__ds_bad_bool_payload() {
+  __ds_return_type=bool
+  __ds_return_value=maybe
+}
+__ds_call_value_into __ds_payload_guard bool __ds_bad_bool_payload
+BASH
+run_fail malformed_payload_guard bash "$TMP/malformed_payload_guard.sh"
+assert_contains "$TMP/malformed_payload_guard.err" 'invalid internal bool function return payload' 'malformed internal bool payload is rejected'
+
 # 9. Parser, HIR, bytecode, and debug views.
 run_ok hir_scalar_return "$DS" hir "$FIX/string_return.ds"
 assert_contains "$TMP/hir_scalar_return.out" 'Function' 'HIR has scalar function structure'
@@ -719,6 +777,10 @@ run_ok away_bash_n bash -n "$TMP/away_newline.sh"
 capture_in_dir away_bash_run "$away" bash "$TMP/away_newline.sh"
 assert_status away_bash_run 0
 assert_same_text $'[one\ntwo\n]\n' "$TMP/away_bash_run.out" 'emitted Bash runs away from source directory'
+
+capture_in_dir restricted_path_bash_run "$away" env PATH=/usr/bin:/bin bash "$TMP/away_newline.sh"
+assert_status restricted_path_bash_run 0
+assert_same_text $'[one\ntwo\n]\n' "$TMP/restricted_path_bash_run.out" 'emitted Bash runs without ds on PATH'
 
 assert_contains Makefile '0-25' 'TEST_VERSIONS contains v0.25'
 assert_matches Makefile '^TEST_VERSIONS := .*0-24 0-25($| )' 'v0.25 follows v0.24 in TEST_VERSIONS'

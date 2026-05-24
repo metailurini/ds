@@ -1,6 +1,7 @@
 #include "bash_internal.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 static bool result_field_is_bool(DsStr field) {
@@ -24,6 +25,35 @@ static bool is_int_binary_op(DsStr op) {
 }
 
 static const char *lower_value_type_name(DsLowerValueKind kind);
+static const char *expr_type_name(const DsLowerExpr *expr);
+
+static bool is_user_function_call_expr(const DsLowerExpr *expr) {
+    return expr && expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
+}
+
+static void temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id) {
+    snprintf(buf, cap, "__%s_%zu", prefix, id);
+}
+
+static bool emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, EmitBuf *out) {
+    buf_append(out, "__ds_call_value_into ");
+    emit_var_name(out, raw_name);
+    buf_append(out, " ");
+    bash_single_quote(out, lower_value_type_name(expr->as.call.return_kind), strlen(lower_value_type_name(expr->as.call.return_kind)));
+    buf_append(out, " ");
+    emit_fn_name(out, expr->as.call.name);
+    return emit_user_call_args(e, &expr->as.call.args, out);
+}
+
+static bool emit_condition_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr *expr, const DsStr *raw_temp, EmitBuf *out) {
+    if (raw_temp) {
+        buf_append(out, "\"$");
+        emit_var_name(out, *raw_temp);
+        buf_append(out, "\"");
+        return true;
+    }
+    return emit_condition_operand(e, expr, out);
+}
 
 static const char *expr_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
@@ -175,8 +205,24 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     const DsLowerExpr *right = expr->as.binary.right;
     DsLowerValueKind left_kind = expr->as.binary.left_kind;
     DsLowerValueKind elem_kind = expr->as.binary.right_element_kind;
-    buf_append(out, "{ __ds_needle=");
-    if (!emit_value_expr(e, left, out)) return false;
+    char left_temp_buf[64];
+    DsStr left_temp = {0};
+    const DsStr *left_temp_ptr = NULL;
+    buf_append(out, "{ ");
+    if (is_user_function_call_expr(left)) {
+        temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "in_left", e->temp_counter++);
+        left_temp.data = left_temp_buf;
+        left_temp.len = strlen(left_temp_buf);
+        emit_var_name(out, left_temp);
+        buf_append(out, "=\"\"; ");
+        if (!emit_user_call_into_raw_var(e, left, left_temp, out)) return false;
+        buf_append(out, "; ");
+        left_temp_ptr = &left_temp;
+    }
+    buf_append(out, "__ds_needle=");
+    if (left_temp_ptr) {
+        buf_append(out, "\"$"); emit_var_name(out, left_temp); buf_append(out, "\"");
+    } else if (!emit_value_expr(e, left, out)) return false;
     buf_append(out, "; __ds_needle_type=");
     emit_membership_left_type(left, left_kind, out);
     buf_append(out, "; ");
@@ -497,6 +543,35 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 }
             }
         }
+        if (expr->as.call.is_user_function) {
+            char temp_buf[64];
+            temp_ds_name(temp_buf, sizeof(temp_buf), "cond", e->temp_counter++);
+            DsStr temp = {temp_buf, strlen(temp_buf)};
+            buf_append(out, "{ ");
+            emit_var_name(out, temp);
+            buf_append(out, "=\"\"; ");
+            if (!emit_user_call_into_raw_var(e, expr, temp, out)) return false;
+            if (kind == DS_LOWER_VALUE_BOOL) {
+                buf_append(out, "; [[ \"$");
+                emit_var_name(out, temp);
+                buf_append(out, "\" == true ]]; }");
+                return true;
+            }
+            if (kind == DS_LOWER_VALUE_INT) {
+                buf_append(out, "; [[ \"$");
+                emit_var_name(out, temp);
+                buf_append(out, "\" != 0 ]]; }");
+                return true;
+            }
+            if (kind == DS_LOWER_VALUE_STRING) {
+                buf_append(out, "; [[ -n \"$");
+                emit_var_name(out, temp);
+                buf_append(out, "\" ]]; }");
+                return true;
+            }
+            buf_append(out, "; false; }");
+            return true;
+        }
         if (kind == DS_LOWER_VALUE_BOOL) {
             buf_append(out, "[[ ");
             if (!emit_value_expr(e, expr, out)) return false;
@@ -550,12 +625,26 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                     ds_diag_error(e->diag, expr->span, "right operand of `matches` must be a regex literal in v0.23.0");
                     return false;
                 }
-                if (insensitive) buf_append(out, "{ __ds_regex=");
-                else buf_append(out, "{ __ds_regex=");
+                char left_temp_buf[64];
+                DsStr left_temp = {0};
+                const DsStr *left_temp_ptr = NULL;
+                if (insensitive) buf_append(out, "{ ");
+                else buf_append(out, "{ ");
+                if (is_user_function_call_expr(expr->as.binary.left)) {
+                    temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "match_left", e->temp_counter++);
+                    left_temp.data = left_temp_buf;
+                    left_temp.len = strlen(left_temp_buf);
+                    emit_var_name(out, left_temp);
+                    buf_append(out, "=\"\"; ");
+                    if (!emit_user_call_into_raw_var(e, expr->as.binary.left, left_temp, out)) return false;
+                    buf_append(out, "; ");
+                    left_temp_ptr = &left_temp;
+                }
+                buf_append(out, "__ds_regex=");
                 if (!emit_bash_regex_quoted(out, pattern)) return false;
                 if (insensitive) buf_append(out, "; __ds_old_nocasematch=$(shopt -p nocasematch || true); shopt -s nocasematch; [[ ");
                 else buf_append(out, "; [[ ");
-                if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
+                if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
                 buf_append(out, " =~ $__ds_regex");
                 if (insensitive) buf_append(out, " ]]; __ds_match_rc=$?; eval \"$__ds_old_nocasematch\"; [[ $__ds_match_rc -eq 0 ]]; }");
                 else buf_append(out, " ]]; }");
@@ -565,6 +654,41 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return false;
         }
         if (negate) buf_append(out, "! ");
+        if (is_user_function_call_expr(expr->as.binary.left) || is_user_function_call_expr(expr->as.binary.right)) {
+            char left_temp_buf[64];
+            char right_temp_buf[64];
+            DsStr left_temp = {0};
+            DsStr right_temp = {0};
+            const DsStr *left_temp_ptr = NULL;
+            const DsStr *right_temp_ptr = NULL;
+            buf_append(out, "{ ");
+            if (is_user_function_call_expr(expr->as.binary.left)) {
+                temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "cmp_left", e->temp_counter++);
+                left_temp.data = left_temp_buf;
+                left_temp.len = strlen(left_temp_buf);
+                emit_var_name(out, left_temp);
+                buf_append(out, "=\"\"; ");
+                if (!emit_user_call_into_raw_var(e, expr->as.binary.left, left_temp, out)) return false;
+                buf_append(out, "; ");
+                left_temp_ptr = &left_temp;
+            }
+            if (is_user_function_call_expr(expr->as.binary.right)) {
+                temp_ds_name(right_temp_buf, sizeof(right_temp_buf), "cmp_right", e->temp_counter++);
+                right_temp.data = right_temp_buf;
+                right_temp.len = strlen(right_temp_buf);
+                emit_var_name(out, right_temp);
+                buf_append(out, "=\"\"; ");
+                if (!emit_user_call_into_raw_var(e, expr->as.binary.right, right_temp, out)) return false;
+                buf_append(out, "; ");
+                right_temp_ptr = &right_temp;
+            }
+            buf_append(out, "[[ ");
+            if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
+            buf_appendf(out, " %s ", op);
+            if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.right, right_temp_ptr, out)) return false;
+            buf_append(out, " ]]; }");
+            return true;
+        }
         buf_append(out, "[[ ");
         if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
         buf_appendf(out, " %s ", op);

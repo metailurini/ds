@@ -681,9 +681,11 @@ The v0.25.0 runtime value-return path transports scalar `string`, `int`, and
 the caller; standalone Bash uses a private `__ds_return_type` /
 `__ds_return_value` payload plus capture helpers that validate the expected
 scalar kind and reject unexpected stdout from value-style calls. User-function
-calls that initialize, assign, or forward-return scalar values use an
-assignment-by-reference helper rather than Bash command substitution, so string
-returns preserve trailing newlines exactly in those supported call positions.
+calls that initialize, assign, forward-return, participate in string-sensitive
+conditions, select `case` arms, or feed direct user-function arguments use
+temporary assignment-by-reference materialization rather than Bash command
+substitution, so string returns preserve trailing newlines exactly in those
+supported call positions.
 Plain command statements inside value-returning functions are therefore
 rejected; captured `run` expressions remain the supported way to use command
 results inside functions. Flat collection and command-result function returns
