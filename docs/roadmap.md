@@ -1196,10 +1196,411 @@ feature-integration milestone before pre-1.0 hardening.
 
 ---
 
+### v0.25.0 — Portable Function Value Return ABI
+
+**Purpose:** create the portable value-return foundation needed before adding
+collection-returning functions, command-result returns, and direct function-call
+interpolation in command words. Bash functions cannot natively return rich
+values, so this milestone defines the DS-owned return protocol that both the VM
+and emitted Bash must share.
+
+**Scope:**
+
+- Introduce an internal typed value-return protocol for emitted Bash.
+- Keep VM returns as real typed runtime values while requiring emitted Bash to
+  serialize returned values through a private DS runtime encoding.
+- Route scalar function returns (`string`, `int`, `bool`, and status-like simple
+  values already supported by the language) through the same abstraction that
+  later collection returns will use.
+- Define the rule that a value-returning function reserves stdout for the
+  encoded return payload in emitted Bash.
+- Reject or diagnose ordinary stdout-producing statements inside value-returning
+  functions unless that output is redirected away from stdout.
+- Preserve existing VM/Bash behavior for functions that are used only for
+  effects or command output.
+- Document the difference between output-oriented functions and value-returning
+  functions.
+
+**Out of scope:**
+
+- No user-facing collection function returns yet.
+- No command-result object returns yet.
+- No direct function-call interpolation in command words yet.
+- No nested collection encoding requirement beyond leaving the protocol able to
+  grow into it later.
+- No binary-safe command-output value model.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for scalar function returns through the new protocol.
+- Diagnostics for illegal stdout in value-returning functions.
+- Runtime/emitter docs explaining the value-return ABI at a high level without
+  exposing unstable implementation details as user syntax.
+
+---
+
+### v0.26.0 — Flat Collection and Command-Result Function Returns
+
+**Purpose:** make functions able to return useful structured data while keeping
+the first implementation portable and deterministic across the VM and emitted
+Bash.
+
+**Scope:**
+
+- Allow functions to return flat scalar arrays.
+- Allow functions to return flat maps/objects with string keys and scalar
+  values.
+- Add a command-result value shape that can be returned from functions:
+  `stdout`, `stderr`, and `status`.
+- Keep command-result capture text-oriented and deterministic.
+- Decode returned arrays/maps/command-result objects at call sites in emitted
+  Bash using the v0.25 value-return protocol.
+- Preserve failure/status propagation rules for commands captured into
+  command-result values.
+- Document the portable restrictions clearly.
+
+**Out of scope:**
+
+- No nested arrays or nested maps.
+- No arrays of maps or maps containing arrays.
+- No streaming command-result values.
+- No binary stdout/stderr capture.
+- No map iteration yet.
+- No index assignment yet.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for flat array returns.
+- VM/Bash parity tests for flat map/object returns.
+- VM/Bash parity tests for returned command-result values, including stdout,
+  stderr, and status.
+- Docs in `docs/status.md`, `docs/runtime.md`, and `docs/language.ds` that mark
+  nested collections and binary command capture as deferred.
+
+---
+
+### v0.27.0 — Environment Variables and Direct Function Interpolation
+
+**Purpose:** improve shell ergonomics after value returns are portable. This
+milestone intentionally combines two user-facing conveniences that depend on
+clear scalar value semantics but should remain tightly scoped.
+
+**Scope:**
+
+- Add direct environment variable reads through `env.NAME`.
+- Add direct environment variable assignment through `env.NAME = value`.
+- Ensure assigned environment values are exported to child commands in both VM
+  mode and emitted Bash mode.
+- Add unset support for environment variables if the existing grammar can do so
+  without awkward special cases.
+- Allow direct function calls inside command-word interpolation when the called
+  function returns a scalar value.
+- Propagate failures from interpolated function calls before launching the outer
+  command.
+- Require interpolated functions to obey the value-returning/stdout-clean rules
+  established in v0.25.
+
+**Out of scope:**
+
+- No scoped `with env.NAME = ... { ... }` block yet.
+- No `env.NAME += ...` shorthand yet.
+- No interpolation of arrays, maps, or command-result objects into command
+  words.
+- No command substitution syntax expansion beyond the supported function-call
+  interpolation form.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for `env.NAME` read, assignment, child-command export,
+  and unset behavior if included.
+- VM/Bash parity tests for scalar function calls inside command words and
+  quoted strings.
+- Diagnostics for collection-returning or stdout-producing functions used in
+  command interpolation.
+
+---
+
+### v0.28.0 — Cleanup: Value, Environment, and Interpolation Stabilization
+
+**Purpose:** repay the complexity introduced by v0.25 through v0.27 before
+adding collection traversal and mutation.
+
+**Scope:**
+
+- Audit the value-return protocol implementation and remove duplicated VM/Bash
+  handling.
+- Verify environment mutation, function interpolation, and command-result
+  capture interact predictably.
+- Reconcile docs and examples against the supported value-return surface.
+- Add negative tests for unsupported nested collections, illegal stdout in
+  value-returning functions, and invalid interpolation targets.
+- Check emitted Bash for standalone behavior and helper emission only when
+  required.
+
+**Out of scope:**
+
+- No new language syntax unless needed to fix a correctness issue.
+- No map iteration.
+- No index assignment.
+- No regex or glob expansion.
+
+**Expected outputs:**
+
+- Full regression/parity pass for v0.25 through v0.27 behavior.
+- Updated docs that clearly distinguish supported flat values from deferred
+  nested values.
+- Cleaner emitted Bash helper organization if the value-return protocol grew
+  messy during implementation.
+
+---
+
+### v0.29.0 — Map Iteration
+
+**Purpose:** let scripts traverse returned and literal maps without relying on
+ad-hoc key lookup or implementation-specific ordering.
+
+**Scope:**
+
+- Add map iteration syntax for key/value traversal.
+- Define deterministic iteration order for VM/Bash parity. Sorted key order is
+  preferred unless a stronger insertion-order representation has already been
+  implemented for both backends.
+- Support flat maps first.
+- Define behavior for empty maps.
+- Reject or clearly define mutation of the iterated map during iteration.
+
+**Out of scope:**
+
+- No nested-map traversal semantics.
+- No destructuring beyond the scoped key/value loop form.
+- No iteration over command-result objects unless explicitly modeled as maps in
+  the milestone spec.
+- No custom iterator protocol.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for key/value order, empty maps, scalar values, and
+  diagnostics.
+- Docs describing the chosen deterministic ordering rule.
+
+---
+
+### v0.30.0 — Index Assignment
+
+**Purpose:** add controlled mutation for arrays and maps after collection values
+and map traversal are stable.
+
+**Scope:**
+
+- Support assignment to named array elements: `items[0] = value`.
+- Support assignment to named map entries: `user["name"] = value` and/or the
+  existing field-access form if the language supports it.
+- Bounds-check array assignment consistently in VM and emitted Bash.
+- Allow map assignment to existing and new keys if the milestone spec confirms
+  that behavior.
+- Reject assignment into temporary values, function-call results, or command
+  results unless a future milestone introduces reference semantics.
+
+**Out of scope:**
+
+- No sparse arrays unless deliberately specified later.
+- No assignment into nested collections.
+- No mutation through aliases or references.
+- No slice assignment.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for array element assignment, map entry assignment,
+  bounds diagnostics, and invalid assignment targets.
+- Docs explaining mutability and the initial no-temporary-assignment rule.
+
+---
+
+### v0.31.0 — Recursive Glob Patterns
+
+**Purpose:** make file traversal more ergonomic than raw Bash while preserving
+deterministic behavior across VM and emitted Bash.
+
+**Scope:**
+
+- Add recursive `**` glob support through the smallest stable surface, with
+  function-style `glob("**/*.ds")` preferred as the first user-facing API if it
+  is easier to keep portable.
+- Define `**` as zero or more directories.
+- Return sorted deterministic results.
+- Document dotfile, broken symlink, directory symlink, and no-match behavior.
+- Keep VM and emitted Bash aligned without relying on ambient user shell options.
+
+**Out of scope:**
+
+- No custom glob flags unless required for dotfile or symlink behavior.
+- No filesystem watcher or streaming traversal API.
+- No brace expansion or extended glob syntax unless already supported.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for zero-directory matches, nested matches, no matches,
+  dotfile behavior, and symlink behavior where portable.
+- Docs describing the exact recursive-glob contract.
+
+---
+
+### v0.32.0 — Regex Captures, Replacement, and Runtime Regex Strings
+
+**Purpose:** complete the practical regex layer that v0.23 intentionally left
+out while keeping the regex subset compatible with emitted Bash.
+
+**Scope:**
+
+- Add capture access for successful regex matches.
+- Add regex replacement for text values.
+- Add runtime regex string construction/validation if it can be implemented with
+  deterministic diagnostics in both backends.
+- Keep the supported regex grammar conservative and document any POSIX
+  ERE-compatible limits needed for Bash parity.
+- Define capture behavior for unmatched optional groups.
+- Define replacement escaping rules.
+
+**Out of scope:**
+
+- No full PCRE compatibility unless the project deliberately accepts a runtime
+  dependency or implements its own compatible engine.
+- No named captures unless they are explicitly added to the milestone spec.
+- No regex splitting API unless it falls out naturally and is explicitly scoped.
+- No binary regex matching.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for captures, optional captures, replacement, invalid
+  runtime regex strings, and escaping behavior.
+- Docs updating the v0.23 regex limitations now that captures/replacement are
+  supported.
+
+---
+
+### v0.33.0 — Cleanup: Collection, Glob, and Regex Stabilization
+
+**Purpose:** stabilize the data and pattern features before expanding signal and
+job-control behavior, which is intentionally higher risk.
+
+**Scope:**
+
+- Audit map iteration, index assignment, recursive glob, and regex behavior for
+  VM/Bash parity gaps.
+- Re-run examples and update them to use the final supported forms.
+- Remove overclaiming docs around nested collections, PCRE regex features,
+  globstar behavior, and mutation semantics.
+- Add missing negative tests where unsupported behavior is easy to misuse.
+
+**Out of scope:**
+
+- No new data-structure features.
+- No richer signal/job-control APIs.
+- No native or alternate shell backends.
+
+**Expected outputs:**
+
+- Full regression/parity pass across v0.25 through v0.32.
+- Reconciled docs for collections, command results, environment variables,
+  interpolation, globbing, and regex.
+
+---
+
+### v0.34.0 — Richer Cleanup and Signal Handler Context
+
+**Purpose:** restart signal/job-control work from the stable v0.22 base by adding
+small, testable handler improvements before introducing background jobs or
+process ownership APIs.
+
+**Scope:**
+
+- Add a structured signal/handler context only where VM and emitted Bash can
+  expose the same fields.
+- Improve cleanup hooks with any missing status/signal context needed by real
+  scripts.
+- Preserve the existing v0.22 ordering model for traps, defers, and exit
+  cleanup.
+- Keep tests deterministic and process-session isolated.
+
+**Out of scope:**
+
+- No background jobs yet.
+- No arbitrary process-tree supervision.
+- No shell-grade job table.
+- No platform-specific signal metadata that cannot be emitted to Bash
+  consistently.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for supported handler context fields.
+- Docs that separate supported context from intentionally unavailable metadata.
+
+---
+
+### v0.35.0 — Background Jobs and Wait Primitives
+
+**Purpose:** add the smallest useful job abstraction after cleanup and signal
+handlers are stable.
+
+**Scope:**
+
+- Add a scoped background job/spawn primitive if the milestone spec confirms the
+  final syntax.
+- Add `wait` behavior for a spawned job and define the returned status/result.
+- Ensure cleanup behavior for outstanding jobs is deterministic.
+- Keep emitted Bash and VM behavior aligned for supported direct-command jobs.
+
+**Out of scope:**
+
+- No interactive job control such as `fg`/`bg`.
+- No background pipelines unless explicitly scoped.
+- No daemon supervisor or restart policy.
+- No cross-platform process abstraction beyond the shell-native target.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for spawn, wait, failure status, cleanup, and signal
+  interruption.
+- Docs explaining what DS jobs are and are not compared with Bash job control.
+
+---
+
+### v0.36.0 — Foreground Job-Control and Signal Integration Cleanup
+
+**Purpose:** finish the richer signal/job-control pre-1.0 work by stabilizing the
+interaction between foreground commands, background jobs, pipelines, traps,
+defers, and emitted Bash helpers.
+
+**Scope:**
+
+- Audit signal forwarding and cleanup behavior for supported foreground commands
+  and jobs.
+- Audit simple pipeline behavior against the v0.22 guarantees.
+- Ensure generated Bash does not leave stray children or temp files for the
+  supported job-control subset.
+- Finalize docs and examples for the supported signal/job-control API.
+
+**Out of scope:**
+
+- No full interactive shell job-control replacement.
+- No arbitrary process-tree management beyond the documented DS subset.
+- No platform-specific behavior that cannot be tested reliably.
+
+**Expected outputs:**
+
+- Full signal/job-control regression pass in VM and emitted Bash modes.
+- Updated `docs/status.md`, `docs/runtime.md`, and release checklist entries for
+  the final supported pre-1.0 behavior.
+
+---
+
 ## Later waves
 
 Possible future areas:
 
+- nested collections and collection values beyond the flat v0.26 surface;
+- typed required function parameters;
+- collection and command-result values in more expression positions;
 - better module system;
 - shell completion generation;
 - JSON support;
@@ -1241,6 +1642,16 @@ Before `1.0.0`, `ds` should have:
 - stable CLI argument syntax;
 - imports;
 - functions;
+- flat collection and command-result function returns;
+- direct scalar function-call interpolation in command words;
+- deterministic map iteration;
+- controlled array/map index assignment;
+- recursive `**` glob behavior with documented dotfile/symlink/no-match rules;
+- regex captures, replacement, and runtime regex validation within the supported
+  VM/Bash-compatible regex subset;
+- direct `env.NAME` access and assignment;
+- the documented signal/job-control subset, including cleanup context and any
+  supported job/wait primitives;
 - commands, pipes, and redirections;
 - useful filesystem and command standard-library helpers;
 - clear diagnostics;
