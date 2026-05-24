@@ -209,7 +209,10 @@ invalid-field diagnostics, and captured non-zero status tests.
 
 Current maintenance rule: command-result helper semantics must live in shared
 metadata/HIR first. Backend helper names or VM helper functions are
-implementations, not the source of truth.
+implementations, not the source of truth. Field access on a command-result
+value currently requires a named binding; direct field access on a temporary
+function call is rejected by lowering because Bash does not yet have a
+backend-neutral temporary representation for it.
 
 ### Command words and interpolation
 
@@ -287,7 +290,10 @@ iteration/index assignment, and edge cases for keys, bounds, and value kinds.
 
 Current maintenance rule: mutable collection features require explicit HIR
 assignment/iteration nodes before implementation. Bash helper sidecars and VM
-runtime containers are not the canonical semantics.
+runtime containers are not the canonical semantics. Field/index reads currently
+require named collection storage; indexing array literals or function-call
+collection results directly is rejected by lowering until HIR/Bash have a
+portable temporary collection representation.
 
 ### Regex
 

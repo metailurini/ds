@@ -4,6 +4,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+static bool lower_expr_is_named_storage_ref(const DsLowerExpr *expr) {
+    return expr && expr->kind == DS_LOWER_EXPR_IDENT;
+}
+
+static void lower_reject_temporary_collection_access(Lower *lower, DsSpan span) {
+    /*
+     * VM bytecode can evaluate fields/indexes from temporary structured values,
+     * but standalone Bash currently has one canonical representation for those
+     * values: named storage. Rejecting the temporary form here keeps the parity
+     * contract owned by lowering instead of letting Bash emission become the
+     * semantic validator.
+     */
+    ds_diag_error(lower->diag, span,
+                  "collection and command-result field/index access requires a named binding for VM/Bash parity; bind the value to a variable first");
+}
+
 static bool int_literal_in_range(DsStr text) {
     static const char max_text[] = "9223372036854775807";
     size_t start = 0;
@@ -873,10 +890,16 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     DsLowerExpr *object = lower_expr(lower, expr->as.field.object, &object_kind);
     SymKind field_kind = SYM_UNKNOWN;
     if (object_kind == SYM_COMMAND_RESULT) {
+        if (!lower_expr_is_named_storage_ref(object)) {
+            lower_reject_temporary_collection_access(lower, expr->span);
+        }
         if (!command_result_field_kind(expr->as.field.field, &field_kind)) {
             ds_diag_error(lower->diag, expr->span, "unknown command result field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
         }
     } else if (object_kind == SYM_MAP) {
+        if (!lower_expr_is_named_storage_ref(object)) {
+            lower_reject_temporary_collection_access(lower, expr->span);
+        }
         return lower_map_field_expr(expr, object, kind_out);
     } else {
         ds_diag_error(lower->diag, expr->span, "field access is only supported on command results and maps in v0.10.0");
@@ -1084,6 +1107,9 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     out->as.index.index = index;
     if (obj_kind == SYM_ARRAY) {
         out->as.index.object_is_array = true;
+        if (!lower_expr_is_named_storage_ref(object)) {
+            lower_reject_temporary_collection_access(lower, expr->span);
+        }
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.index.index->as.unary.op, "-") &&
             expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {
@@ -1094,6 +1120,9 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         *kind_out = element_kind;
     } else if (obj_kind == SYM_MAP) {
         out->as.index.object_is_map = true;
+        if (!lower_expr_is_named_storage_ref(object)) {
+            lower_reject_temporary_collection_access(lower, expr->span);
+        }
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;
             lower_decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);

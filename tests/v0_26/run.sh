@@ -536,6 +536,44 @@ DS
 assert_check_fails mixed_map_command_rejected "$FIX/mixed_map_command_rejected.ds" 'same value kind'
 assert_emit_fails mixed_map_command_rejected "$FIX/mixed_map_command_rejected.ds" 'same value kind'
 
+write_fixture "$FIX/temporary_array_index_rejected.ds" <<'DS'
+fn apps() {
+  return ["api", "web"]
+}
+
+let first = apps()[0]
+DS
+assert_check_fails temporary_array_index_rejected "$FIX/temporary_array_index_rejected.ds" 'requires a named binding for VM/Bash parity'
+assert_emit_fails temporary_array_index_rejected "$FIX/temporary_array_index_rejected.ds" 'requires a named binding for VM/Bash parity'
+run_fail temporary_array_index_rejected_run "$DS" run "$FIX/temporary_array_index_rejected.ds"
+assert_diag "$TMP/temporary_array_index_rejected_run.err" 'requires a named binding for VM/Bash parity' 'temporary_array_index_rejected run diagnostic'
+
+write_fixture "$FIX/temporary_array_literal_index_rejected.ds" <<'DS'
+let first = ["api", "web"][0]
+DS
+assert_check_fails temporary_array_literal_index_rejected "$FIX/temporary_array_literal_index_rejected.ds" 'requires a named binding for VM/Bash parity'
+assert_emit_fails temporary_array_literal_index_rejected "$FIX/temporary_array_literal_index_rejected.ds" 'requires a named binding for VM/Bash parity'
+
+write_fixture "$FIX/temporary_map_field_rejected.ds" <<'DS'
+fn app() {
+  return { name: "api" }
+}
+
+let name = app().name
+DS
+assert_check_fails temporary_map_field_rejected "$FIX/temporary_map_field_rejected.ds" 'requires a named binding for VM/Bash parity'
+assert_emit_fails temporary_map_field_rejected "$FIX/temporary_map_field_rejected.ds" 'requires a named binding for VM/Bash parity'
+
+write_fixture "$FIX/temporary_command_result_field_rejected.ds" <<'DS'
+fn probe() {
+  return run printf "ok"
+}
+
+let stdout = probe().stdout
+DS
+assert_check_fails temporary_command_result_field_rejected "$FIX/temporary_command_result_field_rejected.ds" 'requires a named binding for VM/Bash parity'
+assert_emit_fails temporary_command_result_field_rejected "$FIX/temporary_command_result_field_rejected.ds" 'requires a named binding for VM/Bash parity'
+
 write_fixture "$FIX/mixed_array_elements.ds" <<'DS'
 fn values() {
   return [1, "two", false]
