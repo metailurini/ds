@@ -44,7 +44,7 @@ Risk labels:
 | Captured command results | HIR expression with shared command-result metadata and runtime `DsValue` object | Lowerer | VM process execution; Bash command-result helpers | Language docs, architecture backend boundary docs | VM tests, Bash parity tests, field diagnostics | **Watch** |
 | Command-result fields | Shared descriptor table in command metadata, consumed through HIR | Lowerer for field validity | VM field reads/interpolation; Bash condition/expression helpers | Language docs and architecture command-result notes | Diagnostic tests plus VM/Bash parity field tests | **Watch** |
 | Command-result functions | Stdlib helper metadata plus HIR call expression/statement | Lowerer via stdlib metadata | `vm_stdlib.c`; Bash stdlib/helper emission | Language stdlib docs, runtime docs | VM tests, Bash parity tests, wrong-arity diagnostics | **Hell candidate** |
-| Function return kinds | Function declaration metadata and HIR return kind/value kind | Function collection/lowering | VM scope/function call path; Bash function emission | Language docs and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Hell candidate** |
+| Function return kinds | Function declaration metadata and HIR return kind/value kind; see `docs/maintenance/m3-2-function-return-kinds.md` | Function collection/lowering | VM scope/function call path; Bash function emission | `docs/maintenance/m3-2-function-return-kinds.md`, language docs, and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Hell candidate** |
 | Direct function-call interpolation in command words | HIR command word segment containing a validated expression result | Lowerer | VM command interpolation; Bash command rendering/quoting | Language docs and architecture command word rules | VM/Bash parity tests; diagnostics for unsupported return kinds | **Hell candidate** |
 | Pipeline behavior | HIR command/pipeline command payload | Parser for syntax; lowerer for semantic restrictions | VM process pipeline execution; Bash command emitter | Language docs and runtime/process docs | VM/Bash parity tests including stdout/stderr/status | **Hell candidate** |
 | Plain command execution | HIR command statement | Parser for command syntax; lowerer for command word validation | VM process execution; Bash command statement emission | Language docs, runtime docs | VM/Bash parity tests; failure/redirect diagnostics | **Watch** |
@@ -88,8 +88,11 @@ These concepts have the highest risk of becoming "kind of everywhere":
    backends do not rediscover expression/quoting rules.
 2. **Function return kinds**: function collection, call validation, statement vs
    expression calls, command-result returns, collection returns, VM calls, and
-   Bash function emission all depend on one stable return-kind model. Any new
-   return shape should start in HIR/stdlib metadata, not backend-specific code.
+   Bash function emission all depend on one stable return-kind model. M3.2 now
+   has a focused maintenance contract in
+   `docs/maintenance/m3-2-function-return-kinds.md`; the concept remains Hell
+   until implementation cleanup proves lowerer-owned validation and backend-only
+   invariant diagnostics.
 3. **Trap/defer/signal behavior**: syntax, handler legality, global/process
    scope, foreground process interaction, LIFO defer order, replacement trap
    order, VM signal runtime, and Bash `trap` semantics are all coupled. Keep

@@ -176,6 +176,9 @@ diagnostic-only, or currently rejected.
 
 ### Function returns
 
+Focused maintenance contract: see
+`docs/maintenance/m3-2-function-return-kinds.md`.
+
 Canonical representation: function metadata plus HIR return statements and value
 kind facts.
 

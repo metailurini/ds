@@ -610,7 +610,8 @@ Owns:
 - Function signature collection.
 - Function default validation.
 - Function body lowering coordination.
-- Return-kind and recursion checks for user functions.
+- Return-kind and recursion checks for user functions, in line with
+  `docs/maintenance/m3-2-function-return-kinds.md`.
 
 Allowed to know:
 - Lowerer symbol/function tables, AST function declarations, HIR function shapes,
