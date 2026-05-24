@@ -241,7 +241,13 @@ quoting, and diagnostics for unsupported command interpolation or return kinds.
 
 Current maintenance rule: command words are portable only when the HIR segment
 model preserves enough information for both VM argv construction and Bash
-quoting. Do not encode command semantics as backend-specific strings.
+quoting. Do not encode command semantics as backend-specific strings. The
+current direct function-call interpolation boundary is documented in
+`docs/maintenance/m3-4-command-words-interpolation-boundary.md`: only scalar
+function calls in quoted command-word interpolation are accepted, and they are
+portable because lowering pre-materializes the call into a private string binding
+before either backend sees the command. Other direct command-word interpolation
+forms remain rejected until they have an equally backend-neutral representation.
 
 ### Pipelines
 

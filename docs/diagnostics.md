@@ -281,8 +281,11 @@ coverage over a broad test-suite rewrite.
 These areas still need careful source review before behavior changes:
 
 - command-word interpolation currently touches parser, lowerer, VM process, and
-  Bash quoting; unsupported expression/return forms should continue moving into
-  lowerer-owned diagnostics;
+  Bash quoting. M3.4 specifies the intended boundary: parser owns command syntax
+  shape, lowerer owns command-word/interpolation acceptance and
+  pre-materialization of supported scalar function-call interpolation, and
+  VM/Bash own execution/rendering of accepted command payloads. Unsupported
+  expression/return forms should continue moving into lowerer-owned diagnostics;
 - function return kinds still span function collection, call lowering, VM call
   execution, and Bash function emission;
 - trap/defer/signal diagnostics span syntax, lowerer legality, VM runtime signal

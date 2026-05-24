@@ -40,12 +40,12 @@ Risk labels:
 
 | Concept | Canonical representation | Validation owner | Execution owner | Documentation owner | Tests | Risk |
 | --- | --- | --- | --- | --- | --- | --- |
-| Command words | AST command payload, then HIR command payload using `DsCommand*` | Parser for syntax shape; lowerer for interpolation/word legality | VM command process path; Bash command emitter | `docs/language.ds`, `docs/architecture.md`, `docs/source-map.md` | VM command tests, Bash parity tests, diagnostics for invalid words | **Hell candidate** |
+| Command words | AST command payload, then lowerer-validated HIR command payload using `DsCommand*`; see `docs/maintenance/m3-4-command-words-interpolation-boundary.md` | Parser for syntax shape; lowerer for interpolation/word legality and normalization | VM command process path; Bash command emitter | `docs/maintenance/m3-4-command-words-interpolation-boundary.md`, `docs/language.ds`, `docs/architecture.md`, `docs/source-map.md` | VM command tests, Bash parity tests, diagnostics for invalid words | **Hell candidate — specified, not implemented** |
 | Captured command results | HIR expression with shared command-result metadata and runtime `DsValue` object | Lowerer | VM process execution; Bash command-result helpers | Language docs, architecture backend boundary docs | VM tests, Bash parity tests, field diagnostics | **Watch** |
 | Command-result fields | Shared descriptor table in command metadata, consumed through HIR | Lowerer for field validity | VM field reads/interpolation; Bash condition/expression helpers | Language docs and architecture command-result notes | Diagnostic tests plus VM/Bash parity field tests | **Watch** |
 | Command-result functions | Stdlib/helper metadata lowered into `DS_LOWER_EXPR_CALL.return_kind` plus `DS_LOWER_VALUE_COMMAND_RESULT`; see `docs/maintenance/m3-3-command-result-functions.md` | Lowerer via stdlib/function metadata and command-result field catalog | VM stdlib/user-call execution; Bash stdlib/helper emission consuming lowered call metadata | `docs/maintenance/m3-3-command-result-functions.md`, language stdlib docs, runtime docs | VM tests, Bash parity tests, wrong-arity/field/temporary-access diagnostics | **Watch** |
 | Function return kinds | Function declaration metadata and HIR return kind/value kind; see `docs/maintenance/m3-2-function-return-kinds.md` | Function collection/lowering | VM scope/function call path; Bash function emission | `docs/maintenance/m3-2-function-return-kinds.md`, language docs, and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Watch** |
-| Direct function-call interpolation in command words | HIR command word segment containing a validated expression result | Lowerer | VM command interpolation; Bash command rendering/quoting | Language docs and architecture command word rules | VM/Bash parity tests; diagnostics for unsupported return kinds | **Hell candidate** |
+| Direct function-call interpolation in command words | Pre-materialized lowerer private string binding plus rewritten command word for the currently supported scalar quoted-word form; see `docs/maintenance/m3-4-command-words-interpolation-boundary.md` | Lowerer using function return-kind metadata | VM command argv construction; Bash command rendering/quoting consuming the rewritten command payload | `docs/maintenance/m3-4-command-words-interpolation-boundary.md`, language docs, and architecture command word rules | VM/Bash parity tests; diagnostics for unsupported return kinds and invalid interpolation forms | **Hell candidate — specified, not implemented** |
 | Pipeline behavior | HIR command/pipeline command payload | Parser for syntax; lowerer for semantic restrictions | VM process pipeline execution; Bash command emitter | Language docs and runtime/process docs | VM/Bash parity tests including stdout/stderr/status | **Hell candidate** |
 | Plain command execution | HIR command statement | Parser for command syntax; lowerer for command word validation | VM process execution; Bash command statement emission | Language docs, runtime docs | VM/Bash parity tests; failure/redirect diagnostics | **Watch** |
 | Redirection | AST/HIR command redirection metadata | Parser for syntax; lowerer for conservative target validation | VM process file setup; Bash command emitter | Language docs and runtime process docs | VM/Bash parity tests with file side effects; diagnostics | **Watch** |
@@ -82,10 +82,12 @@ Risk labels:
 
 These concepts have the highest risk of becoming "kind of everywhere":
 
-1. **Command words and direct interpolation**: parser, `DsCommand*`, lowerer,
-   VM process execution, Bash command rendering, and Bash quoting all touch it.
-   Future work should make command-word segment representation explicit in HIR so
-   backends do not rediscover expression/quoting rules.
+1. **Command words and direct interpolation**: M3.4 now specifies the boundary:
+   parser owns command syntax shape; lowerer owns command-word semantics,
+   unsupported forms, and pre-materialization of supported scalar function-call
+   interpolation; VM/Bash consume accepted command payloads. The implementation
+   cleanup still needs to prove that boundary in code before this can move to
+   Watch.
 2. **Trap/defer/signal behavior**: syntax, handler legality, global/process
    scope, foreground process interaction, LIFO defer order, replacement trap
    order, VM signal runtime, and Bash `trap` semantics are all coupled. Keep
