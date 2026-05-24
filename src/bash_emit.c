@@ -241,7 +241,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_collection_helpers = program_uses_collection_index(lowered);
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_debug = program_has_command(lowered);
-    bool needs_int_helpers = program_uses_int_helpers(lowered);
+    bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
     bool needs_signal_handlers = program_uses_signal_handlers(lowered);

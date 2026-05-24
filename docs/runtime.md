@@ -676,12 +676,15 @@ function returns and through explicit arguments validated against defaulted
 parameter kinds, so emitted Bash keeps kind-aware `case` parity for the supported
 function-call forms.
 
-The v0.21.0 runtime value-return path transports scalar `string`, `int`, and
+The v0.25.0 runtime value-return path transports scalar `string`, `int`, and
 `bool` results out of user functions. VM execution stores the returned value in
-the caller; standalone Bash uses `__ds_return` plus an expression-capture helper
-that rejects unexpected stdout from value-style calls. Plain command statements
-inside value-returning functions are therefore rejected; captured `run`
-expressions remain the supported way to use command results inside functions.
+the caller; standalone Bash uses a private `__ds_return_type` /
+`__ds_return_value` payload plus an expression-capture helper that validates the
+expected scalar kind and rejects unexpected stdout from value-style calls. Plain
+command statements inside value-returning functions are therefore rejected;
+captured `run` expressions remain the supported way to use command results
+inside functions. Flat collection and command-result function returns remain
+deferred to v0.26.0.
 Integer arithmetic uses the same signed 64-bit contract in both backends: `*`,
 `/`, `%`, `**`, unary `-`, and compound integer updates diagnose division by
 zero, negative exponents, out-of-range integer literals, and overflow instead of

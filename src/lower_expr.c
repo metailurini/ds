@@ -908,7 +908,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a value because not all control paths return in v0.21.0", (int)fn->name.len, fn->name.data);
         } else if (fn->contains_plain_command) {
             ds_diag_error(lower->diag, expr->span,
-                          "function `%.*s` cannot be used as a value because it contains plain command statements in v0.21.0; capture command output with `run` or call it as a statement",
+                          "function `%.*s` cannot be used as a value because it contains plain command statements in v0.25.0; redirect debug output away from stdout, capture command output with `run`, or call it as a statement",
                           (int)fn->name.len, fn->name.data);
         }
         switch (fn->return_kind) {

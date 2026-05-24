@@ -58,9 +58,10 @@ const char *ds_bash_int_helpers_source(void) {
 const char *ds_bash_function_value_helpers_source(void) {
     return
         "__ds_call_value() {\n"
-        "  local __ds_fn=\"$1\" __ds_tmpdir __ds_stdout __ds_stderr __ds_code __ds_data\n"
-        "  shift\n"
-        "  __ds_return=\n"
+        "  local __ds_expected=\"$1\" __ds_fn=\"$2\" __ds_tmpdir __ds_stdout __ds_stderr __ds_code\n"
+        "  shift 2\n"
+        "  __ds_return_type=\n"
+        "  __ds_return_value=\n"
         "  __ds_tmpdir=$(mktemp -d) || __ds_error 'failed to create function capture temp dir'\n"
         "  __ds_stdout=\"$__ds_tmpdir/stdout\"\n"
         "  __ds_stderr=\"$__ds_tmpdir/stderr\"\n"
@@ -70,7 +71,12 @@ const char *ds_bash_function_value_helpers_source(void) {
         "  set -e\n"
         "  if (( __ds_code != 0 )); then cat \"$__ds_stderr\" >&2; rm -rf \"$__ds_tmpdir\"; exit \"$__ds_code\"; fi\n"
         "  if [[ -s \"$__ds_stdout\" ]]; then cat \"$__ds_stdout\" >&2; rm -rf \"$__ds_tmpdir\"; __ds_error 'value-returning function produced stdout during expression capture'; fi\n"
-        "  printf '%s' \"$__ds_return\"\n"
+        "  if [[ -z \"$__ds_return_type\" ]]; then rm -rf \"$__ds_tmpdir\"; __ds_error 'value-returning function did not set an internal return payload'; fi\n"
+        "  case \"$__ds_return_type\" in string|int|bool|null) ;; *) rm -rf \"$__ds_tmpdir\"; __ds_error \"invalid internal function return type '$__ds_return_type'\" ;; esac\n"
+        "  if [[ \"$__ds_expected\" != unknown && \"$__ds_expected\" != \"$__ds_return_type\" ]]; then rm -rf \"$__ds_tmpdir\"; __ds_error \"function returned $__ds_return_type where $__ds_expected was expected\"; fi\n"
+        "  if [[ \"$__ds_return_type\" == int ]]; then __ds_int_check \"$__ds_return_value\" || { rm -rf \"$__ds_tmpdir\"; __ds_error 'invalid internal int function return payload'; }; fi\n"
+        "  if [[ \"$__ds_return_type\" == bool && \"$__ds_return_value\" != true && \"$__ds_return_value\" != false ]]; then rm -rf \"$__ds_tmpdir\"; __ds_error 'invalid internal bool function return payload'; fi\n"
+        "  printf '%s' \"$__ds_return_value\"\n"
         "  rm -rf \"$__ds_tmpdir\"\n"
         "}\n\n";
 }

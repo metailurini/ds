@@ -337,8 +337,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             SymKind value_kind = SYM_UNKNOWN;
             out->as.return_stmt.value = lower_expr(lower, stmt->as.return_stmt.value, &value_kind);
+            out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
             if (value_kind == SYM_ARRAY || value_kind == SYM_MAP || value_kind == SYM_COMMAND_RESULT) {
-                ds_diag_error(lower->diag, stmt->span, "returning collections and command results is deferred in v0.21.0");
+                ds_diag_error(lower->diag, stmt->span, "returning collections and command results is deferred to v0.26.0; v0.25.0 supports only scalar function return payloads");
             }
             if (lower->current_function) {
                 DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);

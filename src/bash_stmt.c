@@ -735,7 +735,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             return false;
         case DS_LOWER_STMT_RETURN:
             emit_indent(&e->out, indent);
-            buf_append(&e->out, "__ds_return=");
+            buf_append(&e->out, "__ds_return_type=");
+            bash_single_quote(&e->out, lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(lower_value_type_name(stmt->as.return_stmt.return_kind)));
+            buf_append(&e->out, "\n");
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "__ds_return_value=");
             if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);

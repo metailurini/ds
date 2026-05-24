@@ -216,7 +216,7 @@ struct DsLowerStmt {
         struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
         struct { DsStr name; DsLowerExpr *value; } push_stmt;
         struct { DsLowerExpr *condition; } assert_stmt;
-        struct { DsLowerExpr *value; } return_stmt;
+        struct { DsLowerExpr *value; DsLowerValueKind return_kind; } return_stmt;
         struct { DsHandlerSignal signal; DsLowerStmt *body; } handler_stmt;
         DsCommand cmd_stmt;
     } as;

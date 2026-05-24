@@ -316,6 +316,8 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         case DS_LOWER_EXPR_CALL:
             if (expr->as.call.is_user_function) {
                 buf_append(out, "\"$(__ds_call_value ");
+                bash_single_quote(out, lower_value_type_name(expr->as.call.return_kind), strlen(lower_value_type_name(expr->as.call.return_kind)));
+                buf_append(out, " ");
                 emit_fn_name(out, expr->as.call.name);
                 if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;
                 buf_append(out, ")\"");
