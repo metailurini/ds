@@ -213,11 +213,17 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
         case DS_EXPR_IDENT:
             return ast_kind_env_find(env, expr->as.text, kind_out);
         case DS_EXPR_RUN:
+            *kind_out = DS_LOWER_VALUE_COMMAND_RESULT;
+            return true;
+        case DS_EXPR_ARRAY:
+            *kind_out = DS_LOWER_VALUE_ARRAY;
+            return true;
+        case DS_EXPR_MAP:
+            *kind_out = DS_LOWER_VALUE_MAP;
+            return true;
         case DS_EXPR_REGEX:
         case DS_EXPR_RANGE:
         case DS_EXPR_FIELD:
-        case DS_EXPR_ARRAY:
-        case DS_EXPR_MAP:
         case DS_EXPR_INDEX:
         case DS_EXPR_ERROR:
             return false;
@@ -263,8 +269,7 @@ static bool ast_collect_return_kind(Lower *lower, const DsStmt *stmt, AstKindEnv
     switch (stmt->kind) {
         case DS_STMT_RETURN: {
             DsLowerValueKind found = DS_LOWER_VALUE_UNKNOWN;
-            if (!ast_expr_kind_known(lower, env, stmt->as.return_stmt.value, &found) ||
-                found == DS_LOWER_VALUE_ARRAY || found == DS_LOWER_VALUE_MAP || found == DS_LOWER_VALUE_COMMAND_RESULT) return false;
+            if (!ast_expr_kind_known(lower, env, stmt->as.return_stmt.value, &found)) return false;
             if (*saw_return && *kind != found) return false;
             *saw_return = true;
             *kind = found;

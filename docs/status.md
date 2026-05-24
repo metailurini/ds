@@ -1,8 +1,9 @@
 # Current Status
 
 This document is the user-facing snapshot after the completed implementation
-surface through `v0.23.0`, the `v0.24.0` pre-1.0 hardening pass, and the
-completed `v0.25.0` scalar function value-return ABI pass. It is a
+surface through `v0.23.0`, the `v0.24.0` pre-1.0 hardening pass, the completed
+`v0.25.0` scalar function value-return ABI pass, and the implementation-only
+`v0.26.0` flat structured function-return pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -57,12 +58,14 @@ regex/range/membership implementation and test pass:
   `!>>`, `&>`, and `&>>`;
 - top-level `fn` declarations with positional parameters and trailing literal
   defaults;
-- statement-style function calls, scalar function return values, and scalar
-  value-returning function calls in expressions; emitted Bash now carries these
-  returns through a private typed `__ds_` payload instead of untyped stdout;
-- `return expr` inside function bodies for scalar string/int/bool values, with
-  conservative same-kind/all-paths validation before a function can be used as a
-  value;
+- statement-style function calls, scalar function return values, flat
+  scalar-array returns, flat scalar-map/object returns, command-result returns,
+  and value-returning function calls in expressions; emitted Bash now carries
+  these returns through a private typed `__ds_` payload instead of untyped
+  stdout;
+- `return expr` inside function bodies for scalar string/int/bool values, flat
+  arrays, flat maps, and command results, with conservative same-kind/all-paths
+  validation before a function can be used as a value;
 - array literals, map literals with string-like keys, array/map access, array
   `push`, and array `for` loops;
 - scalar reassignment with `name = expr` plus integer `+=`, `-=`, `*=`, `/=`, and
@@ -179,7 +182,8 @@ The following remain intentionally unsupported or backend-limited until later
 milestones:
 
 - recursive-call semantics;
-- collection/command-result function returns and typed return annotations;
+- nested collection function returns, collection-valued parameters, and typed
+  return annotations;
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;

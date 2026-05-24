@@ -299,6 +299,71 @@ static void emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLo
     }
 }
 
+static void emit_command_result_storage_decl(BashEmitter *e, DsStr name, int indent, bool local_decl) {
+    emit_indent(&e->out, indent);
+    if (local_decl) {
+        buf_append(&e->out, "local ");
+        emit_var_name(&e->out, name); buf_append(&e->out, "_stdout ");
+        emit_var_name(&e->out, name); buf_append(&e->out, "_stderr ");
+        emit_var_name(&e->out, name); buf_append(&e->out, "_code ");
+        emit_var_name(&e->out, name); buf_append(&e->out, "_ok ");
+        emit_var_name(&e->out, name); buf_append(&e->out, "_failed\n");
+        return;
+    }
+    emit_var_name(&e->out, name); buf_append(&e->out, "_stdout=\"\"; ");
+    emit_var_name(&e->out, name); buf_append(&e->out, "_stderr=\"\"; ");
+    emit_var_name(&e->out, name); buf_append(&e->out, "_code=0; ");
+    emit_var_name(&e->out, name); buf_append(&e->out, "_ok=false; ");
+    emit_var_name(&e->out, name); buf_append(&e->out, "_failed=true\n");
+}
+
+static bool emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl) {
+    switch (kind) {
+        case DS_LOWER_VALUE_ARRAY:
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
+            emit_var_name(&e->out, name);
+            buf_append(&e->out, "=()\n");
+            return true;
+        case DS_LOWER_VALUE_MAP:
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+            emit_var_name(&e->out, name);
+            buf_append(&e->out, "=()\n");
+            return true;
+        case DS_LOWER_VALUE_COMMAND_RESULT:
+            emit_command_result_storage_decl(e, name, indent, local_decl);
+            return true;
+        default:
+            emit_indent(&e->out, indent);
+            if (local_decl) buf_append(&e->out, "local ");
+            emit_var_name(&e->out, name);
+            buf_append(&e->out, "=\"\"\n");
+            return true;
+    }
+}
+
+static bool emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent) {
+    MaterializedArg *mats = NULL;
+    if (call->as.call.args.len > 0) {
+        mats = calloc(call->as.call.args.len, sizeof(*mats));
+        if (!mats) return false;
+        if (!emit_materialized_user_call_args(e, &call->as.call.args, mats, indent)) { free(mats); return false; }
+    }
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "__ds_call_value_into ");
+    emit_var_name(&e->out, name);
+    buf_append(&e->out, " ");
+    bash_single_quote(&e->out, lower_value_type_name(call->as.call.return_kind), strlen(lower_value_type_name(call->as.call.return_kind)));
+    buf_append(&e->out, " ");
+    emit_fn_name(&e->out, call->as.call.name);
+    bool ok = emit_user_call_args_with_materialized(e, &call->as.call.args, mats, &e->out);
+    free(mats);
+    if (!ok) return false;
+    buf_append(&e->out, "\n");
+    return true;
+}
+
 bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
     if (!is_safe_identifier(fn->name)) {
         ds_diag_error(e->diag, fn->span, "cannot emit unsafe Bash function name `%.*s`", (int)fn->name.len, fn->name.data);
@@ -613,25 +678,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_stdlib_helper_name(&e->out, stmt->as.let_stmt.value->as.call.name);
                 if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
-                MaterializedArg *mats = NULL;
-                if (stmt->as.let_stmt.value->as.call.args.len > 0) {
-                    mats = calloc(stmt->as.let_stmt.value->as.call.args.len, sizeof(*mats));
-                    if (!mats) return false;
-                    if (!emit_materialized_user_call_args(e, &stmt->as.let_stmt.value->as.call.args, mats, indent)) { free(mats); return false; }
-                }
-                if (e->function_depth > 0) buf_append(&e->out, "local ");
-                emit_var_name(&e->out, stmt->as.let_stmt.name);
-                buf_append(&e->out, "=\"\"\n");
-                emit_indent(&e->out, indent);
-                buf_append(&e->out, "__ds_call_value_into ");
-                emit_var_name(&e->out, stmt->as.let_stmt.name);
-                buf_append(&e->out, " ");
-                bash_single_quote(&e->out, lower_value_type_name(stmt->as.let_stmt.value->as.call.return_kind), strlen(lower_value_type_name(stmt->as.let_stmt.value->as.call.return_kind)));
-                buf_append(&e->out, " ");
-                emit_fn_name(&e->out, stmt->as.let_stmt.value->as.call.name);
-                bool ok = emit_user_call_args_with_materialized(e, &stmt->as.let_stmt.value->as.call.args, mats, &e->out);
-                free(mats);
-                if (!ok) return false;
+                if (!emit_structured_target_decl(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.call.return_kind, indent, e->function_depth > 0)) return false;
+                if (!emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -A ");
                 else buf_append(&e->out, "declare -A ");
@@ -923,9 +971,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     if (!mats) return false;
                     if (!emit_materialized_user_call_args(e, &stmt->as.return_stmt.value->as.call.args, mats, indent)) { free(mats); return false; }
                 }
-                buf_append(&e->out, "__ds_return_value=\"\"\n");
-                emit_indent(&e->out, indent);
-                buf_append(&e->out, "__ds_call_value_into __ds_return_value ");
+                buf_append(&e->out, "__ds_call_value_capture ");
                 bash_single_quote(&e->out, lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(lower_value_type_name(stmt->as.return_stmt.return_kind)));
                 buf_append(&e->out, " ");
                 emit_fn_name(&e->out, stmt->as.return_stmt.value->as.call.name);
@@ -937,6 +983,67 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "__ds_return_type=");
                 bash_single_quote(&e->out, lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(lower_value_type_name(stmt->as.return_stmt.return_kind)));
                 buf_append(&e->out, "\n");
+            } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_ARRAY) {
+                if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
+                    buf_append(&e->out, "declare -ga __ds_return_array=");
+                    if (!emit_array_elements(e, &stmt->as.return_stmt.value->as.array.elements, &e->out)) return false;
+                    buf_append(&e->out, "\n");
+                    emit_indent(&e->out, indent);
+                    buf_append(&e->out, "__ds_return_elem_type='unknown'\n");
+                } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+                    buf_append(&e->out, "declare -ga __ds_return_array=(\"${");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
+                    buf_append(&e->out, "[@]}\")\n");
+                    emit_indent(&e->out, indent);
+                    buf_append(&e->out, "__ds_return_elem_type=\"${");
+                    emit_elem_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
+                    buf_append(&e->out, ":-unknown}\"\n");
+                } else {
+                    ds_diag_error(e->diag, stmt->span, "Bash emission supports returning array literals, array variables, or forwarded array calls in v0.26.0");
+                    return false;
+                }
+            } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_MAP) {
+                if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_MAP) {
+                    buf_append(&e->out, "declare -gA __ds_return_map=");
+                    if (!emit_map_entries(e, &stmt->as.return_stmt.value->as.map.entries, &e->out)) return false;
+                    buf_append(&e->out, "\n");
+                } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+                    buf_append(&e->out, "declare -gA __ds_return_map=()\n");
+                    emit_indent(&e->out, indent);
+                    buf_append(&e->out, "for __ds_key in \"${!");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
+                    buf_append(&e->out, "[@]}\"; do __ds_return_map[\"$__ds_key\"]=\"${");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
+                    buf_append(&e->out, "[$__ds_key]}\"; done\n");
+                } else {
+                    ds_diag_error(e->diag, stmt->span, "Bash emission supports returning map literals, map variables, or forwarded map calls in v0.26.0");
+                    return false;
+                }
+            } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_COMMAND_RESULT) {
+                if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_RUN) {
+                    if (stmt->as.return_stmt.value->as.run.stages.len > 1) {
+                        DsStr ret_name = {"return", strlen("return")};
+                        if (!emit_capture_pipeline_assignment(e, ret_name, &stmt->as.return_stmt.value->as.run, stmt->as.return_stmt.value->span, indent)) return false;
+                    } else {
+                        buf_append(&e->out, "__ds_capture __ds_return");
+                        if (!emit_capture_command(e, &stmt->as.return_stmt.value->as.run, &e->out, stmt->as.return_stmt.value->span)) return false;
+                        buf_append(&e->out, "\n");
+                    }
+                } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+                    buf_append(&e->out, "printf -v __ds_return_stdout '%s' \"$");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_stdout\"\n");
+                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_stderr '%s' \"$");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_stderr\"\n");
+                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_code '%s' \"$");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_code\"\n");
+                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_ok '%s' \"$");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_ok\"\n");
+                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_failed '%s' \"$");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_failed\"\n");
+                } else {
+                    ds_diag_error(e->diag, stmt->span, "Bash emission supports returning command results from run captures, variables, or forwarded calls in v0.26.0");
+                    return false;
+                }
             } else {
                 buf_append(&e->out, "__ds_return_value=");
                 if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;

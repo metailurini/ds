@@ -915,6 +915,9 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             case DS_LOWER_VALUE_BOOL: *kind_out = SYM_BOOL; break;
             case DS_LOWER_VALUE_INT: *kind_out = SYM_INT; break;
             case DS_LOWER_VALUE_STRING: *kind_out = SYM_STRING; break;
+            case DS_LOWER_VALUE_ARRAY: *kind_out = SYM_ARRAY; break;
+            case DS_LOWER_VALUE_MAP: *kind_out = SYM_MAP; break;
+            case DS_LOWER_VALUE_COMMAND_RESULT: *kind_out = SYM_COMMAND_RESULT; break;
             default: *kind_out = SYM_UNKNOWN; break;
         }
         out->as.call.is_user_function = true;
@@ -1038,7 +1041,9 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_CALL: {
             const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
             SymKind ret = SYM_UNKNOWN;
-            return stdlib_return_kind(helper, &ret) ? ret : SYM_UNKNOWN;
+            if (stdlib_return_kind(helper, &ret)) return ret;
+            DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
+            return fn && fn->has_return ? sym_kind_from_lower_value_kind(fn->return_kind) : SYM_UNKNOWN;
         }
         case DS_LOWER_EXPR_ARRAY: return SYM_ARRAY;
         case DS_LOWER_EXPR_MAP: return SYM_MAP;
@@ -1064,6 +1069,7 @@ SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr) {
         return sym ? sym->element_kind : SYM_UNKNOWN;
     }
     if (expr->kind == DS_LOWER_EXPR_CALL && helper_returns_string_array(expr->as.call.name)) return SYM_STRING;
+    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function) return SYM_UNKNOWN;
     if (expr->kind != DS_LOWER_EXPR_ARRAY) return SYM_UNKNOWN;
 
     SymKind common = SYM_UNKNOWN;

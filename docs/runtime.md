@@ -677,19 +677,25 @@ parameter kinds, so emitted Bash keeps kind-aware `case` parity for the supporte
 function-call forms.
 
 The v0.25.0 runtime value-return path transports scalar `string`, `int`, and
-`bool` results out of user functions. VM execution stores the returned value in
-the caller; standalone Bash uses a private `__ds_return_type` /
-`__ds_return_value` payload plus capture helpers that validate the expected
-scalar kind and reject unexpected stdout from value-style calls. User-function
-calls that initialize, assign, forward-return, participate in string-sensitive
-conditions, select `case` arms, or feed direct user-function arguments use
-temporary assignment-by-reference materialization rather than Bash command
-substitution, so string returns preserve trailing newlines exactly in those
-supported call positions.
-Plain command statements inside value-returning functions are therefore
-rejected; captured `run` expressions remain the supported way to use command
-results inside functions. Flat collection and command-result function returns
-remain deferred to v0.26.0.
+`bool` results out of user functions. The v0.26.0 extension carries flat scalar
+arrays, flat scalar maps/objects, and command-result objects through the same
+private function-value boundary. VM execution stores the returned `DsValue` in
+the caller; standalone Bash uses private `__ds_return_type` metadata plus
+`__ds_` payload variables for scalar, array, map, and command-result shapes.
+The exact Bash encoding is intentionally private, but it must preserve empty
+strings, whitespace, shell metacharacters, and text newlines without calling the
+`ds` binary from generated scripts.
+
+User-function calls that initialize, assign, forward-return, participate in
+string-sensitive conditions, select `case` arms, or feed direct user-function
+arguments use temporary assignment-by-reference materialization rather than
+Bash command substitution, so string returns preserve trailing newlines exactly
+in those supported call positions. Plain command statements inside
+value-returning functions are therefore rejected; captured `run` expressions are
+the supported way to return command-result data from functions. Nested
+collections, arrays/maps inside maps, collection-valued parameters, direct
+function-call interpolation in command words, and public access to the private
+payload format remain deferred.
 Integer arithmetic uses the same signed 64-bit contract in both backends: `*`,
 `/`, `%`, `**`, unary `-`, and compound integer updates diagnose division by
 zero, negative exponents, out-of-range integer literals, and overflow instead of
