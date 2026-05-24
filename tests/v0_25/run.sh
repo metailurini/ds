@@ -527,16 +527,17 @@ echo "{value}"
 DS
 assert_check_fails command_failure_before_return "$FIX/command_failure_before_return.ds" 'plain command statements in v0.25.0'
 
-# 6. Unsupported/deferred return values.
+# 6. Structured return values are now supported by the later v0.26 surface.
 write_fixture "$FIX/array_return_rejected.ds" <<'DS'
 fn names() {
   return ["api", "web"]
 }
 
 let value = names()
+let first = value[0]
+echo "{first}"
 DS
-assert_check_fails array_return_rejected "$FIX/array_return_rejected.ds" 'deferred to v0.26.0'
-assert_emit_fails array_return_rejected "$FIX/array_return_rejected.ds" 'deferred to v0.26.0'
+assert_parity array_return_supported "$FIX/array_return_rejected.ds" 0 $'api\n'
 
 write_fixture "$FIX/map_return_rejected.ds" <<'DS'
 fn user() {
@@ -544,17 +545,20 @@ fn user() {
 }
 
 let value = user()
+let name = value.name
+echo "{name}"
 DS
-assert_check_fails map_return_rejected "$FIX/map_return_rejected.ds" 'deferred to v0.26.0'
+assert_parity map_return_supported "$FIX/map_return_rejected.ds" 0 $'Ana\n'
 
 write_fixture "$FIX/command_result_return_rejected.ds" <<'DS'
 fn search() {
-  return run grep "x" "file.txt"
+  return run printf "x"
 }
 
 let result = search()
+echo result.stdout
 DS
-assert_check_fails command_result_return_rejected "$FIX/command_result_return_rejected.ds" 'deferred to v0.26.0'
+assert_parity command_result_return_supported "$FIX/command_result_return_rejected.ds" 0 $'x\n'
 
 write_fixture "$FIX/mixed_scalar_collection_rejected.ds" <<'DS'
 fn bad(flag = true) {
@@ -566,7 +570,7 @@ fn bad(flag = true) {
 
 let value = bad(false)
 DS
-assert_check_fails mixed_scalar_collection_rejected "$FIX/mixed_scalar_collection_rejected.ds" 'deferred to v0.26.0'
+assert_check_fails mixed_scalar_collection_rejected "$FIX/mixed_scalar_collection_rejected.ds" 'same value kind'
 
 # 7. Existing scalar diagnostics stay correct.
 write_fixture "$FIX/mixed_scalar_kinds_rejected.ds" <<'DS'
@@ -661,10 +665,10 @@ run_ok hir_scalar_return "$DS" hir "$FIX/string_return.ds"
 assert_contains "$TMP/hir_scalar_return.out" 'Function' 'HIR has scalar function structure'
 run_ok bytecode_scalar_return "$DS" bytecode "$FIX/string_return.ds"
 assert_contains "$TMP/bytecode_scalar_return.out" 'RETURN_VALUE' 'bytecode has return-value instruction'
-run_fail hir_array_return_rejected "$DS" hir "$FIX/array_return_rejected.ds"
-assert_diag "$TMP/hir_array_return_rejected.err" 'deferred to v0.26.0' 'HIR array return diagnostic'
-run_fail bytecode_command_result_return_rejected "$DS" bytecode "$FIX/command_result_return_rejected.ds"
-assert_diag "$TMP/bytecode_command_result_return_rejected.err" 'deferred to v0.26.0' 'bytecode command-result return diagnostic'
+run_ok hir_array_return_supported "$DS" hir "$FIX/array_return_rejected.ds"
+assert_contains "$TMP/hir_array_return_supported.out" 'Function' 'HIR array return is supported after v0.26'
+run_ok bytecode_command_result_return_supported "$DS" bytecode "$FIX/command_result_return_rejected.ds"
+assert_contains "$TMP/bytecode_command_result_return_supported.out" 'RETURN_VALUE' 'bytecode command-result return is supported after v0.26'
 assert_not_contains "$TMP/hir_scalar_return.out" '__ds_return_type' 'HIR does not expose Bash ABI details'
 assert_not_contains "$TMP/bytecode_scalar_return.out" '__ds_return_type' 'bytecode does not expose Bash ABI details'
 

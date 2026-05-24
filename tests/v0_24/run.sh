@@ -614,7 +614,6 @@ for item in \
   'shell_and|cmd1 && cmd2|not supported' \
   'process_sub|cat <(printf hi)|unsupported' \
   'heredoc|cat <<EOF\nhello\nEOF|unsupported' \
-  'return_array|fn bad() {\n  return [1, 2]\n}|deferred' \
   'defer_hup|defer on: "HUP" {\n  echo hup\n}|unsupported defer on: signal' \
   'map_destructure|for key, value in { api: 1 } {\n  echo "{key}={value}"\n}|expected'; do
   IFS='|' read -r name src frag <<<"$item"
