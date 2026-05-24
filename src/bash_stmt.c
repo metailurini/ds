@@ -380,6 +380,23 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         buf_append(&e->out, "\n");
         return true;
     }
+    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.is_user_function) {
+        emit_indent(&e->out, indent);
+        emit_var_name(&e->out, name);
+        buf_append(&e->out, "=\"\"\n");
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "__ds_call_value_into ");
+        emit_var_name(&e->out, name);
+        buf_append(&e->out, " ");
+        bash_single_quote(&e->out, lower_value_type_name(value->as.call.return_kind), strlen(lower_value_type_name(value->as.call.return_kind)));
+        buf_append(&e->out, " ");
+        emit_fn_name(&e->out, value->as.call.name);
+        if (!emit_user_call_args(e, &value->as.call.args, &e->out)) return false;
+        buf_append(&e->out, "\n");
+        emit_type_assignment_for_expr(e, name, value, indent, false);
+        buf_append(&e->out, "\n");
+        return true;
+    }
     emit_indent(&e->out, indent);
     emit_var_name(&e->out, name);
     buf_append(&e->out, "=");
@@ -491,6 +508,18 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, " ");
                 emit_stdlib_helper_name(&e->out, stmt->as.let_stmt.value->as.call.name);
                 if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
+            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
+                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "=\"\"\n");
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "__ds_call_value_into ");
+                emit_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, " ");
+                bash_single_quote(&e->out, lower_value_type_name(stmt->as.let_stmt.value->as.call.return_kind), strlen(lower_value_type_name(stmt->as.let_stmt.value->as.call.return_kind)));
+                buf_append(&e->out, " ");
+                emit_fn_name(&e->out, stmt->as.let_stmt.value->as.call.name);
+                if (!emit_user_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -A ");
                 else buf_append(&e->out, "declare -A ");
@@ -739,9 +768,24 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             bash_single_quote(&e->out, lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(lower_value_type_name(stmt->as.return_stmt.return_kind)));
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
-            buf_append(&e->out, "__ds_return_value=");
-            if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;
-            buf_append(&e->out, "\n");
+            if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.return_stmt.value->as.call.is_user_function) {
+                buf_append(&e->out, "__ds_return_value=\"\"\n");
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "__ds_call_value_into __ds_return_value ");
+                bash_single_quote(&e->out, lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(lower_value_type_name(stmt->as.return_stmt.return_kind)));
+                buf_append(&e->out, " ");
+                emit_fn_name(&e->out, stmt->as.return_stmt.value->as.call.name);
+                if (!emit_user_call_args(e, &stmt->as.return_stmt.value->as.call.args, &e->out)) return false;
+                buf_append(&e->out, "\n");
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "__ds_return_type=");
+                bash_single_quote(&e->out, lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(lower_value_type_name(stmt->as.return_stmt.return_kind)));
+                buf_append(&e->out, "\n");
+            } else {
+                buf_append(&e->out, "__ds_return_value=");
+                if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;
+                buf_append(&e->out, "\n");
+            }
             emit_indent(&e->out, indent);
             buf_append(&e->out, "return 0\n\n");
             return true;

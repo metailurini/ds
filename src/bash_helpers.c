@@ -57,7 +57,7 @@ const char *ds_bash_int_helpers_source(void) {
 
 const char *ds_bash_function_value_helpers_source(void) {
     return
-        "__ds_call_value() {\n"
+        "__ds_call_value_capture() {\n"
         "  local __ds_expected=\"$1\" __ds_fn=\"$2\" __ds_tmpdir __ds_stdout __ds_stderr __ds_code\n"
         "  shift 2\n"
         "  __ds_return_type=\n"
@@ -76,8 +76,19 @@ const char *ds_bash_function_value_helpers_source(void) {
         "  if [[ \"$__ds_expected\" != unknown && \"$__ds_expected\" != \"$__ds_return_type\" ]]; then rm -rf \"$__ds_tmpdir\"; __ds_error \"function returned $__ds_return_type where $__ds_expected was expected\"; fi\n"
         "  if [[ \"$__ds_return_type\" == int ]]; then __ds_int_check \"$__ds_return_value\" || { rm -rf \"$__ds_tmpdir\"; __ds_error 'invalid internal int function return payload'; }; fi\n"
         "  if [[ \"$__ds_return_type\" == bool && \"$__ds_return_value\" != true && \"$__ds_return_value\" != false ]]; then rm -rf \"$__ds_tmpdir\"; __ds_error 'invalid internal bool function return payload'; fi\n"
-        "  printf '%s' \"$__ds_return_value\"\n"
         "  rm -rf \"$__ds_tmpdir\"\n"
+        "}\n"
+        "__ds_call_value_into() {\n"
+        "  local __ds_target=\"$1\" __ds_expected=\"$2\" __ds_fn=\"$3\"\n"
+        "  shift 3\n"
+        "  __ds_call_value_capture \"$__ds_expected\" \"$__ds_fn\" \"$@\"\n"
+        "  printf -v \"$__ds_target\" '%s' \"$__ds_return_value\"\n"
+        "}\n"
+        "__ds_call_value() {\n"
+        "  local __ds_expected=\"$1\" __ds_fn=\"$2\"\n"
+        "  shift 2\n"
+        "  __ds_call_value_capture \"$__ds_expected\" \"$__ds_fn\" \"$@\"\n"
+        "  printf '%s' \"$__ds_return_value\"\n"
         "}\n\n";
 }
 
