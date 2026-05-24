@@ -281,9 +281,9 @@ DS
 assert_diag "bad_builtin_lines" "$FIX/bad_builtin_lines.ds" 'conflicts with a'
 
 write_fixture "$FIX/bad_env_direct.ds" <<'DS'
-let home = env.HOME
+env.PATH += "./bin"
 DS
-assert_diag "bad_env_direct" "$FIX/bad_env_direct.ds" 'direct `env.NAME` access is deferred'
+assert_diag "bad_env_direct" "$FIX/bad_env_direct.ds" 'environment assignment supports only `=`'
 
 write_fixture "$FIX/bad_recursive_glob.ds" <<'DS'
 for f in glob("**/*.txt") {

@@ -452,6 +452,64 @@ static void temp_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
     vec->items[vec->len++] = expr;
 }
 
+static void temp_expr_free(DsExpr *expr) {
+    if (!expr) return;
+    switch (expr->kind) {
+        case DS_EXPR_IDENT:
+        case DS_EXPR_STRING:
+        case DS_EXPR_INT:
+            free(expr->as.text.data);
+            break;
+        case DS_EXPR_REGEX:
+            free(expr->as.regex.data);
+            break;
+        case DS_EXPR_RUN:
+            ds_command_free(&expr->as.run);
+            break;
+        case DS_EXPR_FIELD:
+            temp_expr_free(expr->as.field.object);
+            free(expr->as.field.field.data);
+            break;
+        case DS_EXPR_UNARY:
+            free(expr->as.unary.op.data);
+            temp_expr_free(expr->as.unary.right);
+            break;
+        case DS_EXPR_BINARY:
+            temp_expr_free(expr->as.binary.left);
+            free(expr->as.binary.op.data);
+            temp_expr_free(expr->as.binary.right);
+            break;
+        case DS_EXPR_CALL:
+            free(expr->as.call.name.data);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) temp_expr_free(expr->as.call.args.items[i]);
+            free(expr->as.call.args.items);
+            break;
+        case DS_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) temp_expr_free(expr->as.array.elements.items[i]);
+            free(expr->as.array.elements.items);
+            break;
+        case DS_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+                free(expr->as.map.entries.items[i].key.data);
+                temp_expr_free(expr->as.map.entries.items[i].value);
+            }
+            free(expr->as.map.entries.items);
+            break;
+        case DS_EXPR_INDEX:
+            temp_expr_free(expr->as.index.object);
+            temp_expr_free(expr->as.index.index);
+            break;
+        case DS_EXPR_RANGE:
+            temp_expr_free(expr->as.range.start);
+            temp_expr_free(expr->as.range.end);
+            break;
+        case DS_EXPR_BOOL:
+        case DS_EXPR_ERROR:
+            break;
+    }
+    free(expr);
+}
+
 static void interp_skip_ws(const char *s, size_t len, size_t *i) {
     while (*i < len && (s[*i] == ' ' || s[*i] == '\t' || s[*i] == '\n' || s[*i] == '\r')) (*i)++;
 }
@@ -662,10 +720,12 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
                 ds_diag_error(lower->diag, expr->span, "interpolation expression must be scalar in v0.21.0");
             }
             lower_expr_vec_push(&out->as.interp.parts, part);
+            temp_expr_free(inner);
             i = j;
             literal_start = j + 1;
             continue;
         }
+        temp_expr_free(inner);
         ds_diag_error(lower->diag, expr->span, "unsupported string interpolation; expected `{name}`, `{name.field}`, or `{name(args...)}`");
         break;
     }

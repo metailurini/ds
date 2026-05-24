@@ -163,6 +163,14 @@ static DsStmt *parse_env_unset(Parser *p) {
     return stmt;
 }
 
+static DsStmt *parse_bad_unset(Parser *p) {
+    DsToken *unset_tok = parser_advance(p);
+    ds_diag_error(p->diag, unset_tok->span, "unset requires an environment target like `unset env.NAME` in v0.27.0");
+    while (!parser_is_stmt_end(p)) parser_advance(p);
+    parser_consume_statement_end(p);
+    return NULL;
+}
+
 static bool stmt_contains_assignment_operator(const Parser *p) {
     for (size_t i = p->pos; i < p->tokens->len; i++) {
         DsTokenKind kind = p->tokens->items[i].kind;
@@ -506,6 +514,7 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 5 && memcmp(parser_peek(p)->text.data, "unset", 5) == 0 &&
         parser_next_at(p, DS_TOK_IDENT) && p->tokens->items[p->pos + 1].text.len == 3 && memcmp(p->tokens->items[p->pos + 1].text.data, "env", 3) == 0 &&
         parser_peek2_at(p, DS_TOK_DOT)) return parse_env_unset(p);
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 5 && memcmp(parser_peek(p)->text.data, "unset", 5) == 0) return parse_bad_unset(p);
     if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 3 && memcmp(parser_peek(p)->text.data, "env", 3) == 0 &&
         parser_next_at(p, DS_TOK_DOT) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) {

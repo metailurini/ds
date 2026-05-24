@@ -29,6 +29,32 @@ run_parity(){
   assert_eq "$name expected stdout" "$expected" "$(cat "$TMP/$name.vm.out")"
 }
 
+run_parity_env(){
+  local name=$1 file=$2 expected=$3
+  shift 3
+  local env_args=("PATH=$PATH" "$@")
+  ./ds check "$file" >"$TMP/$name.check.out" 2>"$TMP/$name.check.err"; ok "$name check"
+  ./ds emit bash "$file" -o "$TMP/$name.sh" >"$TMP/$name.emit.out" 2>"$TMP/$name.emit.err"; ok "$name emit"
+  bash -n "$TMP/$name.sh"; ok "$name bash -n"
+  assert_no_contains "$name emitted Bash standalone" "$TMP/$name.sh" './ds '
+  env -i "${env_args[@]}" ./ds run "$file" >"$TMP/$name.vm.out" 2>"$TMP/$name.vm.err"; local vm_rc=$?
+  env -i "${env_args[@]}" bash "$TMP/$name.sh" >"$TMP/$name.bash.out" 2>"$TMP/$name.bash.err"; local bash_rc=$?
+  assert_eq "$name exit parity" "$vm_rc" "$bash_rc"
+  assert_eq "$name stdout parity" "$(cat "$TMP/$name.vm.out")" "$(cat "$TMP/$name.bash.out")"
+  assert_eq "$name stderr parity" "$(cat "$TMP/$name.vm.err")" "$(cat "$TMP/$name.bash.err")"
+  assert_eq "$name expected stdout" "$expected" "$(cat "$TMP/$name.vm.out")"
+}
+
+assert_reject(){
+  local name=$1 file=$2 needle=$3
+  ! ./ds check "$file" >"$TMP/$name.check.out" 2>"$TMP/$name.check.err" || fail "$name check rejects"
+  ok "$name check rejects"
+  assert_contains "$name check diagnostic" "$TMP/$name.check.err" "$needle"
+  ! ./ds emit bash "$file" -o "$TMP/$name.sh" >"$TMP/$name.emit.out" 2>"$TMP/$name.emit.err" || fail "$name emit rejects"
+  ok "$name emit rejects"
+  assert_contains "$name emit diagnostic" "$TMP/$name.emit.err" "$needle"
+}
+
 write_fixture "$TMP/fixtures/scalar_command_interp.ds" <<'DS'
 fn app() {
   return "api"
@@ -148,6 +174,251 @@ DS
 ! ./ds check "$TMP/fixtures/structured_interp_rejected.ds" >"$TMP/reject.out" 2>"$TMP/reject.err" || fail "structured interpolation rejected check"
 ok "structured interpolation rejected check"
 assert_contains "structured interpolation rejected diagnostic" "$TMP/reject.err" 'interpolation expression must be scalar'
+
+write_fixture "$TMP/fixtures/env_present.ds" <<'DS'
+echo env.DS_TEST_ENV
+DS
+run_parity_env env_present "$TMP/fixtures/env_present.ds" 'present' DS_TEST_ENV=present
+
+write_fixture "$TMP/fixtures/env_runtime_read.ds" <<'DS'
+echo env.DS_TEST_ENV
+DS
+./ds check "$TMP/fixtures/env_runtime_read.ds" >"$TMP/env_runtime.check.out" 2>"$TMP/env_runtime.check.err"; ok "env runtime read check"
+env -i PATH="$PATH" DS_TEST_ENV=emit-time ./ds emit bash "$TMP/fixtures/env_runtime_read.ds" -o "$TMP/env_runtime.sh" >"$TMP/env_runtime.emit.out" 2>"$TMP/env_runtime.emit.err"; ok "env runtime read emit"
+bash -n "$TMP/env_runtime.sh"; ok "env runtime read bash -n"
+env -i PATH="$PATH" DS_TEST_ENV=first bash "$TMP/env_runtime.sh" >"$TMP/env_runtime.first.out" 2>"$TMP/env_runtime.first.err"
+assert_eq "env runtime first output" 'first' "$(cat "$TMP/env_runtime.first.out")"
+env -i PATH="$PATH" DS_TEST_ENV=second bash "$TMP/env_runtime.sh" >"$TMP/env_runtime.second.out" 2>"$TMP/env_runtime.second.err"
+assert_eq "env runtime second output" 'second' "$(cat "$TMP/env_runtime.second.out")"
+assert_no_contains "env runtime emitted Bash standalone" "$TMP/env_runtime.sh" './ds '
+
+write_fixture "$TMP/fixtures/env_empty.ds" <<'DS'
+echo "[{env.DS_TEST_ENV}]"
+DS
+run_parity_env env_empty "$TMP/fixtures/env_empty.ds" '[]' DS_TEST_ENV=
+
+write_fixture "$TMP/fixtures/env_missing.ds" <<'DS'
+echo "[{env.DS_TEST_MISSING}]"
+DS
+run_parity_env env_missing "$TMP/fixtures/env_missing.ds" '[]'
+
+write_fixture "$TMP/fixtures/env_conditional.ds" <<'DS'
+let mode = env.DS_MODE
+if mode == "prod" {
+  echo "production"
+} else {
+  echo "other"
+}
+DS
+run_parity_env env_conditional "$TMP/fixtures/env_conditional.ds" 'production' DS_MODE=prod
+
+write_fixture "$TMP/fixtures/env_function_read.ds" <<'DS'
+fn region() {
+  return env.DS_REGION
+}
+let r = region()
+echo "{r}"
+DS
+run_parity_env env_function_read "$TMP/fixtures/env_function_read.ds" 'apac' DS_REGION=apac
+
+write_fixture "$TMP/fixtures/env_assignment_scalars.ds" <<'DS'
+env.DS_APP = "api"
+echo env.DS_APP
+env.DS_RETRIES = 3
+echo env.DS_RETRIES
+sh "-c" "printf '%s\n' \"$DS_RETRIES\""
+env.DS_DEBUG = true
+echo env.DS_DEBUG
+sh "-c" "printf '%s\n' \"$DS_DEBUG\""
+DS
+run_parity env_assignment_scalars "$TMP/fixtures/env_assignment_scalars.ds" $'api\n3\n3\ntrue\ntrue'
+
+write_fixture "$TMP/fixtures/env_override_ordering.ds" <<'DS'
+echo "before={env.DS_APP}"
+env.DS_APP = "new"
+echo "after={env.DS_APP}"
+env.DS_ORDER = "one"
+echo env.DS_ORDER
+env.DS_ORDER = "two"
+echo env.DS_ORDER
+DS
+run_parity_env env_override_ordering "$TMP/fixtures/env_override_ordering.ds" $'before=old\nafter=new\none\ntwo' DS_APP=old
+
+write_fixture "$TMP/fixtures/env_literal_empty_function.ds" <<'DS'
+env.DS_LITERAL = "semi; $(echo bad) *?[x]"
+echo env.DS_LITERAL
+sh "-c" "printf '%s\n' \"$DS_LITERAL\""
+env.DS_EMPTY = ""
+echo "[{env.DS_EMPTY}]"
+sh "-c" "printf '[%s]\n' \"$DS_EMPTY\""
+fn configure() {
+  env.DS_FROM_FN = "configured"
+}
+configure()
+echo env.DS_FROM_FN
+sh "-c" "printf '%s\n' \"$DS_FROM_FN\""
+DS
+run_parity env_literal_empty_function "$TMP/fixtures/env_literal_empty_function.ds" $'semi; $(echo bad) *?[x]\nsemi; $(echo bad) *?[x]\n[]\n[]\nconfigured\nconfigured'
+
+write_fixture "$TMP/fixtures/unset_child_only.ds" <<'DS'
+env.DS_TEMP = "set"
+unset env.DS_TEMP
+sh "-c" "printenv DS_TEMP >/dev/null; if [ $? -eq 1 ]; then echo absent; else echo present; fi"
+DS
+run_parity unset_child_only "$TMP/fixtures/unset_child_only.ds" 'absent'
+
+write_fixture "$TMP/fixtures/bad_unset_target.ds" <<'DS'
+unset DS_TEMP
+DS
+assert_reject bad_unset_target "$TMP/fixtures/bad_unset_target.ds" 'unset requires an environment target'
+
+write_fixture "$TMP/fixtures/interp_empty_multi.ds" <<'DS'
+env.DS_COUNT = 0
+fn empty() {
+  return ""
+}
+fn tick() {
+  if env.DS_COUNT == "0" {
+    env.DS_COUNT = 1
+  } else {
+    env.DS_COUNT = 2
+  }
+  return env.DS_COUNT
+}
+echo "before{empty()}after"
+printf "[%s]\n" "{empty()}"
+echo "{tick()}-{tick()}-{env.DS_COUNT}"
+DS
+run_parity interp_empty_multi "$TMP/fixtures/interp_empty_multi.ds" $'beforeafter\n[]\n1-2-2'
+
+cat >"$TMP/fixtures/v027_mod.ds" <<'DS'
+fn app() {
+  return "api"
+}
+DS
+write_fixture "$TMP/fixtures/imported_interp.ds" <<'DS'
+import "./v027_mod.ds"
+echo "app={app()}"
+DS
+run_parity imported_interp "$TMP/fixtures/imported_interp.ds" 'app=api'
+
+write_fixture "$TMP/fixtures/failing_short_circuit.ds" <<'DS'
+fn bad() {
+  return 1 / 0
+}
+fn side_effect() {
+  env.DS_SHOULD_NOT_SET = "set"
+  return "x"
+}
+echo "{bad()} {side_effect()}"
+echo env.DS_SHOULD_NOT_SET
+DS
+( cd "$TMP" && ! "$ROOT/ds" run "$TMP/fixtures/failing_short_circuit.ds" >short.vm.out 2>short.vm.err ) || fail "failing short-circuit VM fails"
+ok "failing short-circuit VM fails"
+./ds emit bash "$TMP/fixtures/failing_short_circuit.ds" -o "$TMP/short.sh" >/dev/null
+bash -n "$TMP/short.sh"; ok "failing short-circuit bash -n"
+( cd "$TMP" && ! bash "$TMP/short.sh" >short.bash.out 2>short.bash.err ) || fail "failing short-circuit Bash fails"
+ok "failing short-circuit Bash fails"
+assert_eq "failing short-circuit stdout parity" "$(cat "$TMP/short.vm.out")" "$(cat "$TMP/short.bash.out")"
+assert_contains "failing short-circuit VM real diagnostic" "$TMP/short.vm.err" 'division or modulo by zero'
+assert_contains "failing short-circuit Bash real diagnostic" "$TMP/short.bash.err" 'division or modulo by zero'
+assert_no_contains "failing short-circuit skipped later interpolation" "$TMP/short.vm.out" 'set'
+
+write_fixture "$TMP/fixtures/bad_env_name.ds" <<'DS'
+echo env.1BAD
+DS
+assert_reject bad_env_name "$TMP/fixtures/bad_env_name.ds" 'invalid environment variable name'
+
+write_fixture "$TMP/fixtures/env_assign_array_rejected.ds" <<'DS'
+env.DS_BAD = ["a", "b"]
+DS
+assert_reject env_assign_array_rejected "$TMP/fixtures/env_assign_array_rejected.ds" 'environment variable assignment requires a scalar value'
+
+write_fixture "$TMP/fixtures/env_assign_map_rejected.ds" <<'DS'
+env.DS_BAD = { name: "api" }
+DS
+assert_reject env_assign_map_rejected "$TMP/fixtures/env_assign_map_rejected.ds" 'environment variable assignment requires a scalar value'
+
+write_fixture "$TMP/fixtures/env_assign_command_rejected.ds" <<'DS'
+env.DS_BAD = run "printf" "x"
+DS
+assert_reject env_assign_command_rejected "$TMP/fixtures/env_assign_command_rejected.ds" 'environment variable assignment requires a scalar value'
+
+write_fixture "$TMP/fixtures/map_interp_rejected.ds" <<'DS'
+fn service() {
+  return { name: "api" }
+}
+echo "{service()}"
+DS
+assert_reject map_interp_rejected "$TMP/fixtures/map_interp_rejected.ds" 'interpolation expression must be scalar'
+
+write_fixture "$TMP/fixtures/command_result_interp_rejected.ds" <<'DS'
+fn result() {
+  return run "printf" "ok"
+}
+echo "{result()}"
+DS
+assert_reject command_result_interp_rejected "$TMP/fixtures/command_result_interp_rejected.ds" 'interpolation expression must be scalar'
+
+write_fixture "$TMP/fixtures/noisy_interp_rejected.ds" <<'DS'
+fn noisy() {
+  echo "debug"
+  return "value"
+}
+echo "{noisy()}"
+DS
+assert_reject noisy_interp_rejected "$TMP/fixtures/noisy_interp_rejected.ds" 'cannot be used as a value because it contains plain command statements'
+
+write_fixture "$TMP/fixtures/mixed_interp_rejected.ds" <<'DS'
+fn maybe(flag = true) {
+  if flag {
+    return "name"
+  }
+  return ["name"]
+}
+echo "{maybe(true)}"
+DS
+assert_reject mixed_interp_rejected "$TMP/fixtures/mixed_interp_rejected.ds" 'same value kind'
+
+write_fixture "$TMP/fixtures/malformed_interp_rejected.ds" <<'DS'
+echo "{name(}"
+DS
+assert_reject malformed_interp_rejected "$TMP/fixtures/malformed_interp_rejected.ds" 'unknown function `name`'
+
+write_fixture "$TMP/fixtures/interp_prefix_env.ds" <<'DS'
+fn name() {
+  return "api"
+}
+echo "{env.DS_PREFIX}-{name()}"
+env.DS_PREFIX = "svc"
+fn prefix() {
+  return env.DS_PREFIX
+}
+printf "%s\n" "service-{name()}-v1"
+echo "{prefix()}-api"
+DS
+run_parity_env interp_prefix_env "$TMP/fixtures/interp_prefix_env.ds" $'svc-api\nservice-api-v1\nsvc-api' DS_PREFIX=svc
+
+write_fixture "$TMP/fixtures/env_only_helpers.ds" <<'DS'
+env.DS_APP = "api"
+echo env.DS_APP
+DS
+./ds emit bash "$TMP/fixtures/env_only_helpers.ds" -o "$TMP/env_only_helpers.sh" >/dev/null; ok "env-only helper emit"
+bash -n "$TMP/env_only_helpers.sh"; ok "env-only helper bash -n"
+assert_no_contains "env-only does not emit value-call helper" "$TMP/env_only_helpers.sh" '__ds_call_value_into'
+
+write_fixture "$TMP/fixtures/interp_helpers_once.ds" <<'DS'
+fn a() {
+  return "a"
+}
+fn b() {
+  return "b"
+}
+echo "{a()} {b()} {a()}"
+DS
+run_parity interp_helpers_once "$TMP/fixtures/interp_helpers_once.ds" 'a b a'
+helper_count=$(grep -c '^__ds_call_value_into()' "$TMP/interp_helpers_once.sh" || true)
+assert_eq "interpolation helper emitted once" '1' "$helper_count"
 
 assert_contains "status documents command interpolation" docs/status.md 'direct scalar value-returning function calls in quoted command'
 assert_contains "runtime documents pre-materialization" docs/runtime.md 'pre-materializing each interpolated call'
