@@ -1,8 +1,10 @@
 # `src/` ownership guide
 
 The source tree is split by compiler/runtime phase. The detailed per-file map is
-in [`../docs/source-map.md`](../docs/source-map.md); keep that document updated
-whenever a file gains or loses a responsibility.
+in [`../docs/source-map.md`](../docs/source-map.md), and cross-cutting concepts
+are mapped in [`../docs/concept-map.md`](../docs/concept-map.md). Keep both
+documents updated whenever a file gains or loses a responsibility or a language
+concept gets a clearer canonical home.
 
 ## Phase boundaries
 
@@ -58,5 +60,5 @@ Before putting code in a file, ask:
 5. Should this be a new helper in the same phase rather than expanding a dense
    file?
 
-If the answer is unclear, update `docs/source-map.md` first. Ambiguous ownership
-is refactoring work, not just documentation work.
+If the answer is unclear, update `docs/source-map.md` or `docs/concept-map.md`
+first. Ambiguous ownership is refactoring work, not just documentation work.

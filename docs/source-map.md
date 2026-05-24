@@ -6,7 +6,9 @@ outside this map, treat that as pressure to split, move, or document a new
 boundary before continuing feature work.
 
 Use this with `docs/architecture.md`, which explains the end-to-end pipeline and
-larger architectural rules. This file answers the narrower maintenance questions:
+larger architectural rules, and `docs/concept-map.md`, which maps cross-cutting
+language/runtime concepts to canonical homes. This file answers the narrower
+maintenance questions:
 
 - What does each file own?
 - What is it allowed to know?
