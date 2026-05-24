@@ -49,9 +49,9 @@ Risk labels:
 | Pipeline behavior | HIR command/pipeline command payload | Parser for syntax; lowerer for semantic restrictions | VM process pipeline execution; Bash command emitter | Language docs and runtime/process docs | VM/Bash parity tests including stdout/stderr/status | **Hell candidate** |
 | Plain command execution | HIR command statement | Parser for command syntax; lowerer for command word validation | VM process execution; Bash command statement emission | Language docs, runtime docs | VM/Bash parity tests; failure/redirect diagnostics | **Watch** |
 | Redirection | AST/HIR command redirection metadata | Parser for syntax; lowerer for conservative target validation | VM process file setup; Bash command emitter | Language docs and runtime process docs | VM/Bash parity tests with file side effects; diagnostics | **Watch** |
-| Trap/defer behavior | AST handler nodes lowered to HIR handler tables | Parser for handler syntax; lowerer for supported signal/context restrictions | VM signal/defer runtime; Bash trap/defer emission | Language docs and architecture handler notes | VM tests, Bash parity tests, deterministic signal tests, diagnostics | **Hell candidate** |
-| Signal handling | HIR handler declarations plus backend-specific runtime state | Lowerer for supported signal literals and handler legality | VM foreground process/signal runtime; Bash `trap` emission | Language docs, runtime docs, v0.22 milestone docs | Deterministic signal harness, VM/Bash parity tests, diagnostics | **Hell candidate** |
-| Handler context | HIR handler scope metadata once supported | Lowerer | VM handler frame/scope; Bash handler variables | Language docs and runtime docs | VM/Bash parity tests and diagnostics | **Hell candidate** |
+| Trap/defer behavior | AST handler nodes lowered to HIR handler declarations; see `docs/maintenance/m3-x-trap-defer-signal-ownership.md` | Parser for handler syntax; lowerer for supported signal/context restrictions | VM signal/defer runtime; Bash trap/defer emission | `docs/maintenance/m3-x-trap-defer-signal-ownership.md`, runtime docs, language docs | VM tests, Bash parity tests, deterministic signal tests, diagnostics | **Hell candidate — specified, not implemented** |
+| Signal handling | HIR handler declarations plus backend-specific runtime state; see `docs/maintenance/m3-x-trap-defer-signal-ownership.md` | Lowerer for supported signal literals and handler legality | VM foreground process/signal runtime; Bash `trap` emission | `docs/maintenance/m3-x-trap-defer-signal-ownership.md`, runtime docs, v0.22 milestone docs | Deterministic signal harness, VM/Bash parity tests, diagnostics | **Hell candidate — specified, not implemented** |
+| Handler context | HIR handler scope metadata once supported; currently deferred by `docs/maintenance/m3-x-trap-defer-signal-ownership.md` | Lowerer | VM handler frame/scope; Bash handler variables | `docs/maintenance/m3-x-trap-defer-signal-ownership.md`, language docs, runtime docs | VM/Bash parity tests and diagnostics | **Hell candidate — specified, not implemented** |
 | Environment variables via helpers | Stdlib metadata and HIR call expression/statement | Lowerer via stdlib metadata and env-name validation | VM stdlib env helpers; Bash helper/native env operations | Language stdlib docs, runtime docs | VM/Bash parity tests; process-local mutation tests; diagnostics | **Watch** |
 | Direct `env.NAME` access/assignment | Not yet a stable canonical representation; should become explicit HIR env access/assign nodes or remain rejected | Lowerer if syntax parses; parser only for shape | VM stdlib/env runtime and Bash env emission only after HIR exists | Language docs and roadmap/milestones | Diagnostics until supported; then VM/Bash parity tests | **Hell candidate** |
 | String interpolation | AST string segments, then HIR interpolation/expression segments | Parser for token/string segmentation; lowerer for expression and format validity | VM string rendering; Bash quoting/interpolation helpers | Language docs and architecture interpolation notes | VM/Bash parity tests; format and unsupported-expression diagnostics | **Hell candidate** |
@@ -82,16 +82,18 @@ Risk labels:
 
 These concepts have the highest risk of becoming "kind of everywhere":
 
-1. **Command words and direct interpolation**: M3.4 now specifies the boundary:
-   parser owns command syntax shape; lowerer owns command-word semantics,
-   unsupported forms, and pre-materialization of supported scalar function-call
-   interpolation; VM/Bash consume accepted command payloads. The implementation
-   cleanup still needs to prove that boundary in code before this can move to
-   Watch.
-2. **Trap/defer/signal behavior**: syntax, handler legality, global/process
-   scope, foreground process interaction, LIFO defer order, replacement trap
-   order, VM signal runtime, and Bash `trap` semantics are all coupled. Keep
-   handler semantics in HIR and reject backend-only shortcuts.
+1. **Command words and direct interpolation**: M3.4 now specifies and implements
+   the boundary: parser owns command syntax shape; lowerer owns command-word
+   semantics, unsupported forms, and pre-materialization of supported scalar
+   function-call interpolation; VM/Bash consume accepted command payloads. It is
+   tracked under Watch because future command-word expansion can still drift.
+2. **Trap/defer/signal behavior**: M3.x now specifies the ownership model in
+   `docs/maintenance/m3-x-trap-defer-signal-ownership.md`: parser owns handler
+   syntax shape, lowerer owns handler legality and unsupported/source-language
+   diagnostics, HIR is the accepted handler contract, VM owns cleanup/signal
+   execution and foreground process classification, and Bash owns standalone
+   trap/helper emission. It remains Hell until implementation cleanup proves the
+   documented boundaries in code and tests.
 3. **Regex expansion beyond conservative literals**: capture arrays, replacement,
    split, and runtime regex strings need a parity strategy before implementation.
    Otherwise VM regex libraries and Bash regex rules will diverge.
