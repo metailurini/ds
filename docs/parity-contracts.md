@@ -8,6 +8,7 @@ Use this with:
 
 - `docs/architecture.md` for the end-to-end pipeline and HIR rule.
 - `docs/source-map.md` for file-level ownership.
+- `docs/diagnostics.md` for phase ownership of errors and warnings.
 - `docs/concept-map.md` for cross-cutting concept ownership.
 - `docs/language.ds` for user-facing syntax status.
 - `docs/status.md` and milestone specs for the currently supported surface.
@@ -141,7 +142,8 @@ diagnostic test.
 
 ### Diagnostics
 
-Owns phase-appropriate user-facing rejection.
+Owns phase-appropriate user-facing rejection. The detailed ownership model lives
+in `docs/diagnostics.md`.
 
 Diagnostic responsibilities:
 

@@ -7,7 +7,8 @@ boundary before continuing feature work.
 
 Use this with `docs/architecture.md`, which explains the end-to-end pipeline and
 larger architectural rules, `docs/parity-contracts.md`, which defines the
-VM/Bash acceptance contract, and `docs/concept-map.md`, which maps cross-cutting
+VM/Bash acceptance contract, `docs/diagnostics.md`, which defines diagnostic
+ownership by phase, and `docs/concept-map.md`, which maps cross-cutting
 language/runtime concepts to canonical homes. This file answers the narrower
 maintenance questions:
 
@@ -43,6 +44,25 @@ maintenance questions:
 - CLI files may orchestrate source loading, import composition, frontend passes,
   lowering, and backend selection. They should not own grammar, HIR semantics,
   VM instruction behavior, or Bash rendering details.
+
+## Diagnostic ownership rule
+
+Diagnostics follow the file ownership map, but `docs/diagnostics.md` is the
+canonical phase-level contract. In short:
+
+- lexer/parser files own lexical and syntax diagnostics;
+- lowering files own semantic, unsupported-feature, and VM/Bash parity-gate
+  diagnostics;
+- VM files own runtime/OS/process diagnostics after accepted HIR reaches VM
+  execution;
+- Bash files own artifact/emission diagnostics for accepted HIR and should not
+  become a second semantic validator;
+- checker/formatter files own warnings and presentation diagnostics, not hard
+  language acceptance.
+
+When backend code reports an unsupported source-language form, treat that as
+ownership pressure: either document it as explicitly backend-specific or move the
+rejection to lowering with diagnostic tests.
 
 ## Public façade and headers
 

@@ -53,6 +53,13 @@ and defined behavior for both VM execution and standalone Bash emission, unless
 it is explicitly documented as VM-only, Bash-only, diagnostic-only, or currently
 rejected.
 
+Diagnostic ownership follows the same phase boundary. Syntax errors belong to
+the lexer/parser, semantic and unsupported-feature errors belong to lowering,
+runtime/OS failures belong to the VM, and Bash emission should only diagnose
+artifact or accepted-HIR rendering failures. See `docs/diagnostics.md` for the
+full contract and `docs/parity-contracts.md` for how diagnostics participate in
+VM/Bash parity.
+
 ## Core runtime substrate
 
 `ds` is implemented in C, so the project needs a small reusable runtime substrate before the VM can become serious.

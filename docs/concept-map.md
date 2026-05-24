@@ -10,6 +10,7 @@ Use this together with:
 - `docs/source-map.md` for file-level ownership.
 - `docs/architecture.md` for the compiler/backend pipeline.
 - `docs/parity-contracts.md` for the VM/Bash acceptance contract.
+- `docs/diagnostics.md` for diagnostic ownership by phase.
 - `docs/language.ds` for the user-facing syntax catalog.
 - `docs/runtime.md` for VM/runtime substrate rules.
 
@@ -71,7 +72,7 @@ Risk labels:
 | Bash parity | HIR as contract plus shared metadata/helper catalogs; see `docs/parity-contracts.md` | Lowerer rejects unsupported parity risks unless explicitly VM-only, Bash-only, diagnostic-only, or currently rejected | VM backend and Bash backend independently execute the same accepted HIR | `docs/parity-contracts.md`, architecture docs, release checklist, milestone specs | Every accepted feature needs VM tests, Bash parity tests, and diagnostics for unsupported forms unless explicitly scoped otherwise | **Watch** |
 | VM process execution | VM-private process spec/result around HIR commands | Lowerer validates language rules; VM validates OS/runtime failures | `vm_process.c` and VM interpreter | Runtime docs and architecture backend docs | VM tests plus Bash parity tests for observable behavior | **Watch** |
 | Bash helper selection | Bash dependency flags derived from HIR and stdlib metadata | Lowerer for language legality; Bash deps for helper need | Bash emitter/helpers | Architecture docs and source map | Bash emission tests, `bash -n`, parity tests | **Watch** |
-| Diagnostics | `DsDiag`/source spans attached by each phase | Owning phase: parser/lowerer/runtime/backend as appropriate | Diagnostic renderer/source manager | Architecture diagnostics section | Diagnostic tests per phase and feature | **Hell candidate** |
+| Diagnostics | `DsDiag`/source spans plus the phase ownership contract in `docs/diagnostics.md` | Lexer/parser for syntax; lowerer for semantic/unsupported/parity-gate diagnostics; checker for warnings; VM/Bash only for backend-appropriate failures | Diagnostic renderer/source manager display messages; each owning phase decides its own errors | `docs/diagnostics.md`, architecture docs, parity contract | Diagnostic tests per phase; parity-gate rejection tests before backend selection; runtime/backend tests only for backend-specific failures | **Watch** |
 | Formatter behavior | AST-preserving formatter output | Parser must build enough AST; formatter owns formatting policy | Formatter only, no language execution | Language syntax docs and formatter docs/milestones | Formatter snapshot tests; parse-after-format tests | **Watch** |
 | Standard-library helper catalog | `ds_stdlib.h` metadata and `stdlib.c` table | Lowerer consumes metadata for arity/kind/flags | VM stdlib and Bash helpers consume same metadata | Language stdlib docs and runtime docs | VM/Bash parity tests plus wrong-arity/name diagnostics | **Watch** |
 | Runtime values | `DsValue`/runtime containers | Lowerer controls which language values can reach runtime | VM runtime; Bash has standalone encoded equivalents/helpers | Runtime docs and architecture docs | Runtime/unit tests where available; VM/Bash parity tests | **Watch** |
@@ -107,10 +108,12 @@ These concepts have the highest risk of becoming "kind of everywhere":
    that previously reached VM but failed Bash emission. Remaining risk is
    enforcement drift during feature work, so keep it under **Watch** rather than
    treating it as vague ownership.
-7. **Diagnostics**: every phase can emit diagnostics, but ownership must follow
-   the rule being checked. Parser reports syntax, lowerer reports semantic
-   language misuse, VM reports runtime/OS failures, and Bash emitter reports only
-   impossible backend/emission errors.
+7. **Diagnostics**: narrowed by `docs/diagnostics.md`. Every phase can emit
+   diagnostics, but ownership must follow the rule being checked: parser reports
+   syntax, lowerer reports semantic language misuse and unsupported parity forms,
+   checker reports warnings, VM reports runtime/OS failures, and Bash emitter
+   reports only artifact or accepted-HIR emission errors. Remaining risk is
+   backend `unsupported` diagnostics that may still need to move into lowering.
 
 ## Refactoring rules from this map
 
