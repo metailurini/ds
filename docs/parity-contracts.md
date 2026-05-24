@@ -336,7 +336,8 @@ those features are accepted.
 
 Current maintenance rule: regex expansion beyond conservative literals remains
 rejected until capture/replacement/runtime-string semantics have a portable HIR
-and backend plan.
+and backend plan. See `docs/maintenance/m3-5-regex-boundary.md` for the regex
+maintenance boundary and test plan.
 
 ### Globs
 

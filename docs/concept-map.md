@@ -58,8 +58,8 @@ Risk labels:
 | Interpolation format specifiers | HIR interpolation segment metadata | Lowerer | VM string formatting; Bash helper/printf formatting | Language docs and milestone specs | VM/Bash parity tests; invalid specifier diagnostics | **Watch** |
 | Glob expansion | Stdlib helper metadata and HIR iterable call | Lowerer via stdlib metadata and pattern restrictions | VM stdlib glob implementation; Bash helper/emission | Language stdlib docs, runtime docs | VM/Bash parity tests with sorted output; diagnostics | **Watch** |
 | Recursive `**` glob patterns | Explicitly rejected/deferred pattern form until parity strategy exists | Lowerer/stdlib validation | None until supported | Language docs, roadmap/milestones | Diagnostic tests; later VM/Bash parity tests | **Clear while rejected** |
-| Regex match | HIR call/operator with conservative regex literal metadata | Parser for literal syntax; lowerer for supported regex surface | VM regex runtime; Bash regex emission | Language docs, runtime regex notes, milestone specs | VM/Bash parity tests; unsupported-regex diagnostics | **Hell candidate** |
-| Regex captures/replacement/runtime regex strings | No stable home yet; should not leak into backend-specific ad hoc behavior | Lowerer should reject until canonical HIR/value model exists | None until supported | Language docs and runtime regex plan | Diagnostic tests now; future VM/Bash parity tests | **Hell candidate** |
+| Regex match | HIR `matches` expression with conservative regex literal metadata; see `docs/maintenance/m3-5-regex-boundary.md` | Parser/lexer for literal syntax; lowerer for supported regex surface and parity gates | VM regex runtime; Bash regex emission | Language docs, runtime regex notes, M3.5 regex boundary spec | VM/Bash parity tests; unsupported-regex diagnostics | **Watch** |
+| Regex captures/replacement/runtime regex strings | Explicitly rejected until a canonical HIR/value model exists; see `docs/maintenance/m3-5-regex-boundary.md` | Lowerer rejects parseable unsupported forms; lexer/parser own malformed literal shape | None until supported | Language docs, runtime regex plan, M3.5 regex boundary spec | Diagnostic tests now; future VM/Bash parity tests before acceptance | **Clear while rejected** |
 | Lists/arrays | AST collection literal, HIR collection expression, runtime array value | Parser for literal shape; lowerer for value-kind/element restrictions | VM runtime values; Bash collection helpers/tags | Language docs and runtime docs | VM/Bash parity tests; type/shape diagnostics | **Watch** |
 | Maps/objects | AST map literal, HIR map expression, runtime map value | Parser for literal shape; lowerer for key/value restrictions | VM runtime map values; Bash collection helpers/tags | Language docs and runtime docs | VM/Bash parity tests; duplicate/invalid key diagnostics | **Watch** |
 | Map iteration | No stable execution home if deferred; eventually HIR iterable semantics | Lowerer should reject until defined | VM iterator runtime; Bash collection iteration helpers | Language docs and milestones | Diagnostic tests now; future VM/Bash parity tests | **Hell candidate** |
@@ -97,9 +97,11 @@ These concepts have the highest risk of becoming "kind of everywhere":
    entire v0.22 integration suite. It remains Watch because signal behavior is
    OS-sensitive and future changes can still drift if they bypass the accepted
    HIR handler contract.
-3. **Regex expansion beyond conservative literals**: capture arrays, replacement,
-   split, and runtime regex strings need a parity strategy before implementation.
-   Otherwise VM regex libraries and Bash regex rules will diverge.
+3. **Regex expansion beyond conservative literals**: M3.5 now defines the
+   boundary in `docs/maintenance/m3-5-regex-boundary.md`. Conservative
+   literal `matches` is Watch; captures, replacement, split, and runtime regex
+   strings are Clear while rejected until a future milestone adds portable
+   HIR/value semantics and VM/Bash parity tests.
 4. **Mutable collections (`map` iteration, index assignment)**: collection value
    encoding already affects VM values and Bash helper sidecars. Mutation and map
    iteration need explicit HIR nodes and tests before adding syntax sugar.
