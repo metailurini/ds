@@ -495,6 +495,7 @@ env.unset("DEBUG")
 # and explicit dynamic-name use.
 let home = env.HOME
 env.NODE_ENV = "production"
+unset env.DEBUG
 # env.PATH += "./node_modules/.bin"
 
 

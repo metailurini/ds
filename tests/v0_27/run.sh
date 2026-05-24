@@ -69,6 +69,17 @@ echo "{left()}:{right()}:{env.DS_ORDER}"
 DS
 run_parity left_to_right_env "$TMP/fixtures/left_to_right_env.ds" 'left:right:right'
 
+write_fixture "$TMP/fixtures/unset_env.ds" <<'DS'
+env.DS_V027_UNSET = "set"
+echo "before={env.DS_V027_UNSET}"
+unset env.DS_V027_UNSET
+echo "after={env.DS_V027_UNSET}"
+let result = run "printenv" "DS_V027_UNSET"
+echo "status={result.status}"
+echo "stdout={result.stdout}"
+DS
+run_parity unset_env "$TMP/fixtures/unset_env.ds" $'before=set\nafter=\nstatus=1\nstdout='
+
 write_fixture "$TMP/fixtures/captured_run_interp.ds" <<'DS'
 fn word() {
   return "hello"
@@ -116,6 +127,17 @@ bash -n "$TMP/failing.sh"; ok "failing interp bash -n"
 ok "failing interp Bash fails"
 [[ ! -e "$TMP/should_not_exist" ]] || fail "failing interp Bash prevents launch"
 ok "failing interp Bash prevents launch"
+assert_contains "failing interp VM real diagnostic" "$TMP/failing.vm.err" 'division or modulo by zero'
+assert_contains "failing interp Bash real diagnostic" "$TMP/failing.bash.err" 'division or modulo by zero'
+assert_no_contains "failing interp Bash avoids internal payload diagnostic" "$TMP/failing.bash.err" 'invalid internal int function return payload'
+
+write_fixture "$TMP/fixtures/env_shadow_rejected.ds" <<'DS'
+let env = "not-env"
+echo env.DS_WHATEVER
+DS
+! ./ds check "$TMP/fixtures/env_shadow_rejected.ds" >"$TMP/env_shadow.out" 2>"$TMP/env_shadow.err" || fail "env namespace shadow rejected"
+ok "env namespace shadow rejected"
+assert_contains "env namespace shadow diagnostic" "$TMP/env_shadow.err" 'reserved environment namespace'
 
 write_fixture "$TMP/fixtures/structured_interp_rejected.ds" <<'DS'
 fn names() {

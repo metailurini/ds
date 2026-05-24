@@ -285,10 +285,11 @@ with the return transport through arbitrary stdout; statement-style calls may
 still stream stdout and ignore returned scalar values. Use captured `run`
 expressions inside value functions when command output should participate in the
 returned value. Expression-backed string interpolation can include
-scalar value-returning calls. v0.27.0 also adds direct `env.NAME` reads and
-`env.NAME = scalar` assignment; missing environment variables read as an empty
-string, and assignments are exported to later child commands in both VM and
-emitted Bash. Command-word interpolation supports the legacy `{name}` / `{name.field}` forms,
+scalar value-returning calls. v0.27.0 also adds direct `env.NAME` reads,
+`env.NAME = scalar` assignment, and `unset env.NAME`; missing environment
+variables read as an empty string, assignments are exported to later child
+commands, and unsets remove the variable from later child-command environments
+in both VM and emitted Bash. Command-word interpolation supports the legacy `{name}` / `{name.field}` forms,
 `{env.NAME}`, direct `env.NAME` command arguments, integer arithmetic
 expressions, and direct scalar value-returning function calls in quoted command
 words. Interpolated function calls are pre-evaluated before the outer command

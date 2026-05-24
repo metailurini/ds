@@ -45,6 +45,9 @@ static DsStmt *parse_let(Parser *p) {
     DsToken *start = parser_previous(p);
     if (!parser_expect_identifier_like(p, "expected identifier after `let`")) return NULL;
     DsToken *name = parser_previous(p);
+    if (name->text.len == 3 && memcmp(name->text.data, "env", 3) == 0) {
+        ds_diag_error(p->diag, name->span, "`env` is a reserved environment namespace in v0.27.0");
+    }
     if (!parser_expect(p, DS_TOK_EQUAL, "expected `=` after variable name")) return NULL;
     if (parser_is_stmt_end(p)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after `=`");
@@ -123,6 +126,37 @@ static DsStmt *parse_env_assign(Parser *p) {
     stmt->as.assign_stmt.value = value;
     if (!parser_is_stmt_end(p)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "expected end of environment assignment statement");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+    }
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
+static DsStr quoted_env_name_from_token(const DsToken *field) {
+    size_t len = field->text.len + 2;
+    char *data = (char *)ds_xcalloc(len + 1, 1);
+    data[0] = '"';
+    memcpy(data + 1, field->text.data, field->text.len);
+    data[len - 1] = '"';
+    return (DsStr){data, len};
+}
+
+static DsStmt *parse_env_unset(Parser *p) {
+    DsToken *unset_tok = parser_advance(p);
+    DsToken *env_tok = parser_advance(p);
+    (void)env_tok;
+    if (!parser_expect(p, DS_TOK_DOT, "expected `.` after `env` in environment unset")) return NULL;
+    if (!parser_expect_identifier_like(p, "expected environment variable name after `env.`")) return NULL;
+    DsToken *field = parser_previous(p);
+
+    DsStmt *stmt = parser_new_stmt(DS_STMT_CALL, (DsSpan){unset_tok->span.start, field->span.end, unset_tok->span.source});
+    stmt->as.call_stmt.name = (DsStr){ds_str_dup_range("env.unset", strlen("env.unset")), strlen("env.unset")};
+    DsExpr *arg = parser_new_expr(DS_EXPR_STRING, field->span);
+    arg->as.text = quoted_env_name_from_token(field);
+    parser_expr_vec_push(&stmt->as.call_stmt.args, arg);
+
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of environment unset statement");
         while (!parser_is_stmt_end(p)) parser_advance(p);
     }
     parser_consume_statement_end(p);
@@ -469,6 +503,9 @@ DsStmt *parse_stmt(Parser *p) {
         return NULL;
     }
     if (parser_advance_if(p, DS_TOK_LET)) return parse_let(p);
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 5 && memcmp(parser_peek(p)->text.data, "unset", 5) == 0 &&
+        parser_next_at(p, DS_TOK_IDENT) && p->tokens->items[p->pos + 1].text.len == 3 && memcmp(p->tokens->items[p->pos + 1].text.data, "env", 3) == 0 &&
+        parser_peek2_at(p, DS_TOK_DOT)) return parse_env_unset(p);
     if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 3 && memcmp(parser_peek(p)->text.data, "env", 3) == 0 &&
         parser_next_at(p, DS_TOK_DOT) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) {

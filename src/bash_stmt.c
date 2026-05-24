@@ -1256,7 +1256,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             } else {
                 buf_append(&e->out, "__ds_return_value=");
                 if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;
-                buf_append(&e->out, "\n");
+                buf_append(&e->out, " || return $?\n");
             }
             emit_indent(&e->out, indent);
             buf_append(&e->out, "return 0\n\n");

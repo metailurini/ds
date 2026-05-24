@@ -88,6 +88,10 @@ void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan s
 }
 
 void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span) {
+    if (name_eq(name, "env")) {
+        ds_diag_error(lower->diag, span, "`env` is a reserved environment namespace in v0.27.0");
+        return;
+    }
     Symbol *current = scope_find_current(scope, name);
     if (current && current->kind == SYM_TOPLEVEL_PREDECLARED) {
         current->kind = kind;
