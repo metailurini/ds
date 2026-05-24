@@ -368,6 +368,24 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                 while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
                 if (j < len && (decoded[j] == '}' || decoded[j] == '.' || decoded[j] == ':')) {
                     DsStr name = {decoded + start, j - start};
+                    if (name.len == 3 && memcmp(name.data, "env", 3) == 0 && decoded[j] == '.') {
+                        size_t field_start = ++j;
+                        if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
+                            j++;
+                            while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
+                        }
+                        DsStr field = {decoded + field_start, j - field_start};
+                        if (j >= len || decoded[j] != '}') {
+                            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            free(decoded);
+                            return false;
+                        }
+                        buf_append(out, "${");
+                        buf_append_len(out, field.data, field.len);
+                        buf_append(out, ":-}");
+                        i = j;
+                        continue;
+                    }
                     if (!symbol_exists(&e->symbols, name)) {
                         ds_diag_error(e->diag, expr->span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
                         free(decoded);

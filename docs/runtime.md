@@ -701,6 +701,15 @@ the supported way to return command-result data from functions. Nested
 collections, arrays/maps inside maps, collection-valued parameters, direct
 function-call interpolation in command words, and public access to the private
 payload format remain deferred.
+
+Environment reads through `env.NAME` lower to runtime environment lookups and
+read as an empty string when the variable is absent. Environment assignments
+through `env.NAME = value` accept scalar string/int/bool values, render them to
+the same string form used by interpolation, update the current VM process
+environment, and export the value to later child commands. Emitted Bash uses
+strict-mode-safe `${NAME:-}` reads and quoted `export NAME="$value"`
+assignments, so generated scripts read the environment at Bash runtime rather
+than baking values in during emission.
 Integer arithmetic uses the same signed 64-bit contract in both backends: `*`,
 `/`, `%`, `**`, unary `-`, and compound integer updates diagnose division by
 zero, negative exponents, out-of-range integer literals, and overflow instead of

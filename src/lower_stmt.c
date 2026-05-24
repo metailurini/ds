@@ -160,6 +160,22 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSIGN, stmt->span);
             out->as.assign_stmt.name = str_clone(stmt->as.assign_stmt.name);
             out->as.assign_stmt.op = lower_assign_op(stmt->as.assign_stmt.op);
+            bool env_assign = stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0;
+            if (env_assign) {
+                DsStr env_name = {stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4};
+                if (!is_env_name_text(env_name)) {
+                    ds_diag_error(lower->diag, stmt->span, "invalid environment variable name `%.*s` in v0.27.0", (int)env_name.len, env_name.data);
+                }
+                if (stmt->as.assign_stmt.op != DS_ASSIGN_SET) {
+                    ds_diag_error(lower->diag, stmt->span, "environment assignment supports only `=` in v0.27.0");
+                }
+                SymKind value_kind = SYM_UNKNOWN;
+                out->as.assign_stmt.value = lower_expr(lower, stmt->as.assign_stmt.value, &value_kind);
+                if (value_kind != SYM_STRING && value_kind != SYM_INT && value_kind != SYM_BOOL && value_kind != SYM_UNKNOWN) {
+                    ds_diag_error(lower->diag, stmt->as.assign_stmt.value->span, "environment variable assignment requires a scalar value in v0.27.0");
+                }
+                return out;
+            }
             Symbol *sym = scope_find(lower->scope, stmt->as.assign_stmt.name);
             if (!sym) {
                 ds_diag_error(lower->diag, stmt->span, "assignment target `%.*s` is not defined; use `let` to declare variables", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);

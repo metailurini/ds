@@ -77,6 +77,20 @@ bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 free(decoded.data);
                 return false;
             }
+            if (name.len == 3 && memcmp(name.data, "env", 3) == 0 && j < decoded.len && decoded.data[j] == '.') {
+                size_t field_start = ++j;
+                if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
+                    j++;
+                    while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
+                }
+                DsStr field = {decoded.data + field_start, j - field_start};
+                if (!is_env_name_text(field)) {
+                    ds_diag_error(lower->diag, span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);
+                    free(decoded.data);
+                    return false;
+                }
+                if (j < decoded.len && decoded.data[j] == '}') { i = j; continue; }
+            }
             Symbol *sym = scope_find(lower->scope, name);
             if (!sym) {
                 ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
@@ -451,6 +465,12 @@ static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) 
     return true;
 }
 
+static DsExpr *temp_ident_from_str(DsStr name, DsSpan span) {
+    DsExpr *expr = temp_expr_new(DS_EXPR_IDENT, span);
+    expr->as.text = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
+    return expr;
+}
+
 static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan span, int min_bp);
 
 static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i, DsStr name, DsSpan span) {
@@ -529,6 +549,14 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
     if (name.len == 5 && memcmp(name.data, "false", 5) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
     interp_skip_ws(s, len, i);
     if (*i < len && s[*i] == '(') return parse_interp_call_after_name(s, len, i, name, span);
+    for (size_t dot = 0; dot < name.len; dot++) {
+        if (name.data[dot] == '.') {
+            DsExpr *field = temp_expr_new(DS_EXPR_FIELD, span);
+            field->as.field.object = temp_ident_from_str((DsStr){name.data, dot}, span);
+            field->as.field.field = (DsStr){ds_str_dup_range(name.data + dot + 1, name.len - dot - 1), name.len - dot - 1};
+            return field;
+        }
+    }
     DsExpr *expr = temp_expr_new(DS_EXPR_IDENT, span);
     expr->as.text = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
     return expr;
@@ -764,11 +792,21 @@ DsLowerExpr *lower_map_field_expr(const DsExpr *expr, DsLowerExpr *object, SymKi
 
 DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     if (expr->as.field.object && expr->as.field.object->kind == DS_EXPR_IDENT && lower_str_eq(expr->as.field.object->as.text, "env")) {
-        ds_diag_error(lower->diag, expr->span, "direct `env.NAME` access is deferred in v0.11.0; use `env.get(\"NAME\")` instead");
-        DsLowerExpr *out = expr_new(DS_LOWER_EXPR_FIELD, expr->span);
-        out->as.field.object = expr_new(DS_LOWER_EXPR_ERROR, expr->as.field.object->span);
-        out->as.field.field = str_clone(expr->as.field.field);
-        *kind_out = SYM_UNKNOWN;
+        if (!is_env_name_text(expr->as.field.field)) {
+            ds_diag_error(lower->diag, expr->span, "invalid environment variable name `%.*s` in v0.27.0", (int)expr->as.field.field.len, expr->as.field.field.data);
+        }
+        DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
+        out->as.call.name = (DsStr){ds_str_dup_range("env.get", 7), 7};
+        DsLowerExpr *arg = expr_new(DS_LOWER_EXPR_STRING, expr->span);
+        DsString quoted;
+        ds_string_init(&quoted);
+        ds_string_append_char(&quoted, '"');
+        ds_string_append_range(&quoted, expr->as.field.field.data, expr->as.field.field.len);
+        ds_string_append_char(&quoted, '"');
+        arg->as.text = (DsStr){quoted.data, quoted.len};
+        lower_expr_vec_push(&out->as.call.args, arg);
+        out->as.call.return_kind = DS_LOWER_VALUE_STRING;
+        *kind_out = SYM_STRING;
         return out;
     }
     SymKind object_kind = SYM_UNKNOWN;
@@ -1181,6 +1219,13 @@ bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
             if (field.len == 0) {
                 ds_diag_error(lower->diag, field_span, "expected field name after `.`");
                 return false;
+            }
+            if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
+                if (!is_env_name_text(field)) {
+                    ds_diag_error(lower->diag, field_span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);
+                    return false;
+                }
+                continue;
             }
             SymKind field_kind = SYM_UNKNOWN;
             Symbol *sym = scope_find(lower->scope, name);

@@ -2,8 +2,9 @@
 
 This document is the user-facing snapshot after the completed implementation
 surface through `v0.23.0`, the `v0.24.0` pre-1.0 hardening pass, the completed
-`v0.25.0` scalar function value-return ABI pass, and the completed `v0.26.0`
-flat structured function-return implementation and test pass. It is a
+`v0.25.0` scalar function value-return ABI pass, the completed `v0.26.0`
+flat structured function-return implementation and test pass, and the initial
+`v0.27.0` direct environment read/assignment implementation. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -197,7 +198,7 @@ milestones:
 - passing whole collection values directly to functions or commands;
 - direct collection access inside command words without first binding a scalar;
 - empty map literal inference and empty map keys;
-- direct `env.NAME` access or assignment;
+- environment append/prepend shorthand and scoped environment blocks;
 - recursive `**` glob patterns;
 - binary file helpers and streaming `lines`;
 - formatter configuration, warning suppression comments, workspace formatting,
@@ -284,12 +285,16 @@ with the return transport through arbitrary stdout; statement-style calls may
 still stream stdout and ignore returned scalar values. Use captured `run`
 expressions inside value functions when command output should participate in the
 returned value. Expression-backed string interpolation can include
-scalar value-returning calls. Command-word interpolation supports the legacy
-`{name}`/`{name.field}` forms plus integer arithmetic expressions; direct
-function-call interpolation in command words still emits a targeted diagnostic
-telling callers to bind the string expression first. Statement-style calls may
-still ignore returned values. `examples/function-values.ds` shows the supported
-return, arithmetic, and expression interpolation path.
+scalar value-returning calls. v0.27.0 also adds direct `env.NAME` reads and
+`env.NAME = scalar` assignment; missing environment variables read as an empty
+string, and assignments are exported to later child commands in both VM and
+emitted Bash. Command-word interpolation supports the legacy `{name}` /
+`{name.field}` forms, `{env.NAME}`, direct `env.NAME` command arguments, and
+integer arithmetic expressions; direct function-call interpolation in command
+words still emits a targeted diagnostic telling callers to bind the string
+expression first. Statement-style calls may still ignore returned values.
+`examples/function-values.ds` shows the supported return, arithmetic, and
+expression interpolation path.
 The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
 diagnostic, formatting, example, and generated-Bash boundary behavior.
 

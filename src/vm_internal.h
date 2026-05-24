@@ -11,6 +11,7 @@ typedef enum {
     OP_LOAD_CONST,
     OP_LOAD_VAR,
     OP_STORE_VAR,
+    OP_SET_ENV,
     OP_NOT,
     OP_BINARY,
     OP_COMPARE,

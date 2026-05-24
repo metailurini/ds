@@ -524,6 +524,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             break;
         }
         case DS_LOWER_STMT_ASSIGN: {
+            bool env_assign = stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0;
             int src = -1;
             if (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SET) {
                 src = compile_expr(p, stmt->as.assign_stmt.value);
@@ -551,10 +552,11 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                 emit_instr(p, bin);
             }
             Instr ins = {0};
-            ins.op = OP_STORE_VAR;
+            ins.op = env_assign ? OP_SET_ENV : OP_STORE_VAR;
             ins.span = stmt->span;
             ins.a = src;
-            ins.name = ds_str_dup_range(stmt->as.assign_stmt.name.data, stmt->as.assign_stmt.name.len);
+            if (env_assign) ins.name = ds_str_dup_range(stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4);
+            else ins.name = ds_str_dup_range(stmt->as.assign_stmt.name.data, stmt->as.assign_stmt.name.len);
             emit_instr(p, ins);
             break;
         }

@@ -27,6 +27,7 @@ const char *op_name(OpCode op) {
         case OP_LOAD_CONST: return "LOAD_CONST";
         case OP_LOAD_VAR: return "LOAD_VAR";
         case OP_STORE_VAR: return "STORE_VAR";
+        case OP_SET_ENV: return "SET_ENV";
         case OP_NOT: return "NOT";
         case OP_BINARY: return "BINARY";
         case OP_COMPARE: return "COMPARE";
@@ -179,6 +180,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_LOAD_CONST: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
             case OP_LOAD_VAR: fprintf(out, " r%d, %s", ins->dst, ins->name); break;
             case OP_STORE_VAR: fprintf(out, " %s, r%d", ins->name, ins->a); break;
+            case OP_SET_ENV: fprintf(out, " %s, r%d", ins->name, ins->a); break;
             case OP_NOT: fprintf(out, " r%d, r%d", ins->dst, ins->a); break;
             case OP_BINARY: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;
             case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, ins->cmp, ins->b); break;

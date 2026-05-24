@@ -51,9 +51,11 @@ count = count + 1
 count += 1
 count -= 1
 
-# Environment variables use an explicit env namespace. Direct assignment syntax
-# is planned but deferred in v0.11.0; use `env.get` / `env.set` below today.
-# env.NODE_ENV = "production"
+# Environment variables use an explicit env namespace. v0.27.0 supports direct
+# reads and scalar assignment; missing variables read as an empty string.
+env.NODE_ENV = "production"
+let current_path = env.PATH
+# Append/prepend shorthand remains deferred; assign the complete value instead.
 # env.PATH += "./node_modules/.bin"
 
 
@@ -311,7 +313,8 @@ fn deploy_default(target = "staging") {
 # the scalar return. Use captured `run` expressions inside value functions when
 # command output should participate in a returned value. Nested collections,
 # collection-valued parameters, map iteration, index assignment, and direct
-# function-call interpolation in command words remain deferred.
+# function-call interpolation in command words remain deferred. Scalar
+# function-call interpolation is supported in expression-backed strings.
 
 fn to_upper(s = "hello") {
   return s.upper()
@@ -486,8 +489,11 @@ let target = env.get("TARGET", "staging")
 env.set("NODE_ENV", "production")
 env.unset("DEBUG")
 
-# Direct `env.NAME` assignment remains deferred in v0.11.0.
-# env.NODE_ENV = "production"
+# Direct `env.NAME` reads and scalar assignments are the preferred v0.27.0
+# syntax. `env.get` / `env.set` / `env.unset` remain available for compatibility
+# and explicit dynamic-name use.
+let home = env.HOME
+env.NODE_ENV = "production"
 # env.PATH += "./node_modules/.bin"
 
 

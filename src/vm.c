@@ -206,6 +206,19 @@ dispatch_loop:
                 ip++;
                 break;
             }
+            case OP_SET_ENV: {
+                DsString rendered;
+                ds_value_to_string(&vm.regs[ins->a], &rendered);
+                if (setenv(ins->name, rendered.data ? rendered.data : "", 1) != 0) {
+                    ds_diag_error(vm.diag, ins->span, "failed to set environment `%s`", ins->name);
+                    ds_string_free(&rendered);
+                    rc = 1;
+                    goto done;
+                }
+                ds_string_free(&rendered);
+                ip++;
+                break;
+            }
             case OP_NOT: {
                 bool truth = false;
                 ds_value_truthy(&vm.regs[ins->a], &truth);

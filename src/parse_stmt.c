@@ -98,6 +98,37 @@ static DsStmt *parse_assign(Parser *p) {
     return stmt;
 }
 
+static DsStmt *parse_env_assign(Parser *p) {
+    DsToken *env_tok = parser_advance(p);
+    if (!parser_expect(p, DS_TOK_DOT, "expected `.` after `env` in environment assignment")) return NULL;
+    if (!parser_expect_identifier_like(p, "expected environment variable name after `env.`")) return NULL;
+    DsToken *field = parser_previous(p);
+    DsSpan op_span = parser_peek(p)->span;
+    if (!parser_advance_if(p, DS_TOK_EQUAL)) {
+        ds_diag_error(p->diag, op_span, "environment assignment supports only `=` in v0.27.0");
+        return NULL;
+    }
+    if (parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after environment assignment operator");
+        return NULL;
+    }
+    DsExpr *value = parse_expr(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_ASSIGN, (DsSpan){env_tok->span.start, value ? value->span.end : field->span.end, env_tok->span.source});
+    size_t len = 4 + field->text.len;
+    char *name = (char *)ds_xcalloc(len + 1, 1);
+    memcpy(name, "env.", 4);
+    memcpy(name + 4, field->text.data, field->text.len);
+    stmt->as.assign_stmt.name = (DsStr){name, len};
+    stmt->as.assign_stmt.op = DS_ASSIGN_SET;
+    stmt->as.assign_stmt.value = value;
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of environment assignment statement");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+    }
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
 static bool stmt_contains_assignment_operator(const Parser *p) {
     for (size_t i = p->pos; i < p->tokens->len; i++) {
         DsTokenKind kind = p->tokens->items[i].kind;
@@ -438,6 +469,8 @@ DsStmt *parse_stmt(Parser *p) {
         return NULL;
     }
     if (parser_advance_if(p, DS_TOK_LET)) return parse_let(p);
+    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 3 && memcmp(parser_peek(p)->text.data, "env", 3) == 0 &&
+        parser_next_at(p, DS_TOK_DOT) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "unsupported assignment target in v0.17.0");
         consume_bad_statement(p);

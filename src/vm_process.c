@@ -153,6 +153,22 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                 while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
                 if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':')) {
                     char *name = ds_str_dup_range(input->data + start, j - start);
+                    if (strcmp(name, "env") == 0 && input->data[j] == '.') {
+                        size_t field_start = ++j;
+                        if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+                            j++;
+                            while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                        }
+                        char *field = ds_str_dup_range(input->data + field_start, j - field_start);
+                        if (j >= input->len || input->data[j] != '}') {
+                            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            free(field); free(name); ds_string_free(out); return false;
+                        }
+                        const char *env_value = getenv(field);
+                        ds_string_append_cstr(out, env_value ? env_value : "");
+                        free(field); free(name);
+                        i = j; continue;
+                    }
                     DsValue value;
                     if (!lookup_var(vm, name, &value, span)) { free(name); ds_string_free(out); return false; }
                     if (input->data[j] == '.') {
@@ -229,6 +245,12 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         if (word.data[i] == '.') {
             char *name = ds_str_dup_range(word.data, i);
             char *field = ds_str_dup_range(word.data + i + 1, word.len - i - 1);
+            if (strcmp(name, "env") == 0) {
+                const char *value = getenv(field);
+                *out = ds_str_dup_range(value ? value : "", value ? strlen(value) : 0);
+                free(name); free(field);
+                return true;
+            }
             DsValue value;
             if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
             DsValue field_value = ds_value_null();

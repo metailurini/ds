@@ -1,6 +1,7 @@
 #include "bash_internal.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
     DsStr word = command_word.text;
@@ -25,6 +26,12 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
         if (word.data[i] == '.') {
             DsStr name = {word.data, i};
             DsStr field = {word.data + i + 1, word.len - i - 1};
+            if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
+                buf_append(out, "\"${");
+                buf_append_len(out, field.data, field.len);
+                buf_append(out, ":-}\"");
+                return true;
+            }
             if (!symbol_exists(&e->symbols, name)) {
                 ds_diag_error(e->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
                 return false;

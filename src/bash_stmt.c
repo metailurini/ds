@@ -804,6 +804,30 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             return true;
 
         case DS_LOWER_STMT_ASSIGN:
+            if (stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0) {
+                DsStr env_name = {stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4};
+                char tmp_buf[64];
+                snprintf(tmp_buf, sizeof(tmp_buf), "__env_value_%zu", e->temp_counter++);
+                DsStr tmp = {tmp_buf, strlen(tmp_buf)};
+                emit_indent(&e->out, indent);
+                emit_var_name(&e->out, tmp);
+                buf_append(&e->out, "=");
+                if (stmt->as.assign_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.assign_stmt.value->as.call.is_user_function) {
+                    buf_append(&e->out, "\n");
+                    emit_indent(&e->out, indent);
+                    if (!emit_user_function_value_call_into(e, tmp, stmt->as.assign_stmt.value, indent)) return false;
+                } else {
+                    if (!emit_value_expr(e, stmt->as.assign_stmt.value, &e->out)) return false;
+                    buf_append(&e->out, "\n");
+                }
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "export ");
+                buf_append_len(&e->out, env_name.data, env_name.len);
+                buf_append(&e->out, "=\"$");
+                emit_var_name(&e->out, tmp);
+                buf_append(&e->out, "\"\n");
+                return true;
+            }
             if (!is_safe_identifier(stmt->as.assign_stmt.name)) {
                 ds_diag_error(e->diag, stmt->span, "cannot emit unsafe Bash variable name `%.*s`", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);
                 return false;
