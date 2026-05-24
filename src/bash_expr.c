@@ -84,19 +84,6 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
             if (str_eq(expr->as.unary.op, "-")) return "int";
             return "unknown";
         case DS_LOWER_EXPR_CALL:
-            if (ds_stdlib_is_name(expr->as.call.name)) {
-                const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
-                if (!helper) return "unknown";
-                switch (helper->return_kind) {
-                    case DS_STDLIB_RETURN_BOOL: return "bool";
-                    case DS_STDLIB_RETURN_INT: return "int";
-                    case DS_STDLIB_RETURN_STRING: return "string";
-                    case DS_STDLIB_RETURN_ARRAY: return "array";
-                    case DS_STDLIB_RETURN_MAP: return "map";
-                    case DS_STDLIB_RETURN_COMMAND_RESULT: return "command_result";
-                    case DS_STDLIB_RETURN_STATEMENT_ONLY: return "unknown";
-                }
-            }
             return lower_value_type_name(expr->as.call.return_kind);
         case DS_LOWER_EXPR_FIELD: {
             const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
@@ -546,17 +533,6 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     }
     if (expr->kind == DS_LOWER_EXPR_CALL) {
         DsLowerValueKind kind = expr->as.call.return_kind;
-        if (ds_stdlib_is_name(expr->as.call.name)) {
-            const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
-            if (helper) {
-                switch (helper->return_kind) {
-                    case DS_STDLIB_RETURN_BOOL: kind = DS_LOWER_VALUE_BOOL; break;
-                    case DS_STDLIB_RETURN_INT: kind = DS_LOWER_VALUE_INT; break;
-                    case DS_STDLIB_RETURN_STRING: kind = DS_LOWER_VALUE_STRING; break;
-                    default: break;
-                }
-            }
-        }
         if (expr->as.call.is_user_function) {
             char temp_buf[64];
             temp_ds_name(temp_buf, sizeof(temp_buf), "cond", e->temp_counter++);

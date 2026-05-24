@@ -195,13 +195,10 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
             return false;
         case DS_EXPR_CALL: {
             const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
-            SymKind std_kind = SYM_UNKNOWN;
-            if (stdlib_return_kind(helper, &std_kind)) {
-                DsLowerValueKind lowered = lower_value_kind_from_sym(std_kind);
-                if (lowered != DS_LOWER_VALUE_UNKNOWN) {
-                    *kind_out = lowered;
-                    return true;
-                }
+            DsLowerValueKind lowered = lower_stdlib_return_value_kind(helper);
+            if (lowered != DS_LOWER_VALUE_UNKNOWN) {
+                *kind_out = lowered;
+                return true;
             }
             DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
             if (fn && fn->has_return && fn->all_paths_return && fn->return_kind != DS_LOWER_VALUE_UNKNOWN) {

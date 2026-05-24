@@ -292,6 +292,19 @@ bool command_result_field_kind(DsStr field, SymKind *kind_out) {
     return false;
 }
 
+bool lower_expr_produces_command_result(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_RUN) return true;
+    return expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.return_kind == DS_LOWER_VALUE_COMMAND_RESULT;
+}
+
+bool lower_expr_is_portable_command_result_return(const DsLowerExpr *expr) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_RUN || expr->kind == DS_LOWER_EXPR_IDENT) return true;
+    return expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function &&
+           expr->as.call.return_kind == DS_LOWER_VALUE_COMMAND_RESULT;
+}
+
 DsLowerValueKind lower_value_kind_from_sym(SymKind kind) {
     switch (kind) {
         case SYM_BOOL: return DS_LOWER_VALUE_BOOL;
@@ -923,7 +936,8 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     SymKind object_kind = SYM_UNKNOWN;
     DsLowerExpr *object = lower_expr(lower, expr->as.field.object, &object_kind);
     SymKind field_kind = SYM_UNKNOWN;
-    if (object_kind == SYM_COMMAND_RESULT) {
+    bool object_is_command_result = object_kind == SYM_COMMAND_RESULT || lower_expr_produces_command_result(object);
+    if (object_is_command_result) {
         if (!lower_expr_is_named_storage_ref(object)) {
             lower_reject_temporary_collection_access(lower, expr->span);
         }
@@ -1002,10 +1016,9 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
     }
     const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(expr->as.call.name);
     if (stdlib_helper) {
-        SymKind ret = SYM_UNKNOWN;
-        if (!stdlib_return_kind(stdlib_helper, &ret)) {
-            ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
-        } else if (!ds_stdlib_arity_ok(stdlib_helper, expr->as.call.args.len)) {
+        DsLowerValueKind ret_kind = lower_stdlib_return_value_kind(stdlib_helper);
+        SymKind ret = sym_kind_from_lower_value_kind(ret_kind);
+        if (!ds_stdlib_arity_ok(stdlib_helper, expr->as.call.args.len)) {
             if (is_string_helper_name(expr->as.call.name)) {
                 size_t expected = 0;
                 string_helper_arg_count_ok(expr->as.call.name, expr->as.call.args.len, &expected);
@@ -1036,7 +1049,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         }
         if (expr->as.call.args.len > 0) validate_glob_pattern_arg(lower, expr->as.call.name, expr->as.call.args.items[0]);
         *kind_out = ret;
-        out->as.call.return_kind = lower_value_kind_from_sym(ret);
+        out->as.call.return_kind = ret_kind;
         free(arg_kinds);
         return out;
     }
@@ -1190,11 +1203,8 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
                 lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) return SYM_BOOL;
             return SYM_UNKNOWN;
         case DS_LOWER_EXPR_CALL: {
-            const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
-            SymKind ret = SYM_UNKNOWN;
-            if (stdlib_return_kind(helper, &ret)) return ret;
-            DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
-            return fn && fn->has_return ? sym_kind_from_lower_value_kind(fn->return_kind) : SYM_UNKNOWN;
+            (void)lower;
+            return sym_kind_from_lower_value_kind(expr->as.call.return_kind);
         }
         case DS_LOWER_EXPR_ARRAY: return SYM_ARRAY;
         case DS_LOWER_EXPR_MAP: return SYM_MAP;

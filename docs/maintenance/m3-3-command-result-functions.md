@@ -546,3 +546,21 @@ M3.3 implementation cleanup can be considered complete when:
 - `docs/concept-map.md` can move Command-result functions from **Hell
   candidate** to **Watch**, not **Clear**, because command words and future
   portable temporary support can still affect the concept.
+
+## Implementation cleanup result
+
+The M3.3 cleanup pass moved this concept to **Watch** by making the existing
+metadata contract more explicit in code without changing language behavior:
+
+- stdlib return metadata maps once into lowered value-kind metadata;
+- `DS_LOWER_EXPR_CALL.return_kind` is the backend-facing call result contract for
+  both stdlib and user-function calls;
+- lowerer helpers classify command-result-producing expressions and portable
+  command-result return shapes;
+- Bash expression/statement type rendering consumes lowered call metadata instead
+  of re-deriving stdlib call result types from helper names.
+
+This is intentionally not **Clear**. Future command-result-producing helpers,
+direct temporary command-result field support, and command-word interpolation
+work must continue to update the lowerer/HIR contract first and then let VM/Bash
+consume accepted metadata.

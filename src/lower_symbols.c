@@ -37,18 +37,24 @@ bool split_member_name(DsStr name, DsStr *ns, DsStr *member) {
     return false;
 }
 
+DsLowerValueKind lower_stdlib_return_value_kind(const DsStdlibHelper *helper) {
+    if (!helper) return DS_LOWER_VALUE_UNKNOWN;
+    switch (helper->return_kind) {
+        case DS_STDLIB_RETURN_BOOL: return DS_LOWER_VALUE_BOOL;
+        case DS_STDLIB_RETURN_INT: return DS_LOWER_VALUE_INT;
+        case DS_STDLIB_RETURN_STRING: return DS_LOWER_VALUE_STRING;
+        case DS_STDLIB_RETURN_ARRAY: return DS_LOWER_VALUE_ARRAY;
+        case DS_STDLIB_RETURN_MAP: return DS_LOWER_VALUE_MAP;
+        case DS_STDLIB_RETURN_COMMAND_RESULT: return DS_LOWER_VALUE_COMMAND_RESULT;
+        case DS_STDLIB_RETURN_STATEMENT_ONLY: return DS_LOWER_VALUE_UNKNOWN;
+    }
+    return DS_LOWER_VALUE_UNKNOWN;
+}
+
 bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind) {
     if (!helper) return false;
-    switch (helper->return_kind) {
-        case DS_STDLIB_RETURN_BOOL: *kind = SYM_BOOL; return true;
-        case DS_STDLIB_RETURN_INT: *kind = SYM_INT; return true;
-        case DS_STDLIB_RETURN_STRING: *kind = SYM_STRING; return true;
-        case DS_STDLIB_RETURN_ARRAY: *kind = SYM_ARRAY; return true;
-        case DS_STDLIB_RETURN_MAP: *kind = SYM_MAP; return true;
-        case DS_STDLIB_RETURN_COMMAND_RESULT: *kind = SYM_COMMAND_RESULT; return true;
-        case DS_STDLIB_RETURN_STATEMENT_ONLY: *kind = SYM_UNKNOWN; return true;
-    }
-    return false;
+    *kind = sym_kind_from_lower_value_kind(lower_stdlib_return_value_kind(helper));
+    return true;
 }
 
 DsStr str_clone(DsStr s) {

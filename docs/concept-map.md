@@ -43,7 +43,7 @@ Risk labels:
 | Command words | AST command payload, then HIR command payload using `DsCommand*` | Parser for syntax shape; lowerer for interpolation/word legality | VM command process path; Bash command emitter | `docs/language.ds`, `docs/architecture.md`, `docs/source-map.md` | VM command tests, Bash parity tests, diagnostics for invalid words | **Hell candidate** |
 | Captured command results | HIR expression with shared command-result metadata and runtime `DsValue` object | Lowerer | VM process execution; Bash command-result helpers | Language docs, architecture backend boundary docs | VM tests, Bash parity tests, field diagnostics | **Watch** |
 | Command-result fields | Shared descriptor table in command metadata, consumed through HIR | Lowerer for field validity | VM field reads/interpolation; Bash condition/expression helpers | Language docs and architecture command-result notes | Diagnostic tests plus VM/Bash parity field tests | **Watch** |
-| Command-result functions | Stdlib helper metadata plus HIR call expression/statement; see `docs/maintenance/m3-3-command-result-functions.md` | Lowerer via stdlib metadata | `vm_stdlib.c`; Bash stdlib/helper emission | `docs/maintenance/m3-3-command-result-functions.md`, language stdlib docs, runtime docs | VM tests, Bash parity tests, wrong-arity diagnostics | **Hell candidate** |
+| Command-result functions | Stdlib/helper metadata lowered into `DS_LOWER_EXPR_CALL.return_kind` plus `DS_LOWER_VALUE_COMMAND_RESULT`; see `docs/maintenance/m3-3-command-result-functions.md` | Lowerer via stdlib/function metadata and command-result field catalog | VM stdlib/user-call execution; Bash stdlib/helper emission consuming lowered call metadata | `docs/maintenance/m3-3-command-result-functions.md`, language stdlib docs, runtime docs | VM tests, Bash parity tests, wrong-arity/field/temporary-access diagnostics | **Watch** |
 | Function return kinds | Function declaration metadata and HIR return kind/value kind; see `docs/maintenance/m3-2-function-return-kinds.md` | Function collection/lowering | VM scope/function call path; Bash function emission | `docs/maintenance/m3-2-function-return-kinds.md`, language docs, and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Watch** |
 | Direct function-call interpolation in command words | HIR command word segment containing a validated expression result | Lowerer | VM command interpolation; Bash command rendering/quoting | Language docs and architecture command word rules | VM/Bash parity tests; diagnostics for unsupported return kinds | **Hell candidate** |
 | Pipeline behavior | HIR command/pipeline command payload | Parser for syntax; lowerer for semantic restrictions | VM process pipeline execution; Bash command emitter | Language docs and runtime/process docs | VM/Bash parity tests including stdout/stderr/status | **Hell candidate** |
@@ -96,13 +96,15 @@ These concepts have the highest risk of becoming "kind of everywhere":
 4. **Mutable collections (`map` iteration, index assignment)**: collection value
    encoding already affects VM values and Bash helper sidecars. Mutation and map
    iteration need explicit HIR nodes and tests before adding syntax sugar.
-5. **Command-result functions**: M3.3 now has a maintenance spec in
-   `docs/maintenance/m3-3-command-result-functions.md`. This remains Hell until
-   implementation cleanup proves stdlib/function metadata drives command-result
-   calls, returns, fields, VM execution, and Bash emission without ad hoc backend
-   validation.
-
 Moved to **Watch** after maintenance cleanup:
+
+- **Command-result functions**: M3.3 names the lowerer/HIR command-result
+  contract. Stdlib return metadata now maps once into lowered call value kinds,
+  command-result producers/portable returns are classified by lowerer helpers,
+  and Bash expression/statement typing consumes lowered call metadata instead of
+  re-deriving stdlib call result types from helper names. Remaining risk is drift
+  when future command-result-producing helpers or direct temporary support are
+  added.
 
 - **Function return kinds**: M3.2 centralizes return-statement validation in the
   lowerer, removes the parser-side semantic `return`-outside-function diagnostic,

@@ -270,7 +270,7 @@ static bool lower_return_value_has_portable_backend_representation(DsLowerValueK
         case DS_LOWER_VALUE_MAP:
             return value->kind == DS_LOWER_EXPR_MAP || value->kind == DS_LOWER_EXPR_IDENT;
         case DS_LOWER_VALUE_COMMAND_RESULT:
-            return value->kind == DS_LOWER_EXPR_RUN || value->kind == DS_LOWER_EXPR_IDENT;
+            return lower_expr_is_portable_command_result_return(value);
         case DS_LOWER_VALUE_STRING:
         case DS_LOWER_VALUE_INT:
         case DS_LOWER_VALUE_BOOL:
