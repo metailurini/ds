@@ -259,6 +259,40 @@ static void emit_elem_type_var_name(EmitBuf *out, DsStr name) {
     buf_append_len(out, name.data, name.len);
 }
 
+static void emit_map_value_type_var_name(EmitBuf *out, DsStr name) {
+    buf_append(out, "__ds_value_type_");
+    buf_append_len(out, name.data, name.len);
+}
+
+static void emit_array_element_type_entries(BashEmitter *e, const DsLowerExprVec *elements, int indent, const char *target_name) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "declare -ga ");
+    buf_append(&e->out, target_name);
+    buf_append(&e->out, "=(");
+    for (size_t i = 0; i < elements->len; i++) {
+        if (i) buf_append(&e->out, " ");
+        const char *type = stmt_expr_type_name(elements->items[i]);
+        bash_single_quote(&e->out, type, strlen(type));
+    }
+    buf_append(&e->out, ")\n");
+}
+
+static void emit_map_value_type_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, int indent, const char *target_name) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "declare -gA ");
+    buf_append(&e->out, target_name);
+    buf_append(&e->out, "=(");
+    for (size_t i = 0; i < entries->len; i++) {
+        if (i) buf_append(&e->out, " ");
+        buf_append(&e->out, "[");
+        bash_single_quote(&e->out, entries->items[i].key.data, entries->items[i].key.len);
+        buf_append(&e->out, "]=");
+        const char *type = stmt_expr_type_name(entries->items[i].value);
+        bash_single_quote(&e->out, type, strlen(type));
+    }
+    buf_append(&e->out, ")\n");
+}
+
 static void emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl) {
     if (!e->needs_case_types) return;
     emit_indent(&e->out, indent);
@@ -296,6 +330,53 @@ static void emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLo
             bash_single_quote(&e->out, type, strlen(type));
         }
         buf_append(&e->out, ")\n");
+    } else if (value->kind == DS_LOWER_EXPR_MAP) {
+        emit_indent(&e->out, indent);
+        if (local_decl) buf_append(&e->out, "local -A ");
+        else buf_append(&e->out, "declare -A ");
+        emit_map_value_type_var_name(&e->out, name);
+        buf_append(&e->out, "=(");
+        for (size_t i = 0; i < value->as.map.entries.len; i++) {
+            if (i) buf_append(&e->out, " ");
+            buf_append(&e->out, "[");
+            bash_single_quote(&e->out, value->as.map.entries.items[i].key.data, value->as.map.entries.items[i].key.len);
+            buf_append(&e->out, "]=");
+            const char *type = stmt_expr_type_name(value->as.map.entries.items[i].value);
+            bash_single_quote(&e->out, type, strlen(type));
+        }
+        buf_append(&e->out, ")\n");
+    } else if (value->kind == DS_LOWER_EXPR_INDEX && value->as.index.object->kind == DS_LOWER_EXPR_IDENT) {
+        emit_indent(&e->out, indent);
+        if (local_decl) buf_append(&e->out, "local ");
+        emit_type_var_name(&e->out, name);
+        buf_append(&e->out, "=");
+        if (value->as.index.object_is_array) {
+            buf_append(&e->out, "\"${");
+            emit_elem_type_var_name(&e->out, value->as.index.object->as.text);
+            buf_append(&e->out, "[");
+            if (value->as.index.index->kind == DS_LOWER_EXPR_INT) {
+                buf_append_len(&e->out, value->as.index.index->as.text.data, value->as.index.index->as.text.len);
+            } else if (value->as.index.index->kind == DS_LOWER_EXPR_IDENT) {
+                buf_append(&e->out, "$");
+                emit_var_name(&e->out, value->as.index.index->as.text);
+            } else {
+                buf_append(&e->out, "0");
+            }
+            buf_append(&e->out, "]:-unknown}\"\n");
+        } else if (value->as.index.object_is_map) {
+            buf_append(&e->out, "\"${");
+            emit_map_value_type_var_name(&e->out, value->as.index.object->as.text);
+            buf_append(&e->out, "[");
+            if (value->as.index.map_key_literal) {
+                bash_single_quote(&e->out, value->as.index.map_key.data, value->as.index.map_key.len);
+            } else if (value->as.index.index->kind == DS_LOWER_EXPR_IDENT) {
+                buf_append(&e->out, "$");
+                emit_var_name(&e->out, value->as.index.index->as.text);
+            } else {
+                buf_append(&e->out, "");
+            }
+            buf_append(&e->out, "]:-unknown}\"\n");
+        }
     }
 }
 
@@ -324,11 +405,19 @@ static bool emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValue
             buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
             emit_var_name(&e->out, name);
             buf_append(&e->out, "=()\n");
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
+            emit_elem_type_var_name(&e->out, name);
+            buf_append(&e->out, "=()\n");
             return true;
         case DS_LOWER_VALUE_MAP:
             emit_indent(&e->out, indent);
             buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
             emit_var_name(&e->out, name);
+            buf_append(&e->out, "=()\n");
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+            emit_map_value_type_var_name(&e->out, name);
             buf_append(&e->out, "=()\n");
             return true;
         case DS_LOWER_VALUE_COMMAND_RESULT:
@@ -654,6 +743,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent);
+                if (e->function_depth > 0) buf_append(&e->out, "local -a ");
+                else buf_append(&e->out, "declare -a ");
+                emit_elem_type_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "=()\n");
+                emit_indent(&e->out, indent);
                 size_t temp_id = e->temp_counter++;
                 buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
                 emit_indent(&e->out, indent);
@@ -663,7 +757,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, "while IFS= read -r __ds_line; do ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
-                buf_append(&e->out, "+=(\"$__ds_line\"); done");
+                buf_append(&e->out, "+=(\"$__ds_line\"); ");
+                emit_elem_type_var_name(&e->out, stmt->as.let_stmt.name);
+                buf_append(&e->out, "+=(\"string\"); done");
                 buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"", temp_id);
@@ -988,16 +1084,15 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     buf_append(&e->out, "declare -ga __ds_return_array=");
                     if (!emit_array_elements(e, &stmt->as.return_stmt.value->as.array.elements, &e->out)) return false;
                     buf_append(&e->out, "\n");
-                    emit_indent(&e->out, indent);
-                    buf_append(&e->out, "__ds_return_elem_type='unknown'\n");
+                    emit_array_element_type_entries(e, &stmt->as.return_stmt.value->as.array.elements, indent, "__ds_return_elem_type");
                 } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
                     buf_append(&e->out, "declare -ga __ds_return_array=(\"${");
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
                     buf_append(&e->out, "[@]}\")\n");
                     emit_indent(&e->out, indent);
-                    buf_append(&e->out, "__ds_return_elem_type=\"${");
+                    buf_append(&e->out, "declare -ga __ds_return_elem_type=(\"${");
                     emit_elem_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, ":-unknown}\"\n");
+                    buf_append(&e->out, "[@]}\")\n");
                 } else {
                     ds_diag_error(e->diag, stmt->span, "Bash emission supports returning array literals, array variables, or forwarded array calls in v0.26.0");
                     return false;
@@ -1007,6 +1102,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     buf_append(&e->out, "declare -gA __ds_return_map=");
                     if (!emit_map_entries(e, &stmt->as.return_stmt.value->as.map.entries, &e->out)) return false;
                     buf_append(&e->out, "\n");
+                    emit_map_value_type_entries(e, &stmt->as.return_stmt.value->as.map.entries, indent, "__ds_return_value_type");
                 } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
                     buf_append(&e->out, "declare -gA __ds_return_map=()\n");
                     emit_indent(&e->out, indent);
@@ -1014,6 +1110,14 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
                     buf_append(&e->out, "[@]}\"; do __ds_return_map[\"$__ds_key\"]=\"${");
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
+                    buf_append(&e->out, "[$__ds_key]}\"; done\n");
+                    emit_indent(&e->out, indent);
+                    buf_append(&e->out, "declare -gA __ds_return_value_type=()\n");
+                    emit_indent(&e->out, indent);
+                    buf_append(&e->out, "for __ds_key in \"${!");
+                    emit_map_value_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
+                    buf_append(&e->out, "[@]}\"; do __ds_return_value_type[\"$__ds_key\"]=\"${");
+                    emit_map_value_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
                     buf_append(&e->out, "[$__ds_key]}\"; done\n");
                 } else {
                     ds_diag_error(e->diag, stmt->span, "Bash emission supports returning map literals, map variables, or forwarded map calls in v0.26.0");

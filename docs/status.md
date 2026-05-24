@@ -2,8 +2,8 @@
 
 This document is the user-facing snapshot after the completed implementation
 surface through `v0.23.0`, the `v0.24.0` pre-1.0 hardening pass, the completed
-`v0.25.0` scalar function value-return ABI pass, and the implementation-only
-`v0.26.0` flat structured function-return pass. It is a
+`v0.25.0` scalar function value-return ABI pass, and the `v0.26.0` flat
+structured function-return implementation pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -63,6 +63,8 @@ regex/range/membership implementation and test pass:
   and value-returning function calls in expressions; emitted Bash now carries
   these returns through a private typed `__ds_` payload instead of untyped
   stdout;
+- returned arrays/maps in emitted Bash carry the scalar kind sidecars needed for
+  `in`, indexing, and map field truthiness parity;
 - `return expr` inside function bodies for scalar string/int/bool values, flat
   arrays, flat maps, and command results, with conservative same-kind/all-paths
   validation before a function can be used as a value;

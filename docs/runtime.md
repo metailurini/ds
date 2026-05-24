@@ -683,8 +683,13 @@ private function-value boundary. VM execution stores the returned `DsValue` in
 the caller; standalone Bash uses private `__ds_return_type` metadata plus
 `__ds_` payload variables for scalar, array, map, and command-result shapes.
 The exact Bash encoding is intentionally private, but it must preserve empty
-strings, whitespace, shell metacharacters, and text newlines without calling the
-`ds` binary from generated scripts.
+strings, whitespace, shell metacharacters, text newlines, and scalar kind
+metadata without calling the `ds` binary from generated scripts. For returned
+arrays, generated Bash copies both the array payload and the per-element scalar
+kind sidecar used by indexing and `in` comparisons. For returned maps, generated
+Bash copies both the associative-array payload and the per-key scalar kind
+sidecar used by field/index reads, so returned `false` and `0` values keep ds
+truthiness instead of becoming truthy shell strings.
 
 User-function calls that initialize, assign, forward-return, participate in
 string-sensitive conditions, select `case` arms, or feed direct user-function
