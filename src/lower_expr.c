@@ -21,6 +21,23 @@ static void lower_reject_temporary_collection_access(Lower *lower, DsSpan span) 
                   "collection and command-result field/index access requires a named binding for VM/Bash parity; bind the value to a variable first");
 }
 
+static bool lower_expr_is_portable_collection_index(const DsLowerExpr *expr, bool map_index) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_IDENT) return true;
+    return map_index ? expr->kind == DS_LOWER_EXPR_STRING : expr->kind == DS_LOWER_EXPR_INT;
+}
+
+static void lower_reject_computed_collection_index(Lower *lower, DsSpan span) {
+    /*
+     * VM bytecode can evaluate computed index expressions directly. Standalone
+     * Bash emission currently renders portable collection indexing only from a
+     * literal index/key or a named variable. Keep that language restriction in
+     * lowering so the Bash emitter does not become the semantic gatekeeper.
+     */
+    ds_diag_error(lower->diag, span,
+                  "collection index expression must be a literal or variable for VM/Bash parity; bind the computed index to a variable first");
+}
+
 static bool int_literal_in_range(DsStr text) {
     static const char max_text[] = "9223372036854775807";
     size_t start = 0;
@@ -1110,6 +1127,9 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         if (!lower_expr_is_named_storage_ref(object)) {
             lower_reject_temporary_collection_access(lower, expr->span);
         }
+        if (!lower_expr_is_portable_collection_index(index, false)) {
+            lower_reject_computed_collection_index(lower, expr->as.index.index->span);
+        }
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.index.index->as.unary.op, "-") &&
             expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {
@@ -1122,6 +1142,9 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         out->as.index.object_is_map = true;
         if (!lower_expr_is_named_storage_ref(object)) {
             lower_reject_temporary_collection_access(lower, expr->span);
+        }
+        if (!lower_expr_is_portable_collection_index(index, true)) {
+            lower_reject_computed_collection_index(lower, expr->as.index.index->span);
         }
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;

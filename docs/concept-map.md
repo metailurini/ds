@@ -62,7 +62,7 @@ Risk labels:
 | Lists/arrays | AST collection literal, HIR collection expression, runtime array value | Parser for literal shape; lowerer for value-kind/element restrictions | VM runtime values; Bash collection helpers/tags | Language docs and runtime docs | VM/Bash parity tests; type/shape diagnostics | **Watch** |
 | Maps/objects | AST map literal, HIR map expression, runtime map value | Parser for literal shape; lowerer for key/value restrictions | VM runtime map values; Bash collection helpers/tags | Language docs and runtime docs | VM/Bash parity tests; duplicate/invalid key diagnostics | **Watch** |
 | Map iteration | No stable execution home if deferred; eventually HIR iterable semantics | Lowerer should reject until defined | VM iterator runtime; Bash collection iteration helpers | Language docs and milestones | Diagnostic tests now; future VM/Bash parity tests | **Hell candidate** |
-| Index reads | HIR index expression over named lists/maps where supported | Lowerer for target/key/index legality and named-binding parity restrictions | VM runtime indexing; Bash helper emission | Language docs and runtime docs | VM/Bash parity tests; bounds/type diagnostics; diagnostics for temporary collection access | **Watch** |
+| Index reads | HIR index expression over named lists/maps where supported | Lowerer for target/key/index legality, named-binding parity restrictions, and portable literal-or-variable index expressions | VM runtime indexing; Bash helper emission | Language docs and runtime docs | VM/Bash parity tests; bounds/type diagnostics; diagnostics for temporary collection/computed-index access | **Watch** |
 | Index assignment | No stable home if deferred; should become explicit HIR assignment target | Lowerer should reject until assignment semantics are defined | VM mutation runtime; Bash collection update helpers | Language docs and roadmap/milestones | Diagnostic tests now; future VM/Bash parity tests | **Hell candidate** |
 | Scalar variables and assignment | HIR variable declarations/assignments and lowerer symbol table facts | Parser for statement syntax; lowerer for symbol/value-kind rules | VM scope runtime; Bash statement emission | Language docs, architecture lowering docs | VM/Bash parity tests; duplicate/unknown/invalid assignment diagnostics | **Clear** |
 | Conditionals and boolean logic | HIR expression/statement forms | Lowerer for expression validity and type-like constraints | VM interpreter; Bash condition emitter | Language docs | VM/Bash parity tests; diagnostics | **Clear** |
@@ -103,9 +103,10 @@ These concepts have the highest risk of becoming "kind of everywhere":
    accepted only when it has backend-neutral HIR/shared metadata and defined VM
    and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
    or currently rejected. Lowering now rejects temporary collection and
-   command-result field/index access that previously reached VM but failed Bash
-   emission. Remaining risk is enforcement drift during feature work, so keep it
-   under **Watch** rather than treating it as vague ownership.
+   command-result field/index access, plus computed collection index expressions,
+   that previously reached VM but failed Bash emission. Remaining risk is
+   enforcement drift during feature work, so keep it under **Watch** rather than
+   treating it as vague ownership.
 7. **Diagnostics**: every phase can emit diagnostics, but ownership must follow
    the rule being checked. Parser reports syntax, lowerer reports semantic
    language misuse, VM reports runtime/OS failures, and Bash emitter reports only

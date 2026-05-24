@@ -574,6 +574,22 @@ DS
 assert_check_fails temporary_command_result_field_rejected "$FIX/temporary_command_result_field_rejected.ds" 'requires a named binding for VM/Bash parity'
 assert_emit_fails temporary_command_result_field_rejected "$FIX/temporary_command_result_field_rejected.ds" 'requires a named binding for VM/Bash parity'
 
+write_fixture "$FIX/computed_array_index_rejected.ds" <<'DS'
+let apps = ["api", "web"]
+let first = apps[0 + 0]
+DS
+assert_check_fails computed_array_index_rejected "$FIX/computed_array_index_rejected.ds" 'collection index expression must be a literal or variable for VM/Bash parity'
+assert_emit_fails computed_array_index_rejected "$FIX/computed_array_index_rejected.ds" 'collection index expression must be a literal or variable for VM/Bash parity'
+run_fail computed_array_index_rejected_run "$DS" run "$FIX/computed_array_index_rejected.ds"
+assert_diag "$TMP/computed_array_index_rejected_run.err" 'collection index expression must be a literal or variable for VM/Bash parity' 'computed_array_index_rejected run diagnostic'
+
+write_fixture "$FIX/computed_map_index_rejected.ds" <<'DS'
+let app = { name: "api" }
+let name = app["name".trim()]
+DS
+assert_check_fails computed_map_index_rejected "$FIX/computed_map_index_rejected.ds" 'collection index expression must be a literal or variable for VM/Bash parity'
+assert_emit_fails computed_map_index_rejected "$FIX/computed_map_index_rejected.ds" 'collection index expression must be a literal or variable for VM/Bash parity'
+
 write_fixture "$FIX/mixed_array_elements.ds" <<'DS'
 fn values() {
   return [1, "two", false]

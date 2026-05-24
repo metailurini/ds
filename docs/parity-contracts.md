@@ -293,7 +293,10 @@ assignment/iteration nodes before implementation. Bash helper sidecars and VM
 runtime containers are not the canonical semantics. Field/index reads currently
 require named collection storage; indexing array literals or function-call
 collection results directly is rejected by lowering until HIR/Bash have a
-portable temporary collection representation.
+portable temporary collection representation. Collection index expressions are
+also limited to literals or named variables; computed indexes must be bound to a
+variable first so the lowerer, not the Bash emitter, owns the unsupported-form
+diagnostic.
 
 ### Regex
 
