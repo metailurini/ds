@@ -334,7 +334,17 @@ static DsLowerValueKind ast_literal_default_kind(const DsExpr *expr) {
     }
 }
 
-void infer_function_return_signatures(Lower *lower, const DsAst *ast) {
+void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
+    /*
+     * Provisional forward-call contract discovery.
+     *
+     * This pass intentionally runs before function bodies are lowered so calls
+     * to functions declared later can be validated in expression position. It
+     * does not emit user-facing return diagnostics and is not the final source
+     * of truth for return statements. Concrete return statements are still
+     * lowered and validated by lower_validate_function_return_contract() in
+     * lower_stmt.c, which owns source-language return-kind diagnostics.
+     */
     if (!ast || lower->program->functions.len == 0) return;
     for (size_t pass = 0; pass < lower->program->functions.len; pass++) {
         bool changed = false;
@@ -573,16 +583,7 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     lower->function_depth++;
     lower->current_function = fn;
     for (size_t i = 0; i < fn->params.len; i++) {
-        SymKind kind = SYM_UNKNOWN;
-        switch (fn->params.items[i].default_kind) {
-            case DS_LOWER_VALUE_BOOL: kind = SYM_BOOL; break;
-            case DS_LOWER_VALUE_INT: kind = SYM_INT; break;
-            case DS_LOWER_VALUE_STRING: kind = SYM_STRING; break;
-            case DS_LOWER_VALUE_COMMAND_RESULT: kind = SYM_COMMAND_RESULT; break;
-            case DS_LOWER_VALUE_ARRAY: kind = SYM_ARRAY; break;
-            case DS_LOWER_VALUE_MAP: kind = SYM_MAP; break;
-            case DS_LOWER_VALUE_UNKNOWN: kind = SYM_UNKNOWN; break;
-        }
+        SymKind kind = sym_kind_from_lower_value_kind(fn->params.items[i].default_kind);
         scope_define(lower, &local, fn->params.items[i].name, kind, fn->params.items[i].span);
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);

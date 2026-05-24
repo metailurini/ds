@@ -40,9 +40,12 @@ finding parity or diagnostic gaps.
 Implementation status after M3.2 cleanup: the concept is **Watch** in
 `docs/concept-map.md`. The lowerer is the source-language validation owner, the
 parser no longer emits the duplicate semantic `return`-outside-function
-diagnostic, and emitted Bash helper failures are documented as internal ABI
-invariants. Remaining risk is future drift when new command interpolation or
-structured-return surfaces add more call/return positions.
+diagnostic, provisional return-contract discovery is explicitly named as a
+lowerer prepass for forward value calls, expression-position call validation is
+funneled through a lowerer helper, and VM/Bash return helper failures are
+documented as internal invariants. Remaining risk is future drift when new
+command interpolation or structured-return surfaces add more call/return
+positions.
 
 ## Current implementation trace
 
@@ -121,9 +124,11 @@ Current role:
   - `all_paths_return`;
   - `contains_plain_command`.
 - `DS_LOWER_STMT_RETURN` carries the lowered return expression and return kind.
-- `lower_functions.c` collects function signatures, pre-infers return kinds for
-  known return expressions, computes all-paths-return state, and performs
-  recursion/call graph checks.
+- `lower_functions.c` collects function signatures, predeclares provisional
+  return contracts for known return expressions so forward value calls can be
+  validated, computes all-paths-return state, and performs recursion/call graph
+  checks. This discovery pass does not own final source-language diagnostics;
+  concrete `return` statements are still lowered and validated in `lower_stmt.c`.
 - `lower_expr.c` validates user-function calls in expression position, including
   wrong arity, no-value functions, not-all-paths-return functions, plain-command
   functions, argument kind checks, and maps the function return kind back to the
@@ -134,9 +139,10 @@ Current role:
 
 Current risk:
 
-- Return kind inference exists in more than one shape: an AST prepass in
-  `lower_functions.c`, final return statement validation in `lower_stmt.c`, and
-  call-position validation in `lower_expr.c`.
+- Return kind flow intentionally has three lowerer-owned steps: provisional
+  signature discovery in `lower_functions.c`, final return-statement validation
+  in `lower_stmt.c`, and call-position validation in `lower_expr.c`. The risk is
+  future drift between those steps.
 - Structured return portability is now lowerer-owned, but the contract is still
   implicit in helper functions and diagnostics.
 - Some return-call restrictions are expressed as function metadata booleans rather
@@ -317,7 +323,7 @@ The architectural failure is that "function return kind" is currently an emergen
 property of several implementation facts:
 
 - AST return expression shape;
-- function collection/pre-inference;
+- function collection/provisional return-contract discovery;
 - lowerer symbol kind;
 - `DsLowerValueKind`;
 - user-function call validation;

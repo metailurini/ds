@@ -339,6 +339,23 @@ void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExp
     }
 }
 
+static void validate_user_function_value_call(Lower *lower, const DsLowerFn *fn, DsSpan span) {
+    /*
+     * Function return kind is a lowerer/HIR contract. Expression-position calls
+     * consume the function metadata collected and finalized by lowering; VM and
+     * Bash backends must not rediscover whether the function is value-capable.
+     */
+    if (!fn->has_return) {
+        ds_diag_error(lower->diag, span, "function `%.*s` does not return a value", (int)fn->name.len, fn->name.data);
+    } else if (!fn->all_paths_return) {
+        ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a value because not all control paths return in v0.21.0", (int)fn->name.len, fn->name.data);
+    } else if (fn->contains_plain_command) {
+        ds_diag_error(lower->diag, span,
+                      "function `%.*s` cannot be used as a value because it contains plain command statements in v0.25.0; redirect debug output away from stdout, capture command output with `run`, or call it as a statement",
+                      (int)fn->name.len, fn->name.data);
+    }
+}
+
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs);
 
@@ -1040,24 +1057,8 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             ds_diag_error(lower->diag, expr->span, "function `%.*s` called with wrong number of arguments", (int)fn->name.len, fn->name.data);
         }
         validate_user_call_arg_kinds(lower, fn, &expr->as.call.args, arg_kinds);
-        if (!fn->has_return) {
-            ds_diag_error(lower->diag, expr->span, "function `%.*s` does not return a value", (int)fn->name.len, fn->name.data);
-        } else if (!fn->all_paths_return) {
-            ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a value because not all control paths return in v0.21.0", (int)fn->name.len, fn->name.data);
-        } else if (fn->contains_plain_command) {
-            ds_diag_error(lower->diag, expr->span,
-                          "function `%.*s` cannot be used as a value because it contains plain command statements in v0.25.0; redirect debug output away from stdout, capture command output with `run`, or call it as a statement",
-                          (int)fn->name.len, fn->name.data);
-        }
-        switch (fn->return_kind) {
-            case DS_LOWER_VALUE_BOOL: *kind_out = SYM_BOOL; break;
-            case DS_LOWER_VALUE_INT: *kind_out = SYM_INT; break;
-            case DS_LOWER_VALUE_STRING: *kind_out = SYM_STRING; break;
-            case DS_LOWER_VALUE_ARRAY: *kind_out = SYM_ARRAY; break;
-            case DS_LOWER_VALUE_MAP: *kind_out = SYM_MAP; break;
-            case DS_LOWER_VALUE_COMMAND_RESULT: *kind_out = SYM_COMMAND_RESULT; break;
-            default: *kind_out = SYM_UNKNOWN; break;
-        }
+        validate_user_function_value_call(lower, fn, expr->span);
+        *kind_out = sym_kind_from_lower_value_kind(fn->return_kind);
         out->as.call.is_user_function = true;
         out->as.call.return_kind = fn->return_kind;
         free(arg_kinds);

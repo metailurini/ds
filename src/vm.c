@@ -528,7 +528,16 @@ dispatch_loop:
             }
             case OP_RETURN_VALUE: {
                 size_t return_ip = 0;
-                if (vm.return_len == 0) { ds_diag_error(diag, ins->span, "return outside active function"); rc = 1; goto done; }
+                if (vm.return_len == 0) {
+                    /*
+                     * Lowering only emits OP_RETURN_VALUE inside lowered
+                     * function bodies. Reaching this path means the accepted
+                     * HIR/bytecode violated the function-return contract.
+                     */
+                    ds_diag_error(diag, ins->span, "internal VM return invariant failed: return outside active function");
+                    rc = 1;
+                    goto done;
+                }
                 int dst = vm.return_dsts[vm.return_len - 1];
                 VmScope *caller_scope = vm.return_scopes[vm.return_len - 1];
                 DsValue value = ds_value_copy(&vm.regs[ins->a]);

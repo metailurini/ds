@@ -101,9 +101,11 @@ Moved to **Watch** after maintenance cleanup:
 
 - **Function return kinds**: M3.2 centralizes return-statement validation in the
   lowerer, removes the parser-side semantic `return`-outside-function diagnostic,
-  and documents Bash return helper failures as internal ABI invariants. Remaining
-  risk is drift when future command interpolation or structured-return features
-  add new call/return positions.
+  names provisional return-contract discovery for forward value calls, funnels
+  expression-position call validation through a lowerer helper, and documents VM
+  and Bash return fallbacks as internal invariants. Remaining risk is drift when
+  future command interpolation or structured-return features add new call/return
+  positions.
 5. **Bash parity itself**: narrowed by `docs/parity-contracts.md`. A feature is
    accepted only when it has backend-neutral HIR/shared metadata and defined VM
    and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
