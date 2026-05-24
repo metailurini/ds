@@ -312,9 +312,10 @@ fn deploy_default(target = "staging") {
 # scalar return payload. Statement-style calls may still stream stdout and ignore
 # the scalar return. Use captured `run` expressions inside value functions when
 # command output should participate in a returned value. Nested collections,
-# collection-valued parameters, map iteration, index assignment, and direct
-# function-call interpolation in command words remain deferred. Scalar
-# function-call interpolation is supported in expression-backed strings.
+# collection-valued parameters, map iteration, and index assignment remain
+# deferred. Scalar function-call interpolation is supported in expression-backed
+# strings and quoted command words; command words pre-evaluate those calls before
+# launching the outer command.
 
 fn to_upper(s = "hello") {
   return s.upper()

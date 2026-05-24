@@ -288,11 +288,12 @@ returned value. Expression-backed string interpolation can include
 scalar value-returning calls. v0.27.0 also adds direct `env.NAME` reads and
 `env.NAME = scalar` assignment; missing environment variables read as an empty
 string, and assignments are exported to later child commands in both VM and
-emitted Bash. Command-word interpolation supports the legacy `{name}` /
-`{name.field}` forms, `{env.NAME}`, direct `env.NAME` command arguments, and
-integer arithmetic expressions; direct function-call interpolation in command
-words still emits a targeted diagnostic telling callers to bind the string
-expression first. Statement-style calls may still ignore returned values.
+emitted Bash. Command-word interpolation supports the legacy `{name}` / `{name.field}` forms,
+`{env.NAME}`, direct `env.NAME` command arguments, integer arithmetic
+expressions, and direct scalar value-returning function calls in quoted command
+words. Interpolated function calls are pre-evaluated before the outer command
+launches; unsupported collection/map/command-result interpolation remains
+deferred. Statement-style calls may still ignore returned values.
 `examples/function-values.ds` shows the supported return, arithmetic, and
 expression interpolation path.
 The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,

@@ -783,7 +783,8 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             break;
         }
         case DS_LOWER_STMT_BLOCK:
-            compile_scoped_block(p, stmt);
+            if (stmt->as.block_stmt.scoped) compile_scoped_block(p, stmt);
+            else for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) compile_stmt(p, stmt->as.block_stmt.statements.items[i]);
             break;
         case DS_LOWER_STMT_ASSERT: {
             int cond = compile_expr(p, stmt->as.assert_stmt.condition);

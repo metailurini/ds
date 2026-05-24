@@ -209,7 +209,7 @@ struct DsLowerStmt {
         struct { DsStr name; DsLowerExpr *value; } let_stmt;
         struct { DsStr name; DsLowerAssignOp op; DsLowerExpr *value; } assign_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
-        struct { DsLowerStmtVec statements; } block_stmt;
+        struct { DsLowerStmtVec statements; bool scoped; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
         struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; } for_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *body; } while_stmt;

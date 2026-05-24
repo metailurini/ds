@@ -713,10 +713,11 @@ than baking values in during emission.
 Integer arithmetic uses the same signed 64-bit contract in both backends: `*`,
 `/`, `%`, `**`, unary `-`, and compound integer updates diagnose division by
 zero, negative exponents, out-of-range integer literals, and overflow instead of
-silently wrapping. Expression-backed interpolation supports scalar function
-calls; command-word interpolation supports legacy variable/field interpolation
-and integer arithmetic, while direct function calls in command words must be
-bound first.
+silently wrapping. Expression-backed interpolation supports scalar function calls. Quoted command
+words use the same scalar interpolation surface for direct value-returning
+function calls by pre-materializing each interpolated call into a private string
+variable before the command launches, preserving quoting and avoiding generated
+Bash calls back into `ds`.
 
 
 ## Cleanup and signal runtime

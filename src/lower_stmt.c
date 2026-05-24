@@ -1,6 +1,7 @@
 #include "lower_internal.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
@@ -67,6 +68,7 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
 
 DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope) {
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_BLOCK, block->span);
+    out->as.block_stmt.scoped = child_scope;
     Scope *saved = lower->scope;
     Scope *local = NULL;
     if (child_scope) {
@@ -100,6 +102,99 @@ static DsLowerAssignOp lower_assign_op(DsAssignOp op) {
 static void maybe_update_symbol(Symbol *sym, SymKind kind) {
     if (!sym) return;
     if (kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) sym->kind = kind;
+}
+
+static bool quoted_word_has_expr_call_interpolation(Lower *lower, DsStr word) {
+    if (word.len < 2 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
+    DsStr decoded = {0};
+    if (!lower_decode_string_text(word, &decoded)) return false;
+    bool found = false;
+    for (size_t i = 0; i < decoded.len && !found; i++) {
+        if (decoded.data[i] != '{') continue;
+        size_t j = i + 1;
+        while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
+        if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
+                                (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
+                                decoded.data[j] == '_')) {
+            j++;
+            while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
+                                       (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
+                                       (decoded.data[j] >= '0' && decoded.data[j] <= '9') ||
+                                       decoded.data[j] == '_' || decoded.data[j] == '.')) j++;
+            while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
+            if (j < decoded.len && decoded.data[j] == '(') found = true;
+        }
+    }
+    free(decoded.data);
+    (void)lower;
+    return found;
+}
+
+static DsStr lower_make_temp_name(Lower *lower, const char *prefix) {
+    char buf[96];
+    snprintf(buf, sizeof(buf), "__ds_%s_%zu", prefix, lower->temp_counter++);
+    return (DsStr){ds_str_dup_range(buf, strlen(buf)), strlen(buf)};
+}
+
+static DsLowerStmt *lower_temp_string_let(Lower *lower, DsStr name, DsStr quoted_text, DsSpan span) {
+    DsExpr fake;
+    memset(&fake, 0, sizeof(fake));
+    fake.kind = DS_EXPR_STRING;
+    fake.span = span;
+    fake.as.text = quoted_text;
+    SymKind kind = SYM_UNKNOWN;
+    DsLowerStmt *let = stmt_new(DS_LOWER_STMT_LET, span);
+    let->as.let_stmt.name = str_clone(name);
+    let->as.let_stmt.value = lower_expr(lower, &fake, &kind);
+    if (kind != SYM_STRING && kind != SYM_UNKNOWN) {
+        ds_diag_error(lower->diag, span, "function call in command interpolation must return a scalar string-renderable value in v0.27.0");
+    }
+    scope_define(lower, lower->scope, name, SYM_STRING, span);
+    return let;
+}
+
+static DsStr lower_command_temp_word(DsStr name) {
+    DsString s;
+    ds_string_init(&s);
+    ds_string_append_char(&s, '$');
+    ds_string_append_range(&s, name.data, name.len);
+    return (DsStr){s.data, s.len};
+}
+
+static DsStr lower_redirect_temp_target(DsStr name) {
+    DsString s;
+    ds_string_init(&s);
+    ds_string_append_char(&s, '"');
+    ds_string_append_char(&s, '{');
+    ds_string_append_range(&s, name.data, name.len);
+    ds_string_append_char(&s, '}');
+    ds_string_append_char(&s, '"');
+    return (DsStr){s.data, s.len};
+}
+
+static bool lower_materialize_command_interpolation(Lower *lower, DsCommand *command, DsLowerStmt *block) {
+    bool changed = false;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
+            DsWord *word = &command->stages.items[s].words.items[i];
+            if (!quoted_word_has_expr_call_interpolation(lower, word->text)) continue;
+            DsStr tmp = lower_make_temp_name(lower, "cmd_interp");
+            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_temp_string_let(lower, tmp, word->text, word->span));
+            free(word->text.data);
+            word->text = lower_command_temp_word(tmp);
+            free(tmp.data);
+            changed = true;
+        }
+    }
+    if (command->redirect.kind != DS_REDIRECT_NONE && quoted_word_has_expr_call_interpolation(lower, command->redirect.target)) {
+        DsStr tmp = lower_make_temp_name(lower, "redir_interp");
+        lower_stmt_vec_push(&block->as.block_stmt.statements, lower_temp_string_let(lower, tmp, command->redirect.target, command->redirect.target_span));
+        free(command->redirect.target.data);
+        command->redirect.target = lower_redirect_temp_target(tmp);
+        free(tmp.data);
+        changed = true;
+    }
+    return changed;
 }
 
 static bool pattern_equal(const DsLowerCasePattern *a, const DsLowerCasePattern *b) {
@@ -147,6 +242,32 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
 DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
     switch (stmt->kind) {
         case DS_STMT_LET: {
+            if (stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_EXPR_RUN) {
+                DsCommand command_copy;
+                ds_command_clone(&command_copy, &stmt->as.let_stmt.value->as.run);
+                DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
+                block->as.block_stmt.scoped = false;
+                bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
+                if (materialized) {
+                    DsExpr fake;
+                    memset(&fake, 0, sizeof(fake));
+                    fake.kind = DS_EXPR_RUN;
+                    fake.span = stmt->as.let_stmt.value->span;
+                    fake.as.run = command_copy;
+                    SymKind kind = SYM_UNKNOWN;
+                    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
+                    out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
+                    out->as.let_stmt.value = lower_expr(lower, &fake, &kind);
+                    scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
+                                       kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN,
+                                       stmt->span);
+                    lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                    ds_command_free(&command_copy);
+                    return block;
+                }
+                lower_stmt_free(block);
+                ds_command_free(&command_copy);
+            }
             SymKind kind = SYM_UNKNOWN;
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
             out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
@@ -202,21 +323,32 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             return out;
         }
         case DS_STMT_CMD: {
+            DsCommand command_copy;
+            ds_command_clone(&command_copy, &stmt->as.cmd_stmt);
+            DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
+            block->as.block_stmt.scoped = false;
+            bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
-            ds_command_clone(&out->as.cmd_stmt, &stmt->as.cmd_stmt);
-            for (size_t s = 0; s < stmt->as.cmd_stmt.stages.len; s++) {
-                if (stmt->as.cmd_stmt.stages.items[s].words.len == 0) ds_diag_error(lower->diag, stmt->as.cmd_stmt.stages.items[s].span, "empty pipeline stage");
-                for (size_t i = 0; i < stmt->as.cmd_stmt.stages.items[s].words.len; i++) {
-                    validate_cmd_word(lower, stmt->as.cmd_stmt.stages.items[s].words.items[i].text, stmt->as.cmd_stmt.stages.items[s].words.items[i].span);
+            ds_command_clone(&out->as.cmd_stmt, &command_copy);
+            for (size_t s = 0; s < command_copy.stages.len; s++) {
+                if (command_copy.stages.items[s].words.len == 0) ds_diag_error(lower->diag, command_copy.stages.items[s].span, "empty pipeline stage");
+                for (size_t i = 0; i < command_copy.stages.items[s].words.len; i++) {
+                    validate_cmd_word(lower, command_copy.stages.items[s].words.items[i].text, command_copy.stages.items[s].words.items[i].span);
                 }
             }
-            if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
-                if (stmt->as.cmd_stmt.redirect.target.len == 0) {
-                    ds_diag_error(lower->diag, stmt->as.cmd_stmt.redirect.op_span, "expected redirection target");
+            if (command_copy.redirect.kind != DS_REDIRECT_NONE) {
+                if (command_copy.redirect.target.len == 0) {
+                    ds_diag_error(lower->diag, command_copy.redirect.op_span, "expected redirection target");
                 } else {
-                    validate_interpolation(lower, stmt->as.cmd_stmt.redirect.target, stmt->as.cmd_stmt.redirect.target_span);
+                    validate_interpolation(lower, command_copy.redirect.target, command_copy.redirect.target_span);
                 }
             }
+            ds_command_free(&command_copy);
+            if (materialized) {
+                lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                return block;
+            }
+            lower_stmt_free(block);
             return out;
         }
         case DS_STMT_CALL:
@@ -344,6 +476,46 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             return out;
         }
         case DS_STMT_RETURN: {
+            if (stmt->as.return_stmt.value && stmt->as.return_stmt.value->kind == DS_EXPR_RUN) {
+                DsCommand command_copy;
+                ds_command_clone(&command_copy, &stmt->as.return_stmt.value->as.run);
+                DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
+                block->as.block_stmt.scoped = false;
+                bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
+                if (materialized) {
+                    DsExpr fake;
+                    memset(&fake, 0, sizeof(fake));
+                    fake.kind = DS_EXPR_RUN;
+                    fake.span = stmt->as.return_stmt.value->span;
+                    fake.as.run = command_copy;
+                    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
+                    if (lower->handler_depth > 0) {
+                        ds_diag_error(lower->diag, stmt->span, "`return` from a cleanup handler is not supported in v0.22.0; move the return into a function called by the handler or use `exit`");
+                    }
+                    if (lower->function_depth <= 0 || !lower->current_function) {
+                        ds_diag_error(lower->diag, stmt->span, "`return` is only allowed inside a function");
+                    }
+                    SymKind value_kind = SYM_UNKNOWN;
+                    out->as.return_stmt.value = lower_expr(lower, &fake, &value_kind);
+                    out->as.return_stmt.return_kind = lower_value_kind_from_sym(value_kind);
+                    if (lower->current_function) {
+                        DsLowerValueKind ret = lower_value_kind_from_sym(value_kind);
+                        if (ret == DS_LOWER_VALUE_UNKNOWN) {
+                            ds_diag_error(lower->diag, stmt->span, "function return value kind must be known in v0.21.0");
+                        } else if (!lower->current_function->has_return) {
+                            lower->current_function->has_return = true;
+                            lower->current_function->return_kind = ret;
+                        } else if (lower->current_function->return_kind != ret) {
+                            ds_diag_error(lower->diag, stmt->span, "all return statements in a function must have the same value kind in v0.21.0");
+                        }
+                    }
+                    lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                    ds_command_free(&command_copy);
+                    return block;
+                }
+                lower_stmt_free(block);
+                ds_command_free(&command_copy);
+            }
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
             if (lower->handler_depth > 0) {
                 ds_diag_error(lower->diag, stmt->span, "`return` from a cleanup handler is not supported in v0.22.0; move the return into a function called by the handler or use `exit`");

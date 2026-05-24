@@ -605,6 +605,57 @@ static bool emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const D
 }
 
 static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent) {
+    if (value->kind == DS_LOWER_EXPR_INTERP) {
+        bool has_user_call = false;
+        for (size_t i = 0; i < value->as.interp.parts.len; i++) {
+            if (is_user_function_call_expr(value->as.interp.parts.items[i])) { has_user_call = true; break; }
+        }
+        if (has_user_call) {
+            char **temps = calloc(value->as.interp.parts.len ? value->as.interp.parts.len : 1, sizeof(char *));
+            if (!temps) return false;
+            for (size_t i = 0; i < value->as.interp.parts.len; i++) {
+                const DsLowerExpr *part = value->as.interp.parts.items[i];
+                if (!is_user_function_call_expr(part)) continue;
+                char tmp[64];
+                temp_ds_name(tmp, sizeof(tmp), "interp", e->temp_counter++);
+                temps[i] = ds_str_dup_range(tmp, strlen(tmp));
+                if (!temps[i]) { free(temps); return false; }
+                DsStr raw = {temps[i], strlen(temps[i])};
+                emit_indent(&e->out, indent);
+                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_var_name(&e->out, raw);
+                buf_append(&e->out, "=\"\"\n");
+                if (!emit_user_call_into_raw_var(e, part, raw, indent)) {
+                    for (size_t j = 0; j < value->as.interp.parts.len; j++) free(temps[j]);
+                    free(temps);
+                    return false;
+                }
+            }
+            emit_indent(&e->out, indent);
+            emit_var_name(&e->out, name);
+            buf_append(&e->out, "=");
+            if (value->as.interp.parts.len == 0) buf_append(&e->out, "\"\"");
+            for (size_t i = 0; i < value->as.interp.parts.len; i++) {
+                const DsLowerExpr *part = value->as.interp.parts.items[i];
+                if (temps[i]) {
+                    DsStr raw = {temps[i], strlen(temps[i])};
+                    buf_append(&e->out, "\"$");
+                    emit_var_name(&e->out, raw);
+                    buf_append(&e->out, "\"");
+                } else if (!emit_value_expr(e, part, &e->out)) {
+                    for (size_t j = 0; j < value->as.interp.parts.len; j++) free(temps[j]);
+                    free(temps);
+                    return false;
+                }
+            }
+            buf_append(&e->out, "\n");
+            for (size_t i = 0; i < value->as.interp.parts.len; i++) free(temps[i]);
+            free(temps);
+            emit_type_assignment_for_expr(e, name, value, indent, false);
+            buf_append(&e->out, "\n");
+            return true;
+        }
+    }
     if (value->kind == DS_LOWER_EXPR_RUN) {
         if (value->as.run.stages.len > 1) {
             if (!emit_capture_pipeline_assignment(e, name, &value->as.run, value->span, indent)) return false;
@@ -671,6 +722,14 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
     return true;
 }
 
+static bool interp_has_user_function_call(const DsLowerExpr *value) {
+    if (!value || value->kind != DS_LOWER_EXPR_INTERP) return false;
+    for (size_t i = 0; i < value->as.interp.parts.len; i++) {
+        if (is_user_function_call_expr(value->as.interp.parts.items[i])) return true;
+    }
+    return false;
+}
+
 static bool emit_case_pattern_condition(BashEmitter *e, const DsLowerExpr *selector, const DsLowerCasePattern *pattern, EmitBuf *out) {
     buf_append(out, "[[ ");
     if (selector->kind == DS_LOWER_EXPR_IDENT) {
@@ -713,6 +772,20 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             if (!is_safe_identifier(stmt->as.let_stmt.name)) {
                 ds_diag_error(e->diag, stmt->span, "cannot emit unsafe Bash variable name `%.*s`", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
                 return false;
+            }
+            if (interp_has_user_function_call(stmt->as.let_stmt.value)) {
+                if (e->function_depth > 0) {
+                    emit_indent(&e->out, indent);
+                    buf_append(&e->out, "local ");
+                    emit_var_name(&e->out, stmt->as.let_stmt.name);
+                    buf_append(&e->out, "=\"\"\n");
+                }
+                if (!emit_assignment_rhs(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
+                if (!symbol_exists(&e->symbols, stmt->as.let_stmt.name)) {
+                    DsStr copy = {ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len), stmt->as.let_stmt.name.len};
+                    symbol_vec_push(&e->symbols, copy);
+                }
+                return true;
             }
             emit_indent(&e->out, indent);
             if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN) {

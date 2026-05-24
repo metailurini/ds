@@ -630,8 +630,8 @@ fn apps() {
 
 echo "{apps()}"
 DS
-assert_check_fails structured_interpolation_rejected "$FIX/structured_interpolation_rejected.ds" 'function-call interpolation in command words'
-assert_emit_fails structured_interpolation_rejected "$FIX/structured_interpolation_rejected.ds" 'function-call interpolation in command words'
+assert_check_fails structured_interpolation_rejected "$FIX/structured_interpolation_rejected.ds" 'interpolation expression must be scalar'
+assert_emit_fails structured_interpolation_rejected "$FIX/structured_interpolation_rejected.ds" 'interpolation expression must be scalar'
 
 write_fixture "$FIX/map_iteration_rejected.ds" <<'DS'
 fn service() {
@@ -782,7 +782,7 @@ assert_contains docs/status.md 'scalar-array returns' 'status documents array re
 assert_contains docs/status.md 'command-result returns' 'status documents command-result returns'
 assert_contains docs/runtime.md 'private function-value boundary' 'runtime documents structured returns'
 assert_contains docs/language.ds 'Nested collections' 'language marks nested collections deferred'
-assert_contains docs/language.ds 'function-call interpolation in command words remain deferred' 'language marks function interpolation deferred'
+assert_contains docs/language.ds 'function-call interpolation is supported in expression-backed' 'language documents function interpolation support'
 assert_contains docs/status.md 'Generated Bash must not call' 'status documents standalone Bash'
 
 printf 'v0.26.0 tests passed (%d assertions)\n' "$pass_count"
