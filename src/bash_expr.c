@@ -9,6 +9,13 @@ static bool result_field_is_bool(DsStr field) {
     return desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL;
 }
 
+static DsStr result_field_storage_name(DsStr field) {
+    if (field.len == 6 && memcmp(field.data, "status", 6) == 0) {
+        return (DsStr){"code", 4};
+    }
+    return field;
+}
+
 static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_type_");
     buf_append_len(out, name.data, name.len);
@@ -323,11 +330,14 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 ds_diag_error(e->diag, expr->span, "unsupported command result field receiver for Bash emission");
                 return false;
             }
-            buf_append(out, "\"$");
-            emit_var_name(out, expr->as.field.object->as.text);
-            buf_append(out, "_");
-            buf_append_len(out, expr->as.field.field.data, expr->as.field.field.len);
-            buf_append(out, "\"");
+            {
+                DsStr storage_field = result_field_storage_name(expr->as.field.field);
+                buf_append(out, "\"$");
+                emit_var_name(out, expr->as.field.object->as.text);
+                buf_append(out, "_");
+                buf_append_len(out, storage_field.data, storage_field.len);
+                buf_append(out, "\"");
+            }
             return true;
         case DS_LOWER_EXPR_INDEX:
             if (expr->as.index.object->kind != DS_LOWER_EXPR_IDENT) {

@@ -387,6 +387,7 @@ static void emit_command_result_storage_decl(BashEmitter *e, DsStr name, int ind
         emit_var_name(&e->out, name); buf_append(&e->out, "_stdout ");
         emit_var_name(&e->out, name); buf_append(&e->out, "_stderr ");
         emit_var_name(&e->out, name); buf_append(&e->out, "_code ");
+        emit_var_name(&e->out, name); buf_append(&e->out, "_status ");
         emit_var_name(&e->out, name); buf_append(&e->out, "_ok ");
         emit_var_name(&e->out, name); buf_append(&e->out, "_failed\n");
         return;
@@ -394,6 +395,7 @@ static void emit_command_result_storage_decl(BashEmitter *e, DsStr name, int ind
     emit_var_name(&e->out, name); buf_append(&e->out, "_stdout=\"\"; ");
     emit_var_name(&e->out, name); buf_append(&e->out, "_stderr=\"\"; ");
     emit_var_name(&e->out, name); buf_append(&e->out, "_code=0; ");
+    emit_var_name(&e->out, name); buf_append(&e->out, "_status=0; ");
     emit_var_name(&e->out, name); buf_append(&e->out, "_ok=false; ");
     emit_var_name(&e->out, name); buf_append(&e->out, "_failed=true\n");
 }
@@ -572,6 +574,10 @@ static bool emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const D
     emit_indent(&e->out, indent);
     buf_append(&e->out, "printf -v ");
     emit_result_field_name(&e->out, name, "code");
+    buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "status");
     buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
 
     emit_indent(&e->out, indent);
@@ -1139,6 +1145,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_stderr '%s' \"$");
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_stderr\"\n");
                     emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_code '%s' \"$");
+                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_code\"\n");
+                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_status '%s' \"$");
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_code\"\n");
                     emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_ok '%s' \"$");
                     emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_ok\"\n");

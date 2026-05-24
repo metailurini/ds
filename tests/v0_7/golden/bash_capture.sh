@@ -49,6 +49,7 @@ __ds_capture() {
   __ds_data=$(cat "$__ds_stderr"; printf x)
   printf -v "${__ds_prefix}_stderr" '%s' "${__ds_data%x}"
   printf -v "${__ds_prefix}_code" '%s' "$__ds_code"
+  printf -v "${__ds_prefix}_status" '%s' "$__ds_code"
   if [[ $__ds_code -eq 0 ]]; then
     printf -v "${__ds_prefix}_ok" '%s' true
     printf -v "${__ds_prefix}_failed" '%s' false

@@ -222,8 +222,11 @@ let result = run npm test
 
 if result.failed {
   echo result.stderr
-  exit result.code
+  exit result.status
 }
+
+# `code` is kept as a compatibility alias for `status`.
+echo result.code
 
 if result.ok {
   echo result.stdout

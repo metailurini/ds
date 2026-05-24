@@ -95,9 +95,9 @@ these kinds:
 ```txt
 null              internal absence / statement-only placeholder
 bool              conditions and helper predicates
-int               parsed literals, script args/options, command-result code
+int               parsed literals, script args/options, command-result status/code
 string            interpolation, command words, file/path/env/cmd helpers
-command-result    captured `run` stdout/stderr/code/ok/failed fields
+command-result    captured `run` stdout/stderr/status/code/ok/failed fields
 array             array literals, stdlib iterables, array `for` loops
 map               map literals and string-key lookup
 function          callable user declarations during lowering
@@ -799,7 +799,7 @@ As of v0.6.0, imports are deterministic local inclusion rather than modules. Imp
 
 As of v0.7.0, the runtime has a command-result value used by the VM for `let result = run ...`. It owns separate stdout and stderr strings plus an integer exit code. Copies deep-copy both captured buffers, and value cleanup frees them exactly once through the normal `DsValue` ownership path.
 
-Captured VM commands do not treat non-zero exit status as fatal. The process result is bound to the destination variable so scripts can inspect `stdout`, `stderr`, `code`, `ok`, and `failed`. Plain command statements still stream normally and preserve fail-fast exit behavior; redirection opens the target file before child execution so open failures can report the source span of the redirection target.
+Captured VM commands do not treat non-zero exit status as fatal. The process result is bound to the destination variable so scripts can inspect `stdout`, `stderr`, `status`, `code`, `ok`, and `failed`; `status` and `code` are integer aliases for the normalized command exit status. Plain command statements still stream normally and preserve fail-fast exit behavior; redirection opens the target file before child execution so open failures can report the source span of the redirection target.
 
 The `v0.8.0` cleanup keeps `DsCommandResult` as the user-visible runtime value for captured commands while tightening the internal process path. The VM now uses a small internal process spec/result wrapper shared by plain and captured commands. The spec keeps rendered argv, capture mode, command span, and redirection metadata together; the result carries normalized exit code plus captured buffers when capture is enabled. Command-result field metadata lives in one descriptor table; that table is used by lowering and by runtime field expansion so future fields cannot silently drift across VM and Bash paths.
 
@@ -818,12 +818,12 @@ the whole plain pipeline: stdout redirection targets the final stage stdout,
 stderr redirection captures stderr from every stage, and combined redirection
 captures final stdout plus every stage stderr. Captured `run` pipelines produce
 the existing command-result fields: final-stage stdout, all observed stage
-stderr, pipefail code, `ok`, and `failed`.
+stderr, pipefail `status`/`code`, `ok`, and `failed`.
 
 Generated Bash emits normal Bash pipelines under `set -euo pipefail`. Captured
 pipeline emission is structured: the emitter writes the exact staged argv words
 directly into a Bash pipeline, redirects that pipeline into temporary capture
-files, and records stdout/stderr/code/ok/failed fields without using `eval` or
+files, and records stdout/stderr/status/code/ok/failed fields without using `eval` or
 depending on the `ds` binary.
 
 ## v0.19.0 string runtime

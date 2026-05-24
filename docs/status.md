@@ -51,7 +51,7 @@ regex/range/membership implementation and test pass:
 - shell-native command statements;
 - shell-native plain command pipelines such as `cat log | grep ERROR | sort`;
 - captured command results with `run` expressions and `stdout`, `stderr`,
-  `code`, `ok`, and `failed` fields;
+  `status`, `code`, `ok`, and `failed` fields;
 - captured `run` pipelines with pipefail-style status in the same
   command-result fields;
 - readable redirections for plain command statements: `|>`, `|>>`, `!>`,

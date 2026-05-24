@@ -163,6 +163,16 @@ assert_parity string_array_return "$FIX/string_array_return.ds" 0 $'api\nweb\nwo
 [ "$(grep -c '^__ds_call_value_into()' "$TMP/string_array_return.sh")" = 1 ] || fail 'string_array_return emits call-value helper once'
 pass 'string_array_return value helper emitted once'
 
+write_fixture "$FIX/empty_array_return.ds" <<'DS'
+fn empty() {
+  return []
+}
+
+let xs = empty()
+echo "ok"
+DS
+assert_parity empty_array_return "$FIX/empty_array_return.ds" 0 $'ok\n'
+
 write_fixture "$FIX/string_array_tricky.ds" <<'DS'
 fn values() {
   return ["", "  api  ", "a b c", "semi;colon", "$(echo bad)", "*?[x]"]
@@ -390,7 +400,8 @@ assert_parity_same map_missing_field "$FIX/map_missing_field.ds" 1
 assert_contains "$TMP/map_missing_field_vm.err" 'missing map key' 'missing field VM diagnostic'
 assert_contains "$TMP/map_missing_field_bash.err" 'missing map key' 'missing field Bash diagnostic'
 
-# 3. Command-result function returns. The current command-result field is .code.
+# 3. Command-result function returns. The roadmap field is .status; .code remains
+# as an existing compatibility alias.
 write_fixture "$FIX/command_result_success.ds" <<'DS'
 fn probe() {
   return run printf "hello"
@@ -398,9 +409,10 @@ fn probe() {
 
 let result = probe()
 echo "stdout={result.stdout}"
+echo "status={result.status}"
 echo "code={result.code}"
 DS
-assert_parity command_result_success "$FIX/command_result_success.ds" 0 $'stdout=hello\ncode=0\n'
+assert_parity command_result_success "$FIX/command_result_success.ds" 0 $'stdout=hello\nstatus=0\ncode=0\n'
 
 write_fixture "$FIX/command_result_stderr.ds" <<'DS'
 fn probe() {
@@ -420,13 +432,14 @@ fn missing() {
 }
 
 let result = missing()
+echo "status={result.status}"
 echo "code={result.code}"
 if result.failed {
   echo "failed"
 }
 echo "stderr={result.stderr}"
 DS
-assert_parity command_result_nonzero "$FIX/command_result_nonzero.ds" 0 $'code=7\nfailed\nstderr=nope\n'
+assert_parity command_result_nonzero "$FIX/command_result_nonzero.ds" 0 $'status=7\ncode=7\nfailed\nstderr=nope\n'
 
 write_fixture "$FIX/command_result_multiline.ds" <<'DS'
 fn probe() {
@@ -690,6 +703,39 @@ echo value[0]
 DS
 assert_check_fails effect_function_as_value_rejected "$FIX/effect_function_as_value_rejected.ds" 'does not return a value'
 assert_emit_fails effect_function_as_value_rejected "$FIX/effect_function_as_value_rejected.ds" 'does not return a value'
+
+# Malformed private structured payloads are not user-program behavior, but the
+# generated Bash ABI should fail loudly if a DS compiler/runtime bug corrupts
+# the sidecar metadata required to preserve structured value kinds.
+write_fixture "$FIX/malformed_array_payload.ds" <<'DS'
+fn values() {
+  return ["api"]
+}
+
+let xs = values()
+let first = xs[0]
+echo "{first}"
+DS
+run_ok malformed_array_payload_emit "$DS" emit bash "$FIX/malformed_array_payload.ds" -o "$TMP/malformed_array_payload.sh"
+grep -v 'declare -ga __ds_return_elem_type' "$TMP/malformed_array_payload.sh" >"$TMP/malformed_array_payload_corrupt.sh"
+capture_status malformed_array_payload_corrupt bash "$TMP/malformed_array_payload_corrupt.sh"
+assert_nonzero_status malformed_array_payload_corrupt
+assert_contains "$TMP/malformed_array_payload_corrupt.err" 'invalid internal array element-type function return payload' 'malformed array payload diagnostic'
+
+write_fixture "$FIX/malformed_map_payload.ds" <<'DS'
+fn service() {
+  return { name: "api" }
+}
+
+let app = service()
+let name = app.name
+echo "{name}"
+DS
+run_ok malformed_map_payload_emit "$DS" emit bash "$FIX/malformed_map_payload.ds" -o "$TMP/malformed_map_payload.sh"
+grep -v 'declare -gA __ds_return_value_type' "$TMP/malformed_map_payload.sh" >"$TMP/malformed_map_payload_corrupt.sh"
+capture_status malformed_map_payload_corrupt bash "$TMP/malformed_map_payload_corrupt.sh"
+assert_nonzero_status malformed_map_payload_corrupt
+assert_contains "$TMP/malformed_map_payload_corrupt.err" 'invalid internal map value-type function return payload' 'malformed map payload diagnostic'
 
 # 7. Imports and multi-file parity.
 mkdir -p "$FIX/import_all"

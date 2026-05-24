@@ -119,6 +119,7 @@ void ds_command_free(DsCommand *command) {
 static const DsCommandResultField k_fields[] = {
     {"stdout", DS_COMMAND_RESULT_FIELD_STRING},
     {"stderr", DS_COMMAND_RESULT_FIELD_STRING},
+    {"status", DS_COMMAND_RESULT_FIELD_INT},
     {"code", DS_COMMAND_RESULT_FIELD_INT},
     {"ok", DS_COMMAND_RESULT_FIELD_BOOL},
     {"failed", DS_COMMAND_RESULT_FIELD_BOOL},
