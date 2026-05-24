@@ -254,7 +254,7 @@ static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
         while (p->pos < p->len && ((p->data[p->pos] >= 'A' && p->data[p->pos] <= 'Z') || (p->data[p->pos] >= 'a' && p->data[p->pos] <= 'z') || (p->data[p->pos] >= '0' && p->data[p->pos] <= '9') || p->data[p->pos] == '_')) p->pos++;
         DsStr name = {(char *)p->data + start, p->pos - start};
         if (!symbol_exists(&p->e->symbols, name)) {
-            ds_diag_error(p->e->diag, p->span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+            ds_diag_error(p->e->diag, p->span, "internal Bash interpolation invariant failed: unknown interpolation variable `%.*s`", (int)name.len, name.data);
             return false;
         }
         buf_append(out, "\"$");
@@ -353,6 +353,11 @@ static bool emit_arithmetic_interpolation(BashEmitter *e, const char *data, size
 }
 
 bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    /*
+     * Lowering owns interpolation acceptance. The Bash emitter renders accepted
+     * string/command-word interpolation and keeps these diagnostics only as
+     * defensive invariants for malformed HIR or stale metadata.
+     */
     char *decoded = NULL;
     size_t len = 0;
     if (!decode_string_literal(e->diag, expr, &decoded, &len)) return false;
@@ -376,7 +381,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                         }
                         DsStr field = {decoded + field_start, j - field_start};
                         if (j >= len || decoded[j] != '}') {
-                            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: unsupported string interpolation shape");
                             free(decoded);
                             return false;
                         }
@@ -387,7 +392,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                         continue;
                     }
                     if (!symbol_exists(&e->symbols, name)) {
-                        ds_diag_error(e->diag, expr->span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+                        ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: unknown interpolation variable `%.*s`", (int)name.len, name.data);
                         free(decoded);
                         return false;
                     }
@@ -407,7 +412,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                         spec = decoded + spec_start; spec_len = j - spec_start;
                     }
                     if (j >= len || decoded[j] != '}') {
-                        ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                        ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: unsupported string interpolation shape");
                         free(decoded);
                         return false;
                     }
@@ -422,7 +427,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                 i = arith_end;
                 continue;
             }
-            ds_diag_error(e->diag, expr->span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+            ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: unsupported string interpolation shape");
             free(decoded);
             return false;
         }

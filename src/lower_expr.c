@@ -94,7 +94,75 @@ static bool is_supported_format_spec(DsStr spec, SymKind kind) {
     return false;
 }
 
-bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
+static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr body, DsSpan span) {
+    /*
+     * Keep arithmetic interpolation acceptance in lowering. The VM/Bash
+     * arithmetic renderers still parse accepted text at runtime/emission time,
+     * but malformed source shapes must not be discovered first by a backend.
+     */
+    bool expect_operand = true;
+    int depth = 0;
+    for (size_t i = 0; i < body.len;) {
+        char c = body.data[i];
+        if (c == ' ' || c == '\t') { i++; continue; }
+        if (c >= '0' && c <= '9') {
+            while (i < body.len && body.data[i] >= '0' && body.data[i] <= '9') i++;
+            expect_operand = false;
+            continue;
+        }
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+            size_t name_start = i++;
+            while (i < body.len && ((body.data[i] >= 'A' && body.data[i] <= 'Z') ||
+                                    (body.data[i] >= 'a' && body.data[i] <= 'z') ||
+                                    (body.data[i] >= '0' && body.data[i] <= '9') ||
+                                    body.data[i] == '_')) i++;
+            if (i < body.len && body.data[i] == '(') {
+                ds_diag_error(lower->diag, span, "function-call interpolation in command words must be bound to a string expression first in v0.21.0");
+                return false;
+            }
+            DsStr name = {body.data + name_start, i - name_start};
+            Symbol *sym = scope_find(lower->scope, name);
+            if (!sym) {
+                ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+                return false;
+            }
+            lower_validate_handler_capture(lower, sym, name, span);
+            if (sym->kind != SYM_INT) {
+                ds_diag_error(lower->diag, span, "arithmetic interpolation operands must be integers in v0.21.0");
+                return false;
+            }
+            expect_operand = false;
+            continue;
+        }
+        if (c == '(') {
+            if (!expect_operand) return false;
+            depth++;
+            i++;
+            continue;
+        }
+        if (c == ')') {
+            if (expect_operand || depth <= 0) return false;
+            depth--;
+            i++;
+            expect_operand = false;
+            continue;
+        }
+        if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%') {
+            if (expect_operand) {
+                if (c == '-') { i++; continue; }
+                return false;
+            }
+            if (c == '*' && i + 1 < body.len && body.data[i + 1] == '*') i += 2;
+            else i++;
+            expect_operand = true;
+            continue;
+        }
+        return false;
+    }
+    return !expect_operand && depth == 0;
+}
+
+bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
     DsStr decoded = {0};
     if (!lower_decode_string_text(text, &decoded)) return true;
     for (size_t i = 0; i < decoded.len; i++) {
@@ -164,47 +232,22 @@ bool validate_interpolation(Lower *lower, DsStr text, DsSpan span) {
             }
             if (j < decoded.len && decoded.data[j] == '}') { i = j; continue; }
         }
-        bool maybe_arith = false;
-        bool has_arith_op = false;
-        for (size_t scan = start; scan < decoded.len && decoded.data[scan] != '}'; scan++) {
-            char ac = decoded.data[scan];
-            if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') {
-                has_arith_op = true;
-                break;
-            }
-        }
         size_t k = start;
+        bool maybe_arith = false;
         while (k < decoded.len && decoded.data[k] != '}') {
-            char ac = decoded.data[k];
+            char ac = decoded.data[k++];
             if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') maybe_arith = true;
-            if ((ac >= 'A' && ac <= 'Z') || (ac >= 'a' && ac <= 'z') || ac == '_') {
-                if (!has_arith_op) break;
-                size_t name_start = k++;
-                while (k < decoded.len && ((decoded.data[k] >= 'A' && decoded.data[k] <= 'Z') || (decoded.data[k] >= 'a' && decoded.data[k] <= 'z') || (decoded.data[k] >= '0' && decoded.data[k] <= '9') || decoded.data[k] == '_')) k++;
-                if (k < decoded.len && decoded.data[k] == '(') {
-                    ds_diag_error(lower->diag, span, "function-call interpolation in command words must be bound to a string expression first in v0.21.0");
-                    free(decoded.data);
-                    return false;
-                }
-                DsStr aname = {decoded.data + name_start, k - name_start};
-                Symbol *asym = scope_find(lower->scope, aname);
-                if (!asym) {
-                    ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)aname.len, aname.data);
-                    free(decoded.data);
-                    return false;
-                }
-                lower_validate_handler_capture(lower, asym, aname, span);
-                if (asym->kind != SYM_INT) {
-                    ds_diag_error(lower->diag, span, "arithmetic interpolation operands must be integers in v0.21.0");
-                    free(decoded.data);
-                    return false;
-                }
-                continue;
-            }
-            if (!((ac >= '0' && ac <= '9') || ac == ' ' || ac == '\t' || ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')')) break;
-            k++;
         }
-        if (maybe_arith && k < decoded.len && decoded.data[k] == '}') { i = k; continue; }
+        if (maybe_arith && k < decoded.len && decoded.data[k] == '}') {
+            DsStr body = {decoded.data + start, k - start};
+            if (!lower_validate_arithmetic_interpolation_text(lower, body, span)) {
+                if (!lower->diag->has_error) ds_diag_error(lower->diag, span, "invalid arithmetic interpolation in v0.21.0");
+                free(decoded.data);
+                return false;
+            }
+            i = k;
+            continue;
+        }
         ds_diag_error(lower->diag, span, "unsupported string interpolation; expected `{name}`, `{name.field}`, arithmetic, or a supported `:specifier`");
         free(decoded.data);
         return false;
@@ -808,7 +851,7 @@ DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         }
         free(decoded.data);
     }
-    validate_interpolation(lower, expr->as.text, expr->span);
+    lower_validate_word_interpolation(lower, expr->as.text, expr->span);
     *kind_out = SYM_STRING;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, expr->span);
     out->as.text = str_clone(expr->as.text);
@@ -887,7 +930,7 @@ DsLowerExpr *lower_run_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
     }
     for (size_t s = 0; s < expr->as.run.stages.len; s++) {
         if (expr->as.run.stages.items[s].words.len == 0) ds_diag_error(lower->diag, expr->as.run.stages.items[s].span, "empty pipeline stage");
-        for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) validate_cmd_word(lower, expr->as.run.stages.items[s].words.items[i].text, expr->as.run.stages.items[s].words.items[i].span);
+        for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) lower_validate_command_word(lower, expr->as.run.stages.items[s].words.items[i].text, expr->as.run.stages.items[s].words.items[i].span);
     }
     if (expr->as.run.redirect.kind != DS_REDIRECT_NONE) ds_diag_error(lower->diag, expr->as.run.redirect.op_span, "captured `run` commands do not support redirection");
     *kind_out = SYM_COMMAND_RESULT;
@@ -1288,7 +1331,7 @@ DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     return expr_new(DS_LOWER_EXPR_ERROR, expr->span);
 }
 
-bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
+bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
     if ((word.len == 2 && ((word.data[0] == '*' && word.data[1] == '=') ||
                            (word.data[0] == '/' && word.data[1] == '=') ||
                            (word.data[0] == '%' && word.data[1] == '=')))) {
@@ -1329,7 +1372,7 @@ bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span) {
             return false;
         }
     }
-    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') return validate_interpolation(lower, word, span);
+    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') return lower_validate_word_interpolation(lower, word, span);
     for (size_t i = 1; i < word.len; i++) {
         if (word.data[i] == '.') {
             DsStr name = {word.data, i};

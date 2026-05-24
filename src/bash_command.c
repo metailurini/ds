@@ -4,6 +4,11 @@
 #include <string.h>
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
+    /*
+     * Command-word validity is a lowerer-owned M3.4 contract. Diagnostics here
+     * are defensive invariants for malformed HIR that somehow bypassed lowering,
+     * not source-language feature gates.
+     */
     DsStr word = command_word.text;
     DsSpan span = command_word.span;
     if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
@@ -14,7 +19,7 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
     if (word.len >= 2 && word.data[0] == '$') {
         DsStr name = {word.data + 1, word.len - 1};
         if (!symbol_exists(&e->symbols, name)) {
-            ds_diag_error(e->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+            ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
             return false;
         }
         buf_append(out, "\"$");
@@ -33,7 +38,7 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
                 return true;
             }
             if (!symbol_exists(&e->symbols, name)) {
-                ds_diag_error(e->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
+                ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
                 return false;
             }
             buf_append(out, "\"$");

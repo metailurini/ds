@@ -104,7 +104,7 @@ static void maybe_update_symbol(Symbol *sym, SymKind kind) {
     if (kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) sym->kind = kind;
 }
 
-static bool quoted_word_has_expr_call_interpolation(Lower *lower, DsStr word) {
+static bool command_quoted_word_needs_value_call_materialization(Lower *lower, DsStr word) {
     if (word.len < 2 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
     DsStr decoded = {0};
     if (!lower_decode_string_text(word, &decoded)) return false;
@@ -151,7 +151,7 @@ static void lower_temp_scope_end(Lower *lower, Scope *scope, Scope *saved) {
     scope_free(scope);
 }
 
-static DsLowerStmt *lower_temp_string_let(Lower *lower, DsStr name, DsStr quoted_text, DsSpan span) {
+static DsLowerStmt *lower_command_interpolation_temp_string_let(Lower *lower, DsStr name, DsStr quoted_text, DsSpan span) {
     DsExpr fake;
     memset(&fake, 0, sizeof(fake));
     fake.kind = DS_EXPR_STRING;
@@ -187,23 +187,31 @@ static DsStr lower_redirect_temp_target(DsStr name) {
     return (DsStr){s.data, s.len};
 }
 
-static bool lower_materialize_command_interpolation(Lower *lower, DsCommand *command, DsLowerStmt *block) {
+static bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand *command, DsLowerStmt *block) {
+    /*
+     * M3.4 command-word contract: direct scalar value-call interpolation in a
+     * quoted command word is not handed to VM/Bash as a backend-specific
+     * command substitution problem. Lowering evaluates the interpolation as a
+     * normal string expression into a private temporary, then rewrites the
+     * command word to an ordinary `$temp` argument. Unsupported return kinds are
+     * diagnosed while lowering the temporary string expression.
+     */
     bool changed = false;
     for (size_t s = 0; s < command->stages.len; s++) {
         for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
             DsWord *word = &command->stages.items[s].words.items[i];
-            if (!quoted_word_has_expr_call_interpolation(lower, word->text)) continue;
+            if (!command_quoted_word_needs_value_call_materialization(lower, word->text)) continue;
             DsStr tmp = lower_make_temp_name(lower, "cmd_interp");
-            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_temp_string_let(lower, tmp, word->text, word->span));
+            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, word->text, word->span));
             free(word->text.data);
             word->text = lower_command_temp_word(tmp);
             free(tmp.data);
             changed = true;
         }
     }
-    if (command->redirect.kind != DS_REDIRECT_NONE && quoted_word_has_expr_call_interpolation(lower, command->redirect.target)) {
+    if (command->redirect.kind != DS_REDIRECT_NONE && command_quoted_word_needs_value_call_materialization(lower, command->redirect.target)) {
         DsStr tmp = lower_make_temp_name(lower, "redir_interp");
-        lower_stmt_vec_push(&block->as.block_stmt.statements, lower_temp_string_let(lower, tmp, command->redirect.target, command->redirect.target_span));
+        lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, command->redirect.target, command->redirect.target_span));
         free(command->redirect.target.data);
         command->redirect.target = lower_redirect_temp_target(tmp);
         free(tmp.data);
@@ -342,7 +350,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 Scope temp_scope;
                 Scope *saved_scope = NULL;
                 lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
-                bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
+                bool materialized = lower_materialize_command_value_call_interpolation(lower, &command_copy, block);
                 if (materialized) {
                     DsExpr fake;
                     memset(&fake, 0, sizeof(fake));
@@ -427,20 +435,20 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             Scope temp_scope;
             Scope *saved_scope = NULL;
             lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
-            bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
+            bool materialized = lower_materialize_command_value_call_interpolation(lower, &command_copy, block);
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
             ds_command_clone(&out->as.cmd_stmt, &command_copy);
             for (size_t s = 0; s < command_copy.stages.len; s++) {
                 if (command_copy.stages.items[s].words.len == 0) ds_diag_error(lower->diag, command_copy.stages.items[s].span, "empty pipeline stage");
                 for (size_t i = 0; i < command_copy.stages.items[s].words.len; i++) {
-                    validate_cmd_word(lower, command_copy.stages.items[s].words.items[i].text, command_copy.stages.items[s].words.items[i].span);
+                    lower_validate_command_word(lower, command_copy.stages.items[s].words.items[i].text, command_copy.stages.items[s].words.items[i].span);
                 }
             }
             if (command_copy.redirect.kind != DS_REDIRECT_NONE) {
                 if (command_copy.redirect.target.len == 0) {
                     ds_diag_error(lower->diag, command_copy.redirect.op_span, "expected redirection target");
                 } else {
-                    validate_interpolation(lower, command_copy.redirect.target, command_copy.redirect.target_span);
+                    lower_validate_word_interpolation(lower, command_copy.redirect.target, command_copy.redirect.target_span);
                 }
             }
             ds_command_free(&command_copy);
@@ -588,7 +596,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 Scope temp_scope;
                 Scope *saved_scope = NULL;
                 lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
-                bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
+                bool materialized = lower_materialize_command_value_call_interpolation(lower, &command_copy, block);
                 if (materialized) {
                     DsExpr fake;
                     memset(&fake, 0, sizeof(fake));

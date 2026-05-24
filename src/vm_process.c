@@ -142,6 +142,11 @@ static bool vip_expr(VmInterpParser*p,int64_t*o){ int64_t a=0; if(!vip_muldiv(p,
 static bool append_arithmetic_interpolation(Vm*vm,const char*data,size_t len,DsString*out,DsSpan span){ VmInterpParser p={.vm=vm,.s=data,.n=len,.span=span}; int64_t r=0; if(!vip_expr(&p,&r))return false; vip_ws(&p); if(p.i!=p.n)return false; char buf[64]; snprintf(buf,sizeof(buf),"%lld",(long long)r); return ds_string_append_cstr(out,buf); }
 
 bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span) {
+    /*
+     * Source-language interpolation acceptance is validated during lowering.
+     * VM interpolation errors here are runtime failures (for example arithmetic
+     * overflow) or defensive invariant checks for accepted command/string HIR.
+     */
     ds_string_init(out);
     for (size_t i = 0; i < input->len; i++) {
         char c = input->data[i];
@@ -161,7 +166,7 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                         }
                         char *field = ds_str_dup_range(input->data + field_start, j - field_start);
                         if (j >= input->len || input->data[j] != '}') {
-                            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported string interpolation shape");
                             free(field); free(name); ds_string_free(out); return false;
                         }
                         const char *env_value = getenv(field);
@@ -191,7 +196,7 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                         spec = input->data + spec_start; spec_len = j - spec_start;
                     }
                     if (j >= input->len || input->data[j] != '}') {
-                        ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}` or `{name.field}`");
+                        ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported string interpolation shape");
                         ds_value_free(&value); free(name); ds_string_free(out); return false;
                     }
                     bool ok = append_formatted_value(vm, &value, spec, spec_len, out, span);
@@ -206,7 +211,7 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                 i = arith_end;
                 continue;
             }
-            ds_diag_error(vm->diag, span, "unsupported string interpolation; expected `{name}`, `{name.field}`, or arithmetic");
+            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported string interpolation shape");
             ds_string_free(out); return false;
         }
         ds_string_append_char(out, c);

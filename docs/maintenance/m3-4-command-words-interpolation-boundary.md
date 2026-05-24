@@ -578,3 +578,21 @@ M3.4 implementation cleanup is complete when:
 - `docs/concept-map.md` can move command words/direct function-call
   interpolation from Hell candidate to Watch only after implementation proves the
   boundary in code.
+
+## Implementation result
+
+M3.4 cleanup implemented the documented boundary without adding command-word
+features:
+
+- lowerer command-word validators are now named as lowerer-owned contract checks;
+- direct scalar function-call interpolation remains normalized through private
+  temporary string bindings before VM/Bash command execution;
+- malformed arithmetic interpolation in command words is rejected by lowering
+  instead of surfacing first from VM/Bash interpolation fallbacks;
+- VM and Bash interpolation fallbacks are documented in code as defensive
+  backend invariants for accepted HIR, not source-language semantic owners.
+
+Command words and direct scalar function-call interpolation can move to Watch,
+not Clear. Remaining drift risk belongs to future expansion areas: arbitrary
+command-word expressions, command substitution, collection/command-result
+interpolation, and a possible segmented command-word HIR redesign.

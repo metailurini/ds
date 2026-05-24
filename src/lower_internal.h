@@ -86,8 +86,14 @@ void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExp
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr);
 SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr);
-bool validate_cmd_word(Lower *lower, DsStr word, DsSpan span);
-bool validate_interpolation(Lower *lower, DsStr text, DsSpan span);
+/*
+ * M3.4 command-word ownership boundary:
+ * parser preserves command words as syntax text; lowering owns command-word and
+ * interpolation acceptance. VM/Bash should only receive words that passed these
+ * validators or were normalized into private temporary bindings.
+ */
+bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span);
+bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span);
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg);
 bool collection_element_supported_in_bash(const DsLowerExpr *expr);
 bool lower_decode_string_text(DsStr text, DsStr *out);

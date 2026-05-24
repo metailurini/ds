@@ -55,6 +55,14 @@ assert_reject(){
   assert_contains "$name emit diagnostic" "$TMP/$name.emit.err" "$needle"
 }
 
+assert_reject_all(){
+  local name=$1 file=$2 needle=$3
+  assert_reject "$name" "$file" "$needle"
+  ! ./ds run "$file" >"$TMP/$name.run.out" 2>"$TMP/$name.run.err" || fail "$name run rejects"
+  ok "$name run rejects"
+  assert_contains "$name run diagnostic" "$TMP/$name.run.err" "$needle"
+}
+
 write_fixture "$TMP/fixtures/scalar_command_interp.ds" <<'DS'
 fn app() {
   return "api"
@@ -384,6 +392,11 @@ write_fixture "$TMP/fixtures/malformed_interp_rejected.ds" <<'DS'
 echo "{name(}"
 DS
 assert_reject malformed_interp_rejected "$TMP/fixtures/malformed_interp_rejected.ds" 'unknown function `name`'
+
+write_fixture "$TMP/fixtures/invalid_arithmetic_command_interp_rejected.ds" <<'DS'
+echo "{1 +}"
+DS
+assert_reject_all invalid_arithmetic_command_interp_rejected "$TMP/fixtures/invalid_arithmetic_command_interp_rejected.ds" 'invalid arithmetic interpolation in v0.21.0'
 
 write_fixture "$TMP/fixtures/interp_prefix_env.ds" <<'DS'
 fn name() {
