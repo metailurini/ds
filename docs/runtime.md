@@ -723,7 +723,10 @@ silently wrapping. Expression-backed interpolation supports scalar function call
 words use the same scalar interpolation surface for direct value-returning
 function calls by pre-materializing each interpolated call into a private string
 variable before the command launches, preserving quoting and avoiding generated
-Bash calls back into `ds`.
+Bash calls back into `ds`. Those compiler-generated variables are visible only
+to the lowered command/run operation: they are not added to the source symbol
+scope, they do not collide with user variables, and later source code cannot
+read them as normal variables.
 
 
 ## Cleanup and signal runtime

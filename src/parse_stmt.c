@@ -101,12 +101,30 @@ static DsStmt *parse_assign(Parser *p) {
     return stmt;
 }
 
+static bool parser_invalid_hyphenated_env_name(Parser *p, const DsToken *field, const char *version) {
+    if (!parser_at(p, DS_TOK_MINUS)) return false;
+    if (p->pos + 1 >= p->tokens->len || !parser_is_identifier_like(p->tokens->items[p->pos + 1].kind)) return false;
+    DsToken *dash = parser_peek(p);
+    DsToken *suffix = &p->tokens->items[p->pos + 1];
+    size_t len = field->text.len + 1 + suffix->text.len;
+    char *name = (char *)ds_xcalloc(len + 1, 1);
+    memcpy(name, field->text.data, field->text.len);
+    name[field->text.len] = '-';
+    memcpy(name + field->text.len + 1, suffix->text.data, suffix->text.len);
+    ds_diag_error(p->diag, dash->span, "invalid environment variable name `%.*s` in %s", (int)len, name, version);
+    free(name);
+    while (!parser_is_stmt_end(p)) parser_advance(p);
+    parser_consume_statement_end(p);
+    return true;
+}
+
 static DsStmt *parse_env_assign(Parser *p) {
     DsToken *env_tok = parser_advance(p);
     if (!parser_expect(p, DS_TOK_DOT, "expected `.` after `env` in environment assignment")) return NULL;
     if (!parser_expect_identifier_like(p, "expected environment variable name after `env.`")) return NULL;
     DsToken *field = parser_previous(p);
     DsSpan op_span = parser_peek(p)->span;
+    if (parser_invalid_hyphenated_env_name(p, field, "v0.27.0")) return NULL;
     if (!parser_advance_if(p, DS_TOK_EQUAL)) {
         ds_diag_error(p->diag, op_span, "environment assignment supports only `=` in v0.27.0");
         return NULL;
@@ -148,6 +166,7 @@ static DsStmt *parse_env_unset(Parser *p) {
     if (!parser_expect(p, DS_TOK_DOT, "expected `.` after `env` in environment unset")) return NULL;
     if (!parser_expect_identifier_like(p, "expected environment variable name after `env.`")) return NULL;
     DsToken *field = parser_previous(p);
+    if (parser_invalid_hyphenated_env_name(p, field, "v0.27.0")) return NULL;
 
     DsStmt *stmt = parser_new_stmt(DS_STMT_CALL, (DsSpan){unset_tok->span.start, field->span.end, unset_tok->span.source});
     stmt->as.call_stmt.name = (DsStr){ds_str_dup_range("env.unset", strlen("env.unset")), strlen("env.unset")};

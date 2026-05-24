@@ -420,6 +420,37 @@ run_parity interp_helpers_once "$TMP/fixtures/interp_helpers_once.ds" 'a b a'
 helper_count=$(grep -c '^__ds_call_value_into()' "$TMP/interp_helpers_once.sh" || true)
 assert_eq "interpolation helper emitted once" '1' "$helper_count"
 
+write_fixture "$TMP/fixtures/interp_temp_collision.ds" <<'DS'
+let __ds_cmd_interp_0 = "user"
+fn name() {
+  return "api"
+}
+echo "{name()}"
+echo $__ds_cmd_interp_0
+DS
+run_parity interp_temp_collision "$TMP/fixtures/interp_temp_collision.ds" $'api
+user'
+
+write_fixture "$TMP/fixtures/interp_temp_hidden.ds" <<'DS'
+fn name() {
+  return "api"
+}
+echo "{name()}"
+let leaked = __ds_cmd_interp_0
+echo "leaked={leaked}"
+DS
+assert_reject interp_temp_hidden "$TMP/fixtures/interp_temp_hidden.ds" 'unknown variable `__ds_cmd_interp_0`'
+
+write_fixture "$TMP/fixtures/bad_env_assign_hyphen.ds" <<'DS'
+env.BAD-NAME = "x"
+DS
+assert_reject bad_env_assign_hyphen "$TMP/fixtures/bad_env_assign_hyphen.ds" 'invalid environment variable name `BAD-NAME`'
+
+write_fixture "$TMP/fixtures/bad_env_unset_hyphen.ds" <<'DS'
+unset env.BAD-NAME
+DS
+assert_reject bad_env_unset_hyphen "$TMP/fixtures/bad_env_unset_hyphen.ds" 'invalid environment variable name `BAD-NAME`'
+
 assert_contains "status documents command interpolation" docs/status.md 'direct scalar value-returning function calls in quoted command'
 assert_contains "runtime documents pre-materialization" docs/runtime.md 'pre-materializing each interpolated call'
 assert_contains "language documents command interpolation" docs/language.ds 'quoted command words'

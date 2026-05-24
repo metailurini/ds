@@ -132,8 +132,23 @@ static bool quoted_word_has_expr_call_interpolation(Lower *lower, DsStr word) {
 
 static DsStr lower_make_temp_name(Lower *lower, const char *prefix) {
     char buf[96];
-    snprintf(buf, sizeof(buf), "__ds_%s_%zu", prefix, lower->temp_counter++);
+    do {
+        snprintf(buf, sizeof(buf), "__ds_%s_%zu", prefix, lower->temp_counter++);
+        DsStr candidate = {buf, strlen(buf)};
+        if (!scope_find(lower->scope, candidate)) break;
+    } while (true);
     return (DsStr){ds_str_dup_range(buf, strlen(buf)), strlen(buf)};
+}
+
+static void lower_temp_scope_begin(Lower *lower, Scope *scope, Scope **saved) {
+    *saved = lower->scope;
+    scope_init(scope, *saved);
+    lower->scope = scope;
+}
+
+static void lower_temp_scope_end(Lower *lower, Scope *scope, Scope *saved) {
+    lower->scope = saved;
+    scope_free(scope);
 }
 
 static DsLowerStmt *lower_temp_string_let(Lower *lower, DsStr name, DsStr quoted_text, DsSpan span) {
@@ -247,6 +262,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 ds_command_clone(&command_copy, &stmt->as.let_stmt.value->as.run);
                 DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
                 block->as.block_stmt.scoped = false;
+                Scope temp_scope;
+                Scope *saved_scope = NULL;
+                lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
                 bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
                 if (materialized) {
                     DsExpr fake;
@@ -258,6 +276,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
                     out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
                     out->as.let_stmt.value = lower_expr(lower, &fake, &kind);
+                    lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
                                        kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN,
                                        stmt->span);
@@ -265,6 +284,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     ds_command_free(&command_copy);
                     return block;
                 }
+                lower_temp_scope_end(lower, &temp_scope, saved_scope);
                 lower_stmt_free(block);
                 ds_command_free(&command_copy);
             }
@@ -327,6 +347,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             ds_command_clone(&command_copy, &stmt->as.cmd_stmt);
             DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
             block->as.block_stmt.scoped = false;
+            Scope temp_scope;
+            Scope *saved_scope = NULL;
+            lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
             bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
             ds_command_clone(&out->as.cmd_stmt, &command_copy);
@@ -344,6 +367,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 }
             }
             ds_command_free(&command_copy);
+            lower_temp_scope_end(lower, &temp_scope, saved_scope);
             if (materialized) {
                 lower_stmt_vec_push(&block->as.block_stmt.statements, out);
                 return block;
@@ -481,6 +505,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 ds_command_clone(&command_copy, &stmt->as.return_stmt.value->as.run);
                 DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
                 block->as.block_stmt.scoped = false;
+                Scope temp_scope;
+                Scope *saved_scope = NULL;
+                lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
                 bool materialized = lower_materialize_command_interpolation(lower, &command_copy, block);
                 if (materialized) {
                     DsExpr fake;
@@ -510,9 +537,11 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                         }
                     }
                     lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                    lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     ds_command_free(&command_copy);
                     return block;
                 }
+                lower_temp_scope_end(lower, &temp_scope, saved_scope);
                 lower_stmt_free(block);
                 ds_command_free(&command_copy);
             }
