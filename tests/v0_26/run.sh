@@ -700,6 +700,20 @@ DS
 assert_check_fails map_iteration_rejected "$FIX/map_iteration_rejected.ds" 'map iteration is deferred'
 assert_emit_fails map_iteration_rejected "$FIX/map_iteration_rejected.ds" 'map iteration is deferred'
 
+write_fixture "$FIX/function_array_loop_rejected.ds" <<'DS'
+fn apps() {
+  return ["api", "web"]
+}
+
+for app in apps() {
+  echo "{app}"
+}
+DS
+assert_check_fails function_array_loop_rejected "$FIX/function_array_loop_rejected.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity'
+assert_emit_fails function_array_loop_rejected "$FIX/function_array_loop_rejected.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity'
+run_fail function_array_loop_rejected_run "$DS" run "$FIX/function_array_loop_rejected.ds"
+assert_diag "$TMP/function_array_loop_rejected_run.err" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity' 'function_array_loop_rejected run diagnostic'
+
 write_fixture "$FIX/index_assignment_rejected.ds" <<'DS'
 fn apps() {
   return ["api", "web"]

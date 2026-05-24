@@ -520,6 +520,13 @@ for item in service {
 DS
 assert_diag loop_non_array "$FIX/bad_loop_non_array.ds" 'for loop iterable must be an array in v0.10.0'
 
+write_fixture "$FIX/bad_loop_array_literal.ds" <<'DS'
+for item in ["api", "web"] {
+  echo "{item}"
+}
+DS
+assert_diag loop_array_literal "$FIX/bad_loop_array_literal.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first'
+
 write_fixture "$FIX/bad_map_iteration.ds" <<'DS'
 let ports = { api: 3000 }
 

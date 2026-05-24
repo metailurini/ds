@@ -67,7 +67,7 @@ Risk labels:
 | Index assignment | No stable home if deferred; should become explicit HIR assignment target | Lowerer should reject until assignment semantics are defined | VM mutation runtime; Bash collection update helpers | Language docs and roadmap/milestones | Diagnostic tests now; future VM/Bash parity tests | **Hell candidate** |
 | Scalar variables and assignment | HIR variable declarations/assignments and lowerer symbol table facts | Parser for statement syntax; lowerer for symbol/value-kind rules | VM scope runtime; Bash statement emission | Language docs, architecture lowering docs | VM/Bash parity tests; duplicate/unknown/invalid assignment diagnostics | **Clear** |
 | Conditionals and boolean logic | HIR expression/statement forms | Lowerer for expression validity and type-like constraints | VM interpreter; Bash condition emitter | Language docs | VM/Bash parity tests; diagnostics | **Clear** |
-| Loops over iterables | HIR loop statement with iterable expression | Lowerer for iterable eligibility | VM interpreter/scope; Bash loop emission | Language docs | VM/Bash parity tests; diagnostics for non-iterables | **Watch** |
+| Loops over iterables | HIR loop statement with iterable expression | Lowerer for iterable eligibility and portable iterable representation | VM interpreter/scope; Bash loop emission | Language docs | VM/Bash parity tests; diagnostics for non-iterables and nonportable temporary array iterables | **Watch** |
 | Imports/program composition | Loaded-program aggregate plus AST/HIR composed program | CLI program loader for source/import composition; parser for import syntax | All backends consume composed HIR | Architecture docs and language docs | CLI/check/run/emit tests; diagnostics for import failures | **Watch** |
 | Bash parity | HIR as contract plus shared metadata/helper catalogs; see `docs/parity-contracts.md` | Lowerer rejects unsupported parity risks unless explicitly VM-only, Bash-only, diagnostic-only, or currently rejected | VM backend and Bash backend independently execute the same accepted HIR | `docs/parity-contracts.md`, architecture docs, release checklist, milestone specs | Every accepted feature needs VM tests, Bash parity tests, and diagnostics for unsupported forms unless explicitly scoped otherwise | **Watch** |
 | VM process execution | VM-private process spec/result around HIR commands | Lowerer validates language rules; VM validates OS/runtime failures | `vm_process.c` and VM interpreter | Runtime docs and architecture backend docs | VM tests plus Bash parity tests for observable behavior | **Watch** |
@@ -104,8 +104,9 @@ These concepts have the highest risk of becoming "kind of everywhere":
    accepted only when it has backend-neutral HIR/shared metadata and defined VM
    and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
    or currently rejected. Lowering now rejects temporary collection and
-   command-result field/index access, plus computed collection index expressions,
-   that previously reached VM but failed Bash emission. Remaining risk is
+   command-result field/index access, computed collection index expressions, and
+   nonportable temporary array loop iterables that previously reached VM but
+   failed Bash emission. Remaining risk is
    enforcement drift during feature work, so keep it under **Watch** rather than
    treating it as vague ownership.
 7. **Diagnostics**: narrowed by `docs/diagnostics.md`. Every phase can emit

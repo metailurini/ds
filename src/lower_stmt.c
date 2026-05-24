@@ -240,6 +240,27 @@ static void validate_case_pattern_duplicate_in_arm(Lower *lower, const DsLowerCa
     }
 }
 
+static bool lower_for_array_iterable_has_portable_backend_representation(const DsLowerExpr *iterable) {
+    if (!iterable) return false;
+    if (iterable->kind == DS_LOWER_EXPR_IDENT) return true;
+    if (iterable->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(iterable->as.call.name)) {
+        const DsStdlibHelper *helper = ds_stdlib_lookup(iterable->as.call.name);
+        return helper && helper->return_kind == DS_STDLIB_RETURN_ARRAY;
+    }
+    return false;
+}
+
+static void lower_reject_nonportable_for_array_iterable(Lower *lower, DsSpan span) {
+    /*
+     * The VM can iterate some temporary array values directly, but standalone
+     * Bash has portable loop representations only for named arrays and known
+     * stdlib array streams. Keep that acceptance rule in lowering so Bash
+     * emission remains a renderer of accepted HIR, not the semantic owner.
+     */
+    ds_diag_error(lower->diag, span,
+                  "for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first");
+}
+
 static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     DsLowerCasePattern out;
     memset(&out, 0, sizeof(out));
@@ -407,6 +428,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
                 if (!stmt->as.for_stmt.has_value_name && iterable_kind != SYM_ARRAY && iterable_kind != SYM_UNKNOWN) {
                     ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
+                }
+                if (iterable_kind == SYM_ARRAY && !lower_for_array_iterable_has_portable_backend_representation(out->as.for_stmt.iterable)) {
+                    lower_reject_nonportable_for_array_iterable(lower, stmt->as.for_stmt.iterable->span);
                 }
                 element_kind = infer_array_element_kind(lower, out->as.for_stmt.iterable);
             }

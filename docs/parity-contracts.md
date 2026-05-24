@@ -298,7 +298,10 @@ collection results directly is rejected by lowering until HIR/Bash have a
 portable temporary collection representation. Collection index expressions are
 also limited to literals or named variables; computed indexes must be bound to a
 variable first so the lowerer, not the Bash emitter, owns the unsupported-form
-diagnostic.
+diagnostic. Array iteration currently requires a named array or a known stdlib
+array result; looping over array literals or user-function array calls directly
+is rejected by lowering until there is a portable temporary iterable
+representation shared by VM and Bash emission.
 
 ### Regex
 

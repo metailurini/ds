@@ -205,8 +205,8 @@ source can be parsed far enough to know them:
 - unsupported VM/Bash parity forms, including forms that one backend could
   execute but the other cannot represent;
 - invalid command-result fields, command-word interpolation forms, collection
-  access forms, regex/glob/env restrictions, trap/defer/signal restrictions, and
-  unsupported mutable collection forms.
+  access/iteration forms, regex/glob/env restrictions, trap/defer/signal
+  restrictions, and unsupported mutable collection forms.
 
 A rejected program should fail consistently for `ds check`, `ds run`, and
 `ds emit bash`, modulo command-line or file-loading errors that happen before the
