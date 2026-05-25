@@ -1,179 +1,84 @@
 # Concept home map
 
-This document identifies important `ds` language/runtime concepts and assigns each
-one a primary home. It is a refactoring aid: concepts are dangerous when their
-canonical representation, validation, execution, documentation, or tests are
-"kind of everywhere" instead of clearly owned.
-
-Use this together with:
+This map names the canonical home for cross-cutting `ds` concepts. It should
+match the current source tree, not future design wishes. Use it with:
 
 - `docs/source-map.md` for file-level ownership.
-- `docs/architecture.md` for the compiler/backend pipeline.
-- `docs/parity-contracts.md` for the VM/Bash acceptance contract.
-- `docs/diagnostics.md` for diagnostic ownership by phase.
-- `docs/language.ds` for the user-facing syntax catalog.
-- `docs/runtime.md` for VM/runtime substrate rules.
+- `docs/diagnostics.md` for phase-owned diagnostics.
+- `docs/parity-contracts.md` for VM/Bash acceptance rules.
+- `docs/architecture.md` and `docs/runtime.md` for pipeline/runtime details.
+- `docs/maintenance/` for compact boundary records.
 
-## How to read this map
+## Status labels
 
-Each concept answers five questions:
+- **Clear**: stable ownership, supported behavior, low architectural risk.
+- **Watch**: supported behavior with mostly clear ownership, but backend/parity or
+  maintenance drift remains plausible.
+- **High-pressure Watch**: ownership exists, but the concept is central,
+  cross-cutting, or fragile enough that related feature work must start with a
+  focused design/maintenance pass.
+- **Clear while rejected**: unsupported/deferred behavior has an explicit owner,
+  documented rejection, and diagnostics/tests protecting that rejection.
+- **Hell candidate**: no stable home, unclear ownership, duplicated semantics
+  across layers, or unsupported behavior leaks inconsistently into parser/VM/Bash.
 
-- **Canonical representation**: the shape other phases should consume. Prefer
-  AST for syntax-only facts, HIR for validated language behavior, runtime values
-  for VM-only state, and Bash helpers only for emitted-script implementation
-  details.
-- **Validation owner**: the earliest phase that has enough information to reject
-  bad programs without duplicating backend behavior.
-- **Execution owner**: the component that makes the behavior happen.
-- **Documentation owner**: the primary doc that should change when semantics
-  change.
-- **Tests**: the minimum regression surface that should exist for the concept.
+## Concept truth table
 
-Risk labels:
-
-- **Clear**: one canonical home and predictable backend owners.
-- **Watch**: mostly clear, but easy to duplicate in VM/Bash/parser code.
-- **Hell candidate**: currently spans many files or has parity-sensitive rules;
-  refactor before expanding.
-
-## Concept index
-
-| Concept | Canonical representation | Validation owner | Execution owner | Documentation owner | Tests | Risk |
+| Concept | Status | Canonical representation | Owners | Supported behavior | Rejected/deferred behavior | Known traps / next maintenance trigger |
 | --- | --- | --- | --- | --- | --- | --- |
-| Command words | AST command payload, then lowerer-validated HIR command payload using `DsCommand*`; see `docs/maintenance/m3-4-command-words-interpolation-boundary.md` | Parser for syntax shape; lowerer for interpolation/word legality and normalization | VM command process path; Bash command emitter | `docs/maintenance/m3-4-command-words-interpolation-boundary.md`, `docs/language.ds`, `docs/architecture.md`, `docs/source-map.md` | VM command tests, Bash parity tests, diagnostics for invalid words | **Watch** |
-| Captured command results | HIR expression with shared command-result metadata and runtime `DsValue` object | Lowerer | VM process execution; Bash command-result helpers | Language docs, architecture backend boundary docs | VM tests, Bash parity tests, field diagnostics | **Watch** |
-| Command-result fields | Shared descriptor table in command metadata, consumed through HIR | Lowerer for field validity | VM field reads/interpolation; Bash condition/expression helpers | Language docs and architecture command-result notes | Diagnostic tests plus VM/Bash parity field tests | **Watch** |
-| Command-result functions | Stdlib/helper metadata lowered into `DS_LOWER_EXPR_CALL.return_kind` plus `DS_LOWER_VALUE_COMMAND_RESULT`; see `docs/maintenance/m3-3-command-result-functions.md` | Lowerer via stdlib/function metadata and command-result field catalog | VM stdlib/user-call execution; Bash stdlib/helper emission consuming lowered call metadata | `docs/maintenance/m3-3-command-result-functions.md`, language stdlib docs, runtime docs | VM tests, Bash parity tests, wrong-arity/field/temporary-access diagnostics | **Watch** |
-| Function return kinds | Function declaration metadata and HIR return kind/value kind; see `docs/maintenance/m3-2-function-return-kinds.md` | Function collection/lowering | VM scope/function call path; Bash function emission | `docs/maintenance/m3-2-function-return-kinds.md`, language docs, and milestone specs | VM tests, Bash parity tests, invalid return diagnostics | **Watch** |
-| Direct function-call interpolation in command words | Pre-materialized lowerer private string binding plus rewritten command word for the currently supported scalar quoted-word form; see `docs/maintenance/m3-4-command-words-interpolation-boundary.md` | Lowerer using function return-kind metadata | VM command argv construction; Bash command rendering/quoting consuming the rewritten command payload | `docs/maintenance/m3-4-command-words-interpolation-boundary.md`, language docs, and architecture command word rules | VM/Bash parity tests; diagnostics for unsupported return kinds and invalid interpolation forms | **Watch** |
-| Pipeline behavior | HIR command/pipeline command payload with stage/redirection metadata | Parser for syntax; lowerer for semantic restrictions | VM process pipeline execution; Bash command emitter | Language docs, runtime/process docs, parity contract | VM/Bash parity tests including stdout/stderr/status | **Watch** |
-| Plain command execution | HIR command statement | Parser for command syntax; lowerer for command word validation | VM process execution; Bash command statement emission | Language docs, runtime docs | VM/Bash parity tests; failure/redirect diagnostics | **Watch** |
-| Redirection | AST/HIR command redirection metadata | Parser for syntax; lowerer for conservative target validation | VM process file setup; Bash command emitter | Language docs and runtime process docs | VM/Bash parity tests with file side effects; diagnostics | **Watch** |
-| Trap/defer behavior | AST handler nodes lowered to HIR handler declarations; see `docs/maintenance/m3-x-trap-defer-signal-ownership.md` | Parser for handler syntax; lowerer for supported signal/context restrictions | VM signal/defer runtime; Bash trap/defer emission | `docs/maintenance/m3-x-trap-defer-signal-ownership.md`, runtime docs, language docs | VM tests, Bash parity tests, deterministic signal tests, diagnostics | **Watch** |
-| Signal handling | HIR handler declarations plus backend-specific runtime state; see `docs/maintenance/m3-x-trap-defer-signal-ownership.md` | Lowerer for supported signal literals and handler legality | VM foreground process/signal runtime; Bash `trap` emission | `docs/maintenance/m3-x-trap-defer-signal-ownership.md`, runtime docs, v0.22 milestone docs | Deterministic signal harness, VM/Bash parity tests, diagnostics | **Watch** |
-| Handler context | HIR handler scope metadata once supported; currently deferred by `docs/maintenance/m3-x-trap-defer-signal-ownership.md` | Lowerer | VM handler frame/scope; Bash handler variables | `docs/maintenance/m3-x-trap-defer-signal-ownership.md`, language docs, runtime docs | VM/Bash parity tests and diagnostics | **Watch** |
-| Environment variables via helpers | Stdlib metadata and HIR call expression/statement | Lowerer via stdlib metadata and env-name validation | VM stdlib env helpers; Bash helper/native env operations | Language stdlib docs, runtime docs | VM/Bash parity tests; process-local mutation tests; diagnostics | **Watch** |
-| Direct `env.NAME` access/assignment | AST field/assignment syntax lowered to `env.get`/set-env behavior with env-name validation; no general env-object value | Lowerer for env-name/scalar assignment validation | VM stdlib/set-env runtime; Bash env helper/native assignment rendering | Language docs, runtime docs, parity contract | VM/Bash parity tests; invalid-name and non-scalar assignment diagnostics | **Watch** |
-| String interpolation | AST string text, then HIR interpolation/expression segments; command-word interpolation uses `src/lower_command.c` where command-specific | Parser for string syntax; lowerer for expression, field, arithmetic, command-word, and format validity | VM string rendering; Bash quoting/interpolation helpers | Language docs and architecture interpolation notes | VM/Bash parity tests; format and unsupported-expression diagnostics | **Watch** |
-| Interpolation format specifiers | HIR interpolation segment metadata | Lowerer | VM string formatting; Bash helper/printf formatting | Language docs and milestone specs | VM/Bash parity tests; invalid specifier diagnostics | **Watch** |
-| Glob expansion | Stdlib helper metadata and HIR iterable call | Lowerer via stdlib metadata and pattern restrictions | VM stdlib glob implementation; Bash helper/emission | Language stdlib docs, runtime docs | VM/Bash parity tests with sorted output; diagnostics | **Watch** |
-| Recursive `**` glob patterns | Explicitly rejected/deferred pattern form until parity strategy exists | Lowerer/stdlib validation | None until supported | Language docs, roadmap/milestones | Diagnostic tests; later VM/Bash parity tests | **Clear while rejected** |
-| Regex match | HIR `matches` expression with conservative regex literal metadata; see `docs/maintenance/m3-5-regex-boundary.md` | Parser/lexer for literal syntax; lowerer for supported regex surface and parity gates | VM regex runtime; Bash regex emission | Language docs, runtime regex notes, M3.5 regex boundary spec | VM/Bash parity tests; unsupported-regex diagnostics | **Watch** |
-| Regex captures/replacement/runtime regex strings | Explicitly rejected until a canonical HIR/value model exists; see `docs/maintenance/m3-5-regex-boundary.md` | Lowerer rejects parseable unsupported forms; lexer/parser own malformed literal shape | None until supported | Language docs, runtime regex plan, M3.5 regex boundary spec | Diagnostic tests now; future VM/Bash parity tests before acceptance | **Clear while rejected** |
-| List/map literal representation | AST collection literals lowered to HIR array/map expressions; see `docs/maintenance/m3-6-mutable-collections.md` | Parser for literal syntax shape and empty-map rejection; lowerer for key/value/element portability and duplicate/empty-key policy | VM runtime containers; Bash arrays/associative arrays plus value-type metadata | `docs/maintenance/m3-6-mutable-collections.md`, language docs, runtime docs | VM/Bash parity tests; empty-map, duplicate/invalid key, and nonportable element diagnostics | **Watch** |
-| Read-only collection indexing | HIR index expression over named lists/maps where supported; see `docs/maintenance/m3-6-mutable-collections.md` | Lowerer for target/key/index legality, named-binding parity restrictions, and portable literal-or-variable index expressions | VM runtime indexing; Bash helper emission | `docs/maintenance/m3-6-mutable-collections.md`, language docs and runtime docs | VM/Bash parity tests; bounds/type diagnostics; diagnostics for temporary collection/computed-index access | **Watch** |
-| Map iteration | Explicitly deferred until an HIR iteration-order/parity contract exists; see `docs/maintenance/m3-6-mutable-collections.md` | Lowerer rejects while deferred | None until supported | `docs/maintenance/m3-6-mutable-collections.md`, language docs and milestones | Diagnostic tests now; future VM/Bash parity tests before acceptance | **Clear while rejected** |
-| Index assignment | Explicitly deferred until explicit HIR assignment-target/mutation semantics exist; see `docs/maintenance/m3-6-mutable-collections.md` | Parser rejects unsupported collection-assignment syntax before AST/HIR ownership | None until supported | `docs/maintenance/m3-6-mutable-collections.md`, language docs and roadmap/milestones | Parser diagnostic tests now; future VM/Bash parity tests before acceptance | **Clear while rejected** |
-| Nested collection mutation | Explicitly deferred until nested value/reference semantics and Bash encoding are specified; see `docs/maintenance/m3-6-mutable-collections.md` | Parser rejects unsupported nested assignment syntax before AST/HIR ownership | None until supported | `docs/maintenance/m3-6-mutable-collections.md`, language/runtime docs | Parser diagnostic tests now; future VM/Bash parity tests before acceptance | **Clear while rejected** |
-| Mutable collection VM/Bash parity | HIR as the accepted collection contract plus Bash value-type sidecar metadata; see `docs/maintenance/m3-6-mutable-collections.md` | Lowerer rejects unsupported parity risks before backend selection | VM executes accepted containers/mutations; Bash renders accepted collection HIR | `docs/maintenance/m3-6-mutable-collections.md`, parity contract, runtime docs | VM/Bash parity tests for accepted forms and rejection tests for deferred mutation forms | **Watch** |
-| Mutable collection diagnostics | Phase-owned diagnostics per `docs/diagnostics.md`; collection-specific contract in `docs/maintenance/m3-6-mutable-collections.md` | Parser for malformed syntax and unsupported assignment syntax; lowerer for semantic/parity rejection; VM/Bash for runtime data failures/internal invariants | Diagnostic renderer plus owning phase | `docs/maintenance/m3-6-mutable-collections.md`, diagnostics docs | Diagnostic tests for malformed syntax, parser-rejected mutation syntax, rejected semantics, runtime missing key/out-of-range failures | **Watch** |
-| Scalar variables and assignment | HIR variable declarations/assignments and lowerer symbol table facts | Parser for statement syntax; lowerer for symbol/value-kind rules | VM scope runtime; Bash statement emission | Language docs, architecture lowering docs | VM/Bash parity tests; duplicate/unknown/invalid assignment diagnostics | **Clear** |
-| Conditionals and boolean logic | HIR expression/statement forms | Lowerer for expression validity and type-like constraints | VM interpreter; Bash condition emitter | Language docs | VM/Bash parity tests; diagnostics | **Clear** |
-| Loops over iterables | HIR loop statement with iterable expression | Lowerer for iterable eligibility and portable iterable representation | VM interpreter/scope; Bash loop emission | Language docs | VM/Bash parity tests; diagnostics for non-iterables and nonportable temporary array iterables | **Watch** |
-| Imports/program composition | Loaded-program aggregate plus AST/HIR composed program | CLI program loader for source/import composition; parser for import syntax | All backends consume composed HIR | Architecture docs and language docs | CLI/check/run/emit tests; diagnostics for import failures | **Watch** |
-| Bash parity | HIR as contract plus shared metadata/helper catalogs; see `docs/parity-contracts.md` | Lowerer rejects unsupported parity risks unless explicitly VM-only, Bash-only, diagnostic-only, or currently rejected | VM backend and Bash backend independently execute the same accepted HIR | `docs/parity-contracts.md`, architecture docs, release checklist, milestone specs | Every accepted feature needs VM tests, Bash parity tests, and diagnostics for unsupported forms unless explicitly scoped otherwise | **Watch** |
-| VM process execution | VM-private process spec/result around HIR commands | Lowerer validates language rules; VM validates OS/runtime failures | `vm_process.c` and VM interpreter | Runtime docs and architecture backend docs | VM tests plus Bash parity tests for observable behavior | **Watch** |
-| Bash helper selection | Bash dependency flags derived from HIR and stdlib metadata | Lowerer for language legality; Bash deps for helper need | Bash emitter/helpers | Architecture docs and source map | Bash emission tests, `bash -n`, parity tests | **Watch** |
-| Diagnostics | `DsDiag`/source spans plus the phase ownership contract in `docs/diagnostics.md` | Lexer/parser for syntax; lowerer for semantic/unsupported/parity-gate diagnostics; checker for warnings; VM/Bash only for backend-appropriate failures | Diagnostic renderer/source manager display messages; each owning phase decides its own errors | `docs/diagnostics.md`, architecture docs, parity contract | Diagnostic tests per phase; parity-gate rejection tests before backend selection; runtime/backend tests only for backend-specific failures | **Watch** |
-| Formatter behavior | AST-preserving formatter output | Parser must build enough AST; formatter owns formatting policy | Formatter only, no language execution | Language syntax docs and formatter docs/milestones | Formatter snapshot tests; parse-after-format tests | **Watch** |
-| Standard-library helper catalog | `ds_stdlib.h` metadata and `stdlib.c` table | Lowerer consumes metadata for arity/kind/flags | VM stdlib and Bash helpers consume same metadata | Language stdlib docs and runtime docs | VM/Bash parity tests plus wrong-arity/name diagnostics | **Watch** |
-| Runtime values | `DsValue`/runtime containers | Lowerer controls which language values can reach runtime | VM runtime; Bash has standalone encoded equivalents/helpers | Runtime docs and architecture docs | Runtime/unit tests where available; VM/Bash parity tests | **Watch** |
-| Source spans/source manager | `DsSource`, `DsSpan`, `DsLoc` | Each phase attaches/propagates spans | Diagnostics and CLI display | Architecture diagnostics/source manager docs | Diagnostic location tests | **Clear** |
+| Source spans and diagnostics substrate | **Clear** | `DsSource`, `DsSpan`, `DsLoc`, `DsDiag` | Every phase attaches spans; `diag.c` renders | Stable location reporting | None concept-specific | Preserve spans when moving validation. |
+| Diagnostics ownership | **High-pressure Watch** | Phase ownership contract in `docs/diagnostics.md` | Parser syntax; lowerer semantics/parity; checker warnings; VM runtime/OS; Bash artifact/internal invariants | Phase-owned user diagnostics | Backend semantic ownership | Any new backend `unsupported`/`cannot emit` message needs classification. |
+| VM/Bash parity contract | **High-pressure Watch** | HIR plus shared metadata catalogs | Lowerer gates; VM executes; Bash renders | Accepted features require VM and Bash behavior unless scoped otherwise | Backend-only acceptance without contract | Start every feature with HIR/shared-metadata and parity-test plan. |
+| General interpolation segment model | **High-pressure Watch** | Parser string text; HIR `DS_LOWER_EXPR_INTERP` parts; command-word text validated by `lower_command.c` | Parser preserves text; lowerer validates/normalizes; VM/Bash render accepted segments | `{name}`, `{name.field}`, supported expression/function-call forms, format specs where documented | Unsupported segment shapes and unsupported format specs | String and command-word paths are related but not identical; do not duplicate semantics in VM/Bash. |
+| String interpolation | **Watch** | HIR interpolation expression with scalar parts | Parser string syntax; lowerer expression/scalar/format validation; VM/Bash render | Scalar variables, fields, supported calls/expressions, formatting helpers | Non-scalar payloads and unsupported shapes | Keep command-specific rules in `lower_command.c`; backend shape errors should stay internal invariants. |
+| Command words | **High-pressure Watch** | AST/HIR `DsCommand` payloads | `parse_command.c` syntax; `lower_command.c` word legality; VM/Bash command backends | Plain commands, quoted/unquoted words, redirection, pipelines, capture metadata | Unsupported interpolation/word forms | Any new word behavior must update parser, lowerer, HIR command payload, VM argv, Bash quoting, and parity tests together. |
+| Command-word interpolation | **High-pressure Watch** | `DsCommandWord` text plus lowerer validation/materialization | `lower_command.c` owns validation, format checks, command-result fields, scalar value-call materialization | Existing variable/field/arithmetic/format interpolation and supported scalar quoted value-call materialization | Structured return interpolation, unsupported command-result/function forms | Do not move acceptance into `vm_process.c`, `bash_command.c`, or `bash_quote.c`. |
+| Direct function-call interpolation in command words | **Watch** | Private lowerer string temp plus rewritten command word | Lowerer uses return-kind metadata; VM/Bash consume rewritten payload | Currently supported scalar quoted-word value calls | Structured returns and unsupported positions | Expand only after function return and command-word contracts are updated. |
+| Captured command results | **Watch** | HIR run/call result with shared command-result field catalog | Lowerer validates fields; VM captures process output/status; Bash helpers encode fields | `stdout`, `stderr`, `status`/`code`, `ok`, `failed` | Unknown fields and unsupported temporary structured access | Field catalog must remain shared; VM/Bash fallback diagnostics are internal invariants. |
+| Command-result functions | **Watch** | `DS_LOWER_VALUE_COMMAND_RESULT` call return kind | Lowerer/stdlib/function metadata; VM/Bash call implementations | Supported helpers/user calls returning command results | Direct temporary field/index access where rejected | New producers must update metadata, lowerer value kinds, Bash ABI, VM/Bash parity tests. |
+| Function return kinds | **Watch** | Function metadata plus HIR `return_kind`/value kind | `lower_functions.c` and return lowering; VM/Bash call/return backends | Scalar and currently portable structured returns | Nonportable structured returns and invalid mixed returns | New call positions or structured returns must start with return-kind contract review. |
+| Bash structured value ABI | **High-pressure Watch** | Bash raw variables plus array/map/command-result type sidecars/helpers | Lowerer defines accepted value kinds; Bash emitter/helpers encode them | Accepted arrays, maps, command results, structured returns after binding | Shapes without Bash encoding or direct temporary access | Treat Bash ABI as implementation detail, never canonical language semantics. |
+| Pipeline behavior | **High-pressure Watch** | HIR command payload with stages/redirection/capture metadata | Parser syntax; lowerer restrictions; VM process pipeline; Bash pipeline emission | Plain and captured pipelines with documented stdout/stderr/status behavior | Unsupported stage/redirect/capture forms | Process status and signal cleanup are fragile; future changes need focused runtime/parity pass. |
+| Process/signal/pipeline runtime contract | **High-pressure Watch** | HIR handlers/commands plus VM/Bash runtime state | Lowerer validates handlers/signals; VM owns process groups/signals; Bash owns trap/helper emission | Deterministic supported `INT`/`TERM` cleanup, defer/trap ordering, foreground command/pipeline handling | Rich job-control APIs and unsupported handler contexts | OS-sensitive; do not generalize from one backend without deterministic parity tests. |
+| Trap/defer/signal declarations | **Watch** | AST handler nodes lowered to HIR handler declarations | Parser syntax; lowerer signal/context legality; VM/Bash runtime execution | Supported handler declarations and cleanup behavior | Unsupported signals, handler captures, direct returns where rejected | Keep signal policy in lowering, not parser/backends. |
+| Handler context APIs | **Clear while rejected** | No accepted HIR context value beyond current handler contract | Lowerer rejects unsupported context/capture/use | Current cleanup handlers without rich context API | Rich signal/job-control/context variables | Add only with explicit HIR context model and VM/Bash parity plan. |
+| Direct `env.NAME` access/assignment | **Watch** | AST field/assignment lowered to `env.get`/`env.set` behavior; no general env object | Lowerer validates env names/scalar assignment; VM stdlib and Bash/native rendering execute | Direct reads and scalar assignments | Compound assignment, non-scalar assignment, env object semantics | Future richer env access needs explicit HIR/env contract first. |
+| Environment helper calls | **Watch** | Stdlib metadata and HIR calls/statements | Lowerer arity/name validation; VM stdlib; Bash helpers/native ops | `env.get`, `env.set`, `env.unset` behavior as documented | Invalid names/arity/value kinds | Keep helper metadata canonical; helpers do not define language semantics. |
+| Regex policy | **Watch** | HIR `matches` expression with conservative regex literal metadata | Lexer/parser literal syntax; lowerer supported surface/parity gates; VM/Bash regex execution | Conservative regex literals as right operand of `matches` | Captures, replacement, split, runtime regex strings | Any expansion needs regex value/capture model and VM/Bash parity tests. |
+| Regex captures/replacement/runtime regex strings | **Clear while rejected** | No accepted HIR/value model | Lowerer rejects parseable unsupported forms; lexer/parser reject malformed literals | None until designed | Captures, replacement, runtime regex values/strings | Do not leak partial support through VM/Bash helpers. |
+| Glob expansion | **Watch** | Stdlib helper metadata and HIR iterable call | Lowerer for static pattern restrictions/iterable eligibility; VM/Bash helpers execute | `glob`, `glob!`, sorted observable behavior | Recursive `**` where known; no-match behavior per helper | Dynamic pattern restrictions are runtime data failures. |
+| Recursive `**` glob patterns | **Clear while rejected** | No accepted recursive glob contract | Lowerer rejects statically known patterns; VM/Bash helpers reject dynamic patterns at runtime | None | Recursive `**` patterns | Add only after cross-backend ordering and shell-glob semantics are specified. |
+| Mutable collections | **High-pressure Watch** | AST literals/indexing lowered to HIR arrays/maps/index expressions; no mutation HIR node | Parser syntax and unsupported assignment rejection; lowerer parity gates; VM/Bash accepted containers | List/map literals, named read-only indexing, array loops, `array.push`, flat structured returns | Map iteration, index assignment, nested mutation, unsupported temporaries/computed indexes | Collection work must start from M3.6; Bash encoding and value/reference semantics are pressure points. |
+| Collection portability policy | **High-pressure Watch** | HIR value kinds plus Bash sidecar metadata and lowerer parity gates | Lowerer defines portable shapes; VM/Bash execute/render accepted shapes | Flat portable collection values where documented | Nested collections, temporary structured access, nonportable loop/index forms | Do not let VM-capable collection behavior bypass Bash parity gates. |
+| Map iteration | **Clear while rejected** | No accepted HIR iteration-order contract | Lowerer rejects | None | Map iteration/order semantics | Requires explicit order policy and VM/Bash parity tests. |
+| Index assignment and nested mutation | **Clear while rejected** | No AST/HIR mutation representation | Parser rejects unsupported collection assignment syntax | None beyond current `array.push` | `xs[0] = v`, `map.key = v`, nested mutation | Add only with HIR assignment-target/mutation semantics. |
+| List/map literal representation | **Watch** | HIR array/map expressions and value kinds | Parser literal shape/empty-map syntax rejection; lowerer key/value portability | Non-empty maps with valid keys, lists with portable elements | Empty map literal, duplicate/empty keys, nested unsupported values | Empty map remains parser-owned while `{}` has no supported meaning. |
+| Read-only collection indexing | **Watch** | HIR index expression with collection/index metadata | Lowerer target/key/index legality; VM/Bash runtime access | Named list/map indexing with literal or named-variable indexes | Temporary collection access and unsupported computed indexes | Runtime missing-key/out-of-range remains VM/Bash runtime data failure. |
+| Scalar variables and assignment | **Clear** | HIR let/assign statements and lowerer symbol table | Parser statement syntax; lowerer symbols/value kinds; VM/Bash assignment backends | Scalar declarations/assignments | Unknown/invalid assignments | Keep collection/env special cases out of generic scalar ownership. |
+| Conditionals and boolean logic | **Clear** | HIR expressions/statements | Lowerer expression validity; VM/Bash condition evaluation | Supported comparisons, boolean logic, conditions | Unsupported operators/operand kinds | Backend fallback diagnostics should remain internal invariants. |
+| Loops over iterables | **Watch** | HIR for-loop with iterable expression and element kind | Lowerer iterable eligibility; VM/Bash loop execution | Array/range/supported iterable loops | Map iteration and nonportable temporary array iterables | New iterable kinds need VM/Bash loop parity tests. |
+| Imports/program composition | **Watch** | CLI-loaded composed program then AST/HIR | CLI source/import loading; parser import syntax; lowerer/backends consume composed HIR | Current import composition | Import I/O/load failures | Keep composition diagnostics in CLI/frontend orchestration. |
+| Stdlib helper metadata | **Watch** | `ds_stdlib.h` metadata plus `stdlib.c` table | Lowerer consumes metadata; VM/Bash implement helpers | Shared arity/kind/return metadata for helpers | Helper behavior not represented in metadata where needed | New helpers must update metadata before backend implementation. |
+| Stdlib dynamic runtime restrictions | **Watch** | Runtime/helper checks for data-dependent arguments | Lowerer handles static restrictions; VM/Bash helpers handle dynamic data failures | Runtime failures for dynamic empty separators, required glob no-match, dynamic recursive glob, etc. | Treating data-dependent failures as static semantics | Keep wording/runtime classification clear; add tests when dynamic cases change. |
+| Runtime values | **Watch** | `DsValue` containers and VM runtime state; Bash encoded equivalents | Lowerer controls value kinds reaching runtime; VM runtime executes; Bash helpers encode | Scalars, arrays/maps, command-result objects where accepted | Runtime values defining syntax/semantics | Runtime may fail on data/OS errors, not accept new language forms. |
+| Bash helper selection | **Watch** | Helper dependency flags derived from accepted HIR | Bash deps/emitter select helpers; lowerer owns legality | Emit only required helpers for accepted HIR | Helper selection as semantic validation | Helper presence/absence tests catch accidental coupling. |
+| Formatter behavior | **Watch** | AST-preserving formatted output | Parser builds AST; formatter owns presentation | Supported syntax formatting | Semantic acceptance/rejection | Formatter should not need unsupported-only semantic nodes. |
 
-## Hell areas to prioritize
+## Current Hell candidates
 
-These concepts have the highest risk of becoming "kind of everywhere":
+None in the current baseline after Phases 1-4.1 and Phase A. The high-pressure
+Watch entries above are the places most likely to become Hell candidates if a
+future feature bypasses the documented owner.
 
-1. **Command words and direct interpolation**: M3.4 now specifies and implements
-   the boundary: parser owns command syntax shape; lowerer owns command-word
-   semantics, unsupported forms, and pre-materialization of supported scalar
-   function-call interpolation; VM/Bash consume accepted command payloads. It is
-   tracked under Watch because future command-word expansion can still drift.
-2. **Trap/defer/signal behavior**: M3.x now specifies and implements focused
-   ownership cleanups in `docs/maintenance/m3-x-trap-defer-signal-ownership.md`:
-   parser preserves handler syntax shape, lowerer owns supported-signal and
-   handler-context diagnostics, HIR is the accepted handler contract, VM owns
-   cleanup/signal execution and foreground process/pipeline classification, and
-   Bash owns standalone trap/helper emission. Focused signal-runtime tests now
-   cover direct-command and pipeline `INT`/`TERM` parity without running the
-   entire v0.22 integration suite. It remains Watch because signal behavior is
-   OS-sensitive and future changes can still drift if they bypass the accepted
-   HIR handler contract.
-3. **Regex expansion beyond conservative literals**: M3.5 now defines the
-   boundary in `docs/maintenance/m3-5-regex-boundary.md`. Conservative
-   literal `matches` is Watch; captures, replacement, split, and runtime regex
-   strings are Clear while rejected until a future milestone adds portable
-   HIR/value semantics and VM/Bash parity tests.
-4. **Mutable collections (`map` iteration, index assignment, nested mutation)**:
-   M3.6 narrows this into separate sub-risks in
-   `docs/maintenance/m3-6-mutable-collections.md`. Literal representation and
-   read-only indexing are Watch; map iteration, index assignment, and nested
-   mutation are Clear while rejected until a future milestone defines HIR and
-   VM/Bash parity semantics.
+## Maintenance triggers
 
-Reviewed in Phase 4.1 and kept out of Hell-candidate status:
-
-- **Pipeline behavior**: the current accepted surface has a HIR command/pipeline
-  payload, parser/lowerer restrictions, VM process execution, Bash pipeline
-  emission, and parity docs/tests. It remains Watch because process/signal/status
-  behavior is still easy to duplicate across VM and Bash.
-- **Direct `env.NAME` access/assignment**: v0.27 direct reads and scalar
-  assignments are implemented through lowering and backend consumption rather
-  than an arbitrary env-object model. It remains Watch; future compound env
-  assignment or richer env access should define a new contract first.
-- **String interpolation**: the basic string interpolation path is stable enough
-  for Watch. Command-specific interpolation is owned by `src/lower_command.c`;
-  VM/Bash string renderers keep only runtime rendering and internal invariant
-  checks for accepted HIR shapes.
-
-Moved to **Watch** after maintenance cleanup:
-
-- **Command-result functions**: M3.3 names the lowerer/HIR command-result
-  contract. Stdlib return metadata now maps once into lowered call value kinds,
-  command-result producers/portable returns are classified by lowerer helpers,
-  and Bash expression/statement typing consumes lowered call metadata instead of
-  re-deriving stdlib call result types from helper names. Remaining risk is drift
-  when future command-result-producing helpers or direct temporary support are
-  added.
-
-- **Function return kinds**: M3.2 centralizes return-statement validation in the
-  lowerer, removes the parser-side semantic `return`-outside-function diagnostic,
-  names provisional return-contract discovery for forward value calls, funnels
-  expression-position call validation through a lowerer helper, and documents VM
-  and Bash return fallbacks as internal invariants. Remaining risk is drift when
-  future command interpolation or structured-return features add new call/return
-  positions.
-- **Bash parity itself**: narrowed by `docs/parity-contracts.md`. A feature is
-   accepted only when it has backend-neutral HIR/shared metadata and defined VM
-   and Bash behavior, unless documented as VM-only, Bash-only, diagnostic-only,
-   or currently rejected. Lowering now rejects temporary collection and
-   command-result field/index access, computed collection index expressions,
-   nonportable temporary array loop iterables, and nonportable structured
-   function-return payloads that previously reached VM but failed Bash emission.
-   Remaining risk is
-   enforcement drift during feature work, so keep it under **Watch** rather than
-   treating it as vague ownership.
-- **Diagnostics**: narrowed by `docs/diagnostics.md`. Every phase can emit
-   diagnostics, but ownership must follow the rule being checked: parser reports
-   syntax, lowerer reports semantic language misuse and unsupported parity forms,
-   checker reports warnings, VM reports runtime/OS failures, and Bash emitter
-   reports only artifact or accepted-HIR emission errors. Remaining risk is
-   remaining backend `unsupported` diagnostics that need classification as
-   runtime failures, artifact failures, or defensive accepted-HIR invariants.
-
-## Refactoring rules from this map
-
-- Do not add a backend-only feature path unless `docs/parity-contracts.md`
-  explicitly documents it as VM-only or Bash-only. Otherwise add or update the
-  HIR representation first, then wire VM and Bash from that representation.
-- Do not let Bash helpers become canonical semantics. Helpers implement already
-  validated HIR behavior for standalone scripts.
-- Do not let VM runtime values define source syntax. Runtime values execute HIR;
-  parser/lowerer own user-facing language acceptance.
-- Do not spread string/command interpolation rules across VM and Bash. Preserve a
-  shared command/string segment model and make backend code render it.
-- Do not introduce regex, glob, signal, or collection behavior without deciding
-  whether unsupported forms are rejected in lowering or represented in HIR.
-- Every concept marked **Hell candidate** needs at least one explicit diagnostic
-  test for unsupported forms and at least one VM/Bash parity test for supported
-  observable behavior.
+- Promote a **Watch** or **High-pressure Watch** concept to **Hell candidate** if
+  semantic checks appear in both lowerer and a backend, or if VM/Bash accept
+  different source behavior.
+- Keep unsupported features **Clear while rejected** only while diagnostics are
+  documented and tested before backend execution, except data-dependent runtime
+  restrictions that genuinely cannot be known statically.
+- Do not mark a concept **Clear** until adding nearby behavior no longer requires
+  touching parser, lowerer, VM, Bash, docs, and tests together.
+- When adding feature scope, update this file only after source inspection proves
+  the owner/representation is real.
