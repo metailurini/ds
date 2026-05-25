@@ -47,7 +47,7 @@ const char *ds_bash_int_helpers_source(void) {
         "    '*') __ds_out=$(__ds_int_mul_checked '*' \"$__ds_l\" \"$__ds_r\") || exit $? ;;\n"
         "    '/') (( __ds_r != 0 )) || __ds_error 'division or modulo by zero'; (( __ds_l == (-9223372036854775807 - 1) && __ds_r == -1 )) && __ds_int_overflow '/'; __ds_out=$((__ds_l / __ds_r)) ;;\n"
         "    '%') (( __ds_r != 0 )) || __ds_error 'division or modulo by zero'; (( __ds_l == (-9223372036854775807 - 1) && __ds_r == -1 )) && __ds_int_overflow '%'; __ds_out=$((__ds_l % __ds_r)) ;;\n"
-        "    '**') (( __ds_r >= 0 )) || __ds_error 'negative exponents are not supported'; local __ds_base=\"$__ds_l\"; __ds_out=1; while (( __ds_r > 0 )); do if (( __ds_r & 1 )); then __ds_out=$(__ds_int_mul_checked '**' \"$__ds_out\" \"$__ds_base\") || exit $?; fi; __ds_r=$((__ds_r / 2)); if (( __ds_r > 0 )); then __ds_base=$(__ds_int_mul_checked '**' \"$__ds_base\" \"$__ds_base\") || exit $?; fi; done ;;\n"
+        "    '**') (( __ds_r >= 0 )) || __ds_error 'negative exponent runtime value is rejected in v0.21.0'; local __ds_base=\"$__ds_l\"; __ds_out=1; while (( __ds_r > 0 )); do if (( __ds_r & 1 )); then __ds_out=$(__ds_int_mul_checked '**' \"$__ds_out\" \"$__ds_base\") || exit $?; fi; __ds_r=$((__ds_r / 2)); if (( __ds_r > 0 )); then __ds_base=$(__ds_int_mul_checked '**' \"$__ds_base\" \"$__ds_base\") || exit $?; fi; done ;;\n"
         "    *) __ds_error \"internal Bash helper invariant failed: unknown integer operator '$__ds_op' after lowering\" ;;\n"
         "  esac\n"
         "  printf '%s' \"$__ds_out\"\n"
@@ -182,7 +182,7 @@ const char *ds_bash_stdlib_helpers_source(void) {
         "__ds_stdlib_env_set() { __ds_stdlib_env_valid \"$1\"; export \"$1=$2\"; }\n"
         "__ds_stdlib_env_unset() { __ds_stdlib_env_valid \"$1\"; unset \"$1\"; }\n"
         "__ds_stdlib_capture() { local __ds_var=\"$1\" __ds_data __ds_status; shift; set +e; __ds_data=\"$(\"$@\"; printf x)\"; __ds_status=$?; set -e; if (( __ds_status != 0 )); then exit \"$__ds_status\"; fi; __ds_data=\"${__ds_data%x}\"; printf -v \"$__ds_var\" '%s' \"$__ds_data\"; }\n"
-        "__ds_stdlib_reject_recursive_glob() { [[ \"$1\" != *'**'* ]] || __ds_error \"recursive '**' glob patterns are deferred in v0.11.0\"; }\n"
+        "__ds_stdlib_reject_recursive_glob() { [[ \"$1\" != *'**'* ]] || __ds_error \"runtime glob pattern contains recursive **; recursive glob patterns are deferred in v0.11.0\"; }\n"
         "__ds_stdlib_glob() { __ds_stdlib_reject_recursive_glob \"$1\"; { compgen -G \"$1\" || true; } | sort; }\n"
         "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
         "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; __ds_stdlib_reject_nul \"$1\" \"lines from\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\\n' \"$line\"; done <\"$1\"; }\n\n";
@@ -193,11 +193,11 @@ const char *ds_bash_string_helpers_source(void) {
         "__ds_string_trim() { local s=\"$1\"; s=\"${s#${s%%[!$' \\t\\r\\n']*}}\"; s=\"${s%${s##*[!$' \\t\\r\\n']}}\"; printf '%s' \"$s\"; }\n"
         "__ds_string_upper() { printf '%s' \"$1\" | LC_ALL=C tr '[:lower:]' '[:upper:]'; }\n"
         "__ds_string_lower() { printf '%s' \"$1\" | LC_ALL=C tr '[:upper:]' '[:lower:]'; }\n"
-        "__ds_string_replace() { [[ -n \"$2\" ]] || __ds_error 'replace with an empty source is unsupported in v0.19.0'; local s=\"$1\" from=\"$2\" to=\"$3\" out= i=0 flen=${#2}; while (( i < ${#s} )); do if [[ \"${s:i:flen}\" == \"$from\" ]]; then out+=\"$to\"; i=$((i + flen)); else out+=\"${s:i:1}\"; i=$((i + 1)); fi; done; printf '%s' \"$out\"; }\n"
+        "__ds_string_replace() { [[ -n \"$2\" ]] || __ds_error 'replace with an empty runtime source is rejected in v0.19.0'; local s=\"$1\" from=\"$2\" to=\"$3\" out= i=0 flen=${#2}; while (( i < ${#s} )); do if [[ \"${s:i:flen}\" == \"$from\" ]]; then out+=\"$to\"; i=$((i + flen)); else out+=\"${s:i:1}\"; i=$((i + 1)); fi; done; printf '%s' \"$out\"; }\n"
         "__ds_string_contains() { local s=\"$1\" sub=\"$2\" i=0 slen=${#2}; if [[ -z \"$sub\" ]]; then printf true; return; fi; while (( i + slen <= ${#s} )); do [[ \"${s:i:slen}\" == \"$sub\" ]] && { printf true; return; }; i=$((i + 1)); done; printf false; }\n"
         "__ds_string_starts_with() { local s=\"$1\" pre=\"$2\"; [[ \"${s:0:${#pre}}\" == \"$pre\" ]] && printf true || printf false; }\n"
         "__ds_string_ends_with() { local s=\"$1\" suf=\"$2\"; if [[ -z \"$suf\" ]]; then printf true; elif [[ \"${s: -${#suf}}\" == \"$suf\" ]]; then printf true; else printf false; fi; }\n"
-        "__ds_string_split() { [[ -n \"$2\" ]] || __ds_error 'split with an empty separator is unsupported in v0.19.0'; local s=\"$1\" sep=\"$2\" start=0 i=0 slen=${#2}; while (( i + slen <= ${#s} )); do if [[ \"${s:i:slen}\" == \"$sep\" ]]; then printf '%s\\n' \"${s:start:i-start}\"; i=$((i + slen)); start=$i; else i=$((i + 1)); fi; done; printf '%s\\n' \"${s:start}\"; }\n"
+        "__ds_string_split() { [[ -n \"$2\" ]] || __ds_error 'split with an empty runtime separator is rejected in v0.19.0'; local s=\"$1\" sep=\"$2\" start=0 i=0 slen=${#2}; while (( i + slen <= ${#s} )); do if [[ \"${s:i:slen}\" == \"$sep\" ]]; then printf '%s\\n' \"${s:start:i-start}\"; i=$((i + slen)); start=$i; else i=$((i + 1)); fi; done; printf '%s\\n' \"${s:start}\"; }\n"
         "__ds_format_center() { local width=\"$1\" s=\"$2\" pad left right; pad=$((width - ${#s})); (( pad > 0 )) || pad=0; left=$((pad / 2)); right=$((pad - left)); printf '%*s%s%*s' \"$left\" '' \"$s\" \"$right\" ''; }\n\n";
 }
 

@@ -444,7 +444,7 @@ static bool emit_user_function_value_call_into(BashEmitter *e, DsStr name, const
 
 bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
     if (!is_safe_identifier(fn->name)) {
-        ds_diag_error(e->diag, fn->span, "cannot emit unsafe Bash function name `%.*s`", (int)fn->name.len, fn->name.data);
+        ds_diag_error(e->diag, fn->span, "internal Bash invariant failed: unsafe lowered function name `%.*s` reached Bash emission", (int)fn->name.len, fn->name.data);
         return false;
     }
     emit_fn_name(&e->out, fn->name);
@@ -757,7 +757,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET:
             if (!is_safe_identifier(stmt->as.let_stmt.name)) {
-                ds_diag_error(e->diag, stmt->span, "cannot emit unsafe Bash variable name `%.*s`", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
+                ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: unsafe lowered variable name `%.*s` reached Bash emission", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
                 return false;
             }
             if (interp_has_user_function_call(stmt->as.let_stmt.value)) {
@@ -889,7 +889,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 return true;
             }
             if (!is_safe_identifier(stmt->as.assign_stmt.name)) {
-                ds_diag_error(e->diag, stmt->span, "cannot emit unsafe Bash variable name `%.*s`", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);
+                ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: unsafe lowered variable name `%.*s` reached Bash emission", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);
                 return false;
             }
             if (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SET) {
@@ -1143,7 +1143,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_BLOCK:
             return emit_block_body(e, stmt, indent);
         case DS_LOWER_STMT_ASSERT:
-            ds_diag_error(e->diag, stmt->span, "assert statements are only emitted by the test runner in v0.14.0");
+            ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: assert statement reached standalone Bash emission; the test runner owns assert emission in v0.14.0");
             return false;
         case DS_LOWER_STMT_RETURN:
             emit_indent(&e->out, indent);

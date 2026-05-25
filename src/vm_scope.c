@@ -62,7 +62,7 @@ bool vm_pop_return(Vm *vm, size_t *out) {
 
 bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
     if (ins->target < 0 || (size_t)ins->target >= vm->program->function_len) {
-        ds_diag_error(vm->diag, ins->span, "unknown function call target");
+        ds_diag_error(vm->diag, ins->span, "internal VM invariant failed: unknown function call target after lowering");
         return false;
     }
     FnMeta *fn = &vm->program->functions[ins->target];
@@ -97,7 +97,7 @@ bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span) {
         }
     }
     {
-        ds_diag_error(vm->diag, span, "unknown variable `%s`", name);
+        ds_diag_error(vm->diag, span, "internal VM invariant failed: unknown variable `%s` after lowering", name);
         return false;
     }
 }

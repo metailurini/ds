@@ -364,7 +364,7 @@ static bool stdlib_glob(Vm *vm, Instr *ins, DsValue *out) {
     char *pattern = vm_string_arg_dup(vm, ins, 0);
     if (!pattern) return false;
     if (strstr(pattern, "**")) {
-        ds_diag_error(vm->diag, ins->span, "recursive `**` glob patterns are deferred in v0.11.0");
+        ds_diag_error(vm->diag, ins->span, "runtime glob pattern contains recursive `**`; recursive glob patterns are deferred in v0.11.0");
         free(pattern);
         return false;
     }
@@ -476,7 +476,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
     if (helper_is(ins, "string.replace")) {
         const char *from = NULL, *to = NULL; size_t from_len = 0, to_len = 0;
         if (!vm_string_arg(vm, ins, 1, &from, &from_len) || !vm_string_arg(vm, ins, 2, &to, &to_len)) return false;
-        if (from_len == 0) { ds_diag_error(vm->diag, ins->span, "replace with an empty source is unsupported in v0.19.0"); return false; }
+        if (from_len == 0) { ds_diag_error(vm->diag, ins->span, "replace with an empty runtime source is rejected in v0.19.0"); return false; }
         DsString r; ds_string_init(&r);
         size_t i = 0;
         while (i < len) {
@@ -488,7 +488,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
     if (helper_is(ins, "string.split")) {
         const char *sep = NULL; size_t sep_len = 0;
         if (!vm_string_arg(vm, ins, 1, &sep, &sep_len)) return false;
-        if (sep_len == 0) { ds_diag_error(vm->diag, ins->span, "split with an empty separator is unsupported in v0.19.0"); return false; }
+        if (sep_len == 0) { ds_diag_error(vm->diag, ins->span, "split with an empty runtime separator is rejected in v0.19.0"); return false; }
         DsValue array = ds_value_null(); array.kind = DS_VALUE_ARRAY; ds_array_init(&array.as.array);
         size_t part = 0, i = 0;
         while (i + sep_len <= len) {

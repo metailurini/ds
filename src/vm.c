@@ -281,7 +281,7 @@ dispatch_loop:
                     } else if (strcmp(ins->cmp, "/") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer / right->as.integer));
                     else if (strcmp(ins->cmp, "%") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer % right->as.integer));
                     else {
-                        if (right->as.integer < 0) { ds_diag_error(diag, ins->span, "negative exponents are not supported"); rc = 1; goto done; }
+                        if (right->as.integer < 0) { ds_diag_error(diag, ins->span, "negative exponent runtime value is rejected in v0.21.0"); rc = 1; goto done; }
                         int64_t out = 0;
                         if (!int_pow_checked(left->as.integer, right->as.integer, &out)) {
                             ds_diag_error(diag, ins->span, "integer overflow in operator `**`");

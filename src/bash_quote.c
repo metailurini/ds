@@ -133,7 +133,7 @@ bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_dat
         return true;
     }
     if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') {
-        ds_diag_error(diag, expr->span, "invalid string literal for Bash emission");
+        ds_diag_error(diag, expr->span, "internal Bash invariant failed: non-string literal reached Bash string decoding after lowering");
         return false;
     }
 

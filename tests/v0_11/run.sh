@@ -497,7 +497,7 @@ for file in glob(pattern) {
   echo $file
 }
 DS
-assert_runtime_failure "fail_recursive_glob_dynamic" "$FIX/fail_recursive_glob_dynamic.ds" "$seed_basic" 'recursive'
+assert_runtime_failure "fail_recursive_glob_dynamic" "$FIX/fail_recursive_glob_dynamic.ds" "$seed_basic" 'runtime glob pattern contains recursive'
 
 # Direct execution behaves like `run` for a representative fixture.
 capture_status "direct_vm" bash -c "cd '$seed_basic' && '$DS' '$FIX/basic_helpers.ds'"

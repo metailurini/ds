@@ -553,8 +553,8 @@ let x = "{2 ** -1}"
 echo "{x}"
 DS
 assert_vm_bash_parity_args negative_power "$FIX/negative_power.ds" 1 ''
-assert_contains "$TMP/negative_power_vm.err" 'negative exponent' 'VM negative exponent diagnostic'
-assert_contains "$TMP/negative_power_bash.err" 'negative exponent' 'Bash negative exponent diagnostic'
+assert_contains "$TMP/negative_power_vm.err" 'negative exponent runtime value is rejected' 'VM negative exponent diagnostic'
+assert_contains "$TMP/negative_power_bash.err" 'negative exponent runtime value is rejected' 'Bash negative exponent diagnostic'
 
 write_fixture "$FIX/mul_overflow.ds" <<'DS'
 let x = "{9223372036854775807 * 2}"

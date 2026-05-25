@@ -231,6 +231,13 @@ language features. If backend code contains a diagnostic like "unsupported X" fo
 a source-language construct, treat it as a candidate for a lowering diagnostic
 unless it is defensive unreachable code or an explicitly backend-specific state.
 
+Runtime/helper diagnostics may still reject unsupported values when those values
+are not statically knowable. For example, literal recursive glob patterns and
+literal empty `split`/`replace` arguments are lowerer diagnostics, while the same
+values produced dynamically are VM/Bash-helper runtime data failures. Backend
+wording should make that runtime/invariant ownership visible instead of sounding
+like the backend is deciding language validity.
+
 ## Relationship to VM/Bash parity
 
 Diagnostics are part of the parity contract. For accepted features, VM execution
