@@ -254,7 +254,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     if (right->kind == DS_LOWER_EXPR_IDENT) {
         buf_append(out, "\"${"); emit_var_name(out, right->as.text); buf_append(out, "[@]}\"");
     } else {
-        ds_diag_error(e->diag, right->span, "Bash emission supports `in` over named arrays, array literals, and known stdlib string-array results in v0.23.0");
+        ds_diag_error(e->diag, right->span, "internal Bash invariant failed: `in` right operand should be named, literal, or stdlib array after lowering");
         return false;
     }
     buf_append(out, "; do [[ ");
@@ -409,7 +409,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: unary value expression should be supported or rejected by lowering");
             return false;
         default:
-            ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: assignment value should be emitted or rejected by lowering");
             return false;
     }
 }
@@ -440,7 +440,7 @@ bool emit_map_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, EmitBuf
 bool emit_call_arg_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     if (expr->kind == DS_LOWER_EXPR_IDENT) {
         if (!symbol_exists(&e->symbols, expr->as.text)) {
-            ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: unknown variable `%.*s` after lowering", (int)expr->as.text.len, expr->as.text.data);
             return false;
         }
         buf_append(out, "\"$");
@@ -455,7 +455,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
             if (!symbol_exists(&e->symbols, expr->as.text)) {
-                ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
+                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: unknown variable `%.*s` after lowering", (int)expr->as.text.len, expr->as.text.data);
                 return false;
             }
             buf_append(out, "\"$");
@@ -490,7 +490,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
 bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     if (expr->kind == DS_LOWER_EXPR_IDENT) {
         if (!symbol_exists(&e->symbols, expr->as.text)) {
-            ds_diag_error(e->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: unknown variable `%.*s` after lowering", (int)expr->as.text.len, expr->as.text.data);
             return false;
         }
         if (e->needs_case_types) {
@@ -642,7 +642,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 else buf_append(out, " ]]; }");
                 return true;
             }
-            ds_diag_error(e->diag, expr->span, "operator `%.*s` cannot be emitted in a Bash condition in v0.2.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition operator `%.*s` should be emitted or rejected by lowering", (int)expr->as.binary.op.len, expr->as.binary.op.data);
             return false;
         }
         if (negate) buf_append(out, "! ");

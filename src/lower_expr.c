@@ -950,9 +950,6 @@ DsLowerExpr *lower_array_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
 
 DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_MAP, expr->span);
-    if (expr->as.map.entries.len == 0) {
-        ds_diag_error(lower->diag, expr->span, "empty map literals are deferred in v0.10.0");
-    }
     for (size_t i = 0; i < expr->as.map.entries.len; i++) {
         const DsMapEntry *entry = &expr->as.map.entries.items[i];
         DsLowerMapEntry lowered;

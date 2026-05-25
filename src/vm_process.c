@@ -996,7 +996,7 @@ bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpa
         return true;
     }
     if (value->kind != DS_VALUE_COMMAND_RESULT) {
-        ds_diag_error(vm->diag, span, "field access is only supported on command results and maps in v0.10.0");
+        ds_diag_error(vm->diag, span, "internal VM field invariant failed: field receiver should be a command result or map after lowering");
         return false;
     }
     DsStr field_view = {(char *)field, strlen(field)};
@@ -1006,6 +1006,6 @@ bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpa
     if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_INT) { *out = ds_value_int(value->as.command_result.code); return true; }
     if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "ok") == 0) { *out = ds_value_bool(value->as.command_result.code == 0); return true; }
     if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "failed") == 0) { *out = ds_value_bool(value->as.command_result.code != 0); return true; }
-    ds_diag_error(vm->diag, span, "unknown command result field `%s`", field);
+    ds_diag_error(vm->diag, span, "internal VM field invariant failed: unknown command result field `%s` after lowering", field);
     return false;
 }

@@ -61,8 +61,8 @@ VM/Bash parity.
   loop order, push side effects, and accepted structured returns.
 
 ## Rejected behavior
-- Empty list/map literals where current language rules reject them: lowerer
-  diagnostic for semantic cases.
+- Empty map literals: parser diagnostic before AST/HIR because `{}` remains
+  unsupported/ambiguous as a value literal.
 - Index assignment such as `xs[0] = value`: parser emits deferred
   index-assignment diagnostic before AST/HIR.
 - Compound index assignment and nested index assignment such as `matrix[0][1] =
