@@ -75,7 +75,7 @@ Command words stay syntax-preserving until lowering validates them.
 - `src/ast.c`
 - `src/format.c`
 - `src/checker.c`
-- `src/lower_expr.c`
+- `src/lower_command.c`
 - `src/lower_stmt.c`
 - `src/lower_functions.c`
 - `src/lower_internal.h`

@@ -545,18 +545,35 @@ Does not own:
 Owns:
 - Expression semantic validation.
 - AST expression to HIR expression lowering.
-- Command-word interpolation validation needed before both backends.
 - Value-kind inference for expressions and calls where currently supported.
 
 Allowed to know:
-- Lowerer symbols, stdlib metadata, AST expressions, HIR expression shapes, and
-  backend-neutral command word constraints.
+- Lowerer symbols, stdlib metadata, AST expressions, and HIR expression shapes.
 
 Does not own:
 - VM bytecode instructions.
 - Bash quoting rules.
 - Parser expression grammar.
 - Statement block orchestration except through expression use sites.
+
+### `src/lower_command.c`
+
+Owns:
+- Command-word semantic validation.
+- Quoted command-word interpolation legality before both backends.
+- Lowerer-side materialization of accepted scalar function-call interpolation in
+  command words and redirection targets.
+
+Allowed to know:
+- Lowerer symbols/scopes, command AST/HIR payloads, function return-kind
+  metadata through expression lowering, and backend-neutral command-word
+  constraints.
+
+Does not own:
+- Parser command grammar.
+- VM argv construction or process execution.
+- Bash quoting/rendering details beyond preserving the lowerer-owned HIR
+  contract.
 
 ### `src/lower_stmt.c`
 
@@ -942,9 +959,9 @@ places to watch during the maintenance phase:
 - `src/cli_program.c` composes imports by manipulating AST-level containers.
   That is acceptable for current CLI orchestration, but it should not become a
   general AST transformation engine.
-- `src/lower_expr.c` owns both expression lowering and command-word validation.
-  If command interpolation grows substantially, consider splitting command-word
-  semantic lowering into its own lowerer component.
+- `src/lower_command.c` owns command-word validation and materialization. Keep it
+  focused on command interpolation; do not let it become a general command
+  lowering dumping ground.
 - `src/vm_process.c` owns many OS/process/job-control details. If richer
   job-control APIs grow, consider splitting command interpolation, process
   spawning, and signal/job-control responsibilities.

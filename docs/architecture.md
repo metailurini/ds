@@ -113,8 +113,9 @@ the umbrella where possible:
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
 - Lowering responsibilities are split by component: `src/lower.c` owns the
-  orchestration entrypoints, `src/lower_expr.c` owns expression lowering and
-  command-word validation, `src/lower_stmt.c` owns statement/block lowering,
+  orchestration entrypoints, `src/lower_expr.c` owns expression lowering,
+  `src/lower_command.c` owns command-word validation and interpolation
+  materialization, `src/lower_stmt.c` owns statement/block lowering,
   `src/lower_symbols.c` owns scope/name/vector utilities,
   `src/lower_stdlib.c` owns script declarations and literal decoding,
   `src/lower_functions.c` owns function collection/defaults/recursion checks,
@@ -742,6 +743,7 @@ src/
   ir/
     hir.c
     lower.c
+    lower_command.c
     lower_expr.c
     lower_stmt.c
     lower_symbols.c

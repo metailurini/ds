@@ -94,6 +94,7 @@ SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr);
  */
 bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span);
 bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span);
+bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand *command, DsLowerStmt *block);
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg);
 bool collection_element_supported_in_bash(const DsLowerExpr *expr);
 bool lower_decode_string_text(DsStr text, DsStr *out);

@@ -119,42 +119,6 @@ static void maybe_update_symbol(Symbol *sym, SymKind kind) {
     if (kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) sym->kind = kind;
 }
 
-static bool command_quoted_word_needs_value_call_materialization(Lower *lower, DsStr word) {
-    if (word.len < 2 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
-    DsStr decoded = {0};
-    if (!lower_decode_string_text(word, &decoded)) return false;
-    bool found = false;
-    for (size_t i = 0; i < decoded.len && !found; i++) {
-        if (decoded.data[i] != '{') continue;
-        size_t j = i + 1;
-        while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
-        if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
-                                (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
-                                decoded.data[j] == '_')) {
-            j++;
-            while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
-                                       (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
-                                       (decoded.data[j] >= '0' && decoded.data[j] <= '9') ||
-                                       decoded.data[j] == '_' || decoded.data[j] == '.')) j++;
-            while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
-            if (j < decoded.len && decoded.data[j] == '(') found = true;
-        }
-    }
-    free(decoded.data);
-    (void)lower;
-    return found;
-}
-
-static DsStr lower_make_temp_name(Lower *lower, const char *prefix) {
-    char buf[96];
-    do {
-        snprintf(buf, sizeof(buf), "__ds_%s_%zu", prefix, lower->temp_counter++);
-        DsStr candidate = {buf, strlen(buf)};
-        if (!scope_find(lower->scope, candidate)) break;
-    } while (true);
-    return (DsStr){ds_str_dup_range(buf, strlen(buf)), strlen(buf)};
-}
-
 static void lower_temp_scope_begin(Lower *lower, Scope *scope, Scope **saved) {
     *saved = lower->scope;
     scope_init(scope, *saved);
@@ -164,75 +128,6 @@ static void lower_temp_scope_begin(Lower *lower, Scope *scope, Scope **saved) {
 static void lower_temp_scope_end(Lower *lower, Scope *scope, Scope *saved) {
     lower->scope = saved;
     scope_free(scope);
-}
-
-static DsLowerStmt *lower_command_interpolation_temp_string_let(Lower *lower, DsStr name, DsStr quoted_text, DsSpan span) {
-    DsExpr fake;
-    memset(&fake, 0, sizeof(fake));
-    fake.kind = DS_EXPR_STRING;
-    fake.span = span;
-    fake.as.text = quoted_text;
-    SymKind kind = SYM_UNKNOWN;
-    DsLowerStmt *let = stmt_new(DS_LOWER_STMT_LET, span);
-    let->as.let_stmt.name = str_clone(name);
-    let->as.let_stmt.value = lower_expr(lower, &fake, &kind);
-    if (kind != SYM_STRING && kind != SYM_UNKNOWN) {
-        ds_diag_error(lower->diag, span, "function call in command interpolation must return a scalar string-renderable value in v0.27.0");
-    }
-    scope_define(lower, lower->scope, name, SYM_STRING, span);
-    return let;
-}
-
-static DsStr lower_command_temp_word(DsStr name) {
-    DsString s;
-    ds_string_init(&s);
-    ds_string_append_char(&s, '$');
-    ds_string_append_range(&s, name.data, name.len);
-    return (DsStr){s.data, s.len};
-}
-
-static DsStr lower_redirect_temp_target(DsStr name) {
-    DsString s;
-    ds_string_init(&s);
-    ds_string_append_char(&s, '"');
-    ds_string_append_char(&s, '{');
-    ds_string_append_range(&s, name.data, name.len);
-    ds_string_append_char(&s, '}');
-    ds_string_append_char(&s, '"');
-    return (DsStr){s.data, s.len};
-}
-
-static bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand *command, DsLowerStmt *block) {
-    /*
-     * M3.4 command-word contract: direct scalar value-call interpolation in a
-     * quoted command word is not handed to VM/Bash as a backend-specific
-     * command substitution problem. Lowering evaluates the interpolation as a
-     * normal string expression into a private temporary, then rewrites the
-     * command word to an ordinary `$temp` argument. Unsupported return kinds are
-     * diagnosed while lowering the temporary string expression.
-     */
-    bool changed = false;
-    for (size_t s = 0; s < command->stages.len; s++) {
-        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
-            DsWord *word = &command->stages.items[s].words.items[i];
-            if (!command_quoted_word_needs_value_call_materialization(lower, word->text)) continue;
-            DsStr tmp = lower_make_temp_name(lower, "cmd_interp");
-            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, word->text, word->span));
-            free(word->text.data);
-            word->text = lower_command_temp_word(tmp);
-            free(tmp.data);
-            changed = true;
-        }
-    }
-    if (command->redirect.kind != DS_REDIRECT_NONE && command_quoted_word_needs_value_call_materialization(lower, command->redirect.target)) {
-        DsStr tmp = lower_make_temp_name(lower, "redir_interp");
-        lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, command->redirect.target, command->redirect.target_span));
-        free(command->redirect.target.data);
-        command->redirect.target = lower_redirect_temp_target(tmp);
-        free(tmp.data);
-        changed = true;
-    }
-    return changed;
 }
 
 static bool pattern_equal(const DsLowerCasePattern *a, const DsLowerCasePattern *b) {
