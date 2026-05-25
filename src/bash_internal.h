@@ -55,6 +55,13 @@ void emit_source_loc(EmitBuf *out, const DsSource *fallback, DsSpan span);
 bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_data, size_t *out_len);
 bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 
+const char *bash_lower_value_type_name(DsLowerValueKind kind);
+void bash_emit_type_var_name(EmitBuf *out, DsStr name);
+void bash_emit_elem_type_var_name(EmitBuf *out, DsStr name);
+void bash_emit_map_value_type_var_name(EmitBuf *out, DsStr name);
+void bash_emit_command_result_storage_decl(BashEmitter *e, DsStr name, int indent, bool local_decl);
+bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl);
+
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_array_elements(BashEmitter *e, const DsLowerExprVec *elements, EmitBuf *out);
 bool emit_map_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, EmitBuf *out);

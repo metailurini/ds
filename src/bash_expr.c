@@ -16,22 +16,11 @@ static DsStr result_field_storage_name(DsStr field) {
     return field;
 }
 
-static void emit_type_var_name(EmitBuf *out, DsStr name) {
-    buf_append(out, "__ds_type_");
-    buf_append_len(out, name.data, name.len);
-}
-
-static void emit_elem_type_var_name(EmitBuf *out, DsStr name) {
-    buf_append(out, "__ds_elem_type_");
-    buf_append_len(out, name.data, name.len);
-}
-
 static bool is_int_binary_op(DsStr op) {
     return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
 }
 
-static const char *lower_value_type_name(DsLowerValueKind kind);
 static const char *expr_type_name(const DsLowerExpr *expr);
 
 static bool is_user_function_call_expr(const DsLowerExpr *expr) {
@@ -46,7 +35,7 @@ static bool emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr,
     buf_append(out, "__ds_call_value_into ");
     emit_var_name(out, raw_name);
     buf_append(out, " ");
-    bash_single_quote(out, lower_value_type_name(expr->as.call.return_kind), strlen(lower_value_type_name(expr->as.call.return_kind)));
+    bash_single_quote(out, bash_lower_value_type_name(expr->as.call.return_kind), strlen(bash_lower_value_type_name(expr->as.call.return_kind)));
     buf_append(out, " ");
     emit_fn_name(out, expr->as.call.name);
     return emit_user_call_args(e, &expr->as.call.args, out);
@@ -84,7 +73,7 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
             if (str_eq(expr->as.unary.op, "-")) return "int";
             return "unknown";
         case DS_LOWER_EXPR_CALL:
-            return lower_value_type_name(expr->as.call.return_kind);
+            return bash_lower_value_type_name(expr->as.call.return_kind);
         case DS_LOWER_EXPR_FIELD: {
             const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
             if (!desc) return "unknown";
@@ -96,7 +85,7 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
             return "unknown";
         }
         case DS_LOWER_EXPR_INDEX:
-            return lower_value_type_name(expr->as.index.element_kind);
+            return bash_lower_value_type_name(expr->as.index.element_kind);
         case DS_LOWER_EXPR_IDENT:
         case DS_LOWER_EXPR_REGEX:
         case DS_LOWER_EXPR_RANGE:
@@ -110,7 +99,7 @@ static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, Emi
     (void)e;
     if (expr->kind == DS_LOWER_EXPR_IDENT) {
         buf_append(out, " \"${");
-        emit_type_var_name(out, expr->as.text);
+        bash_emit_type_var_name(out, expr->as.text);
         buf_append(out, ":-unknown}\"");
         return true;
     }
@@ -118,19 +107,6 @@ static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, Emi
     const char *type = expr_type_name(expr);
     bash_single_quote(out, type, strlen(type));
     return true;
-}
-
-static const char *lower_value_type_name(DsLowerValueKind kind) {
-    switch (kind) {
-        case DS_LOWER_VALUE_BOOL: return "bool";
-        case DS_LOWER_VALUE_INT: return "int";
-        case DS_LOWER_VALUE_STRING: return "string";
-        case DS_LOWER_VALUE_ARRAY: return "array";
-        case DS_LOWER_VALUE_MAP: return "map";
-        case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
-        case DS_LOWER_VALUE_UNKNOWN: return "unknown";
-    }
-    return "unknown";
 }
 
 static bool regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
@@ -167,10 +143,10 @@ static bool emit_bash_regex_quoted(EmitBuf *out, DsStr pattern) {
 
 static void emit_membership_left_type(const DsLowerExpr *left, DsLowerValueKind left_kind, EmitBuf *out) {
     if (left_kind != DS_LOWER_VALUE_UNKNOWN) {
-        const char *type = lower_value_type_name(left_kind);
+        const char *type = bash_lower_value_type_name(left_kind);
         bash_single_quote(out, type, strlen(type));
     } else if (left->kind == DS_LOWER_EXPR_IDENT) {
-        buf_append(out, "\"${"); emit_type_var_name(out, left->as.text); buf_append(out, ":-unknown}\"");
+        buf_append(out, "\"${"); bash_emit_type_var_name(out, left->as.text); buf_append(out, ":-unknown}\"");
     } else {
         buf_append(out, "'unknown'");
     }
@@ -182,7 +158,7 @@ static bool emit_membership_compare(BashEmitter *e, const DsLowerExpr *left, DsL
     (void)left_kind;
     buf_append(out, "[[ ");
     buf_append(out, "$__ds_needle_type == ");
-    const char *elem_type = lower_value_type_name(elem_kind);
+    const char *elem_type = bash_lower_value_type_name(elem_kind);
     bash_single_quote(out, elem_type, strlen(elem_type));
     buf_append(out, " && \"$__ds_needle\" == ");
     if (elem) {
@@ -245,7 +221,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
         if (!emit_call_args(e, &right->as.call.args, out)) return false;
         buf_appendf(out, " >\"$__ds_iter_%zu\"; while IFS= read -r __ds_item; do [[ ", temp_id);
         buf_append(out, "$__ds_needle_type == ");
-        const char *elem_type = lower_value_type_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
+        const char *elem_type = bash_lower_value_type_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
         buf_appendf(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done <\"$__ds_iter_%zu\"; rm -f \"$__ds_iter_%zu\"; [[ $__ds_found == true ]]; }", temp_id, temp_id);
         return true;
@@ -260,9 +236,9 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     buf_append(out, "; do [[ ");
     buf_append(out, "$__ds_needle_type == ");
     if (elem_kind == DS_LOWER_VALUE_UNKNOWN) {
-        buf_append(out, "\"${"); emit_elem_type_var_name(out, right->as.text); buf_append(out, "[$__ds_i]:-unknown}\"");
+        buf_append(out, "\"${"); bash_emit_elem_type_var_name(out, right->as.text); buf_append(out, "[$__ds_i]:-unknown}\"");
     } else {
-        const char *elem_type = lower_value_type_name(elem_kind);
+        const char *elem_type = bash_lower_value_type_name(elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
     }
     buf_append(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done; [[ $__ds_found == true ]]; }");
@@ -363,7 +339,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         case DS_LOWER_EXPR_CALL:
             if (expr->as.call.is_user_function) {
                 buf_append(out, "\"$(__ds_call_value ");
-                bash_single_quote(out, lower_value_type_name(expr->as.call.return_kind), strlen(lower_value_type_name(expr->as.call.return_kind)));
+                bash_single_quote(out, bash_lower_value_type_name(expr->as.call.return_kind), strlen(bash_lower_value_type_name(expr->as.call.return_kind)));
                 buf_append(out, " ");
                 emit_fn_name(out, expr->as.call.name);
                 if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;
@@ -495,17 +471,17 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         }
         if (e->needs_case_types) {
             buf_append(out, "[[ ( \"${");
-            emit_type_var_name(out, expr->as.text);
+            bash_emit_type_var_name(out, expr->as.text);
             buf_append(out, ":-unknown}\" == bool && \"$");
             emit_var_name(out, expr->as.text);
             buf_append(out, "\" == true ) || ( \"${");
-            emit_type_var_name(out, expr->as.text);
+            bash_emit_type_var_name(out, expr->as.text);
             buf_append(out, ":-unknown}\" == int && \"$");
             emit_var_name(out, expr->as.text);
             buf_append(out, "\" != 0 ) || ( \"${");
-            emit_type_var_name(out, expr->as.text);
+            bash_emit_type_var_name(out, expr->as.text);
             buf_append(out, ":-unknown}\" != bool && \"${");
-            emit_type_var_name(out, expr->as.text);
+            bash_emit_type_var_name(out, expr->as.text);
             buf_append(out, ":-unknown}\" != int && -n \"$");
             emit_var_name(out, expr->as.text);
             buf_append(out, "\" ) ]]");
