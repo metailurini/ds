@@ -23,9 +23,13 @@ static bool helper_is(const Instr *ins, const char *name) {
 static bool vm_string_arg(Vm *vm, Instr *ins, size_t index, const char **out, size_t *len) {
     if (index >= ins->arg_count) return false;
 
+    /*
+     * Static helper arity and literal argument-kind checks are lowerer-owned.
+     * These VM diagnostics cover dynamic values produced by accepted HIR.
+     */
     DsValue *v = &vm->regs[ins->args[index]];
     if (v->kind != DS_VALUE_STRING) {
-        ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` expects string arguments", ins->name ? ins->name : "<helper>");
+        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects string arguments", ins->name ? ins->name : "<helper>");
         return false;
     }
 
@@ -60,7 +64,7 @@ static bool vm_valid_env_name(const char *name) {
 
 static bool vm_require_env_name(Vm *vm, Instr *ins, const char *name) {
     if (vm_valid_env_name(name)) return true;
-    ds_diag_error(vm->diag, ins->span, "invalid environment variable name `%s` in v0.11.0", name ? name : "");
+    ds_diag_error(vm->diag, ins->span, "invalid environment variable name `%s` at runtime in v0.11.0", name ? name : "");
     return false;
 }
 

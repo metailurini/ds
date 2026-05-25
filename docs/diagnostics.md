@@ -238,6 +238,29 @@ values produced dynamically are VM/Bash-helper runtime data failures. Backend
 wording should make that runtime/invariant ownership visible instead of sounding
 like the backend is deciding language validity.
 
+## Static vs dynamic runtime diagnostics
+
+Some rules have two valid diagnostic owners depending on how much is known before
+execution:
+
+- Lowering owns statically-known helper argument kinds, helper arity, invalid
+  environment names in string literals or direct `env.NAME` forms, literal empty
+  `split`/`replace` separators, literal recursive glob patterns, known array
+  index kinds, known `in` operands, known loop iterables, and known arithmetic
+  operand kinds.
+- VM/runtime and emitted Bash helpers own the same class of failure when the bad
+  value is produced dynamically by an accepted program, such as script arguments,
+  function returns, variables with unknown value kind, runtime environment names,
+  runtime glob strings, or runtime string-helper separators.
+- VM/Bash internal invariant diagnostics are for shapes that should be impossible
+  after lowering, such as unknown helper/function targets, unsupported accepted
+  interpolation shapes, or corrupted Bash function-return payloads.
+
+Prefer wording such as "runtime ..." for dynamic value failures and "internal
+VM/Bash invariant" for impossible accepted-HIR shapes. Do not move a runtime
+data diagnostic into lowering unless the invalid value is reliably known before
+execution.
+
 ## Relationship to VM/Bash parity
 
 Diagnostics are part of the parity contract. For accepted features, VM execution

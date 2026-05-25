@@ -227,6 +227,12 @@ dispatch_loop:
                 break;
             }
             case OP_BINARY: {
+                /*
+                 * Lowering rejects statically-known operand-kind errors. The
+                 * checks below are runtime/data diagnostics for values whose
+                 * kind is only known while executing accepted HIR, plus
+                 * arithmetic overflow checks.
+                 */
                 DsValue *left = &vm.regs[ins->a];
                 DsValue *right = &vm.regs[ins->b];
                 if (strcmp(ins->cmp, "+") == 0) {
@@ -244,12 +250,12 @@ dispatch_loop:
                         ds_string_append_range(&joined, right->as.string.data ? right->as.string.data : "", right->as.string.len);
                         set_reg(&vm, ins->dst, ds_value_string_take(&joined));
                     } else {
-                        ds_diag_error(diag, ins->span, "operator `+` supports int+int or string+string");
+                        ds_diag_error(diag, ins->span, "runtime operator `+` supports int+int or string+string");
                         rc = 1; goto done;
                     }
                 } else if (strcmp(ins->cmp, "-") == 0) {
                     if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
-                        ds_diag_error(diag, ins->span, "operator `-` requires integer operands");
+                        ds_diag_error(diag, ins->span, "runtime operator `-` requires integer operands");
                         rc = 1; goto done;
                     }
                     int64_t out = 0;
@@ -260,7 +266,7 @@ dispatch_loop:
                     set_reg(&vm, ins->dst, ds_value_int(out));
                 } else if (strcmp(ins->cmp, "*") == 0 || strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0 || strcmp(ins->cmp, "**") == 0) {
                     if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
-                        ds_diag_error(diag, ins->span, "arithmetic operator `%s` requires integer operands", ins->cmp);
+                        ds_diag_error(diag, ins->span, "runtime arithmetic operator `%s` requires integer operands", ins->cmp);
                         rc = 1; goto done;
                     }
                     if ((strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0) && right->as.integer == 0) {
@@ -315,7 +321,7 @@ dispatch_loop:
             case OP_MEMBERSHIP: {
                 DsValue *needle = &vm.regs[ins->a];
                 DsValue *haystack = &vm.regs[ins->b];
-                if (haystack->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "right operand of `in` must be an array"); rc = 1; goto done; }
+                if (haystack->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "runtime right operand of `in` must be an array"); rc = 1; goto done; }
                 bool found = false;
                 for (size_t i = 0; i < haystack->as.array.len; i++) {
                     DsValue *item = (DsValue *)haystack->as.array.items[i];
@@ -446,7 +452,7 @@ dispatch_loop:
                 DsValue *obj = &vm.regs[ins->a];
                 DsValue *idx = &vm.regs[ins->b];
                 if (obj->kind == DS_VALUE_ARRAY) {
-                    if (idx->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "array index must be an int"); rc = 1; goto done; }
+                    if (idx->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "runtime array index must be an int"); rc = 1; goto done; }
                     if (idx->as.integer < 0 || (size_t)idx->as.integer >= obj->as.array.len) { ds_diag_error(diag, ins->span, "array index %lld out of range", (long long)idx->as.integer); rc = 1; goto done; }
                     set_reg(&vm, ins->dst, ds_value_copy((DsValue *)obj->as.array.items[idx->as.integer]));
                 } else if (obj->kind == DS_VALUE_MAP) {
@@ -473,7 +479,7 @@ dispatch_loop:
             }
             case OP_FOR_ARRAY: {
                 DsValue *iter = &vm.regs[ins->a];
-                if (iter->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "for loop iterable must be an array"); rc = 1; goto done; }
+                if (iter->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "runtime for loop iterable must be an array"); rc = 1; goto done; }
                 if (!ins->loop_active) { ins->loop_active = true; ins->loop_index = 0; }
                 if (ins->loop_index >= iter->as.array.len) { ins->loop_active = false; ip = (size_t)ins->target; break; }
                 vm_push_scope(&vm);
@@ -486,7 +492,7 @@ dispatch_loop:
             case OP_FOR_RANGE: {
                 DsValue *start = &vm.regs[ins->a];
                 DsValue *end = &vm.regs[ins->b];
-                if (start->kind != DS_VALUE_INT || end->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "range bounds must be ints"); rc = 1; goto done; }
+                if (start->kind != DS_VALUE_INT || end->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "runtime range bounds must be ints"); rc = 1; goto done; }
                 if (!ins->loop_active) { ins->loop_active = true; ins->loop_current = start->as.integer; }
                 if (ins->loop_current > end->as.integer) { ins->loop_active = false; ip = (size_t)ins->target; break; }
                 vm_push_scope(&vm);

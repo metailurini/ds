@@ -146,10 +146,11 @@ const char *ds_bash_command_result_helpers_source(void) {
 }
 
 const char *ds_bash_collection_helpers_source(void) {
+    /* Dynamic collection access failures mirror VM runtime data diagnostics. */
     return
         "__ds_array_get() {\n"
         "  local __ds_name=$1 __ds_index=$2 __ds_len\n"
-        "  [[ \"$__ds_index\" =~ ^[0-9]+$ ]] || __ds_error \"array index $__ds_index is not an int\"\n"
+        "  [[ \"$__ds_index\" =~ ^[0-9]+$ ]] || __ds_error \"runtime array index $__ds_index is not an int\"\n"
         "  eval \"__ds_len=\\${#${__ds_name}[@]}\"\n"
         "  if (( __ds_index < 0 || __ds_index >= __ds_len )); then\n"
         "    __ds_error \"array index $__ds_index out of range\"\n"
@@ -164,6 +165,8 @@ const char *ds_bash_collection_helpers_source(void) {
 }
 
 const char *ds_bash_stdlib_helpers_source(void) {
+    /* Static helper validation is lowerer-owned; these helpers validate dynamic
+     * runtime strings and OS/environment state in emitted Bash. */
     return
         "__ds_stdlib_file_exists() { [[ -e \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_file_is_file() { [[ -f \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
@@ -181,7 +184,7 @@ const char *ds_bash_stdlib_helpers_source(void) {
         "__ds_stdlib_cmd_found() { local c=\"$1\" d; if [[ \"$c\" == */* ]]; then [[ -x \"$c\" && ! -d \"$c\" ]] && return 0 || return 1; fi; IFS=: read -r -a __ds_path_parts <<<\"${PATH:-}\"; for d in \"${__ds_path_parts[@]}\"; do [[ -z \"$d\" ]] && d=.; [[ -x \"$d/$c\" && ! -d \"$d/$c\" ]] && return 0; done; return 1; }\n"
         "__ds_stdlib_cmd_exists() { __ds_stdlib_cmd_found \"$1\" && printf '%s' true || printf '%s' false; }\n"
         "__ds_stdlib_cmd_require() { __ds_stdlib_cmd_found \"$1\" || __ds_error \"required command '$1' was not found\"; }\n"
-        "__ds_stdlib_env_valid() { [[ \"$1\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || __ds_error \"invalid environment variable name '$1' in v0.11.0\"; }\n"
+        "__ds_stdlib_env_valid() { [[ \"$1\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || __ds_error \"invalid environment variable name '$1' at runtime in v0.11.0\"; }\n"
         "__ds_stdlib_env_get() { local n=\"$1\"; __ds_stdlib_env_valid \"$n\"; if [[ ${!n+x} ]]; then printf '%s' \"${!n}\"; elif [[ $# -ge 2 ]]; then printf '%s' \"$2\"; fi; }\n"
         "__ds_stdlib_env_set() { __ds_stdlib_env_valid \"$1\"; export \"$1=$2\"; }\n"
         "__ds_stdlib_env_unset() { __ds_stdlib_env_valid \"$1\"; unset \"$1\"; }\n"
