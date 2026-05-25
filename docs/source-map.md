@@ -87,7 +87,8 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | File | Owns | Notes |
 | --- | --- | --- |
 | `src/lower.c` | lowerer orchestration and program-level symbol setup | coordinates, but should not absorb concept-specific logic |
-| `src/lower_expr.c` | expression lowering, expression value-kind checks, string interpolation lowering | keep command-specific interpolation in `lower_command.c` |
+| `src/lower_expr.c` | expression lowering and expression value-kind checks | delegates generic string interpolation to `lower_interpolation.c`; keep command-specific interpolation in `lower_command.c` |
+| `src/lower_interpolation.c` | generic string interpolation parsing/lowering for normal string expressions | owns normal-string interpolation segment validation; not command-word policy |
 | `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, format-spec validation for command strings, direct scalar value-call interpolation materialization | stable owner for command-word lowering; do not split unless a new sub-concept gets its own contract |
 | `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | delegates command-word details to `lower_command.c` |
 | `src/lower_symbols.c` | lowerer scopes/symbol facts | no syntax parsing or backend rendering |
@@ -157,7 +158,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | Trap/defer/signal | HIR handler contract with VM/Bash runtime implementations | keep OS/job-control behavior scoped to documented foreground forms |
 | Pipeline behavior | accepted command pipeline payload plus VM/Bash process implementations | keep process semantics backend-owned, but language restrictions in parser/lowerer |
 | Direct `env.NAME` | AST field/assignment syntax lowered to env helper/set-env behavior | keep env-name validation in lowering where statically known |
-| String interpolation | parser/lowerer own shape/validation; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |
+| String interpolation | `src/lower_interpolation.c` owns normal-string interpolation lowering; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |
 
 ## Maintenance checklist
 
