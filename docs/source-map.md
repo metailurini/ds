@@ -1,973 +1,175 @@
 # Source map
 
-This document is the ownership map for the current `ds` source tree. It is a
-refactoring aid, not a feature roadmap. When a file starts owning responsibilities
-outside this map, treat that as pressure to split, move, or document a new
-boundary before continuing feature work.
-
-Use this with `docs/architecture.md`, which explains the end-to-end pipeline and
-larger architectural rules, `docs/parity-contracts.md`, which defines the
-VM/Bash acceptance contract, `docs/diagnostics.md`, which defines diagnostic
-ownership by phase, and `docs/concept-map.md`, which maps cross-cutting
-language/runtime concepts to canonical homes. This file answers the narrower
-maintenance questions:
-
-- What does each file own?
-- What is it allowed to know?
-- What should not be here?
-
-## Boundary rules
-
-- Frontend files may know about source text, tokens, parser AST, and syntax
-  diagnostics. They should not know VM bytecode, Bash emission, runtime process
-  behavior, or semantic execution details.
-- Lowering files may know AST, HIR, stdlib metadata, symbol/value-kind rules, and
-  semantic diagnostics. They should not know VM instruction encoding, Bash text
-  quoting rules, CLI argument parsing mechanics, or subprocess APIs.
-- HIR files define the backend-facing contract. HIR should not contain
-  backend-specific text fragments, VM registers, Bash helper bodies, or parser
-  cursor state.
-- VM/Bash parity is a language acceptance rule, not a backend convenience. A
-  user-facing feature must have backend-neutral HIR/shared metadata and defined
-  VM and Bash behavior before it is accepted, unless `docs/parity-contracts.md`
-  explicitly documents a backend-specific, diagnostic-only, or rejected state.
-- VM files may know HIR, bytecode/private VM state, runtime values, subprocess
-  behavior, and VM diagnostics. They should not parse source or revalidate
-  language features already rejected by lowering except as defensive runtime
-  checks.
-- Bash files may know HIR, Bash syntax, helper dependency selection, quoting, and
-  standalone script generation. They should not perform language validation that
-  belongs in lowering or AST parsing that belongs in the frontend.
-- Shared runtime files may know generic strings, arrays, maps, values, source
-  loading, allocation, and diagnostics. They should not know language grammar,
-  backend policy, CLI commands, or emitted Bash layout.
-- CLI files may orchestrate source loading, import composition, frontend passes,
-  lowering, and backend selection. They should not own grammar, HIR semantics,
-  VM instruction behavior, or Bash rendering details.
-
-## Diagnostic ownership rule
-
-Diagnostics follow the file ownership map, but `docs/diagnostics.md` is the
-canonical phase-level contract. In short:
-
-- lexer/parser files own lexical and syntax diagnostics;
-- lowering files own semantic, unsupported-feature, and VM/Bash parity-gate
-  diagnostics;
-- VM files own runtime/OS/process diagnostics after accepted HIR reaches VM
-  execution;
-- Bash files own artifact/emission diagnostics for accepted HIR and should not
-  become a second semantic validator;
-- checker/formatter files own warnings and presentation diagnostics, not hard
-  language acceptance.
-
-When backend code reports an unsupported source-language form, treat that as
-ownership pressure: either document it as explicitly backend-specific or move the
-rejection to lowering with diagnostic tests.
-
-## Public façade and headers
-
-### `include/ds.h`
-
-Owns:
-- Compatibility umbrella for external/small unit harness includes.
-- Re-export of focused internal headers while the project migrates to narrower
-  includes.
-
-Allowed to know:
-- Names of the focused source headers that make up the current public façade.
-
-Does not own:
-- New declarations that belong in `src/*.h`.
-- Implementation details.
-- Feature-specific policy.
-
-### `src/ds_common.h`
-
-Owns:
-- Shared source, string-view, source-location/span, diagnostic, and allocation
-  declarations.
-
-Allowed to know:
-- C standard types needed by all phases.
-- The minimal common data structures used across frontend, lowering, backends,
-  and runtime.
-
-Does not own:
-- Token kinds, AST nodes, HIR nodes, runtime values, stdlib helper metadata, VM
-  state, or Bash emission APIs.
-
-### `src/ds_command.h`
-
-Owns:
-- Command word, command stage, redirection, captured/plain command metadata, and
-  command-result field declarations.
-
-Allowed to know:
-- Source spans and string views.
-- Command syntax data shared by AST and HIR.
-
-Does not own:
-- Parser cursor logic.
-- Command semantic validation.
-- VM subprocess execution.
-- Bash command rendering or quoting.
-
-### `src/ds_ast.h`
-
-Owns:
-- Parser-facing AST node shapes for expressions, statements, scripts, functions,
-  tests, traps, and handlers.
-
-Allowed to know:
-- Command AST payloads and source spans.
-- Syntax-preserving structures needed by formatter/debug output and lowering.
-
-Does not own:
-- Semantic value kinds.
-- HIR simplification policy.
-- VM bytecode or Bash output concerns.
-
-### `src/frontend.h`
-
-Owns:
-- Token kinds/token vectors.
-- Lexer and parser public entrypoints.
-
-Allowed to know:
-- AST declarations and source/diagnostic common types.
-
-Does not own:
-- Lowering APIs.
-- Backend APIs.
-- CLI import composition.
-- Runtime execution state.
-
-### `src/ds_hir.h`
-
-Owns:
-- Lowered program, statement, expression, script declaration, function, test, and
-  handler contracts consumed by both backends.
-
-Allowed to know:
-- AST source spans and shared command payloads where HIR preserves command data.
-- Backend-neutral value-kind information.
-
-Does not own:
-- Parser-only syntax preservation.
-- VM registers/instructions/scopes.
-- Bash text fragments or helper bodies.
-- Lowerer-private symbol tables.
-
-### `src/ds_runtime.h`
-
-Owns:
-- Runtime value/string/array/map public declarations.
-
-Allowed to know:
-- Shared `DsStr`/common types.
-- Generic VM/runtime value containers.
-
-Does not own:
-- Language grammar.
-- Stdlib helper catalog policy.
-- Process execution implementation.
-- Backend-specific rendering.
-
-### `src/ds_stdlib.h`
-
-Owns:
-- Standard-library helper metadata contract: name, Bash helper name, arity,
-  return kind, validation flags, and iterable/statement-only flags.
-
-Allowed to know:
-- Common string-view types.
-- Backend-neutral helper facts that lowering, VM, and Bash all share.
-
-Does not own:
-- VM implementation of helpers.
-- Bash helper bodies.
-- Parser recognition of calls beyond names as identifiers/fields.
-
-### `src/backend.h`
-
-Owns:
-- Public formatter/checker, Bash emission, bytecode dump, VM run, and VM test
-  entrypoints.
-- Backend option structs exposed to the CLI/tests.
-
-Allowed to know:
-- AST, HIR, and runtime values needed by backend entrypoints.
-
-Does not own:
-- Backend-private data structures.
-- Parser or lowerer internals.
-- CLI command dispatch.
-
-### `src/parser_internal.h`
-
-Owns:
-- Parser-private cursor, token navigation helpers, AST allocation helpers, and
-  parser component prototypes.
-
-Allowed to know:
-- Token vectors, AST construction helpers, and parser diagnostics.
-
-Does not own:
-- Public frontend API declarations.
-- Semantic validation.
-- HIR lowering.
-- Backend behavior.
-
-### `src/lower_internal.h`
-
-Owns:
-- Lowerer-private context, symbol/value-kind structures, vectors, and component
-  prototypes.
-
-Allowed to know:
-- AST, HIR, runtime containers, and stdlib metadata.
-- Cross-lowering helper functions for symbols, validation, cloning, and cleanup.
-
-Does not own:
-- Public HIR declarations.
-- VM bytecode structures.
-- Bash emission buffers or quoting helpers.
-- CLI orchestration.
-
-### `src/vm_internal.h`
-
-Owns:
-- VM-private bytecode, instruction, scope, frame, compiler, and interpreter
-  declarations shared by VM implementation files.
-
-Allowed to know:
-- Backend entrypoints, HIR, runtime values, and stdlib metadata.
-- OS/process headers indirectly needed by VM components only through their `.c`
-  files where possible.
-
-Does not own:
-- Public runtime value declarations.
-- Parser/lowerer internals.
-- Bash emission internals.
-- CLI command dispatch.
-
-### `src/bash_internal.h`
-
-Owns:
-- Bash-emitter-private buffers, emitter context, dependency flags, and component
-  prototypes.
-
-Allowed to know:
-- Backend/HIR contracts and stdlib metadata.
-- Internal Bash symbol naming and emitted-script helper selection state.
-
-Does not own:
-- Public backend API.
-- Language validation.
-- Parser or VM internals.
-
-### `src/bash_helpers.h`
-
-Owns:
-- Public-internal declarations for emitted Bash helper body snippets.
-
-Allowed to know:
-- Names of helper body strings emitted by `src/bash_helpers.c`.
-
-Does not own:
-- Helper dependency analysis.
-- Bash expression/statement rendering.
-- Stdlib metadata.
-
-### `src/cli_program.h`
-
-Owns:
-- CLI program-loading/composition API and loaded-program aggregate declaration.
-
-Allowed to know:
-- Frontend and backend/lowering entrypoints needed by CLI commands.
-
-Does not own:
-- Command-line parsing text.
-- Parser grammar.
-- Backend implementation details.
-
-## Shared infrastructure implementations
-
-### `src/source.c`
-
-Owns:
-- Reading source files into `DsSource`.
-- Freeing source buffers.
-- Allocation helpers and string duplication helpers.
-
-Allowed to know:
-- Filesystem read errors and `DsDiag` reporting.
-
-Does not own:
-- Import graph composition.
-- Tokenization/parsing.
-- Runtime process execution.
-
-### `src/diag.c`
-
-Owns:
-- Diagnostic initialization, source location formatting, and user-facing error
-  printing.
-
-Allowed to know:
-- Source spans and source text line lookup.
-
-Does not own:
-- Deciding which language rules are errors.
-- Warning policy for `ds check`.
-- Backend-specific recovery behavior.
-
-### `src/runtime.c`
-
-Owns:
-- `DsString`, `DsValue`, `DsArray`, and `DsMap` implementation.
-- Generic value copy/free/truthiness/string conversion/comparison.
-
-Allowed to know:
-- The embedded hashmap adapter under `src/runtime/`.
-- Generic runtime value representation.
-
-Does not own:
-- VM scope or call-frame policy.
-- Stdlib helper dispatch.
-- Command execution.
-- Bash standalone behavior.
-
-### `src/runtime/hashmap.c`, `src/runtime/hashmap.h`, `src/runtime/hashmap.LICENSE`
-
-Owns:
-- Vendored hashmap implementation and its license.
-
-Allowed to know:
-- Its own generic hashmap API and internals.
-
-Does not own:
-- `DsMap` language-facing policy.
-- Any `ds` grammar, HIR, VM, or Bash concerns.
-
-### `src/command.c`
-
-Owns:
-- Command word/vector clone and free helpers.
-- Command-result field descriptor lookup.
-
-Allowed to know:
-- `DsCommand`/`DsWord` shapes and supported command-result field names.
-
-Does not own:
-- Parsing command tokens.
-- Lowering command interpolation semantics.
-- Executing or emitting commands.
-
-### `src/stdlib.c`
-
-Owns:
-- Canonical table of standard-library helper metadata.
-- Helper lookup, namespace detection, and arity checks.
-
-Allowed to know:
-- Backend-neutral helper names, Bash helper names, return kinds, validation
-  flags, and arity constraints.
-
-Does not own:
-- VM helper implementations.
-- Bash helper bodies.
-- Parser grammar for helper calls.
-
-## Frontend implementations
-
-### `src/lexer.c`
-
-Owns:
-- Tokenizing raw source into tokens.
-- Recognizing keywords, identifiers, literals, comments, operators,
-  redirections, regex tokens, command interpolation tokens, and source spans.
-- Lexical diagnostics.
-
-Allowed to know:
-- Token kind names and source location advancement.
-
-Does not own:
-- Syntax validation beyond lexical errors.
-- Semantic validation.
-- AST construction beyond token payloads.
-- HIR lowering or backend behavior.
-
-### `src/parser.c`
-
-Owns:
-- Public `ds_parse` entrypoint.
-- Parser initialization and top-level declaration/statement loop.
-
-Allowed to know:
-- Parser component dispatch and AST script root construction.
-
-Does not own:
-- Detailed expression grammar.
-- Detailed command/script/function/statement grammar when delegated to split
-  parser files.
-- Semantic validation or backend lowering.
-
-### `src/parse_expr.c`
-
-Owns:
-- Expression grammar and expression AST construction.
-- Pratt parsing, calls, field/index access, literals, arrays, maps, ranges,
-  unary/binary expressions, regex expressions, and captured `run` expressions as
-  expression syntax.
-
-Allowed to know:
-- Parser cursor helpers and AST expression node allocation.
-- Expression precedence.
-
-Does not own:
-- Type checking.
-- Runtime semantics.
-- Bash emission.
-- Statement/block parsing outside expression subparsing.
-
-### `src/parse_command.c`
-
-Owns:
-- Shell-like command statement parsing.
-- Command words, pipelines, redirection suffixes, command interpolation tokens,
-  captured `run` command payloads, and command operator diagnostics.
-
-Allowed to know:
-- Command-mode token joining and parser cursor helpers.
-
-Does not own:
-- Command semantic validation after parsing.
-- Subprocess execution.
-- Bash quoting/emission.
-- General expression grammar except where captured `run` needs expression
-  delimiters.
-
-### `src/parse_script.c`
-
-Owns:
-- `script { ... }` declaration grammar.
-- Script arg/option/flag type/default AST construction.
-
-Allowed to know:
-- Script declaration token forms and parser diagnostics.
-
-Does not own:
-- Runtime argv binding.
-- Bash argument prelude generation.
-- Semantic duplicate/default validation beyond parse-shape errors.
-
-### `src/parse_function.c`
-
-Owns:
-- Function declaration grammar.
-- Test declaration grammar.
-- Function parameter/default AST construction.
-
-Allowed to know:
-- Parser block/statement helpers and AST function/test shapes.
-
-Does not own:
-- Function return-kind inference.
-- Recursion checks.
-- VM call-frame behavior.
-- Bash function rendering.
-
-### `src/parse_stmt.c`
-
-Owns:
-- Statement and block grammar dispatch.
-- Language statements such as `let`, assignments, conditionals, loops, cases,
-  push/assert/return/defer/trap, imports, and fallback command statements.
-- Unsupported collection-assignment syntax rejection while index assignment, map
-  field assignment, and nested mutation have no AST/HIR mutation contract.
-
-Allowed to know:
-- Expression and command parser entrypoints.
-- AST statement construction.
-
-Does not own:
-- Semantic validation of names/value kinds/control flow, except for unsupported
-  collection-assignment syntax that is intentionally rejected before AST/HIR.
-- Runtime execution semantics.
-- Bash statement rendering.
-
-### `src/ast.c`
-
-Owns:
-- AST debug printing.
-- AST tree cleanup.
-
-Allowed to know:
-- Complete AST shapes and command payload shapes.
-
-Does not own:
-- Parsing source into AST.
-- Lowering AST into HIR.
-- Formatting source text.
-- Backend execution/emission.
-
-### `src/format.c`
-
-Owns:
-- AST-to-source formatter used by `ds fmt`.
-- Formatting layout decisions for currently supported syntax.
-
-Allowed to know:
-- AST syntax shapes and source text for preserved command words where needed.
-
-Does not own:
-- Parsing or semantic validation.
-- HIR lowering.
-- Runtime/Bash execution behavior.
-
-## Lowering and semantic implementations
-
-### `src/lower.c`
-
-Owns:
-- Public lowering orchestration entrypoints.
-- Root lowerer setup, component sequencing, and final lowered-program assembly.
-
-Allowed to know:
-- Lowerer-private context and all lowering components.
-
-Does not own:
-- Detailed expression/statement/function/test lowering rules when delegated.
-- VM bytecode details.
-- Bash rendering details.
-
-### `src/lower_expr.c`
-
-Owns:
-- Expression semantic validation.
-- AST expression to HIR expression lowering.
-- Value-kind inference for expressions and calls where currently supported.
-
-Allowed to know:
-- Lowerer symbols, stdlib metadata, AST expressions, and HIR expression shapes.
-
-Does not own:
-- VM bytecode instructions.
-- Bash quoting rules.
-- Parser expression grammar.
-- Statement block orchestration except through expression use sites.
-
-### `src/lower_command.c`
-
-Owns:
-- Command-word semantic validation.
-- Quoted command-word interpolation legality before both backends.
-- Lowerer-side materialization of accepted scalar function-call interpolation in
-  command words and redirection targets.
-
-Allowed to know:
-- Lowerer symbols/scopes, command AST/HIR payloads, function return-kind
-  metadata through expression lowering, and backend-neutral command-word
-  constraints.
-
-Does not own:
-- Parser command grammar.
-- VM argv construction or process execution.
-- Bash quoting/rendering details beyond preserving the lowerer-owned HIR
-  contract.
-
-### `src/lower_stmt.c`
-
-Owns:
-- AST statement/block to HIR statement/block lowering.
-- Semantic validation for declarations, assignments, control-flow statements,
-  loops, cases, traps, defers, returns, asserts, command statements, and block
-  scope boundaries.
-
-Allowed to know:
-- Lowered expression results, symbol scopes, function context, and HIR statement
-  shapes.
-
-Does not own:
-- Expression parser grammar.
-- VM scope implementation.
-- Bash statement text layout.
-
-### `src/lower_symbols.c`
-
-Owns:
-- Lowerer symbol tables, name comparisons, namespace/member splitting, scope
-  helpers, vector helpers, and name validation utilities.
-
-Allowed to know:
-- Lowerer-private symbol/value-kind structs and common naming rules.
-
-Does not own:
-- Language syntax parsing.
-- Backend execution policy.
-- Stdlib helper implementation.
-
-### `src/lower_stdlib.c`
-
-Owns:
-- Literal decoding and parsing helpers used by lowering.
-- Script declaration/default lowering helpers.
-- Stdlib-adjacent validation that is backend-neutral.
-
-Allowed to know:
-- Stdlib metadata, script declaration AST/HIR shapes, and literal text forms.
-
-Does not own:
-- The canonical helper metadata table.
-- VM helper behavior.
-- Bash helper bodies.
-
-### `src/lower_functions.c`
-
-Owns:
-- Function signature collection.
-- Function default validation.
-- Function body lowering coordination.
-- Return-kind and recursion checks for user functions, in line with
-  `docs/maintenance/m3-2-function-return-kinds.md`.
-
-Allowed to know:
-- Lowerer symbol/function tables, AST function declarations, HIR function shapes,
-  and backend-neutral value kinds.
-
-Does not own:
-- Parser function grammar.
-- VM call frame mechanics.
-- Bash function text generation.
-
-### `src/lower_tests.c`
-
-Owns:
-- Test declaration collection and lowering into HIR test entries.
-
-Allowed to know:
-- AST test declarations and lowerer/test HIR shapes.
-
-Does not own:
-- VM test execution setup.
-- CLI test selection.
-- Parser test grammar beyond consumed AST shape.
-
-### `src/lower_free.c`
-
-Owns:
-- HIR/lowered-program cleanup.
-
-Allowed to know:
-- Complete HIR allocation ownership shape.
-
-Does not own:
-- AST cleanup.
-- VM runtime value cleanup.
-- Bash buffer cleanup.
-
-### `src/hir.c`
-
-Owns:
-- HIR debug printing.
-
-Allowed to know:
-- Complete HIR shapes and source spans for debug output.
-
-Does not own:
-- Creating or validating HIR.
-- Bytecode generation.
-- Bash emission.
-
-### `src/checker.c`
-
-Owns:
-- AST-level static warnings used by `ds check`, such as unused declarations and
-  shadowing warnings.
-
-Allowed to know:
-- AST shapes and source locations for warning output.
-
-Does not own:
-- Hard semantic errors that should be produced by lowering.
-- HIR transformation.
-- Backend execution/emission.
-
-## Bash backend implementations
-
-### `src/bash_emit.c`
-
-Owns:
-- Public Bash emission entrypoint implementation.
-- Emitted script header/prelude, script-argument prelude, helper inclusion, and
-  artifact writing.
-
-Allowed to know:
-- Lowered program structure, Bash emitter context, helper dependency flags, and
-  output-file errors.
-
-Does not own:
-- Expression/statement rendering details delegated to split files.
-- Language validation.
-- VM behavior.
-
-### `src/bash_deps.c`
-
-Owns:
-- Analysis of lowered program/expression/statement usage to determine which Bash
-  helpers must be emitted.
-
-Allowed to know:
-- HIR shapes and helper dependency flags.
-
-Does not own:
-- Helper body text.
-- Rendering expressions/statements.
-- Stdlib metadata table contents except through helper usage facts.
-
-### `src/bash_expr.c`
-
-Owns:
-- HIR expression and condition rendering to Bash text.
-- Bash representation of expression values, command-result fields, collection
-  operations, stdlib expression calls, and type metadata expressions.
-
-Allowed to know:
-- HIR expression value-kind metadata and Bash emitter buffer utilities.
-
-Does not own:
-- Language validation.
-- AST parsing.
-- VM expression evaluation.
-- Statement rendering outside expression/condition contexts.
-
-### `src/bash_command.c`
-
-Owns:
-- HIR command word, redirection, pipeline, and captured `run` argument rendering
-  to Bash text.
-
-Allowed to know:
-- Lowered command payloads and Bash quoting/interpolation utilities.
-
-Does not own:
-- Parsing command syntax.
-- Command semantic validation.
-- VM subprocess execution.
-
-### `src/bash_stmt.c`
-
-Owns:
-- HIR statement, block, function, loop, case, trap, defer, assert, and test body
-  rendering to Bash text.
-
-Allowed to know:
-- HIR statement shapes, Bash expression/command rendering helpers, and emitter
-  indentation/buffer conventions.
-
-Does not own:
-- Expression semantic validation.
-- VM control-flow execution.
-- Public Bash emission orchestration.
-
-### `src/bash_quote.c`
-
-Owns:
-- Bash output buffer utilities.
-- Shared Bash quoting, interpolation, identifier/symbol naming, and literal
-  escaping helpers.
-
-Allowed to know:
-- Bash syntax rules for safe emitted text and internal symbol naming.
-
-Does not own:
-- Which statements/expressions get emitted.
-- Language semantic validation.
-- Helper dependency selection.
-
-### `src/bash_helpers.c`
-
-Owns:
-- Text bodies of emitted standalone Bash helper functions.
-
-Allowed to know:
-- Bash helper implementation text for command-result, collection, debug, and
-  stdlib operations.
-
-Does not own:
-- Deciding whether a helper is needed.
-- HIR expression/statement rendering.
-- VM stdlib behavior except for parity intent.
-
-## VM backend implementations
-
-### `src/vm_compile.c`
-
-Owns:
-- HIR to VM bytecode construction.
-- Constants/instruction emission and source-location preservation for bytecode.
-
-Allowed to know:
-- HIR shapes and VM-private instruction/register/frame structures.
-
-Does not own:
-- HIR semantic validation.
-- Main interpreter loop.
-- Subprocess execution.
-- Bash emission.
-
-### `src/vm.c`
-
-Owns:
-- Public VM run entrypoints.
-- Main interpreter loop.
-- Signal handler installation/pending-signal bridge.
-- Top-level VM lifecycle coordination.
-
-Allowed to know:
-- VM-private bytecode/state structures, runtime values, and runtime diagnostics.
-
-Does not own:
-- Bytecode construction details.
-- Scope helper internals when delegated.
-- Subprocess execution details when delegated.
-- Bash behavior.
-
-### `src/vm_dump.c`
-
-Owns:
-- Bytecode/debug output formatting.
-
-Allowed to know:
-- VM-private instruction/constant shapes.
-
-Does not own:
-- Bytecode generation.
-- VM execution.
-- HIR debug printing.
-
-### `src/vm_args.c`
-
-Owns:
-- Runtime binding and validation of `script { ... }` arguments for VM execution.
-
-Allowed to know:
-- Lowered script declarations, runtime values, and VM root scope binding helpers.
-
-Does not own:
-- Parser script declaration grammar.
-- Lowering script declaration semantics.
-- Bash argument prelude generation.
-
-### `src/vm_scope.c`
-
-Owns:
-- VM scope chain, variable lookup/binding/assignment, function-call setup, and
-  frame/scope cleanup helpers.
-
-Allowed to know:
-- VM-private scope/frame structs and runtime values.
-
-Does not own:
-- Parser/lowerer symbol tables.
-- Bytecode instruction selection.
-- Bash variable naming.
-
-### `src/vm_process.c`
-
-Owns:
-- VM command interpolation, redirection setup, foreground/background process
-  execution, pipeline execution, subprocess result capture, and job/signal
-  runtime behavior.
-
-Allowed to know:
-- VM runtime values, lowered command payloads, OS process APIs, and signal/job
-  control details.
-
-Does not own:
-- Parsing command syntax.
-- Lowering command validation.
-- Bash command rendering.
-
-### `src/vm_stdlib.c`
-
-Owns:
-- VM execution of standard-library helpers such as `file.*`, `dir.*`, `path.*`,
-  `cmd.*`, `env.*`, `glob`, `glob!`, and `lines`.
-
-Allowed to know:
-- VM runtime values, stdlib metadata names, filesystem/environment/glob APIs, and
-  helper-specific runtime diagnostics.
-
-Does not own:
-- Canonical helper metadata.
-- Bash helper bodies.
-- Parser/lowering validation except defensive runtime checks.
-
-### `src/vm_test.c`
-
-Owns:
-- VM-backed execution setup for a single lowered test.
-
-Allowed to know:
-- Lowered tests and VM run options/entrypoints.
-
-Does not own:
-- Test parsing or test collection.
-- CLI test discovery/output policy.
-- Bash test execution behavior.
-
-## CLI implementation
-
-### `src/main.c`
-
-Owns:
-- Command-line interface parsing and command dispatch.
-- User-facing command usage and top-level exit-code policy.
-
-Allowed to know:
-- CLI program-loading helpers and public frontend/backend entrypoints.
-
-Does not own:
-- Source import composition internals.
-- Parser grammar.
-- Lowering semantics.
-- Backend implementation details.
-
-### `src/cli_program.c`
-
-Owns:
-- CLI source loading, lexing/parsing/lowering pipelines, import resolution,
-  import graph composition, duplicate/cycle handling, and loaded-program cleanup.
-
-Allowed to know:
-- Source manager, lexer/parser/lowerer entrypoints, AST composition details needed
-  to build a combined program, and CLI import path mechanics.
-
-Does not own:
-- Command-line option parsing.
-- Language grammar beyond consuming import AST nodes.
-- VM bytecode or Bash rendering behavior.
-
-## Known ownership pressure points
-
-These are not mandatory refactors for this documentation change, but they are the
-places to watch during the maintenance phase:
-
-- `src/checker.c` is an AST warning pass while hard semantic errors live in
-  lowering. Keep that distinction strict; do not let checker become a second
-  semantic validator.
-- `src/cli_program.c` composes imports by manipulating AST-level containers.
-  That is acceptable for current CLI orchestration, but it should not become a
-  general AST transformation engine.
-- `src/lower_command.c` owns command-word validation and materialization. Keep it
-  focused on command interpolation; do not let it become a general command
-  lowering dumping ground.
-- `src/vm_process.c` owns many OS/process/job-control details. If richer
-  job-control APIs grow, consider splitting command interpolation, process
-  spawning, and signal/job-control responsibilities.
-- `src/bash_expr.c` is naturally dense because Bash expression rendering has many
-  cases. If collection/map/function-value features expand, split by rendered
-  expression family rather than adding more unrelated helpers.
+This is the maintainer navigation map for the current `ds` source tree. It names
+file ownership and cross-layer rules; it is not a parallel implementation guide
+or roadmap. Use it with:
+
+- `docs/architecture.md` for the end-to-end parse -> lower -> backend pipeline.
+- `docs/concept-map.md` for cross-cutting concept homes.
+- `docs/parity-contracts.md` for VM/Bash acceptance rules.
+- `docs/diagnostics.md` for phase-owned diagnostics.
+- `docs/runtime.md` for VM/runtime substrate behavior.
+
+## Layer ownership rules
+
+| Layer | Owns | Must not own |
+| --- | --- | --- |
+| Frontend | source text, tokens, parser AST, syntax recovery, syntax diagnostics | semantic acceptance, HIR, VM bytecode, Bash rendering, process behavior |
+| Lowering | AST -> HIR, symbols, value/return kinds, stdlib metadata, semantic diagnostics, parity gates | VM instruction encoding, Bash quoting details, subprocess/runtime mechanics |
+| HIR/shared metadata | backend-neutral accepted program contract | parser cursor state, VM registers, Bash text fragments, backend helper bodies |
+| VM backend | accepted HIR execution, bytecode/private VM state, runtime values, subprocess/OS failures | source parsing, semantic validation, Bash artifact policy |
+| Bash backend | accepted HIR rendering, quoting, helper selection, standalone script artifact failures | source parsing, semantic validation, canonical language semantics |
+| Runtime/shared support | strings, arrays, maps, values, sources, diagnostics, allocation | grammar, backend policy, CLI command dispatch |
+| CLI | source loading, import composition, frontend/lower/backend orchestration | grammar, HIR semantics, VM op behavior, Bash rendering |
+
+## Diagnostic ownership
+
+`docs/diagnostics.md` is canonical. In short:
+
+- lexer/parser: lexical and syntax diagnostics;
+- lowerer: semantic misuse, unsupported language forms, and VM/Bash parity gates;
+- VM: runtime/OS/process failures and internal accepted-HIR invariants;
+- Bash: artifact/emission failures and internal accepted-HIR invariants;
+- checker/formatter: warnings and presentation diagnostics only.
+
+If VM or Bash reports a source-language unsupported form, treat that as ownership
+pressure unless it is explicitly a runtime data failure or an internal invariant.
+
+## File ownership table
+
+### Public façade and focused headers
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `include/ds.h` | compatibility umbrella for small harnesses/external includes | do not add feature policy here |
+| `src/ds_common.h` | shared source/string/span/diagnostic/allocation declarations | no token, AST, HIR, runtime value, or backend policy |
+| `src/ds_command.h` | command word/stage/redirection/capture metadata shared by AST/HIR | no parser cursor, command validation, VM execution, or Bash quoting |
+| `src/ds_ast.h` | parser-facing AST node shapes | syntax preservation only; no semantic value kinds or backend contracts |
+| `src/frontend.h` | lexer/parser public entrypoints and token vectors | no lower/backend APIs |
+| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract | backend-neutral only |
+| `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
+| `src/ds_stdlib.h` | stdlib helper metadata shared by lowerer/VM/Bash | metadata, not implementation |
+| `src/backend.h` | public formatter/checker/Bash/VM/test backend entrypoints | no backend-private state |
+| `src/parser_internal.h` | parser cursor/helpers/component prototypes | parser-private only |
+| `src/lower_internal.h` | lowerer-private state and helper prototypes | keep narrow; avoid becoming a concept dump |
+| `src/vm_internal.h` | VM-private bytecode/runtime/process/test declarations | no parser/lowerer policy |
+| `src/bash_internal.h` | Bash-emitter-private buffers, dependency flags, render helpers | no semantic validation ownership |
+| `src/bash_helpers.h` | generated Bash helper bodies catalog | helpers implement accepted HIR only |
+| `src/cli_program.h` | CLI import/program composition declarations | orchestration only |
+
+### Shared infrastructure
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `src/source.c` | source manager and span/source lookup | diagnostics support only |
+| `src/diag.c` | diagnostic collection/rendering | displays phase decisions; does not decide them |
+| `src/runtime.c` | `DsValue`/runtime containers/helpers | VM runtime substrate, not syntax policy |
+| `src/runtime/hashmap.*` | generic hashmap implementation | no language semantics |
+| `src/command.c` | command metadata helpers and command-result field catalog | shared descriptor table; no backend execution |
+| `src/stdlib.c` | stdlib helper metadata table | canonical helper facts for lowerer/VM/Bash |
+
+### Frontend implementations
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `src/lexer.c` | tokens, lexical diagnostics, conservative literal tokenization | regex literal syntax errors are lexical |
+| `src/parser.c` | parser entrypoint and top-level coordination | no semantic validation |
+| `src/parse_expr.c` | expression syntax and AST shape | may preserve unsupported parseable forms; lowerer decides semantics |
+| `src/parse_command.c` | command/pipeline/redirection syntax and recovery | no command-word semantic validation |
+| `src/parse_script.c` | script declaration/import/test syntax | frontend shape only |
+| `src/parse_function.c` | function declaration syntax | no return-kind semantics |
+| `src/parse_stmt.c` | statement syntax and syntax-level unsupported assignment rejection | rejects collection assignment while no AST/HIR mutation form exists |
+| `src/ast.c` | AST allocation/free/debug printing | mirrors AST only |
+| `src/format.c` | AST-preserving formatting | formatting policy, not language acceptance |
+
+### Lowering and semantic implementations
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `src/lower.c` | lowerer orchestration and program-level symbol setup | coordinates, but should not absorb concept-specific logic |
+| `src/lower_expr.c` | expression lowering, expression value-kind checks, string interpolation lowering | keep command-specific interpolation in `lower_command.c` |
+| `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, format-spec validation for command strings, direct scalar value-call interpolation materialization | stable owner for command-word lowering; do not split unless a new sub-concept gets its own contract |
+| `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | delegates command-word details to `lower_command.c` |
+| `src/lower_symbols.c` | lowerer scopes/symbol facts | no syntax parsing or backend rendering |
+| `src/lower_stdlib.c` | stdlib declaration/use validation | consumes `ds_stdlib.h` metadata |
+| `src/lower_functions.c` | function collection, return-kind discovery/validation, call-return contracts | owns function return contract pressure |
+| `src/lower_tests.c` | test-block lowering | normal language lowering plus test metadata |
+| `src/lower_free.c` | lowered tree cleanup | no policy |
+| `src/hir.c` | HIR allocation/free/debug helpers | mirrors HIR only |
+| `src/checker.c` | warnings/static checks over AST/HIR where applicable | no hard acceptance except checker-owned warnings |
+
+### Bash backend
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `src/bash_emit.c` | standalone script wrapper, prologue, helper emission | artifact assembly only |
+| `src/bash_deps.c` | helper dependency detection from accepted HIR | no semantic validation |
+| `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
+| `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering | consumes validated `DsCommand`; no command semantics ownership |
+| `src/bash_stmt.c` | Bash rendering for accepted HIR statements/functions/handlers | artifact/runtime mechanics only |
+| `src/bash_quote.c` | Bash quoting and accepted string interpolation rendering | interpolation shape invariants are defensive |
+| `src/bash_helpers.c` | emitted Bash helper implementations | runtime/artifact behavior for accepted HIR |
+
+### VM backend
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `src/vm_compile.c` | accepted HIR -> VM instructions | no semantic language validation |
+| `src/vm.c` | VM instruction interpreter and scalar/runtime behavior | runtime failures only |
+| `src/vm_dump.c` | bytecode/debug dump | presentation only |
+| `src/vm_args.c` | VM argument handling | runtime call boundary only |
+| `src/vm_scope.c` | VM scope stack/storage | runtime state only |
+| `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | internal invariant diagnostics only for impossible post-lowering shapes |
+| `src/vm_stdlib.c` | VM stdlib helper implementations | runtime data/OS failures; lowerer owns helper legality where statically known |
+| `src/vm_test.c` | VM test runner | test execution only |
+
+### CLI
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `src/main.c` | command-line parsing and top-level dispatch | no grammar or feature policy |
+| `src/cli_program.c` | source loading/import composition and backend orchestration | no semantics beyond orchestration failures |
+
+## Cross-layer contracts
+
+- Accepted user-facing behavior must lower into backend-neutral HIR/shared metadata
+  before VM or Bash can execute/render it.
+- Unsupported semantic/parity forms should fail in lowering, except syntax-only
+  unsupported forms may fail in the parser when no AST/HIR representation exists.
+- VM/Bash may keep defensive internal invariant checks for accepted-HIR shapes that
+  should be impossible after lowering.
+- Bash helper bodies and VM runtime code may report runtime data failures, such as
+  OS/process errors, missing collection keys, out-of-range indexes, or dynamic
+  helper arguments that cannot be known statically.
+- Formatter/debug printers mirror AST/HIR shapes; they do not define language
+  support.
+- New concepts should update `docs/concept-map.md` before spreading across parser,
+  lowerer, VM, and Bash.
+
+## Known hotspots
+
+| Hotspot | Current status | Maintenance rule |
+| --- | --- | --- |
+| Command words/interpolation | `src/lower_command.c` is the focused lowerer owner; VM/Bash consume accepted command payloads | keep semantic validation out of `src/vm_process.c` and `src/bash_command.c` |
+| Function returns/command-result functions | lowerer/HIR return-kind metadata is the contract | do not re-derive return kinds in Bash/VM from helper names |
+| Mutable collections | accepted literals/indexing/push/array loops are HIR-backed; unsupported assignment syntax is parser-rejected | do not add mutation AST/HIR without a parity contract |
+| Regex | conservative literals are accepted; captures/replacement/runtime regex strings remain rejected | lowerer owns parity gates after lexer syntax |
+| Trap/defer/signal | HIR handler contract with VM/Bash runtime implementations | keep OS/job-control behavior scoped to documented foreground forms |
+| Pipeline behavior | accepted command pipeline payload plus VM/Bash process implementations | keep process semantics backend-owned, but language restrictions in parser/lowerer |
+| Direct `env.NAME` | AST field/assignment syntax lowered to env helper/set-env behavior | keep env-name validation in lowering where statically known |
+| String interpolation | parser/lowerer own shape/validation; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |
+
+## Maintenance checklist
+
+Before adding or moving behavior:
+
+1. Identify the concept home in `docs/concept-map.md`.
+2. Decide whether the parser, lowerer, HIR, VM, Bash, or runtime owns the rule.
+3. Add/adjust the HIR/shared metadata contract before backend implementation for
+   accepted cross-backend behavior.
+4. Put user-facing unsupported/semantic diagnostics in the owning frontend/lowerer
+   phase.
+5. Keep VM/Bash diagnostics for runtime/artifact failures or internal accepted-HIR
+   invariants.
+6. Add VM/Bash parity tests for accepted behavior and diagnostic tests for rejected
+   behavior before expanding the feature surface.
