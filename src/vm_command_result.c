@@ -28,27 +28,27 @@ bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, Ds
 
     DsStr field_view = {(char *)field, strlen(field)};
     const DsCommandResultField *desc = ds_command_result_field_lookup(field_view);
-    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_STRING && strcmp(desc->name, "stdout") == 0) {
-        ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len);
-        out->kind = DS_VALUE_STRING;
-        return true;
-    }
-    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_STRING && strcmp(desc->name, "stderr") == 0) {
-        ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len);
-        out->kind = DS_VALUE_STRING;
-        return true;
-    }
-    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_INT) {
-        *out = ds_value_int(value->as.command_result.code);
-        return true;
-    }
-    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "ok") == 0) {
-        *out = ds_value_bool(value->as.command_result.code == 0);
-        return true;
-    }
-    if (desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL && strcmp(desc->name, "failed") == 0) {
-        *out = ds_value_bool(value->as.command_result.code != 0);
-        return true;
+    if (desc) {
+        switch (desc->id) {
+            case DS_COMMAND_RESULT_FIELD_STDOUT:
+                ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len);
+                out->kind = DS_VALUE_STRING;
+                return true;
+            case DS_COMMAND_RESULT_FIELD_STDERR:
+                ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len);
+                out->kind = DS_VALUE_STRING;
+                return true;
+            case DS_COMMAND_RESULT_FIELD_STATUS:
+            case DS_COMMAND_RESULT_FIELD_CODE:
+                *out = ds_value_int(value->as.command_result.code);
+                return true;
+            case DS_COMMAND_RESULT_FIELD_OK:
+                *out = ds_value_bool(value->as.command_result.code == 0);
+                return true;
+            case DS_COMMAND_RESULT_FIELD_FAILED:
+                *out = ds_value_bool(value->as.command_result.code != 0);
+                return true;
+        }
     }
 
     ds_diag_error(vm->diag, span, "internal VM field invariant failed: unknown command result field `%s` after lowering", field);

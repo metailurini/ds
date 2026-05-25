@@ -10,10 +10,9 @@ static bool result_field_is_bool(DsStr field) {
 }
 
 static DsStr result_field_storage_name(DsStr field) {
-    if (field.len == 6 && memcmp(field.data, "status", 6) == 0) {
-        return (DsStr){"code", 4};
-    }
-    return field;
+    const DsCommandResultField *desc = ds_command_result_field_lookup(field);
+    if (!desc) return field;
+    return (DsStr){(char *)desc->storage_name, strlen(desc->storage_name)};
 }
 
 static bool is_int_binary_op(DsStr op) {

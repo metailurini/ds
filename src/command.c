@@ -117,12 +117,12 @@ void ds_command_free(DsCommand *command) {
 }
 
 static const DsCommandResultField k_fields[] = {
-    {"stdout", DS_COMMAND_RESULT_FIELD_STRING},
-    {"stderr", DS_COMMAND_RESULT_FIELD_STRING},
-    {"status", DS_COMMAND_RESULT_FIELD_INT},
-    {"code", DS_COMMAND_RESULT_FIELD_INT},
-    {"ok", DS_COMMAND_RESULT_FIELD_BOOL},
-    {"failed", DS_COMMAND_RESULT_FIELD_BOOL},
+    {"stdout", "stdout", DS_COMMAND_RESULT_FIELD_STDOUT, DS_COMMAND_RESULT_FIELD_STRING},
+    {"stderr", "stderr", DS_COMMAND_RESULT_FIELD_STDERR, DS_COMMAND_RESULT_FIELD_STRING},
+    {"status", "code", DS_COMMAND_RESULT_FIELD_STATUS, DS_COMMAND_RESULT_FIELD_INT},
+    {"code", "code", DS_COMMAND_RESULT_FIELD_CODE, DS_COMMAND_RESULT_FIELD_INT},
+    {"ok", "ok", DS_COMMAND_RESULT_FIELD_OK, DS_COMMAND_RESULT_FIELD_BOOL},
+    {"failed", "failed", DS_COMMAND_RESULT_FIELD_FAILED, DS_COMMAND_RESULT_FIELD_BOOL},
 };
 
 const DsCommandResultField *ds_command_result_field_lookup(DsStr field) {

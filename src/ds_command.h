@@ -55,6 +55,15 @@ typedef struct {
 } DsCommand;
 
 typedef enum {
+    DS_COMMAND_RESULT_FIELD_STDOUT,
+    DS_COMMAND_RESULT_FIELD_STDERR,
+    DS_COMMAND_RESULT_FIELD_STATUS,
+    DS_COMMAND_RESULT_FIELD_CODE,
+    DS_COMMAND_RESULT_FIELD_OK,
+    DS_COMMAND_RESULT_FIELD_FAILED
+} DsCommandResultFieldId;
+
+typedef enum {
     DS_COMMAND_RESULT_FIELD_STRING,
     DS_COMMAND_RESULT_FIELD_INT,
     DS_COMMAND_RESULT_FIELD_BOOL
@@ -62,6 +71,8 @@ typedef enum {
 
 typedef struct {
     const char *name;
+    const char *storage_name;
+    DsCommandResultFieldId id;
     DsCommandResultFieldKind kind;
 } DsCommandResultField;
 
