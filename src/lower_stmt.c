@@ -442,6 +442,35 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             else maybe_update_symbol(sym, SYM_INT);
             return out;
         }
+        case DS_STMT_COLLECTION_ASSIGN: {
+            /*
+             * M3.6 collection boundary: the parser preserves collection
+             * assignment syntax so the lowerer, not parser/VM/Bash, owns the
+             * unsupported mutation diagnostic. There is intentionally no HIR
+             * mutation node until a future milestone defines VM/Bash parity for
+             * index assignment, map field assignment, and nested mutation.
+             */
+            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_BLOCK, stmt->span);
+            out->as.block_stmt.scoped = false;
+            SymKind ignored_kind = SYM_UNKNOWN;
+            DsLowerExpr *target = lower_expr(lower, stmt->as.collection_assign_stmt.target, &ignored_kind);
+            ignored_kind = SYM_UNKNOWN;
+            DsLowerExpr *value = lower_expr(lower, stmt->as.collection_assign_stmt.value, &ignored_kind);
+            lower_expr_free(target);
+            lower_expr_free(value);
+
+            const DsExpr *target_ast = stmt->as.collection_assign_stmt.target;
+            if (target_ast && target_ast->kind == DS_EXPR_FIELD) {
+                ds_diag_error(lower->diag, target_ast->span, "map field assignment is deferred in v0.10.0; bind a new map value instead");
+            } else if (target_ast && target_ast->kind == DS_EXPR_INDEX && target_ast->as.index.object && target_ast->as.index.object->kind == DS_EXPR_INDEX) {
+                ds_diag_error(lower->diag, target_ast->span, "nested collection mutation is deferred in v0.10.0");
+            } else if (target_ast && target_ast->kind == DS_EXPR_INDEX) {
+                ds_diag_error(lower->diag, target_ast->span, "index assignment is deferred in v0.10.0; use array.push for append-only list mutation");
+            } else {
+                ds_diag_error(lower->diag, stmt->span, "unsupported collection assignment target in v0.10.0");
+            }
+            return out;
+        }
         case DS_STMT_CMD: {
             DsCommand command_copy;
             ds_command_clone(&command_copy, &stmt->as.cmd_stmt);

@@ -737,8 +737,28 @@ fn apps() {
 let names = apps()
 names[0] = "worker"
 DS
-assert_check_fails index_assignment_rejected "$FIX/index_assignment_rejected.ds" 'unsupported assignment target'
-assert_emit_fails index_assignment_rejected "$FIX/index_assignment_rejected.ds" 'unsupported assignment target'
+run_ok index_assignment_ast "$DS" ast "$FIX/index_assignment_rejected.ds"
+assert_contains "$TMP/index_assignment_ast.out" 'CollectionAssignStmt =' 'index assignment preserved as AST shape'
+assert_check_fails index_assignment_rejected "$FIX/index_assignment_rejected.ds" 'index assignment is deferred in v0.10.0'
+assert_emit_fails index_assignment_rejected "$FIX/index_assignment_rejected.ds" 'index assignment is deferred in v0.10.0'
+run_fail index_assignment_rejected_run "$DS" run "$FIX/index_assignment_rejected.ds"
+assert_diag "$TMP/index_assignment_rejected_run.err" 'index assignment is deferred in v0.10.0' 'index_assignment_rejected run diagnostic'
+
+write_fixture "$FIX/map_field_assignment_rejected.ds" <<'DS'
+let app = { name: "api", port: 8080 }
+app.name = "worker"
+DS
+run_ok map_field_assignment_ast "$DS" ast "$FIX/map_field_assignment_rejected.ds"
+assert_contains "$TMP/map_field_assignment_ast.out" 'CollectionAssignStmt =' 'map field assignment preserved as AST shape'
+assert_check_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'map field assignment is deferred in v0.10.0'
+assert_emit_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'map field assignment is deferred in v0.10.0'
+
+write_fixture "$FIX/nested_mutation_rejected.ds" <<'DS'
+let matrix = [[1]]
+matrix[0][0] = 2
+DS
+assert_check_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collection mutation is deferred in v0.10.0'
+assert_emit_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collection mutation is deferred in v0.10.0'
 
 # 6. Stdout safety and ABI regression.
 write_fixture "$FIX/structured_stdout_rejected.ds" <<'DS'

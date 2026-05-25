@@ -612,3 +612,23 @@ M3.6 implementation cleanup can move collection sub-risks out of Hell only when:
   new feature milestone with canonical HIR/parity contracts;
 - `docs/concept-map.md` reflects the narrowed sub-risks rather than one vague
   mutable-collections Hell candidate.
+
+## Implementation result — M3.6 maintenance cleanup
+
+The M3.6 implementation pass preserves the current collection feature set and
+makes the main unsupported mutation shapes lowerer-owned diagnostics:
+
+- `xs[0] = value` and compound variants now parse as collection-assignment
+  syntax shape and are rejected during lowering as deferred index assignment.
+- `map.field = value` now parses as collection-assignment syntax shape and is
+  rejected during lowering as deferred map field assignment.
+- nested targets such as `matrix[0][1] = value` now parse as assignment-target
+  shape and are rejected during lowering as deferred nested mutation.
+
+There is still intentionally no HIR mutation node for these forms. The lowerer
+returns an empty block only after recording the semantic diagnostic, so VM and
+Bash do not become the language-validity owners for collection mutation.
+
+Accepted collection behavior remains unchanged: literals, named read-only
+indexing, map field reads, array `push`, array loops, and flat structured
+function returns continue to use the existing HIR/runtime/Bash contracts.

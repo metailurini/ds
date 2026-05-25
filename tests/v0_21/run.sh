@@ -530,7 +530,7 @@ write_fixture "$FIX/compound_index.ds" <<'DS'
 let xs = [1, 2]
 xs[0] *= 3
 DS
-assert_check_fails compound_index "$FIX/compound_index.ds" 'unsupported assignment target'
+assert_check_fails compound_index "$FIX/compound_index.ds" 'index assignment is deferred in v0.10.0'
 
 write_fixture "$FIX/div_zero.ds" <<'DS'
 let x = "{1 / 0}"

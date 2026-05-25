@@ -101,6 +101,85 @@ static DsStmt *parse_assign(Parser *p) {
     return stmt;
 }
 
+static bool parse_assignment_operator(Parser *p, DsAssignOp *op) {
+    if (parser_advance_if(p, DS_TOK_EQUAL)) {
+        *op = DS_ASSIGN_SET;
+        return true;
+    }
+    if ((parser_at(p, DS_TOK_PLUS) || parser_at(p, DS_TOK_MINUS) || parser_at(p, DS_TOK_STAR) ||
+         parser_at(p, DS_TOK_SLASH) || parser_at(p, DS_TOK_PERCENT)) && parser_next_at(p, DS_TOK_EQUAL)) {
+        if (parser_at(p, DS_TOK_PLUS)) *op = DS_ASSIGN_ADD;
+        else if (parser_at(p, DS_TOK_MINUS)) *op = DS_ASSIGN_SUB;
+        else if (parser_at(p, DS_TOK_STAR)) *op = DS_ASSIGN_MUL;
+        else if (parser_at(p, DS_TOK_SLASH)) *op = DS_ASSIGN_DIV;
+        else *op = DS_ASSIGN_MOD;
+        parser_advance(p);
+        parser_advance(p);
+        return true;
+    }
+    return false;
+}
+
+static DsExpr *parse_collection_assignment_target(Parser *p) {
+    if (!parser_expect_identifier_like(p, "expected assignment target")) return NULL;
+    DsToken *name = parser_previous(p);
+    DsExpr *target = parser_new_expr(DS_EXPR_IDENT, name->span);
+    target->as.text = parser_copy_token_text(name);
+    while (target && (parser_at(p, DS_TOK_LBRACKET) || parser_at(p, DS_TOK_DOT))) {
+        if (parser_advance_if(p, DS_TOK_LBRACKET)) {
+            DsToken *open = parser_previous(p);
+            DsExpr *idx = NULL;
+            if (parser_at(p, DS_TOK_RBRACKET)) {
+                ds_diag_error(p->diag, open->span, "expected index expression after `[` ");
+            } else {
+                idx = parse_expr(p);
+            }
+            if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
+            DsExpr *index_expr = parser_new_expr(DS_EXPR_INDEX, (DsSpan){target->span.start, parser_previous(p)->span.end, open->span.source});
+            index_expr->as.index.object = target;
+            index_expr->as.index.index = idx;
+            target = index_expr;
+            continue;
+        }
+        if (parser_advance_if(p, DS_TOK_DOT)) {
+            DsToken *dot = parser_previous(p);
+            if (!parser_expect_identifier_like(p, "expected field name after `.`")) break;
+            DsToken *field = parser_previous(p);
+            DsExpr *field_expr = parser_new_expr(DS_EXPR_FIELD, (DsSpan){target->span.start, field->span.end, dot->span.source});
+            field_expr->as.field.object = target;
+            field_expr->as.field.field = parser_copy_token_text(field);
+            target = field_expr;
+        }
+    }
+    return target;
+}
+
+static DsStmt *parse_collection_assign(Parser *p) {
+    DsToken *start = parser_peek(p);
+    DsExpr *target = parse_collection_assignment_target(p);
+    DsAssignOp op = DS_ASSIGN_SET;
+    if (!parse_assignment_operator(p, &op)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected assignment operator");
+        return NULL;
+    }
+    if (parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after assignment operator");
+        return NULL;
+    }
+    DsExpr *value = parse_expr(p);
+    DsStmt *stmt = parser_new_stmt(DS_STMT_COLLECTION_ASSIGN,
+                                   (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
+    stmt->as.collection_assign_stmt.target = target;
+    stmt->as.collection_assign_stmt.op = op;
+    stmt->as.collection_assign_stmt.value = value;
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of statement");
+        while (!parser_is_stmt_end(p)) parser_advance(p);
+    }
+    parser_consume_statement_end(p);
+    return stmt;
+}
+
 static bool parser_invalid_hyphenated_env_name(Parser *p, const DsToken *field, const char *version) {
     if (!parser_at(p, DS_TOK_MINUS)) return false;
     if (p->pos + 1 >= p->tokens->len || !parser_is_identifier_like(p->tokens->items[p->pos + 1].kind)) return false;
@@ -218,11 +297,6 @@ static DsStmt *parse_return(Parser *p) {
     }
     parser_consume_statement_end(p);
     return stmt;
-}
-
-static void consume_bad_statement(Parser *p) {
-    while (!parser_is_stmt_end(p)) parser_advance(p);
-    parser_consume_statement_end(p);
 }
 
 static DsStmt *parse_if(Parser *p) {
@@ -546,11 +620,7 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 5 && memcmp(parser_peek(p)->text.data, "unset", 5) == 0) return parse_bad_unset(p);
     if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 3 && memcmp(parser_peek(p)->text.data, "env", 3) == 0 &&
         parser_next_at(p, DS_TOK_DOT) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
-    if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "unsupported assignment target in v0.17.0");
-        consume_bad_statement(p);
-        return NULL;
-    }
+    if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT)) && stmt_contains_assignment_operator(p)) return parse_collection_assign(p);
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||
         ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS) || parser_next_at(p, DS_TOK_STAR) || parser_next_at(p, DS_TOK_SLASH) || parser_next_at(p, DS_TOK_PERCENT)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
     if (parser_advance_if(p, DS_TOK_RETURN)) return parse_return(p);
