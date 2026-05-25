@@ -290,7 +290,7 @@ dispatch_loop:
                         set_reg(&vm, ins->dst, ds_value_int(out));
                     }
                 } else {
-                    ds_diag_error(diag, ins->span, "unknown binary operator `%s`", ins->cmp ? ins->cmp : "");
+                    ds_diag_error(diag, ins->span, "internal VM invariant failed: unknown binary operator `%s` after lowering", ins->cmp ? ins->cmp : "");
                     rc = 1; goto done;
                 }
                 ip++;
@@ -457,14 +457,14 @@ dispatch_loop:
                     if (!found) { ds_diag_error(diag, ins->span, "missing map key `%.*s`", (int)key_view.len, key_view.data); ds_string_free(&key); rc = 1; goto done; }
                     set_reg(&vm, ins->dst, ds_value_copy(found));
                     ds_string_free(&key);
-                } else { ds_diag_error(diag, ins->span, "indexing requires an array or map"); rc = 1; goto done; }
+                } else { ds_diag_error(diag, ins->span, "internal VM invariant failed: index receiver should be an array or map after lowering"); rc = 1; goto done; }
                 ip++;
                 break;
             }
             case OP_PUSH_ARRAY: {
                 DsValue *array = lookup_var_ref(&vm, ins->name);
-                if (!array) { ds_diag_error(diag, ins->span, "unknown array `%s`", ins->name); rc = 1; goto done; }
-                if (array->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "`push` requires an array variable"); rc = 1; goto done; }
+                if (!array) { ds_diag_error(diag, ins->span, "internal VM invariant failed: array push target `%s` should exist after lowering", ins->name); rc = 1; goto done; }
+                if (array->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "internal VM invariant failed: array push target should be an array after lowering"); rc = 1; goto done; }
                 DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
                 *item = ds_value_copy(&vm.regs[ins->a]);
                 ds_array_push(&array->as.array, item);

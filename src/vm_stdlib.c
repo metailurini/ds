@@ -498,7 +498,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         array_push_string(&array, s + part, len - part);
         *out = array; return true;
     }
-    ds_diag_error(vm->diag, ins->span, "unknown string method `%s`", ins->name ? ins->name : "");
+    ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown string method `%s` after lowering", ins->name ? ins->name : "");
     return false;
 }
 
@@ -509,7 +509,7 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     DsStr helper_name = {(char *)name, strlen(name)};
     const DsStdlibHelper *helper = ds_stdlib_lookup(helper_name);
     if (!helper) {
-        ds_diag_error(vm->diag, ins->span, "unknown standard-library helper `%s`", name);
+        ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown standard-library helper `%s` after lowering", name);
         return false;
     }
 
@@ -545,6 +545,6 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     if (helper_is(ins, "glob") || helper_is(ins, "glob!")) return stdlib_glob(vm, ins, out);
     if (helper_is(ins, "lines")) return stdlib_lines(vm, ins, out);
 
-    ds_diag_error(vm->diag, ins->span, "unknown standard-library helper `%s`", name);
+    ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown standard-library helper `%s` after lowering", name);
     return false;
 }

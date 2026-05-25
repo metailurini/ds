@@ -249,7 +249,8 @@ Therefore:
 - parser rejection is for malformed syntax;
 - lowerer rejection is for semantic invalidity and unsupported portable forms;
 - VM/Bash rejection after lowering should be rare and treated as ownership
-  pressure;
+  pressure unless it is a runtime/data failure, artifact failure, or explicitly
+  worded internal accepted-HIR invariant;
 - tests should prove both accepted parity and rejected unsupported forms.
 
 ## Test ownership
@@ -297,6 +298,7 @@ These areas still need careful source review before behavior changes:
   see `docs/maintenance/m3-5-regex-boundary.md` for the current boundary;
 - mutable collections and map iteration need explicit HIR nodes before runtime or
   Bash helpers become canonical semantics;
-- backend files still contain defensive `unsupported` diagnostics; future
-  implementation passes should classify each as either legitimate backend failure
-  or a diagnostic that belongs in lowering.
+- backend files still contain runtime/data-dependent `unsupported` diagnostics
+  for dynamic values such as glob patterns and string helper separators; keep
+  those in VM/Bash helpers, but word unreachable shape/name fallbacks as internal
+  accepted-HIR invariants.

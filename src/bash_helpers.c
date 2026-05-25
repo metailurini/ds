@@ -48,7 +48,7 @@ const char *ds_bash_int_helpers_source(void) {
         "    '/') (( __ds_r != 0 )) || __ds_error 'division or modulo by zero'; (( __ds_l == (-9223372036854775807 - 1) && __ds_r == -1 )) && __ds_int_overflow '/'; __ds_out=$((__ds_l / __ds_r)) ;;\n"
         "    '%') (( __ds_r != 0 )) || __ds_error 'division or modulo by zero'; (( __ds_l == (-9223372036854775807 - 1) && __ds_r == -1 )) && __ds_int_overflow '%'; __ds_out=$((__ds_l % __ds_r)) ;;\n"
         "    '**') (( __ds_r >= 0 )) || __ds_error 'negative exponents are not supported'; local __ds_base=\"$__ds_l\"; __ds_out=1; while (( __ds_r > 0 )); do if (( __ds_r & 1 )); then __ds_out=$(__ds_int_mul_checked '**' \"$__ds_out\" \"$__ds_base\") || exit $?; fi; __ds_r=$((__ds_r / 2)); if (( __ds_r > 0 )); then __ds_base=$(__ds_int_mul_checked '**' \"$__ds_base\" \"$__ds_base\") || exit $?; fi; done ;;\n"
-        "    *) __ds_error \"unknown integer operator '$__ds_op'\" ;;\n"
+        "    *) __ds_error \"internal Bash helper invariant failed: unknown integer operator '$__ds_op' after lowering\" ;;\n"
         "  esac\n"
         "  printf '%s' \"$__ds_out\"\n"
         "}\n"
