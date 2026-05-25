@@ -118,10 +118,11 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | `src/vm_compile.c` | accepted HIR -> VM instructions | no semantic language validation |
 | `src/vm.c` | VM instruction interpreter and scalar/runtime behavior | runtime failures only |
+| `src/vm_command_result.c` | VM command-result/map field materialization from accepted HIR | lowerer owns field legality; unknown command-result fields here are invariants |
 | `src/vm_dump.c` | bytecode/debug dump | presentation only |
 | `src/vm_args.c` | VM argument handling | runtime call boundary only |
 | `src/vm_scope.c` | VM scope stack/storage | runtime state only |
-| `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | internal invariant diagnostics only for impossible post-lowering shapes |
+| `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | delegates command-result/map field materialization to `src/vm_command_result.c` |
 | `src/vm_stdlib.c` | VM stdlib helper implementations | runtime data/OS failures; lowerer owns helper legality where statically known |
 | `src/vm_test.c` | VM test runner | test execution only |
 

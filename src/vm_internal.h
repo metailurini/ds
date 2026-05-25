@@ -165,7 +165,7 @@ DsValue *lookup_var_ref(Vm *vm, const char *name);
 bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span);
 int run_command(Vm *vm, Instr *ins);
 int run_capture(Vm *vm, Instr *ins, DsValue *out_value);
-bool command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
+bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);
 
 int vm_take_pending_signal(void);
 void vm_note_interrupted_signal(Vm *vm, int sig);

@@ -376,7 +376,7 @@ dispatch_loop:
             }
             case OP_GET_FIELD: {
                 DsValue field = ds_value_null();
-                if (!command_result_field(&vm, &vm.regs[ins->a], ins->field, ins->span, &field)) { rc = 1; goto done; }
+                if (!vm_command_result_field(&vm, &vm.regs[ins->a], ins->field, ins->span, &field)) { rc = 1; goto done; }
                 set_reg(&vm, ins->dst, field);
                 ip++;
                 break;

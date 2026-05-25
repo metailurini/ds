@@ -17,7 +17,8 @@ large process/runtime rewrite.
 - Plain command statements lower to `DS_LOWER_STMT_CMD` with a `DsCommand`.
 - Captured commands lower to `DS_LOWER_EXPR_RUN` with a `DsCommand`.
 - Pipelines are represented as a `DsCommand` with multiple stages.
-- Command-result fields use the shared descriptor table in `src/command.c`.
+- Command-result fields use the shared descriptor table in `src/command.c`;
+  VM field materialization is isolated in `src/vm_command_result.c`.
 - `defer` and `trap` lower to `DS_LOWER_STMT_DEFER` and `DS_LOWER_STMT_TRAP`.
 - Handler signal identity is stored as `DsHandlerSignal` in HIR.
 
@@ -62,6 +63,7 @@ large process/runtime rewrite.
 4. VM `run_capture()` executes either a direct command or pipeline in capture
    mode.
 5. VM capture stores stdout, stderr, and normalized status in `DsCommandResult`.
+   Later VM field reads are materialized by `src/vm_command_result.c`.
 6. Captured non-zero exits are data, not fail-fast errors.
 7. Bash direct capture uses `__ds_capture` helper emission.
 8. Bash captured pipelines use emitter-managed temporary files and assign
@@ -145,8 +147,10 @@ semantic if a new rejection is added there without a lowerer gate.
 ## Coupling points
 
 - `src/vm_process.c` currently owns argv rendering, interpolation runtime,
-  direct process execution, capture, pipelines, redirection, process groups, and
-  command-result field materialization.
+  direct process execution, capture, pipelines, redirection, and process groups.
+- `src/vm_command_result.c` owns VM command-result/map field materialization;
+  capture/storage stays in `src/vm_process.c` because it is produced by process
+  execution.
 - `src/bash_stmt.c` emits normal statements, direct captures, captured pipeline
   assignments, signal-aware direct commands, signal-aware pipelines, and handler
   functions.
@@ -175,6 +179,8 @@ and prevents command-result capture from becoming the owner of process execution
 
 - `vm_process_exec.c`: direct spawn, exec-error pipe, wait, redirection, and
   foreground process-group helpers.
+- `vm_command_result.c`: already owns command-result/map field materialization;
+  do not expand it into process capture or pipeline execution ownership.
 - `vm_pipeline.c`: pipeline pipe setup, stage spawning, pipefail status, capture
   temp files, and pipeline signal classification.
 - `vm_argv.c` or `vm_interpolation.c`: command-word materialization and runtime
