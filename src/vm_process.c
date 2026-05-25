@@ -86,22 +86,22 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
     if (spec[0] == '<' || spec[0] == '>' || spec[0] == '^') {
         if (value->kind != DS_VALUE_STRING) { ds_diag_error(vm->diag, span, "width format specifier requires a string value"); return false; }
         size_t idx = 1; int width = 0;
-        if (!parse_positive_number(spec, spec_len, &idx, &width) || idx != spec_len) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+        if (!parse_positive_number(spec, spec_len, &idx, &width) || idx != spec_len) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
         return append_padded(out, value->as.string.data ? value->as.string.data : "", value->as.string.len, width, spec[0]);
     }
     if (value->kind != DS_VALUE_INT) { ds_diag_error(vm->diag, span, "numeric format specifier requires an int value"); return false; }
     size_t idx = 0; bool zero = false; int width = 0, prec = -1;
     if (idx < spec_len && spec[idx] == '0') { zero = true; idx++; }
     if (idx < spec_len && spec[idx] >= '0' && spec[idx] <= '9') {
-        if (!parse_positive_number(spec, spec_len, &idx, &width)) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+        if (!parse_positive_number(spec, spec_len, &idx, &width)) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
     }
     if (idx < spec_len && spec[idx] == '.') {
         idx++;
-        if (!parse_positive_number(spec, spec_len, &idx, &prec)) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+        if (!parse_positive_number(spec, spec_len, &idx, &prec)) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
     }
     if (idx >= spec_len) return false;
     char conv = spec[idx++];
-    if (idx != spec_len || !(conv == 'd' || conv == 'f')) { ds_diag_error(vm->diag, span, "unsupported interpolation format specifier `%.*s`", (int)spec_len, spec); return false; }
+    if (idx != spec_len || !(conv == 'd' || conv == 'f')) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
     char buf[64];
     if (conv == 'd') {
         snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);

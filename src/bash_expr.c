@@ -371,7 +371,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 return true;
             }
             if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name)) {
-                ds_diag_error(e->diag, expr->span, "unsupported standard-library value expression for Bash emission in v0.11.0");
+                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: value call should be a scalar stdlib or user-function call after lowering");
                 return false;
             }
             buf_append(out, "\"$(");
@@ -397,7 +397,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, "; then printf true; else printf false; fi)");
                 return true;
             }
-            ds_diag_error(e->diag, expr->span, "unsupported binary value expression for Bash emission in v0.17.0");
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: binary value expression should be supported or rejected by lowering");
             return false;
         case DS_LOWER_EXPR_UNARY:
             if (str_eq(expr->as.unary.op, "-")) {
@@ -406,7 +406,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            ds_diag_error(e->diag, expr->span, "unsupported unary value expression for Bash emission in v0.21.0");
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: unary value expression should be supported or rejected by lowering");
             return false;
         default:
             ds_diag_error(e->diag, expr->span, "this expression cannot be emitted as a Bash assignment in v0.2.0");
@@ -482,7 +482,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_INTERP:
             return emit_value_expr(e, expr, out);
         default:
-            ds_diag_error(e->diag, expr->span, "unsupported condition operand for Bash emission");
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition operand should be supported or rejected by lowering");
             return false;
     }
 }
@@ -688,7 +688,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         buf_append(out, " ]]");
         return true;
     }
-    ds_diag_error(e->diag, expr->span, "unsupported condition for Bash emission");
+    ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition should be supported or rejected by lowering");
     return false;
 }
 
