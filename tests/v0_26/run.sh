@@ -752,6 +752,8 @@ run_ok map_field_assignment_ast "$DS" ast "$FIX/map_field_assignment_rejected.ds
 assert_contains "$TMP/map_field_assignment_ast.out" 'CollectionAssignStmt =' 'map field assignment preserved as AST shape'
 assert_check_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'map field assignment is deferred in v0.10.0'
 assert_emit_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'map field assignment is deferred in v0.10.0'
+run_fail map_field_assignment_rejected_run "$DS" run "$FIX/map_field_assignment_rejected.ds"
+assert_diag "$TMP/map_field_assignment_rejected_run.err" 'map field assignment is deferred in v0.10.0' 'map_field_assignment_rejected run diagnostic'
 
 write_fixture "$FIX/nested_mutation_rejected.ds" <<'DS'
 let matrix = [[1]]
@@ -759,6 +761,8 @@ matrix[0][0] = 2
 DS
 assert_check_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collection mutation is deferred in v0.10.0'
 assert_emit_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collection mutation is deferred in v0.10.0'
+run_fail nested_mutation_rejected_run "$DS" run "$FIX/nested_mutation_rejected.ds"
+assert_diag "$TMP/nested_mutation_rejected_run.err" 'nested collection mutation is deferred in v0.10.0' 'nested_mutation_rejected run diagnostic'
 
 # 6. Stdout safety and ABI regression.
 write_fixture "$FIX/structured_stdout_rejected.ds" <<'DS'
