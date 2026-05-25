@@ -7,6 +7,7 @@ const char *ds_bash_stdlib_helpers_source(void);
 const char *ds_bash_string_helpers_source(void);
 const char *ds_bash_debug_helpers_source(void);
 const char *ds_bash_int_helpers_source(void);
-const char *ds_bash_function_value_helpers_source(void);
+const char *ds_bash_function_value_capture_helpers_source(void);
+const char *ds_bash_function_value_materialize_helpers_source(void);
 
 #endif

@@ -195,7 +195,8 @@ static void emit_int_helpers(BashEmitter *e) {
 }
 
 static void emit_function_value_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_function_value_helpers_source());
+    buf_append(&e->out, ds_bash_function_value_capture_helpers_source());
+    buf_append(&e->out, ds_bash_function_value_materialize_helpers_source());
 }
 
 static void emit_error_helper(BashEmitter *e) {

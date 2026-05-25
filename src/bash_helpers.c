@@ -55,7 +55,7 @@ const char *ds_bash_int_helpers_source(void) {
         "__ds_int_neg() { __ds_int_bin '-' 0 \"$1\"; }\n\n";
 }
 
-const char *ds_bash_function_value_helpers_source(void) {
+const char *ds_bash_function_value_capture_helpers_source(void) {
     /*
      * Function return kind is validated by lowering and carried in HIR. These
      * helper diagnostics are emitted-script ABI invariants: they catch corrupted
@@ -87,7 +87,11 @@ const char *ds_bash_function_value_helpers_source(void) {
         "  if [[ \"$__ds_return_type\" == map ]]; then declare -p __ds_return_map >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal map function return payload'; }; declare -p __ds_return_value_type >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal map value-type function return payload'; }; fi\n"
         "  if [[ \"$__ds_return_type\" == command_result ]]; then declare -p __ds_return_stdout __ds_return_stderr __ds_return_code __ds_return_ok __ds_return_failed >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result function return payload'; }; __ds_int_check \"$__ds_return_code\" || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result status function return payload'; }; [[ \"$__ds_return_ok\" == true || \"$__ds_return_ok\" == false ]] || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result ok function return payload'; }; [[ \"$__ds_return_failed\" == true || \"$__ds_return_failed\" == false ]] || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result failed function return payload'; }; fi\n"
         "  rm -rf \"$__ds_cv_tmpdir\"\n"
-        "}\n"
+        "}\n";
+}
+
+const char *ds_bash_function_value_materialize_helpers_source(void) {
+    return
         "__ds_call_value_into() {\n"
         "  __ds_call_value_capture \"$2\" \"$3\" \"${@:4}\"\n"
         "  local __ds_cv_target=\"$1\" __ds_cv_meta __ds_cv_key\n"
