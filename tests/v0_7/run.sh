@@ -26,7 +26,7 @@ run_ok process_result_unit "$TMP/test_v0_7_process_result"
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
   "$ROOT/tests/v0_7/unit/lower_command_result.c" \
   "$ROOT/src/lexer.c" "$ROOT/src/parser.c" "$ROOT/src/parse_expr.c" "$ROOT/src/parse_command.c" "$ROOT/src/parse_script.c" "$ROOT/src/parse_function.c" "$ROOT/src/parse_stmt.c" "$ROOT/src/ast.c" "$ROOT/src/lower.c" "$ROOT/src/lower_symbols.c" "$ROOT/src/lower_expr.c" "$ROOT/src/lower_interpolation.c" "$ROOT/src/lower_command.c" "$ROOT/src/lower_stmt.c" "$ROOT/src/lower_stdlib.c" "$ROOT/src/lower_functions.c" "$ROOT/src/lower_tests.c" "$ROOT/src/lower_free.c" \
-  "$ROOT/src/command.c" "$ROOT/src/runtime.c" "$ROOT/src/stdlib.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" "$ROOT/src/runtime/hashmap.c" \
+  "$ROOT/src/command.c" "$ROOT/src/interpolation.c" "$ROOT/src/runtime.c" "$ROOT/src/stdlib.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" "$ROOT/src/runtime/hashmap.c" \
   -o "$TMP/test_v0_7_lower_command_result"
 run_ok lower_command_result_unit "$TMP/test_v0_7_lower_command_result"
 

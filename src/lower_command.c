@@ -1,4 +1,5 @@
 #include "lower_internal.h"
+#include "ds_interpolation.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -9,50 +10,18 @@ static bool command_name_char(char c) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
 }
 
-static bool parse_format_limit(DsStr spec, size_t start, size_t end, size_t *value) {
-    if (start >= end) return false;
-    size_t out = 0;
-    for (size_t i = start; i < end; i++) {
-        if (spec.data[i] < '0' || spec.data[i] > '9') return false;
-        size_t digit = (size_t)(spec.data[i] - '0');
-        if (out > 1024 / 10 || (out == 1024 / 10 && digit > 1024 % 10)) return false;
-        out = out * 10 + digit;
+static DsInterpValueKind interp_kind_from_sym(SymKind kind) {
+    switch (kind) {
+        case SYM_BOOL: return DS_INTERP_VALUE_BOOL;
+        case SYM_INT: return DS_INTERP_VALUE_INT;
+        case SYM_STRING: return DS_INTERP_VALUE_STRING;
+        case SYM_COMMAND_RESULT: return DS_INTERP_VALUE_COMMAND_RESULT;
+        default: return DS_INTERP_VALUE_UNKNOWN;
     }
-    if (out < 1 || out > 1024) return false;
-    *value = out;
-    return true;
 }
 
 static bool is_supported_format_spec(DsStr spec, SymKind kind) {
-    if (spec.len == 0) return false;
-    if ((spec.len == 5 && memcmp(spec.data, "upper", 5) == 0) ||
-        (spec.len == 5 && memcmp(spec.data, "lower", 5) == 0) ||
-        (spec.len == 4 && memcmp(spec.data, "trim", 4) == 0)) return kind == SYM_STRING;
-    size_t i = 0;
-    if (spec.data[0] == '<' || spec.data[0] == '>' || spec.data[0] == '^') {
-        i = 1;
-        if (i >= spec.len) return false;
-        while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
-        size_t width = 0;
-        return i == spec.len && parse_format_limit(spec, 1, i, &width) && kind == SYM_STRING;
-    }
-    bool zero = false;
-    if (i < spec.len && spec.data[i] == '0') { zero = true; i++; }
-    size_t digits_start = i;
-    while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
-    if (i < spec.len && spec.data[i] == 'd') {
-        size_t width = 0;
-        return i + 1 == spec.len && parse_format_limit(spec, digits_start, i, &width) && kind == SYM_INT;
-    }
-    if (zero) return false;
-    if (i < spec.len && spec.data[i] == '.') {
-        i++;
-        size_t prec_start = i;
-        while (i < spec.len && spec.data[i] >= '0' && spec.data[i] <= '9') i++;
-        size_t precision = 0;
-        return i < spec.len && spec.data[i] == 'f' && i + 1 == spec.len && parse_format_limit(spec, prec_start, i, &precision) && kind == SYM_INT;
-    }
-    return false;
+    return ds_interp_parse_format_spec_for_kind(spec, interp_kind_from_sym(kind), NULL);
 }
 
 static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr body, DsSpan span) {
@@ -186,7 +155,7 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 if (j >= decoded.len) break;
                 DsStr spec = {decoded.data + spec_start, j - spec_start};
                 if (!is_supported_format_spec(spec, value_kind)) {
-                    ds_diag_error(lower->diag, span, "unsupported interpolation format specifier `%.*s`; supported: upper, lower, trim, <N, >N, ^N, Nd, 0Nd, .Pf, N.Pf", (int)spec.len, spec.data);
+                    ds_diag_error(lower->diag, span, "unsupported interpolation format specifier `%.*s`; supported: %s", (int)spec.len, spec.data, ds_interp_supported_format_specs());
                     free(decoded.data);
                     return false;
                 }

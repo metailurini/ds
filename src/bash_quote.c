@@ -1,4 +1,5 @@
 #include "bash_internal.h"
+#include "ds_interpolation.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -173,35 +174,52 @@ static bool emit_interpolation_var_quoted(BashEmitter *e, DsStr name, const char
     return true;
 }
 
-static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char *field, size_t field_len, const char *spec, size_t spec_len, EmitBuf *out) {
+static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char *field, size_t field_len, const char *spec, size_t spec_len, DsSpan span, EmitBuf *out) {
     if (spec_len == 0) return emit_interpolation_var(e, name, field, field_len, out);
-    if (spec_len == 5 && memcmp(spec, "upper", 5) == 0) {
+    DsInterpFormatSpec parsed;
+    if (!ds_interp_parse_format_spec((DsStr){(char *)spec, spec_len}, &parsed)) {
+        ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec);
+        return false;
+    }
+    if (parsed.kind == DS_INTERP_FORMAT_UPPER) {
         buf_append(out, "$(__ds_string_upper "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
     }
-    if (spec_len == 5 && memcmp(spec, "lower", 5) == 0) {
+    if (parsed.kind == DS_INTERP_FORMAT_LOWER) {
         buf_append(out, "$(__ds_string_lower "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
     }
-    if (spec_len == 4 && memcmp(spec, "trim", 4) == 0) {
+    if (parsed.kind == DS_INTERP_FORMAT_TRIM) {
         buf_append(out, "$(__ds_string_trim "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
     }
-    if (spec[0] == '<' || spec[0] == '>' || spec[0] == '^') {
-        if (spec[0] == '^') {
+    if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT || parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT || parsed.kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
+        char width_buf[32];
+        snprintf(width_buf, sizeof(width_buf), "%d", parsed.width);
+        if (parsed.kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
             buf_append(out, "$(__ds_format_center ");
-            buf_append_len(out, spec + 1, spec_len - 1);
+            buf_append(out, width_buf);
             buf_append(out, " ");
             emit_interpolation_var_quoted(e, name, field, field_len, out);
             buf_append(out, ")");
             return true;
         }
         buf_append(out, "$(printf '");
-        if (spec[0] == '<') { buf_append(out, "%-"); buf_append_len(out, spec + 1, spec_len - 1); buf_append(out, "s' "); }
-        else { buf_append(out, "%"); buf_append_len(out, spec + 1, spec_len - 1); buf_append(out, "s' "); }
+        if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT) { buf_append(out, "%-"); buf_append(out, width_buf); buf_append(out, "s' "); }
+        else { buf_append(out, "%"); buf_append(out, width_buf); buf_append(out, "s' "); }
         emit_interpolation_var_quoted(e, name, field, field_len, out);
         buf_append(out, ")");
         return true;
     }
     buf_append(out, "$(printf '");
-    buf_append(out, "%"); buf_append_len(out, spec, spec_len); buf_append(out, "' ");
+    buf_append(out, "%");
+    if (parsed.kind == DS_INTERP_FORMAT_INT_DECIMAL) {
+        if (parsed.zero_pad) buf_append(out, "0");
+        buf_appendf(out, "%d", parsed.width);
+        buf_append(out, "d");
+    } else {
+        if (parsed.width > 0) buf_appendf(out, "%d", parsed.width);
+        buf_appendf(out, ".%d", parsed.precision);
+        buf_append(out, "f");
+    }
+    buf_append(out, "' ");
     emit_interpolation_var_quoted(e, name, field, field_len, out);
     buf_append(out, ")");
     return true;
@@ -416,7 +434,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                         free(decoded);
                         return false;
                     }
-                    if (!emit_formatted_interpolation(e, name, field, field_len, spec, spec_len, out)) { free(decoded); return false; }
+                    if (!emit_formatted_interpolation(e, name, field, field_len, spec, spec_len, expr->span, out)) { free(decoded); return false; }
                     i = j;
                     continue;
                 }

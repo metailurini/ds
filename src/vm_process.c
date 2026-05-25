@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "vm_internal.h"
+#include "ds_interpolation.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -42,19 +43,6 @@ static bool ascii_transform_string(const DsString *in, DsString *out, const char
     return true;
 }
 
-static bool parse_positive_number(const char *s, size_t len, size_t *idx, int *out) {
-    int v = 0;
-    size_t start = *idx;
-    while (*idx < len && s[*idx] >= '0' && s[*idx] <= '9') {
-        v = v * 10 + (s[*idx] - '0');
-        if (v > 1024) return false;
-        (*idx)++;
-    }
-    if (*idx == start || v <= 0) return false;
-    *out = v;
-    return true;
-}
-
 static bool append_padded(DsString *out, const char *data, size_t len, int width, char align) {
     if (width <= (int)len) return ds_string_append_range(out, data, len);
     int pad = width - (int)len;
@@ -68,6 +56,16 @@ static bool append_padded(DsString *out, const char *data, size_t len, int width
     return true;
 }
 
+static DsInterpValueKind interp_kind_from_value(const DsValue *value) {
+    switch (value->kind) {
+        case DS_VALUE_BOOL: return DS_INTERP_VALUE_BOOL;
+        case DS_VALUE_INT: return DS_INTERP_VALUE_INT;
+        case DS_VALUE_STRING: return DS_INTERP_VALUE_STRING;
+        case DS_VALUE_COMMAND_RESULT: return DS_INTERP_VALUE_COMMAND_RESULT;
+        default: return DS_INTERP_VALUE_UNKNOWN;
+    }
+}
+
 static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, size_t spec_len, DsString *out, DsSpan span) {
     if (spec_len == 0) {
         DsString rendered; ds_value_to_string(value, &rendered);
@@ -75,40 +73,31 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
         ds_string_free(&rendered);
         return true;
     }
-    if ((spec_len == 5 && memcmp(spec, "upper", 5) == 0) || (spec_len == 5 && memcmp(spec, "lower", 5) == 0) || (spec_len == 4 && memcmp(spec, "trim", 4) == 0)) {
-        if (value->kind != DS_VALUE_STRING) { ds_diag_error(vm->diag, span, "string format specifier requires a string value"); return false; }
+    DsInterpFormatSpec parsed;
+    DsStr spec_text = {(char *)spec, spec_len};
+    if (!ds_interp_parse_format_spec_for_kind(spec_text, interp_kind_from_value(value), &parsed)) {
+        ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec);
+        return false;
+    }
+    if (parsed.kind == DS_INTERP_FORMAT_UPPER || parsed.kind == DS_INTERP_FORMAT_LOWER || parsed.kind == DS_INTERP_FORMAT_TRIM) {
         DsString rendered;
-        ascii_transform_string(&value->as.string, &rendered, spec_len == 5 && spec[0] == 'u' ? "upper" : (spec_len == 5 ? "lower" : "trim"));
+        const char *op = parsed.kind == DS_INTERP_FORMAT_UPPER ? "upper" : parsed.kind == DS_INTERP_FORMAT_LOWER ? "lower" : "trim";
+        ascii_transform_string(&value->as.string, &rendered, op);
         ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
         ds_string_free(&rendered);
         return true;
     }
-    if (spec[0] == '<' || spec[0] == '>' || spec[0] == '^') {
-        if (value->kind != DS_VALUE_STRING) { ds_diag_error(vm->diag, span, "width format specifier requires a string value"); return false; }
-        size_t idx = 1; int width = 0;
-        if (!parse_positive_number(spec, spec_len, &idx, &width) || idx != spec_len) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
-        return append_padded(out, value->as.string.data ? value->as.string.data : "", value->as.string.len, width, spec[0]);
+    if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT || parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT || parsed.kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
+        char align = parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT ? '<' : parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT ? '>' : '^';
+        return append_padded(out, value->as.string.data ? value->as.string.data : "", value->as.string.len, parsed.width, align);
     }
-    if (value->kind != DS_VALUE_INT) { ds_diag_error(vm->diag, span, "numeric format specifier requires an int value"); return false; }
-    size_t idx = 0; bool zero = false; int width = 0, prec = -1;
-    if (idx < spec_len && spec[idx] == '0') { zero = true; idx++; }
-    if (idx < spec_len && spec[idx] >= '0' && spec[idx] <= '9') {
-        if (!parse_positive_number(spec, spec_len, &idx, &width)) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
-    }
-    if (idx < spec_len && spec[idx] == '.') {
-        idx++;
-        if (!parse_positive_number(spec, spec_len, &idx, &prec)) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
-    }
-    if (idx >= spec_len) return false;
-    char conv = spec[idx++];
-    if (idx != spec_len || !(conv == 'd' || conv == 'f')) { ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec); return false; }
     char buf[64];
-    if (conv == 'd') {
+    if (parsed.kind == DS_INTERP_FORMAT_INT_DECIMAL) {
         snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
         size_t len = strlen(buf);
-        if (width <= (int)len) return ds_string_append_cstr(out, buf);
-        int pad = width - (int)len;
-        if (zero) {
+        if (parsed.width <= (int)len) return ds_string_append_cstr(out, buf);
+        int pad = parsed.width - (int)len;
+        if (parsed.zero_pad) {
             if (buf[0] == '-') {
                 ds_string_append_char(out, '-');
                 for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
@@ -120,10 +109,10 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
         for (int i = 0; i < pad; i++) ds_string_append_char(out, ' ');
         return ds_string_append_cstr(out, buf);
     }
-    if (prec < 0) prec = 6;
+    int prec = parsed.precision < 0 ? 6 : parsed.precision;
     char ibuf[64]; snprintf(ibuf, sizeof(ibuf), "%lld", (long long)value->as.integer);
     DsString tmp; ds_string_init(&tmp); ds_string_append_cstr(&tmp, ibuf); ds_string_append_char(&tmp, '.'); for (int i = 0; i < prec; i++) ds_string_append_char(&tmp, '0');
-    if (width > (int)tmp.len) append_padded(out, tmp.data, tmp.len, width, '>'); else ds_string_append_range(out, tmp.data, tmp.len);
+    if (parsed.width > (int)tmp.len) append_padded(out, tmp.data, tmp.len, parsed.width, '>'); else ds_string_append_range(out, tmp.data, tmp.len);
     ds_string_free(&tmp);
     return true;
 }

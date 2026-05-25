@@ -49,6 +49,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract | backend-neutral only |
 | `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
 | `src/ds_stdlib.h` | stdlib helper metadata shared by lowerer/VM/Bash | metadata, not implementation |
+| `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |
 | `src/backend.h` | public formatter/checker/Bash/VM/test backend entrypoints | no backend-private state |
 | `src/parser_internal.h` | parser cursor/helpers/component prototypes | parser-private only |
 | `src/lower_internal.h` | lowerer-private state and helper prototypes | keep narrow; avoid becoming a concept dump |
@@ -66,6 +67,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/runtime.c` | `DsValue`/runtime containers/helpers | VM runtime substrate, not syntax policy |
 | `src/runtime/hashmap.*` | generic hashmap implementation | no language semantics |
 | `src/command.c` | command metadata helpers and command-result field catalog | shared descriptor table; no backend execution |
+| `src/interpolation.c` | interpolation format-spec parser and kind support table | shared contract for format specs only; lowerer still owns acceptance |
 | `src/stdlib.c` | stdlib helper metadata table | canonical helper facts for lowerer/VM/Bash |
 
 ### Frontend implementations
@@ -89,7 +91,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower.c` | lowerer orchestration and program-level symbol setup | coordinates, but should not absorb concept-specific logic |
 | `src/lower_expr.c` | expression lowering and expression value-kind checks | delegates generic string interpolation to `lower_interpolation.c`; keep command-specific interpolation in `lower_command.c` |
 | `src/lower_interpolation.c` | generic string interpolation parsing/lowering for normal string expressions | owns normal-string interpolation segment validation; not command-word policy |
-| `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, format-spec validation for command strings, direct scalar value-call interpolation materialization | stable owner for command-word lowering; do not split unless a new sub-concept gets its own contract |
+| `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, direct scalar value-call interpolation materialization | consumes shared format-spec metadata; stable owner for command-word lowering |
 | `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | delegates command-word details to `lower_command.c` |
 | `src/lower_symbols.c` | lowerer scopes/symbol facts | no syntax parsing or backend rendering |
 | `src/lower_stdlib.c` | stdlib declaration/use validation | consumes `ds_stdlib.h` metadata |
@@ -153,7 +155,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 
 | Hotspot | Current status | Maintenance rule |
 | --- | --- | --- |
-| Command words/interpolation | `src/lower_command.c` is the focused lowerer owner; VM/Bash consume accepted command payloads | keep semantic validation out of `src/vm_process.c` and `src/bash_command.c` |
+| Command words/interpolation | `src/lower_command.c` is the focused lowerer owner; `src/interpolation.c` owns format-spec syntax/kind metadata; VM/Bash consume accepted command payloads | keep semantic validation out of `src/vm_process.c` and `src/bash_command.c` |
 | Function returns/command-result functions | lowerer/HIR return-kind metadata is the contract | do not re-derive return kinds in Bash/VM from helper names |
 | Bash structured value ABI | `src/bash_structured.c` owns Bash sidecar names and structured target declarations; statement/expression emitters consume those helpers | keep the ABI as Bash implementation detail, not language semantics |
 | Mutable collections | accepted literals/indexing/push/array loops are HIR-backed; unsupported assignment syntax is parser-rejected | do not add mutation AST/HIR without a parity contract |
@@ -161,7 +163,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | Trap/defer/signal | HIR handler contract with VM/Bash runtime implementations | keep OS/job-control behavior scoped to documented foreground forms |
 | Pipeline behavior | accepted command pipeline payload plus VM/Bash process implementations | keep process semantics backend-owned, but language restrictions in parser/lowerer |
 | Direct `env.NAME` | AST field/assignment syntax lowered to env helper/set-env behavior | keep env-name validation in lowering where statically known |
-| String interpolation | `src/lower_interpolation.c` owns normal-string interpolation lowering; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |
+| String interpolation | `src/lower_interpolation.c` owns normal-string interpolation lowering; `src/interpolation.c` owns shared format-spec parsing; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |
 
 ## Maintenance checklist
 
