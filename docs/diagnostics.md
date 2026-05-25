@@ -201,6 +201,8 @@ source can be parsed far enough to know them:
   flow placement;
 - helper/function arity, call form, statement-only/expression-only misuse, and
   return-kind errors;
+- unsupported syntax that has no accepted AST/HIR shape, including collection
+  assignment while index assignment and map field assignment are deferred;
 - unsupported syntax that has an AST shape but no accepted semantics;
 - unsupported VM/Bash parity forms, including forms that one backend could
   execute but the other cannot represent;

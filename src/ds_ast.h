@@ -64,7 +64,6 @@ struct DsExpr {
 typedef enum {
     DS_STMT_LET,
     DS_STMT_ASSIGN,
-    DS_STMT_COLLECTION_ASSIGN,
     DS_STMT_IF,
     DS_STMT_BLOCK,
     DS_STMT_CMD,
@@ -191,7 +190,6 @@ struct DsStmt {
     union {
         struct { DsStr name; DsExpr *value; } let_stmt;
         struct { DsStr name; DsAssignOp op; DsExpr *value; } assign_stmt;
-        struct { DsExpr *target; DsAssignOp op; DsExpr *value; } collection_assign_stmt;
         struct { DsExpr *condition; DsStmt *then_branch; DsStmt *else_branch; } if_stmt;
         struct { DsStmtVec statements; } block_stmt;
         DsCommand cmd_stmt;

@@ -297,16 +297,6 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             format_expr(fmt, stmt->as.assign_stmt.value);
             append_cstr(fmt, "\n");
             break;
-        case DS_STMT_COLLECTION_ASSIGN:
-            format_expr(fmt, stmt->as.collection_assign_stmt.target);
-            append_cstr(fmt, stmt->as.collection_assign_stmt.op == DS_ASSIGN_ADD ? " += " :
-                             (stmt->as.collection_assign_stmt.op == DS_ASSIGN_SUB ? " -= " :
-                              (stmt->as.collection_assign_stmt.op == DS_ASSIGN_MUL ? " *= " :
-                               (stmt->as.collection_assign_stmt.op == DS_ASSIGN_DIV ? " /= " :
-                                (stmt->as.collection_assign_stmt.op == DS_ASSIGN_MOD ? " %= " : " = ")))));
-            format_expr(fmt, stmt->as.collection_assign_stmt.value);
-            append_cstr(fmt, "\n");
-            break;
         case DS_STMT_IF:
             append_cstr(fmt, "if ");
             format_expr(fmt, stmt->as.if_stmt.condition);
@@ -447,7 +437,6 @@ static int top_stmt_group(const DsStmt *stmt) {
         case DS_STMT_IMPORT: return 1;
         case DS_STMT_LET:
         case DS_STMT_ASSIGN:
-        case DS_STMT_COLLECTION_ASSIGN:
         case DS_STMT_CMD:
         case DS_STMT_CALL:
         case DS_STMT_PUSH:

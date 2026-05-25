@@ -286,8 +286,6 @@ static bool ast_collect_return_kind(Lower *lower, const DsStmt *stmt, AstKindEnv
             }
             return true;
         }
-        case DS_STMT_COLLECTION_ASSIGN:
-            return true;
         case DS_STMT_BLOCK:
         {
             AstKindEnv block_env = ast_kind_env_clone(env);

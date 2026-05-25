@@ -11,10 +11,12 @@ first.
 Collection behavior is accepted only through lowerer/HIR contracts with explicit
 VM/Bash parity.
 
-- Parser preserves collection literal, indexing, field, and assignment-target
-  syntax shape.
+- Parser preserves collection literal, read-only indexing, and field-read syntax
+  shape.
+- Parser rejects unsupported collection-assignment syntax before AST/HIR when no
+  accepted semantics exist.
 - Lowering owns collection semantic validation, parity gates, and unsupported
-  mutation diagnostics.
+  mutation diagnostics for parseable collection forms.
 - There is no HIR mutation node for deferred index assignment, map field
   assignment, or nested mutation.
 - VM and Bash execute/render accepted list/map literals, read-only indexing, map
@@ -23,9 +25,12 @@ VM/Bash parity.
   language contract.
 
 ## Ownership
-- Syntax owner: parser (`src/parse_expr.c`, `src/parse_stmt.c`, `src/ds_ast.h`).
+- Syntax owner: parser (`src/parse_expr.c`, `src/parse_stmt.c`, `src/ds_ast.h`);
+  parser also owns unsupported collection-assignment syntax rejection while no
+  AST/HIR mutation form exists.
 - Semantic owner: lowerer (`src/lower_expr.c`, `src/lower_stmt.c`,
-  `src/lower_functions.c`, `src/lower_symbols.c`).
+  `src/lower_functions.c`, `src/lower_symbols.c`) for parseable accepted-form
+  constraints and parity gates.
 - Canonical representation: HIR array/map expressions, HIR index expressions,
   accepted array-loop/push statements, value-kind metadata, and no HIR node for
   deferred mutation forms.
@@ -34,9 +39,10 @@ VM/Bash parity.
 - Bash owner: indexed arrays, associative arrays, value-type sidecars, indexing
   helpers, map-key runtime checks, array append, array loops, and emitted-script
   invariants for accepted HIR.
-- Diagnostics owner: parser for malformed syntax; lowerer for semantic/parity
-  rejection; VM/Bash for accepted runtime data failures, artifact failures, and
-  internal invariants only.
+- Diagnostics owner: parser for malformed syntax and unsupported collection
+  assignment syntax; lowerer for semantic/parity rejection of parseable
+  collection forms; VM/Bash for accepted runtime data failures, artifact
+  failures, and internal invariants only.
 - Test owner: VM/Bash parity for accepted collection behavior and diagnostics for
   deferred mutation/access forms.
 
@@ -57,11 +63,12 @@ VM/Bash parity.
 ## Rejected behavior
 - Empty list/map literals where current language rules reject them: lowerer
   diagnostic for semantic cases.
-- Index assignment such as `xs[0] = value`: parser preserves shape; lowerer emits
-  deferred index-assignment diagnostic.
+- Index assignment such as `xs[0] = value`: parser emits deferred
+  index-assignment diagnostic before AST/HIR.
 - Compound index assignment and nested index assignment such as `matrix[0][1] =
-  value`: lowerer diagnostic.
-- Map field assignment such as `app.name = "api"`: lowerer diagnostic.
+  value`: parser diagnostic before AST/HIR.
+- Map field assignment such as `app.name = "api"`: parser diagnostic before
+  AST/HIR.
 - Arbitrary mutation beyond current `array.push(value)`: lowerer diagnostic.
 - Nested arrays/maps as collection elements or values: lowerer diagnostic.
 - Computed collection indexes that are not literals or named variables: lowerer
@@ -117,4 +124,6 @@ VM/Bash parity.
   are specified.
 - Do not add collection-valued parameters or destructuring through maintenance
   cleanup.
-- Keep unsupported mutation diagnostics lowerer-owned.
+- Keep unsupported assignment-form diagnostics parser-owned while no AST/HIR
+  mutation shape exists; move them only when a future accepted mutation design
+  needs semantic lowering.

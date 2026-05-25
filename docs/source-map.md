@@ -485,13 +485,16 @@ Owns:
 - Statement and block grammar dispatch.
 - Language statements such as `let`, assignments, conditionals, loops, cases,
   push/assert/return/defer/trap, imports, and fallback command statements.
+- Unsupported collection-assignment syntax rejection while index assignment, map
+  field assignment, and nested mutation have no AST/HIR mutation contract.
 
 Allowed to know:
 - Expression and command parser entrypoints.
 - AST statement construction.
 
 Does not own:
-- Semantic validation of names/value kinds/control flow.
+- Semantic validation of names/value kinds/control flow, except for unsupported
+  collection-assignment syntax that is intentionally rejected before AST/HIR.
 - Runtime execution semantics.
 - Bash statement rendering.
 
