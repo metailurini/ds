@@ -67,9 +67,9 @@ match the current source tree, not future design wishes. Use it with:
 
 ## Current Hell candidates
 
-None in the current baseline after Phases 1-4.1 and Phase A. The high-pressure
-Watch entries above are the places most likely to become Hell candidates if a
-future feature bypasses the documented owner.
+None in the current maintenance baseline. The high-pressure Watch entries above
+are the places most likely to become Hell candidates if a future feature bypasses
+the documented owner.
 
 ## Maintenance triggers
 

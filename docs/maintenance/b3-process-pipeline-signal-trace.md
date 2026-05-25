@@ -201,7 +201,8 @@ focused parity tests after each cut.
 - Do not expand signal support beyond `EXIT`, `INT`, and `TERM`.
 - Do not add job-control APIs, async pipelines, or background process features.
 - Do not move semantic command or handler validation into VM/Bash.
-- Do not split files until a future implementation phase chooses one boundary.
+- Do not split broad runtime files in one pass; future cuts should choose one
+  boundary at a time.
 - Do not mark process, pipeline, or signal behavior `Clear`; the concept remains
   parity-sensitive and OS-sensitive.
 
