@@ -16,6 +16,10 @@
 #include <termios.h>
 #include <unistd.h>
 
+/* -------------------------------------------------------------------------
+ * Trace output
+ * ------------------------------------------------------------------------- */
+
 static void print_trace_escaped(FILE *out, const char *data) {
     fputc('"', out);
     for (const char *p = data ? data : ""; *p; p++) {
@@ -26,6 +30,10 @@ static void print_trace_escaped(FILE *out, const char *data) {
     }
     fputc('"', out);
 }
+
+/* -------------------------------------------------------------------------
+ * Interpolation rendering
+ * ------------------------------------------------------------------------- */
 
 static bool ascii_transform_string(const DsString *in, DsString *out, const char *spec) {
     ds_string_init(out);
@@ -111,25 +119,292 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
         return ds_string_append_cstr(out, buf);
     }
     int prec = parsed.precision < 0 ? 6 : parsed.precision;
-    char ibuf[64]; snprintf(ibuf, sizeof(ibuf), "%lld", (long long)value->as.integer);
-    DsString tmp; ds_string_init(&tmp); ds_string_append_cstr(&tmp, ibuf); ds_string_append_char(&tmp, '.'); for (int i = 0; i < prec; i++) ds_string_append_char(&tmp, '0');
-    if (parsed.width > (int)tmp.len) append_padded(out, tmp.data, tmp.len, parsed.width, '>'); else ds_string_append_range(out, tmp.data, tmp.len);
+    char ibuf[64];
+    snprintf(ibuf, sizeof(ibuf), "%lld", (long long)value->as.integer);
+
+    DsString tmp;
+    ds_string_init(&tmp);
+    ds_string_append_cstr(&tmp, ibuf);
+    ds_string_append_char(&tmp, '.');
+    for (int i = 0; i < prec; i++) ds_string_append_char(&tmp, '0');
+
+    if (parsed.width > (int)tmp.len) {
+        append_padded(out, tmp.data, tmp.len, parsed.width, '>');
+    } else {
+        ds_string_append_range(out, tmp.data, tmp.len);
+    }
     ds_string_free(&tmp);
     return true;
 }
 
+typedef struct {
+    Vm *vm;
+    const char *data;
+    size_t len;
+    size_t pos;
+    DsSpan span;
+} VmArithmeticParser;
 
-typedef struct { Vm *vm; const char *s; size_t n, i; DsSpan span; } VmInterpParser;
-static void vip_ws(VmInterpParser *p){ while(p->i<p->n&&(p->s[p->i]==' '||p->s[p->i]=='\t')) p->i++; }
-static bool vip_add(int64_t a,int64_t b,int64_t*o){ if((b>0&&a>INT64_MAX-b)||(b<0&&a<INT64_MIN-b)) return false; *o=a+b; return true; }
-static bool vip_sub(int64_t a,int64_t b,int64_t*o){ if((b<0&&a>INT64_MAX+b)||(b>0&&a<INT64_MIN+b)) return false; *o=a-b; return true; }
-static bool vip_mul(int64_t a,int64_t b,int64_t*o){ if(a==0||b==0){*o=0;return true;} if((a==-1&&b==INT64_MIN)||(b==-1&&a==INT64_MIN)) return false; if(a>0){ if(b>0){ if(a>INT64_MAX/b)return false; } else if(b<INT64_MIN/a)return false; } else { if(b>0){ if(a<INT64_MIN/b)return false; } else if(a<INT64_MAX/b)return false; } *o=a*b; return true; }
-static bool vip_expr(VmInterpParser*,int64_t*);
-static bool vip_primary(VmInterpParser*p,int64_t*o){ vip_ws(p); if(p->i>=p->n)return false; char c=p->s[p->i]; if(c=='('){ p->i++; if(!vip_expr(p,o))return false; vip_ws(p); if(p->i>=p->n||p->s[p->i]!=')')return false; p->i++; return true; } if(c=='-'){ p->i++; int64_t v=0; if(!vip_primary(p,&v))return false; if(v==INT64_MIN){ ds_diag_error(p->vm->diag,p->span,"integer overflow in unary `-`"); return false; } *o=-v; return true; } if(c>='0'&&c<='9'){ size_t st=p->i++; while(p->i<p->n&&p->s[p->i]>='0'&&p->s[p->i]<='9')p->i++; char*tmp=ds_str_dup_range(p->s+st,p->i-st); errno=0; char*end=NULL; long long v=strtoll(tmp,&end,10); bool ok=errno==0&&end&&*end=='\0'; free(tmp); if(!ok){ ds_diag_error(p->vm->diag,p->span,"integer literal is outside the supported int range"); return false; } *o=(int64_t)v; return true; } if((c>='A'&&c<='Z')||(c>='a'&&c<='z')||c=='_'){ size_t st=p->i++; while(p->i<p->n&&((p->s[p->i]>='A'&&p->s[p->i]<='Z')||(p->s[p->i]>='a'&&p->s[p->i]<='z')||(p->s[p->i]>='0'&&p->s[p->i]<='9')||p->s[p->i]=='_'))p->i++; char*name=ds_str_dup_range(p->s+st,p->i-st); DsValue v; if(!lookup_var(p->vm,name,&v,p->span)){ free(name); return false; } free(name); if(v.kind!=DS_VALUE_INT){ ds_value_free(&v); ds_diag_error(p->vm->diag,p->span,"arithmetic interpolation operands must be integers in v0.21.0"); return false; } *o=v.as.integer; ds_value_free(&v); return true; } return false; }
-static bool vip_power(VmInterpParser*p,int64_t*o){ int64_t l=0; if(!vip_primary(p,&l))return false; vip_ws(p); if(p->i+1<p->n&&p->s[p->i]=='*'&&p->s[p->i+1]=='*'){ p->i+=2; int64_t e=0; if(!vip_power(p,&e))return false; if(e<0){ ds_diag_error(p->vm->diag,p->span,"negative exponent runtime value is rejected in v0.21.0"); return false; } int64_t r=1,f=l; while(e>0){ if(e&1){ if(!vip_mul(r,f,&r)){ ds_diag_error(p->vm->diag,p->span,"integer overflow in operator `**`"); return false; }} e>>=1; if(e>0&&!vip_mul(f,f,&f)){ ds_diag_error(p->vm->diag,p->span,"integer overflow in operator `**`"); return false; }} *o=r; return true;} *o=l; return true; }
-static bool vip_muldiv(VmInterpParser*p,int64_t*o){ int64_t a=0; if(!vip_power(p,&a))return false; for(;;){ vip_ws(p); if(p->i>=p->n)break; char op=p->s[p->i]; if(!(op=='*'||op=='/'||op=='%'))break; if(op=='*'&&p->i+1<p->n&&p->s[p->i+1]=='*')break; p->i++; int64_t b=0; if(!vip_power(p,&b))return false; if((op=='/'||op=='%')&&b==0){ ds_diag_error(p->vm->diag,p->span,"division or modulo by zero"); return false; } if((op=='/'||op=='%')&&a==INT64_MIN&&b==-1){ ds_diag_error(p->vm->diag,p->span,"integer overflow in operator `%c`",op); return false; } if(op=='*'){ if(!vip_mul(a,b,&a)){ ds_diag_error(p->vm->diag,p->span,"integer overflow in operator `*`"); return false; }} else if(op=='/') a/=b; else a%=b; } *o=a; return true; }
-static bool vip_expr(VmInterpParser*p,int64_t*o){ int64_t a=0; if(!vip_muldiv(p,&a))return false; for(;;){ vip_ws(p); if(p->i>=p->n)break; char op=p->s[p->i]; if(!(op=='+'||op=='-'))break; p->i++; int64_t b=0; if(!vip_muldiv(p,&b))return false; if(op=='+'){ if(!vip_add(a,b,&a)){ ds_diag_error(p->vm->diag,p->span,"integer overflow in operator `+`"); return false; }} else if(!vip_sub(a,b,&a)){ ds_diag_error(p->vm->diag,p->span,"integer overflow in operator `-`"); return false; }} *o=a; return true; }
-static bool append_arithmetic_interpolation(Vm*vm,const char*data,size_t len,DsString*out,DsSpan span){ VmInterpParser p={.vm=vm,.s=data,.n=len,.span=span}; int64_t r=0; if(!vip_expr(&p,&r))return false; vip_ws(&p); if(p.i!=p.n)return false; char buf[64]; snprintf(buf,sizeof(buf),"%lld",(long long)r); return ds_string_append_cstr(out,buf); }
+static bool arithmetic_parse_expr(VmArithmeticParser *parser, int64_t *out);
+
+static bool ascii_is_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static bool ascii_is_ident_continue(char c) {
+    return ascii_is_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static void arithmetic_skip_ws(VmArithmeticParser *parser) {
+    while (parser->pos < parser->len &&
+           (parser->data[parser->pos] == ' ' || parser->data[parser->pos] == '\t')) {
+        parser->pos++;
+    }
+}
+
+static bool checked_add_i64(int64_t lhs, int64_t rhs, int64_t *out) {
+    if ((rhs > 0 && lhs > INT64_MAX - rhs) ||
+        (rhs < 0 && lhs < INT64_MIN - rhs)) {
+        return false;
+    }
+    *out = lhs + rhs;
+    return true;
+}
+
+static bool checked_sub_i64(int64_t lhs, int64_t rhs, int64_t *out) {
+    if ((rhs < 0 && lhs > INT64_MAX + rhs) ||
+        (rhs > 0 && lhs < INT64_MIN + rhs)) {
+        return false;
+    }
+    *out = lhs - rhs;
+    return true;
+}
+
+static bool checked_mul_i64(int64_t lhs, int64_t rhs, int64_t *out) {
+    if (lhs == 0 || rhs == 0) {
+        *out = 0;
+        return true;
+    }
+    if ((lhs == -1 && rhs == INT64_MIN) || (rhs == -1 && lhs == INT64_MIN)) {
+        return false;
+    }
+    if (lhs > 0) {
+        if (rhs > 0) {
+            if (lhs > INT64_MAX / rhs) return false;
+        } else if (rhs < INT64_MIN / lhs) {
+            return false;
+        }
+    } else {
+        if (rhs > 0) {
+            if (lhs < INT64_MIN / rhs) return false;
+        } else if (lhs < INT64_MAX / rhs) {
+            return false;
+        }
+    }
+    *out = lhs * rhs;
+    return true;
+}
+
+static bool arithmetic_parse_integer_literal(VmArithmeticParser *parser, int64_t *out) {
+    size_t start = parser->pos++;
+    while (parser->pos < parser->len && parser->data[parser->pos] >= '0' && parser->data[parser->pos] <= '9') {
+        parser->pos++;
+    }
+
+    char *text = ds_str_dup_range(parser->data + start, parser->pos - start);
+    errno = 0;
+    char *end = NULL;
+    long long value = strtoll(text, &end, 10);
+    bool ok = errno == 0 && end && *end == '\0';
+    free(text);
+    if (!ok) {
+        ds_diag_error(parser->vm->diag, parser->span, "integer literal is outside the supported int range");
+        return false;
+    }
+    *out = (int64_t)value;
+    return true;
+}
+
+static bool arithmetic_parse_variable(VmArithmeticParser *parser, int64_t *out) {
+    size_t start = parser->pos++;
+    while (parser->pos < parser->len && ascii_is_ident_continue(parser->data[parser->pos])) {
+        parser->pos++;
+    }
+
+    char *name = ds_str_dup_range(parser->data + start, parser->pos - start);
+    DsValue value;
+    if (!lookup_var(parser->vm, name, &value, parser->span)) {
+        free(name);
+        return false;
+    }
+    free(name);
+
+    if (value.kind != DS_VALUE_INT) {
+        ds_value_free(&value);
+        ds_diag_error(parser->vm->diag, parser->span, "arithmetic interpolation operands must be integers in v0.21.0");
+        return false;
+    }
+    *out = value.as.integer;
+    ds_value_free(&value);
+    return true;
+}
+
+static bool arithmetic_parse_primary(VmArithmeticParser *parser, int64_t *out) {
+    arithmetic_skip_ws(parser);
+    if (parser->pos >= parser->len) return false;
+
+    char c = parser->data[parser->pos];
+    if (c == '(') {
+        parser->pos++;
+        if (!arithmetic_parse_expr(parser, out)) return false;
+        arithmetic_skip_ws(parser);
+        if (parser->pos >= parser->len || parser->data[parser->pos] != ')') return false;
+        parser->pos++;
+        return true;
+    }
+
+    if (c == '-') {
+        parser->pos++;
+        int64_t value = 0;
+        if (!arithmetic_parse_primary(parser, &value)) return false;
+        if (value == INT64_MIN) {
+            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in unary `-`");
+            return false;
+        }
+        *out = -value;
+        return true;
+    }
+
+    if (c >= '0' && c <= '9') return arithmetic_parse_integer_literal(parser, out);
+    if (ascii_is_ident_start(c)) return arithmetic_parse_variable(parser, out);
+    return false;
+}
+
+static bool arithmetic_parse_power(VmArithmeticParser *parser, int64_t *out) {
+    int64_t base = 0;
+    if (!arithmetic_parse_primary(parser, &base)) return false;
+
+    arithmetic_skip_ws(parser);
+    bool has_exponent = parser->pos + 1 < parser->len &&
+                        parser->data[parser->pos] == '*' &&
+                        parser->data[parser->pos + 1] == '*';
+    if (!has_exponent) {
+        *out = base;
+        return true;
+    }
+
+    parser->pos += 2;
+    int64_t exponent = 0;
+    if (!arithmetic_parse_power(parser, &exponent)) return false;
+    if (exponent < 0) {
+        ds_diag_error(parser->vm->diag, parser->span, "negative exponent runtime value is rejected in v0.21.0");
+        return false;
+    }
+
+    int64_t result = 1;
+    int64_t factor = base;
+    while (exponent > 0) {
+        if ((exponent & 1) && !checked_mul_i64(result, factor, &result)) {
+            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `**`");
+            return false;
+        }
+        exponent >>= 1;
+        if (exponent > 0 && !checked_mul_i64(factor, factor, &factor)) {
+            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `**`");
+            return false;
+        }
+    }
+    *out = result;
+    return true;
+}
+
+static bool arithmetic_parse_mul_div(VmArithmeticParser *parser, int64_t *out) {
+    int64_t value = 0;
+    if (!arithmetic_parse_power(parser, &value)) return false;
+
+    for (;;) {
+        arithmetic_skip_ws(parser);
+        if (parser->pos >= parser->len) break;
+
+        char op = parser->data[parser->pos];
+        if (!(op == '*' || op == '/' || op == '%')) break;
+        if (op == '*' && parser->pos + 1 < parser->len && parser->data[parser->pos + 1] == '*') break;
+        parser->pos++;
+
+        int64_t rhs = 0;
+        if (!arithmetic_parse_power(parser, &rhs)) return false;
+        if ((op == '/' || op == '%') && rhs == 0) {
+            ds_diag_error(parser->vm->diag, parser->span, "division or modulo by zero");
+            return false;
+        }
+        if ((op == '/' || op == '%') && value == INT64_MIN && rhs == -1) {
+            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `%c`", op);
+            return false;
+        }
+        if (op == '*') {
+            if (!checked_mul_i64(value, rhs, &value)) {
+                ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `*`");
+                return false;
+            }
+        } else if (op == '/') {
+            value /= rhs;
+        } else {
+            value %= rhs;
+        }
+    }
+    *out = value;
+    return true;
+}
+
+static bool arithmetic_parse_expr(VmArithmeticParser *parser, int64_t *out) {
+    int64_t value = 0;
+    if (!arithmetic_parse_mul_div(parser, &value)) return false;
+
+    for (;;) {
+        arithmetic_skip_ws(parser);
+        if (parser->pos >= parser->len) break;
+
+        char op = parser->data[parser->pos];
+        if (!(op == '+' || op == '-')) break;
+        parser->pos++;
+
+        int64_t rhs = 0;
+        if (!arithmetic_parse_mul_div(parser, &rhs)) return false;
+        if (op == '+') {
+            if (!checked_add_i64(value, rhs, &value)) {
+                ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `+`");
+                return false;
+            }
+        } else if (!checked_sub_i64(value, rhs, &value)) {
+            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `-`");
+            return false;
+        }
+    }
+    *out = value;
+    return true;
+}
+
+static bool append_arithmetic_interpolation(Vm *vm, const char *data, size_t len, DsString *out, DsSpan span) {
+    VmArithmeticParser parser = {
+        .vm = vm,
+        .data = data,
+        .len = len,
+        .pos = 0,
+        .span = span,
+    };
+    int64_t result = 0;
+    if (!arithmetic_parse_expr(&parser, &result)) return false;
+    arithmetic_skip_ws(&parser);
+    if (parser.pos != parser.len) return false;
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%lld", (long long)result);
+    return ds_string_append_cstr(out, buf);
+}
+
+/* -------------------------------------------------------------------------
+ * Command-word and redirect materialization
+ * ------------------------------------------------------------------------- */
 
 bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span) {
     /*
@@ -143,16 +418,16 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
         if (c == '{') {
             size_t start = i + 1;
             size_t j = start;
-            if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+            if (j < input->len && ascii_is_ident_start(input->data[j])) {
                 j++;
-                while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
                 if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':')) {
                     char *name = ds_str_dup_range(input->data + start, j - start);
                     if (strcmp(name, "env") == 0 && input->data[j] == '.') {
                         size_t field_start = ++j;
-                        if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+                        if (j < input->len && ascii_is_ident_start(input->data[j])) {
                             j++;
-                            while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                            while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
                         }
                         char *field = ds_str_dup_range(input->data + field_start, j - field_start);
                         if (j >= input->len || input->data[j] != '}') {
@@ -168,9 +443,9 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                     if (!lookup_var(vm, name, &value, span)) { free(name); ds_string_free(out); return false; }
                     if (input->data[j] == '.') {
                         size_t field_start = ++j;
-                        if (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || input->data[j] == '_')) {
+                        if (j < input->len && ascii_is_ident_start(input->data[j])) {
                             j++;
-                            while (j < input->len && ((input->data[j] >= 'A' && input->data[j] <= 'Z') || (input->data[j] >= 'a' && input->data[j] <= 'z') || (input->data[j] >= '0' && input->data[j] <= '9') || input->data[j] == '_')) j++;
+                            while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
                         }
                         char *field = ds_str_dup_range(input->data + field_start, j - field_start);
                         DsValue field_value = ds_value_null();
@@ -332,6 +607,10 @@ static bool argv_build_range(Vm *vm, Instr *ins, size_t first_word, size_t word_
 static bool argv_build(Vm *vm, Instr *ins, VmArgv *argv) {
     return argv_build_range(vm, ins, 0, ins->word_count, argv);
 }
+
+/* -------------------------------------------------------------------------
+ * Process specs, result storage, redirects, and built-in control commands
+ * ------------------------------------------------------------------------- */
 
 static int process_status_code(int status) {
     if (WIFEXITED(status)) return WEXITSTATUS(status);
@@ -537,6 +816,10 @@ static void trace_command_spec(Vm *vm, const VmProcessSpec *spec) {
     fputc('\n', stderr);
 }
 
+/* -------------------------------------------------------------------------
+ * Foreground process groups and signal forwarding
+ * ------------------------------------------------------------------------- */
+
 static bool fd_set_cloexec(int fd) {
     int flags = fcntl(fd, F_GETFD);
     if (flags < 0) return false;
@@ -635,6 +918,10 @@ static bool process_exec_error_pipe(Vm *vm, const VmProcessSpec *spec, int pipe_
     }
     return true;
 }
+
+/* -------------------------------------------------------------------------
+ * Direct process execution
+ * ------------------------------------------------------------------------- */
 
 static void process_child_exec(const VmProcessSpec *spec, int redirect_fd, FILE *out_fp, FILE *err_fp) {
     if (spec->capture) {
@@ -740,6 +1027,10 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     }
     return true;
 }
+
+/* -------------------------------------------------------------------------
+ * Pipeline execution
+ * ------------------------------------------------------------------------- */
 
 static void close_pipe_array(int (*pipes)[2], size_t count) {
     for (size_t i = 0; i < count; i++) {

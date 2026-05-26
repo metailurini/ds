@@ -125,33 +125,35 @@ Keep this naming rule enforced:
 - Do not introduce new non-matching shared header/source pairs unless the source
   map explicitly marks the header as a façade.
 
-## H3 — `vm_process.c` is long, and some functions are unclear rather than merely large
+## H3 — `vm_process.c` is long, and must stay readable by concern
 
-**Status:** High priority
+**Status:** Addressed for the current maintenance loop; keep on watch
 **Kind:** readability / runtime boundary debt
 **File:** `src/vm_process.c`
 
-**Problem:**
+**Resolved in this pass:**
+
+- Replaced compressed `vip_*` arithmetic interpolation helpers with named,
+  multi-line parser functions such as `arithmetic_parse_expr()`,
+  `arithmetic_parse_power()`, and `checked_mul_i64()`.
+- Added section comments inside `src/vm_process.c` for trace output,
+  interpolation rendering, command-word/redirect materialization, process specs
+  and control commands, foreground process groups/signals, direct process
+  execution, and pipeline execution.
+- Reused small identifier helpers in interpolation scanning instead of repeating
+  long ASCII identifier predicates inline.
+
+**Remaining pressure:**
 
 The file owns too many runtime concerns at once: command-word materialization,
 interpolation rendering, arithmetic interpolation parsing, redirection, direct
 process execution, capture, pipelines, and signal interruption classification.
-The biggest readability issue is not just file length; it is dense helper bodies
-and mixed concerns inside the same scan path.
+That is acceptable for now because the functions are clearer, but future changes
+should still avoid making any one section absorb unrelated behavior.
 
-The arithmetic interpolation helpers are especially hard to review because the
-parser/evaluator functions are compressed and visually dense.
+**Next fix only if the section itself grows unclear:**
 
-**Preferred fix:**
-
-First make functions readable without moving behavior:
-
-- Reformat dense `vip_*` helpers into normal multi-line C.
-- Add section comments for interpolation, argv rendering, redirection, direct
-  process execution, capture, and pipeline execution.
-- Rename helpers whose names only make sense to the original author.
-
-Only after that, consider one cohesive extraction such as:
+Consider one cohesive extraction such as:
 
 - `vm_argv.c` for command-word/redirect target materialization; or
 - `vm_process_exec.c` for child spawn/wait/redirection; or
