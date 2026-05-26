@@ -75,11 +75,20 @@ bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
 bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
 bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 
+bool bash_is_user_function_call_expr(const DsLowerExpr *expr);
+void bash_temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id);
+bool bash_emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, int indent);
+bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent);
+bool bash_emit_user_call_statement(BashEmitter *e, DsStr name, const DsLowerExprVec *args, int indent);
+bool bash_emit_user_call_capture_return(BashEmitter *e, const DsLowerExpr *call, DsLowerValueKind return_kind, int indent);
+bool bash_emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent);
+
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out);
 bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span);
 bool emit_trace_redirect_args(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out);
 bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span);
 bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span);
+bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsCommand *command, DsSpan span, int indent);
 bool emit_command_pipeline_stages(BashEmitter *e, const DsCommand *command, EmitBuf *out);
 bool emit_command_pipeline(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span);
 

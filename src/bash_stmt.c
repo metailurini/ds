@@ -12,101 +12,6 @@ bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
     return true;
 }
 
-typedef struct {
-    bool active;
-    char raw_name[64];
-    DsLowerValueKind kind;
-} MaterializedArg;
-
-static bool is_user_function_call_expr(const DsLowerExpr *expr) {
-    return expr && expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
-}
-
-static void temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id) {
-    snprintf(buf, cap, "__%s_%zu", prefix, id);
-}
-
-static bool is_int_binary_op(DsStr op) {
-    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
-           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
-}
-
-static const char *stmt_expr_type_name(const DsLowerExpr *expr) {
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING:
-        case DS_LOWER_EXPR_INTERP: return "string";
-        case DS_LOWER_EXPR_INT: return "int";
-        case DS_LOWER_EXPR_BOOL: return "bool";
-        case DS_LOWER_EXPR_ARRAY: return "array";
-        case DS_LOWER_EXPR_MAP: return "map";
-        case DS_LOWER_EXPR_RUN: return "command_result";
-        case DS_LOWER_EXPR_BINARY: return is_int_binary_op(expr->as.binary.op) ? "int" : "bool";
-        case DS_LOWER_EXPR_UNARY:
-            if (str_eq(expr->as.unary.op, "!")) return "bool";
-            if (str_eq(expr->as.unary.op, "-")) return "int";
-            return "unknown";
-        case DS_LOWER_EXPR_CALL: return bash_lower_value_type_name(expr->as.call.return_kind);
-        case DS_LOWER_EXPR_INDEX: return bash_lower_value_type_name(expr->as.index.element_kind);
-        default: return "unknown";
-    }
-}
-
-static bool emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, int indent) {
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "__ds_call_value_into ");
-    emit_var_name(&e->out, raw_name);
-    buf_append(&e->out, " ");
-    bash_single_quote(&e->out, bash_lower_value_type_name(expr->as.call.return_kind), strlen(bash_lower_value_type_name(expr->as.call.return_kind)));
-    buf_append(&e->out, " ");
-    emit_fn_name(&e->out, expr->as.call.name);
-    if (!emit_user_call_args(e, &expr->as.call.args, &e->out)) return false;
-    buf_append(&e->out, "\n");
-    return true;
-}
-
-static bool emit_materialized_user_call_args(BashEmitter *e, const DsLowerExprVec *args, MaterializedArg *mats, int indent) {
-    for (size_t i = 0; i < args->len; i++) {
-        mats[i].active = false;
-        if (!is_user_function_call_expr(args->items[i])) continue;
-        mats[i].active = true;
-        mats[i].kind = args->items[i]->as.call.return_kind;
-        temp_ds_name(mats[i].raw_name, sizeof(mats[i].raw_name), "arg", e->temp_counter++);
-        DsStr raw = {mats[i].raw_name, strlen(mats[i].raw_name)};
-        emit_indent(&e->out, indent);
-        if (e->function_depth > 0) buf_append(&e->out, "local ");
-        emit_var_name(&e->out, raw);
-        buf_append(&e->out, "=\"\"\n");
-        if (!emit_user_call_into_raw_var(e, args->items[i], raw, indent)) return false;
-    }
-    return true;
-}
-
-static bool emit_user_call_args_with_materialized(BashEmitter *e, const DsLowerExprVec *args, const MaterializedArg *mats, EmitBuf *out) {
-    for (size_t i = 0; i < args->len; i++) {
-        buf_append(out, " ");
-        if (mats && mats[i].active) {
-            DsStr raw = {(char *)mats[i].raw_name, strlen(mats[i].raw_name)};
-            buf_append(out, "\"$");
-            emit_var_name(out, raw);
-            buf_append(out, "\" ");
-            bash_single_quote(out, bash_lower_value_type_name(mats[i].kind), strlen(bash_lower_value_type_name(mats[i].kind)));
-            continue;
-        }
-        if (!emit_call_arg_expr(e, args->items[i], out)) return false;
-        buf_append(out, " ");
-        if (args->items[i]->kind == DS_LOWER_EXPR_IDENT) {
-            buf_append(out, "\"${");
-            buf_append(out, "__ds_type_");
-            buf_append_len(out, args->items[i]->as.text.data, args->items[i]->as.text.len);
-            buf_append(out, ":-unknown}\"");
-        } else {
-            const char *type = stmt_expr_type_name(args->items[i]);
-            bash_single_quote(out, type, strlen(type));
-        }
-    }
-    return true;
-}
-
 static const char *expr_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING: return "string";
@@ -212,35 +117,6 @@ static bool emit_control_command(BashEmitter *e, const DsCommand *command, DsSpa
     return true;
 }
 
-static void emit_array_element_type_entries(BashEmitter *e, const DsLowerExprVec *elements, int indent, const char *target_name) {
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "declare -ga ");
-    buf_append(&e->out, target_name);
-    buf_append(&e->out, "=(");
-    for (size_t i = 0; i < elements->len; i++) {
-        if (i) buf_append(&e->out, " ");
-        const char *type = stmt_expr_type_name(elements->items[i]);
-        bash_single_quote(&e->out, type, strlen(type));
-    }
-    buf_append(&e->out, ")\n");
-}
-
-static void emit_map_value_type_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, int indent, const char *target_name) {
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "declare -gA ");
-    buf_append(&e->out, target_name);
-    buf_append(&e->out, "=(");
-    for (size_t i = 0; i < entries->len; i++) {
-        if (i) buf_append(&e->out, " ");
-        buf_append(&e->out, "[");
-        bash_single_quote(&e->out, entries->items[i].key.data, entries->items[i].key.len);
-        buf_append(&e->out, "]=");
-        const char *type = stmt_expr_type_name(entries->items[i].value);
-        bash_single_quote(&e->out, type, strlen(type));
-    }
-    buf_append(&e->out, ")\n");
-}
-
 static void emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl) {
     if (!e->needs_case_types) return;
     emit_indent(&e->out, indent);
@@ -289,7 +165,7 @@ static void emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLo
             buf_append(&e->out, "[");
             bash_single_quote(&e->out, value->as.map.entries.items[i].key.data, value->as.map.entries.items[i].key.len);
             buf_append(&e->out, "]=");
-            const char *type = stmt_expr_type_name(value->as.map.entries.items[i].value);
+            const char *type = expr_type_name(value->as.map.entries.items[i].value);
             bash_single_quote(&e->out, type, strlen(type));
         }
         buf_append(&e->out, ")\n");
@@ -340,190 +216,20 @@ static void emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr
     bash_single_quote(out, type, strlen(type));
 }
 
-static bool emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent) {
-    MaterializedArg *mats = NULL;
-    if (call->as.call.args.len > 0) {
-        mats = calloc(call->as.call.args.len, sizeof(*mats));
-        if (!mats) return false;
-        if (!emit_materialized_user_call_args(e, &call->as.call.args, mats, indent)) { free(mats); return false; }
-    }
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "__ds_call_value_into ");
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, " ");
-    bash_single_quote(&e->out, bash_lower_value_type_name(call->as.call.return_kind), strlen(bash_lower_value_type_name(call->as.call.return_kind)));
-    buf_append(&e->out, " ");
-    emit_fn_name(&e->out, call->as.call.name);
-    bool ok = emit_user_call_args_with_materialized(e, &call->as.call.args, mats, &e->out);
-    free(mats);
-    if (!ok) return false;
-    buf_append(&e->out, "\n");
-    return true;
-}
-
-bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
-    if (!is_safe_identifier(fn->name)) {
-        ds_diag_error(e->diag, fn->span, "internal Bash invariant failed: unsafe lowered function name `%.*s` reached Bash emission", (int)fn->name.len, fn->name.data);
-        return false;
-    }
-    emit_fn_name(&e->out, fn->name);
-    buf_append(&e->out, "() {\n");
-    size_t symbol_mark = e->symbols.len;
-    for (size_t i = 0; i < fn->params.len; i++) {
-        const DsLowerFnParam *param = &fn->params.items[i];
-        DsStr copy = {ds_str_dup_range(param->name.data, param->name.len), param->name.len};
-        symbol_vec_push(&e->symbols, copy);
-        emit_indent(&e->out, 1);
-        buf_append(&e->out, "local ");
-        emit_var_name(&e->out, param->name);
-        buf_append(&e->out, "\n");
-        if (e->needs_case_types) {
-            emit_indent(&e->out, 1);
-            buf_append(&e->out, "local ");
-            bash_emit_type_var_name(&e->out, param->name);
-            buf_append(&e->out, "\n");
-        }
-        emit_indent(&e->out, 1);
-        buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i * 2);
-        emit_var_name(&e->out, param->name);
-        buf_appendf(&e->out, "=\"${%zu}\"", i * 2 + 1);
-        if (e->needs_case_types) {
-            buf_append(&e->out, "; ");
-            bash_emit_type_var_name(&e->out, param->name);
-            buf_append(&e->out, "=");
-            buf_appendf(&e->out, "\"${%zu:-", i * 2 + 2);
-            const char *type = param->has_default ? bash_lower_value_type_name(param->default_kind) : "unknown";
-            buf_append(&e->out, type);
-            buf_append(&e->out, "}\"");
-        }
-        buf_append(&e->out, "; else ");
-        emit_var_name(&e->out, param->name);
-        buf_append(&e->out, "=");
-        if (param->has_default) {
-            if (!emit_function_default(e, param->default_value, &e->out)) { symbols_truncate(&e->symbols, symbol_mark); return false; }
-        } else {
-            buf_append(&e->out, "\"\"");
-        }
-        if (e->needs_case_types) {
-            buf_append(&e->out, "; ");
-            bash_emit_type_var_name(&e->out, param->name);
-            buf_append(&e->out, "=");
-            const char *type = param->has_default ? bash_lower_value_type_name(param->default_kind) : "unknown";
-            bash_single_quote(&e->out, type, strlen(type));
-        }
-        buf_append(&e->out, "; fi\n");
-    }
-    int saved_depth = e->function_depth;
-    e->function_depth++;
-    bool ok = emit_block_body(e, fn->body, 1);
-    e->function_depth = saved_depth;
-    symbols_truncate(&e->symbols, symbol_mark);
-    buf_append(&e->out, "}\n\n");
-    return ok;
-}
-
-static void emit_result_field_name(EmitBuf *out, DsStr name, const char *field) {
-    emit_var_name(out, name);
-    buf_append(out, "_");
-    buf_append(out, field);
-}
-
-static bool emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsCommand *command, DsSpan span, int indent) {
-    size_t id = e->temp_counter++;
-
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_tmpdir_%zu=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n", id);
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_stdout_%zu=\"$__ds_tmpdir_%zu/stdout\"\n", id, id);
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_stderr_%zu=\"$__ds_tmpdir_%zu/stderr\"\n", id, id);
-
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "set +e\n");
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "__ds_trace_cmd ");
-    emit_source_loc(&e->out, e->source, span);
-    for (size_t s = 0; s < command->stages.len; s++) {
-        if (s > 0) buf_append(&e->out, " \"|\"");
-        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
-            buf_append(&e->out, " ");
-            if (!emit_command_word(e, command->stages.items[s].words.items[i], &e->out)) return false;
-        }
-    }
-    buf_append(&e->out, "\n");
-
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "{ if [[ -t 0 ]]; then exec </dev/null; fi; ");
-    if (!emit_command_pipeline_stages(e, command, &e->out)) return false;
-    buf_appendf(&e->out, " ; } >\"$__ds_stdout_%zu\" 2>\"$__ds_stderr_%zu\"\n", id, id);
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_code_%zu=$?\n", id);
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "set -e\n");
-
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_data_%zu=$(cat \"$__ds_stdout_%zu\"; printf x)\n", id, id);
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "printf -v ");
-    emit_result_field_name(&e->out, name, "stdout");
-    buf_append(&e->out, " '%s' ");
-    buf_appendf(&e->out, "\"${__ds_data_%zu%%x}\"\n", id);
-
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_data_%zu=$(cat \"$__ds_stderr_%zu\"; printf x)\n", id, id);
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "printf -v ");
-    emit_result_field_name(&e->out, name, "stderr");
-    buf_append(&e->out, " '%s' ");
-    buf_appendf(&e->out, "\"${__ds_data_%zu%%x}\"\n", id);
-
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "printf -v ");
-    emit_result_field_name(&e->out, name, "code");
-    buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "printf -v ");
-    emit_result_field_name(&e->out, name, "status");
-    buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
-
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "if [[ $__ds_code_%zu -eq 0 ]]; then\n", id);
-    emit_indent(&e->out, indent + 1);
-    emit_result_field_name(&e->out, name, "ok");
-    buf_append(&e->out, "=true\n");
-    emit_indent(&e->out, indent + 1);
-    emit_result_field_name(&e->out, name, "failed");
-    buf_append(&e->out, "=false\n");
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "else\n");
-    emit_indent(&e->out, indent + 1);
-    emit_result_field_name(&e->out, name, "ok");
-    buf_append(&e->out, "=false\n");
-    emit_indent(&e->out, indent + 1);
-    emit_result_field_name(&e->out, name, "failed");
-    buf_append(&e->out, "=true\n");
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "fi\n");
-
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "rm -rf \"$__ds_tmpdir_%zu\"\n", id);
-    return true;
-}
-
 static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent) {
     if (value->kind == DS_LOWER_EXPR_INTERP) {
         bool has_user_call = false;
         for (size_t i = 0; i < value->as.interp.parts.len; i++) {
-            if (is_user_function_call_expr(value->as.interp.parts.items[i])) { has_user_call = true; break; }
+            if (bash_is_user_function_call_expr(value->as.interp.parts.items[i])) { has_user_call = true; break; }
         }
         if (has_user_call) {
             char **temps = calloc(value->as.interp.parts.len ? value->as.interp.parts.len : 1, sizeof(char *));
             if (!temps) return false;
             for (size_t i = 0; i < value->as.interp.parts.len; i++) {
                 const DsLowerExpr *part = value->as.interp.parts.items[i];
-                if (!is_user_function_call_expr(part)) continue;
+                if (!bash_is_user_function_call_expr(part)) continue;
                 char tmp[64];
-                temp_ds_name(tmp, sizeof(tmp), "interp", e->temp_counter++);
+                bash_temp_ds_name(tmp, sizeof(tmp), "interp", e->temp_counter++);
                 temps[i] = ds_str_dup_range(tmp, strlen(tmp));
                 if (!temps[i]) { free(temps); return false; }
                 DsStr raw = {temps[i], strlen(temps[i])};
@@ -531,7 +237,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
                 if (e->function_depth > 0) buf_append(&e->out, "local ");
                 emit_var_name(&e->out, raw);
                 buf_append(&e->out, "=\"\"\n");
-                if (!emit_user_call_into_raw_var(e, part, raw, indent)) {
+                if (!bash_emit_user_call_into_raw_var(e, part, raw, indent)) {
                     for (size_t j = 0; j < value->as.interp.parts.len; j++) free(temps[j]);
                     free(temps);
                     return false;
@@ -564,7 +270,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
     }
     if (value->kind == DS_LOWER_EXPR_RUN) {
         if (ds_command_is_pipeline(&value->as.run)) {
-            if (!emit_capture_pipeline_assignment(e, name, &value->as.run, value->span, indent)) return false;
+            if (!bash_emit_capture_pipeline_assignment(e, name, &value->as.run, value->span, indent)) return false;
             emit_type_assignment_for_expr(e, name, value, indent, false);
             buf_append(&e->out, "\n");
             return true;
@@ -594,26 +300,10 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         return true;
     }
     if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.is_user_function) {
-        MaterializedArg *mats = NULL;
-        if (value->as.call.args.len > 0) {
-            mats = calloc(value->as.call.args.len, sizeof(*mats));
-            if (!mats) return false;
-            if (!emit_materialized_user_call_args(e, &value->as.call.args, mats, indent)) { free(mats); return false; }
-        }
         emit_indent(&e->out, indent);
         emit_var_name(&e->out, name);
         buf_append(&e->out, "=\"\"\n");
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "__ds_call_value_into ");
-        emit_var_name(&e->out, name);
-        buf_append(&e->out, " ");
-        bash_single_quote(&e->out, bash_lower_value_type_name(value->as.call.return_kind), strlen(bash_lower_value_type_name(value->as.call.return_kind)));
-        buf_append(&e->out, " ");
-        emit_fn_name(&e->out, value->as.call.name);
-        bool ok = emit_user_call_args_with_materialized(e, &value->as.call.args, mats, &e->out);
-        free(mats);
-        if (!ok) return false;
-        buf_append(&e->out, "\n");
+        if (!bash_emit_user_function_value_call_into(e, name, value, indent)) return false;
         emit_type_assignment_for_expr(e, name, value, indent, false);
         buf_append(&e->out, "\n");
         return true;
@@ -631,7 +321,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
 static bool interp_has_user_function_call(const DsLowerExpr *value) {
     if (!value || value->kind != DS_LOWER_EXPR_INTERP) return false;
     for (size_t i = 0; i < value->as.interp.parts.len; i++) {
-        if (is_user_function_call_expr(value->as.interp.parts.items[i])) return true;
+        if (bash_is_user_function_call_expr(value->as.interp.parts.items[i])) return true;
     }
     return false;
 }
@@ -700,7 +390,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_indent(&e->out, indent);
                 }
                 if (ds_command_is_pipeline(&stmt->as.let_stmt.value->as.run)) {
-                    if (!emit_capture_pipeline_assignment(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.value->as.run, stmt->as.let_stmt.value->span, indent)) return false;
+                    if (!bash_emit_capture_pipeline_assignment(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.value->as.run, stmt->as.let_stmt.value->span, indent)) return false;
                 } else {
                     buf_append(&e->out, "__ds_capture ");
                     emit_var_name(&e->out, stmt->as.let_stmt.name);
@@ -750,7 +440,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
                 if (!bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.call.return_kind, indent, e->function_depth > 0)) return false;
-                if (!emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
+                if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -A ");
                 else buf_append(&e->out, "declare -A ");
@@ -784,7 +474,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (stmt->as.assign_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.assign_stmt.value->as.call.is_user_function) {
                     buf_append(&e->out, "\n");
                     emit_indent(&e->out, indent);
-                    if (!emit_user_function_value_call_into(e, tmp, stmt->as.assign_stmt.value, indent)) return false;
+                    if (!bash_emit_user_function_value_call_into(e, tmp, stmt->as.assign_stmt.value, indent)) return false;
                 } else {
                     if (!emit_value_expr(e, stmt->as.assign_stmt.value, &e->out)) return false;
                     buf_append(&e->out, "\n");
@@ -863,26 +553,15 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             return true;
 
-        case DS_LOWER_STMT_CALL: {
-            MaterializedArg *call_mats = NULL;
-            if (!ds_stdlib_is_name(stmt->as.call_stmt.name) && stmt->as.call_stmt.args.len > 0) {
-                call_mats = calloc(stmt->as.call_stmt.args.len, sizeof(*call_mats));
-                if (!call_mats) return false;
-                if (!emit_materialized_user_call_args(e, &stmt->as.call_stmt.args, call_mats, indent)) { free(call_mats); return false; }
-            }
-            emit_indent(&e->out, indent);
-            if (ds_stdlib_is_name(stmt->as.call_stmt.name)) emit_stdlib_helper_name(&e->out, stmt->as.call_stmt.name);
-            else emit_fn_name(&e->out, stmt->as.call_stmt.name);
+        case DS_LOWER_STMT_CALL:
             if (ds_stdlib_is_name(stmt->as.call_stmt.name)) {
+                emit_indent(&e->out, indent);
+                emit_stdlib_helper_name(&e->out, stmt->as.call_stmt.name);
                 if (!emit_call_args(e, &stmt->as.call_stmt.args, &e->out)) return false;
-            } else {
-                bool ok = emit_user_call_args_with_materialized(e, &stmt->as.call_stmt.args, call_mats, &e->out);
-                free(call_mats);
-                if (!ok) return false;
+                buf_append(&e->out, "\n\n");
+                return true;
             }
-            buf_append(&e->out, "\n\n");
-            return true;
-        }
+            return bash_emit_user_call_statement(e, stmt->as.call_stmt.name, &stmt->as.call_stmt.args, indent);
 
         case DS_LOWER_STMT_PUSH:
             emit_indent(&e->out, indent);
@@ -1013,14 +692,14 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             DsLowerExpr case_temp_expr;
             char case_temp_buf[64];
             size_t case_symbol_len = e->symbols.len;
-            if (is_user_function_call_expr(stmt->as.case_stmt.selector)) {
-                temp_ds_name(case_temp_buf, sizeof(case_temp_buf), "case", e->temp_counter++);
+            if (bash_is_user_function_call_expr(stmt->as.case_stmt.selector)) {
+                bash_temp_ds_name(case_temp_buf, sizeof(case_temp_buf), "case", e->temp_counter++);
                 DsStr raw = {case_temp_buf, strlen(case_temp_buf)};
                 emit_indent(&e->out, indent);
                 if (e->function_depth > 0) buf_append(&e->out, "local ");
                 emit_var_name(&e->out, raw);
                 buf_append(&e->out, "=\"\"\n");
-                if (!emit_user_call_into_raw_var(e, stmt->as.case_stmt.selector, raw, indent)) return false;
+                if (!bash_emit_user_call_into_raw_var(e, stmt->as.case_stmt.selector, raw, indent)) return false;
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, "__ds_type_");
                 buf_append_len(&e->out, raw.data, raw.len);
@@ -1064,101 +743,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: assert statement reached standalone Bash emission; the test runner owns assert emission in v0.14.0");
             return false;
         case DS_LOWER_STMT_RETURN:
-            emit_indent(&e->out, indent);
-            buf_append(&e->out, "__ds_return_type=");
-            bash_single_quote(&e->out, bash_lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(bash_lower_value_type_name(stmt->as.return_stmt.return_kind)));
-            buf_append(&e->out, "\n");
-            emit_indent(&e->out, indent);
-            if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.return_stmt.value->as.call.is_user_function) {
-                MaterializedArg *mats = NULL;
-                if (stmt->as.return_stmt.value->as.call.args.len > 0) {
-                    mats = calloc(stmt->as.return_stmt.value->as.call.args.len, sizeof(*mats));
-                    if (!mats) return false;
-                    if (!emit_materialized_user_call_args(e, &stmt->as.return_stmt.value->as.call.args, mats, indent)) { free(mats); return false; }
-                }
-                buf_append(&e->out, "__ds_call_value_capture ");
-                bash_single_quote(&e->out, bash_lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(bash_lower_value_type_name(stmt->as.return_stmt.return_kind)));
-                buf_append(&e->out, " ");
-                emit_fn_name(&e->out, stmt->as.return_stmt.value->as.call.name);
-                bool ok = emit_user_call_args_with_materialized(e, &stmt->as.return_stmt.value->as.call.args, mats, &e->out);
-                free(mats);
-                if (!ok) return false;
-                buf_append(&e->out, "\n");
-                emit_indent(&e->out, indent);
-                buf_append(&e->out, "__ds_return_type=");
-                bash_single_quote(&e->out, bash_lower_value_type_name(stmt->as.return_stmt.return_kind), strlen(bash_lower_value_type_name(stmt->as.return_stmt.return_kind)));
-                buf_append(&e->out, "\n");
-            } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_ARRAY) {
-                if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
-                    buf_append(&e->out, "declare -ga __ds_return_array=");
-                    if (!emit_array_elements(e, &stmt->as.return_stmt.value->as.array.elements, &e->out)) return false;
-                    buf_append(&e->out, "\n");
-                    emit_array_element_type_entries(e, &stmt->as.return_stmt.value->as.array.elements, indent, "__ds_return_elem_type");
-                } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                    buf_append(&e->out, "declare -ga __ds_return_array=(\"${");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, "[@]}\")\n");
-                    emit_indent(&e->out, indent);
-                    buf_append(&e->out, "declare -ga __ds_return_elem_type=(\"${");
-                    bash_emit_elem_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, "[@]}\")\n");
-                } else {
-                    /* Lowering owns the structured-return portability gate. */
-                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: array return should be literal, named, or forwarded after lowering");
-                    return false;
-                }
-            } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_MAP) {
-                if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_MAP) {
-                    buf_append(&e->out, "declare -gA __ds_return_map=");
-                    if (!emit_map_entries(e, &stmt->as.return_stmt.value->as.map.entries, &e->out)) return false;
-                    buf_append(&e->out, "\n");
-                    emit_map_value_type_entries(e, &stmt->as.return_stmt.value->as.map.entries, indent, "__ds_return_value_type");
-                } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                    buf_append(&e->out, "declare -gA __ds_return_map=()\n");
-                    emit_indent(&e->out, indent);
-                    buf_append(&e->out, "for __ds_key in \"${!");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, "[@]}\"; do __ds_return_map[\"$__ds_key\"]=\"${");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, "[$__ds_key]}\"; done\n");
-                    emit_indent(&e->out, indent);
-                    buf_append(&e->out, "declare -gA __ds_return_value_type=()\n");
-                    emit_indent(&e->out, indent);
-                    buf_append(&e->out, "for __ds_key in \"${!");
-                    bash_emit_map_value_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, "[@]}\"; do __ds_return_value_type[\"$__ds_key\"]=\"${");
-                    bash_emit_map_value_type_var_name(&e->out, stmt->as.return_stmt.value->as.text);
-                    buf_append(&e->out, "[$__ds_key]}\"; done\n");
-                } else {
-                    /* Lowering owns the structured-return portability gate. */
-                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: map return should be literal, named, or forwarded after lowering");
-                    return false;
-                }
-            } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_COMMAND_RESULT) {
-                if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_RUN) {
-                    if (ds_command_is_pipeline(&stmt->as.return_stmt.value->as.run)) {
-                        DsStr ret_name = {"return", strlen("return")};
-                        if (!emit_capture_pipeline_assignment(e, ret_name, &stmt->as.return_stmt.value->as.run, stmt->as.return_stmt.value->span, indent)) return false;
-                    } else {
-                        buf_append(&e->out, "__ds_capture __ds_return");
-                        if (!emit_capture_command(e, &stmt->as.return_stmt.value->as.run, &e->out, stmt->as.return_stmt.value->span)) return false;
-                        buf_append(&e->out, "\n");
-                    }
-                } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                    bash_emit_command_result_copy_to_return(e, stmt->as.return_stmt.value->as.text, indent);
-                } else {
-                    /* Lowering owns the structured-return portability gate. */
-                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: command-result return should be run, named, or forwarded after lowering");
-                    return false;
-                }
-            } else {
-                buf_append(&e->out, "__ds_return_value=");
-                if (!emit_value_expr(e, stmt->as.return_stmt.value, &e->out)) return false;
-                buf_append(&e->out, " || return $?\n");
-            }
-            emit_indent(&e->out, indent);
-            buf_append(&e->out, "return 0\n\n");
-            return true;
+            return bash_emit_return_stmt(e, stmt, indent);
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP: {
             size_t id = e->handler_counter++;

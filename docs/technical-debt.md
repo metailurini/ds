@@ -167,38 +167,47 @@ Consider one cohesive extraction such as:
 
 ## H4 — `bash_stmt.c` remains a broad emitter monolith
 
-**Status:** High priority
+**Status:** Addressed enough for now; keep on watch
 **Kind:** emitter cohesion debt
-**File:** `src/bash_stmt.c`
+**Files:** `src/bash_stmt.c`, `src/bash_function.c`, `src/bash_return.c`, `src/bash_command.c`
 
-**Problem:**
+**What was wrong:**
 
-`bash_stmt.c` is long and still mixes statement emission, function emission,
-structured return mechanics, array/map mutation emission, command/capture
-statements, handler emission, and control-flow rendering. Long is acceptable,
-but the helper names and section boundaries need to make the ownership obvious.
+`bash_stmt.c` mixed too many Bash-emitter concerns: statement dispatch,
+function definitions, user-function call materialization, structured return
+payloads, captured pipeline assignment mechanics, handlers, assignments,
+mutation, and control-flow rendering. The problem was not the line count by
+itself; the problem was that unrelated mechanics lived beside the statement
+switch, making future edits easy to misplace.
 
-**Preferred fix:**
+**Current shape after the H4 cleanup:**
 
-Do a no-behavior readability pass before any more extraction:
+- `bash_stmt.c` remains the accepted-HIR statement dispatcher and owns normal
+  statement/control-flow/handler/assignment/mutation emission.
+- `bash_function.c` owns Bash function wrapper/parameter/default binding and
+  user-function call materialization, including nested user-call argument capture
+  and value-call plumbing.
+- `bash_return.c` owns return statement payload emission, including structured
+  array/map/command-result returns.
+- `bash_command.c` owns command rendering and captured pipeline assignment
+  mechanics.
 
-- Add clear section boundaries.
-- Rename helpers that hide whether they emit values, type sidecars, function
-  call materialization, or statements.
-- Keep broad statement emission here until a cohesive cluster has enough weight
-  to move.
+This is intentionally not a one-file-per-statement split. Each extracted file
+has a cohesive Bash-emitter concern with enough weight to justify its existence.
 
-Possible future cohesive moves:
+**Remaining watch points:**
 
-- Bash handler emission cluster.
-- Bash function-return emission cluster.
-- Bash collection mutation emission cluster.
+- `bash_stmt.c` is still long because statement dispatch and statement-local
+  mechanics remain there.
+- Assignment/mutation helpers may deserve clearer names if collection work grows.
+- Handler emission is still inside `bash_stmt.c`; extract only if signal/trap
+  behavior grows, not just because it is a switch case.
 
 **Do not:**
 
-- Move one or two helpers into new files.
-- Split statement emission from its nearby control-flow context unless the new
-  owner is obviously cohesive.
+- Move one or two statement cases into standalone files.
+- Split by line count.
+- Let helper files become generic dumping grounds.
 
 ## H5 — Shared command metadata is becoming a mixed bag
 

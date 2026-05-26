@@ -116,8 +116,10 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/bash_deps.c` | helper dependency detection from accepted HIR | no semantic validation |
 | `src/bash_structured.c` | Bash structured-value ABI naming, declarations, command-result storage helpers, and structured return copy helpers | no language validity or semantic value-kind ownership |
 | `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
-| `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering | consumes validated `DsCommand`; no command semantics ownership |
-| `src/bash_stmt.c` | Bash rendering for accepted HIR statements/functions/handlers | artifact/runtime mechanics only |
+| `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering and captured pipeline assignment mechanics | consumes validated `DsCommand`; no command semantics ownership |
+| `src/bash_function.c` | Bash function definition emission, parameter/default binding, and user-function call materialization | owns function wrapper shape and nested user-call argument plumbing; body emission delegates back to statement emitter |
+| `src/bash_return.c` | Bash return statement and structured return payload emission | owns return payload mechanics; lowering owns return portability/validity |
+| `src/bash_stmt.c` | Bash rendering for accepted HIR statements, control flow, handlers, and assignment/mutation statements | statement dispatcher; artifact/runtime mechanics only |
 | `src/bash_quote.c` | Bash quoting and accepted string interpolation rendering | interpolation shape invariants are defensive |
 | `src/bash_helpers.c` | emitted Bash helper implementations | runtime/artifact behavior for accepted HIR |
 

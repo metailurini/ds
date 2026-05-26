@@ -153,3 +153,91 @@ bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out
     }
     return emit_capture_words(e, &command->stages.items[0].words, out, span);
 }
+
+static void emit_result_field_name(EmitBuf *out, DsStr name, const char *field) {
+    emit_var_name(out, name);
+    buf_append(out, "_");
+    buf_append(out, field);
+}
+
+bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsCommand *command, DsSpan span, int indent) {
+    size_t id = e->temp_counter++;
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_tmpdir_%zu=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n", id);
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_stdout_%zu=\"$__ds_tmpdir_%zu/stdout\"\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_stderr_%zu=\"$__ds_tmpdir_%zu/stderr\"\n", id, id);
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "set +e\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "__ds_trace_cmd ");
+    emit_source_loc(&e->out, e->source, span);
+    for (size_t s = 0; s < command->stages.len; s++) {
+        if (s > 0) buf_append(&e->out, " \"|\"");
+        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
+            buf_append(&e->out, " ");
+            if (!emit_command_word(e, command->stages.items[s].words.items[i], &e->out)) return false;
+        }
+    }
+    buf_append(&e->out, "\n");
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "{ if [[ -t 0 ]]; then exec </dev/null; fi; ");
+    if (!emit_command_pipeline_stages(e, command, &e->out)) return false;
+    buf_appendf(&e->out, " ; } >\"$__ds_stdout_%zu\" 2>\"$__ds_stderr_%zu\"\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_code_%zu=$?\n", id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "set -e\n");
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_data_%zu=$(cat \"$__ds_stdout_%zu\"; printf x)\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "stdout");
+    buf_append(&e->out, " '%s' ");
+    buf_appendf(&e->out, "\"${__ds_data_%zu%%x}\"\n", id);
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_data_%zu=$(cat \"$__ds_stderr_%zu\"; printf x)\n", id, id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "stderr");
+    buf_append(&e->out, " '%s' ");
+    buf_appendf(&e->out, "\"${__ds_data_%zu%%x}\"\n", id);
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "code");
+    buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "printf -v ");
+    emit_result_field_name(&e->out, name, "status");
+    buf_appendf(&e->out, " '%%s' \"$__ds_code_%zu\"\n", id);
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "if [[ $__ds_code_%zu -eq 0 ]]; then\n", id);
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "ok");
+    buf_append(&e->out, "=true\n");
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "failed");
+    buf_append(&e->out, "=false\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "else\n");
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "ok");
+    buf_append(&e->out, "=false\n");
+    emit_indent(&e->out, indent + 1);
+    emit_result_field_name(&e->out, name, "failed");
+    buf_append(&e->out, "=true\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "fi\n");
+
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "rm -rf \"$__ds_tmpdir_%zu\"\n", id);
+    return true;
+}
