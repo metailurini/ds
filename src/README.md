@@ -32,8 +32,9 @@ either backend. The VM and Bash backend should not implement separate languages.
   AST-to-HIR lowering, lowered-program ownership, and HIR debug output.
 - `bash_*.c`, `bash_internal.h`, `bash_helpers.h`: HIR-to-standalone-Bash
   emission. Keep concerns cohesive: command rendering in `bash_command.c`,
-  function wrappers and user-call materialization in `bash_function.c`, return
-  payloads in `bash_return.c`, and statement dispatch in `bash_stmt.c`.
+  structured-value ABI helpers in `bash_structured.c`, function wrappers and
+  user-call materialization in `bash_function.c`, return control flow in
+  `bash_return.c`, and statement dispatch in `bash_stmt.c`.
 - `vm*.c`, `vm_internal.h`: HIR-to-bytecode construction, bytecode dumping, VM
   execution, scopes, script argv binding, subprocess/runtime behavior, stdlib
   execution, and VM test setup.

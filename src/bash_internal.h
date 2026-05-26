@@ -56,6 +56,7 @@ bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_dat
 bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 
 const char *bash_lower_value_type_name(DsLowerValueKind kind);
+const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr);
 void bash_emit_type_var_name(EmitBuf *out, DsStr name);
 void bash_emit_elem_type_var_name(EmitBuf *out, DsStr name);
 void bash_emit_map_value_type_var_name(EmitBuf *out, DsStr name);
@@ -64,6 +65,13 @@ DsStr bash_command_result_field_storage_name(DsStr field);
 bool bash_command_result_field_is_bool(DsStr field);
 void bash_emit_command_result_copy_to_return(BashEmitter *e, DsStr source, int indent);
 bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl);
+void bash_emit_expr_type_value(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
+void bash_emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl);
+void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl);
+void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *value, EmitBuf *out);
+void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent);
+bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
+bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
 
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_array_elements(BashEmitter *e, const DsLowerExprVec *elements, EmitBuf *out);

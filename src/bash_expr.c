@@ -1,5 +1,4 @@
 #include "bash_internal.h"
-#include "ds_command_result.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -9,8 +8,6 @@ static bool is_int_binary_op(DsStr op) {
     return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
 }
-
-static const char *expr_type_name(const DsLowerExpr *expr);
 
 static bool is_user_function_call_expr(const DsLowerExpr *expr) {
     return expr && expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
@@ -40,61 +37,9 @@ static bool emit_condition_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr
     return emit_condition_operand(e, expr, out);
 }
 
-static const char *expr_type_name(const DsLowerExpr *expr) {
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING:
-        case DS_LOWER_EXPR_INTERP:
-            return "string";
-        case DS_LOWER_EXPR_INT:
-            return "int";
-        case DS_LOWER_EXPR_BOOL:
-            return "bool";
-        case DS_LOWER_EXPR_ARRAY:
-            return "array";
-        case DS_LOWER_EXPR_MAP:
-            return "map";
-        case DS_LOWER_EXPR_RUN:
-            return "command_result";
-        case DS_LOWER_EXPR_BINARY:
-            return is_int_binary_op(expr->as.binary.op) ? "int" : "bool";
-        case DS_LOWER_EXPR_UNARY:
-            if (str_eq(expr->as.unary.op, "!")) return "bool";
-            if (str_eq(expr->as.unary.op, "-")) return "int";
-            return "unknown";
-        case DS_LOWER_EXPR_CALL:
-            return bash_lower_value_type_name(expr->as.call.return_kind);
-        case DS_LOWER_EXPR_FIELD: {
-            const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
-            if (!desc) return "unknown";
-            switch (desc->kind) {
-                case DS_COMMAND_RESULT_FIELD_STRING: return "string";
-                case DS_COMMAND_RESULT_FIELD_INT: return "int";
-                case DS_COMMAND_RESULT_FIELD_BOOL: return "bool";
-            }
-            return "unknown";
-        }
-        case DS_LOWER_EXPR_INDEX:
-            return bash_lower_value_type_name(expr->as.index.element_kind);
-        case DS_LOWER_EXPR_IDENT:
-        case DS_LOWER_EXPR_REGEX:
-        case DS_LOWER_EXPR_RANGE:
-        case DS_LOWER_EXPR_ERROR:
-            return "unknown";
-    }
-    return "unknown";
-}
-
 static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
-    (void)e;
-    if (expr->kind == DS_LOWER_EXPR_IDENT) {
-        buf_append(out, " \"${");
-        bash_emit_type_var_name(out, expr->as.text);
-        buf_append(out, ":-unknown}\"");
-        return true;
-    }
     buf_append(out, " ");
-    const char *type = expr_type_name(expr);
-    bash_single_quote(out, type, strlen(type));
+    bash_emit_expr_type_value(e, expr, out);
     return true;
 }
 

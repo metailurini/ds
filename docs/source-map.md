@@ -117,11 +117,11 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | `src/bash_emit.c` | standalone script wrapper, prologue, helper emission | consumes shared signal status metadata for cleanup-aware wrappers; artifact assembly only |
 | `src/bash_deps.c` | helper dependency detection from accepted HIR | no semantic validation |
-| `src/bash_structured.c` | Bash structured-value ABI naming, declarations, command-result storage helpers, and structured return copy helpers | no language validity or semantic value-kind ownership |
+| `src/bash_structured.c` | Bash structured-value ABI names, type-sidecar writes, structured declarations, command-result storage, and structured return payload helpers | no language validity or semantic value-kind ownership |
 | `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
 | `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering and captured pipeline assignment mechanics | consumes validated `DsCommand`; no command semantics ownership |
 | `src/bash_function.c` | Bash function definition emission, parameter/default binding, and user-function call materialization | owns function wrapper shape and nested user-call argument plumbing; body emission delegates back to statement emitter |
-| `src/bash_return.c` | Bash return statement and structured return payload emission | owns return payload mechanics; lowering owns return portability/validity |
+| `src/bash_return.c` | Bash return statement control flow | delegates structured return payload ABI to `src/bash_structured.c`; lowering owns return portability/validity |
 | `src/bash_stmt.c` | Bash rendering for accepted HIR statements, control flow, handlers, and assignment/mutation statements | statement dispatcher; artifact/runtime mechanics only |
 | `src/bash_quote.c` | Bash quoting and accepted string interpolation rendering | interpolation shape invariants are defensive |
 | `src/bash_helpers.c` | emitted Bash helper implementations | runtime/artifact behavior for accepted HIR |
@@ -167,7 +167,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | Command words/interpolation | `src/lower_command.c` is the focused lowerer owner; `src/ds_command_word.c` owns raw command-word shape helpers; `src/ds_interpolation.c` owns format-spec syntax/kind metadata; VM/Bash consume accepted command payloads | keep semantic validation out of `src/vm_process.c` and `src/bash_command.c` |
 | Function returns/command-result functions | lowerer/HIR return-kind metadata is the contract | do not re-derive return kinds in Bash/VM from helper names |
-| Bash structured value ABI | `src/bash_structured.c` owns Bash sidecar names, structured target declarations, command-result storage names, and structured return copy helpers; statement/expression emitters consume those helpers | keep the ABI as Bash implementation detail, not language semantics |
+| Bash structured value ABI | `src/bash_structured.c` owns Bash sidecar names, static type-name mapping, type-sidecar writes, structured target declarations, command-result storage names, and structured return payload helpers; statement/expression/function/return emitters consume those helpers | keep the ABI as Bash implementation detail, not language semantics |
 | Mutable collections | accepted literals/indexing/push/array loops are HIR-backed; `src/lower_collection.c` owns portability gates; Bash push updates array element-type sidecars; unsupported assignment syntax is parser-rejected | do not add mutation AST/HIR without a parity contract |
 | Regex | conservative literals are accepted; captures/replacement/runtime regex strings remain rejected | lowerer owns parity gates after lexer syntax |
 | Trap/defer/signal | HIR handler contract plus shared signal status metadata in `src/ds_signal.c`; VM/Bash runtime implementations consume it | keep OS/job-control behavior scoped to documented foreground forms |

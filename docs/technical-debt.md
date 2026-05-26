@@ -255,7 +255,7 @@ each new file has a named command-model subdomain consumed by multiple phases.
 
 ## H6 — Bash structured-value ABI is clearer but still spread across emitters
 
-**Status:** Medium priority
+**Status:** Addressed for the current shape; keep on watch
 **Kind:** backend ABI debt
 **Files:**
 
@@ -267,17 +267,30 @@ each new file has a named command-model subdomain consumed by multiple phases.
 
 **Problem:**
 
-`bash_structured.c` now owns more names/declarations/storage helpers, but the ABI
-is still implemented through statement emission, expression emission, dependency
-scanning, and generated helper bodies. This is expected for Bash output, but the
-risk remains high whenever arrays, maps, command results, or structured function
-returns change.
+Earlier passes gave `bash_structured.c` the obvious names/declarations/storage
+helpers, but type-sidecar writes and structured return payloads were still
+implemented through statement, expression, return, and function emitters. That
+made the ABI look owned while important metadata rules were still duplicated at
+call sites.
+
+This pass moved the cohesive ABI pieces into `bash_structured.c`:
+
+- static Bash type-name mapping for lowered expressions;
+- dynamic-or-static type value emission for function arguments and sidecars;
+- `__ds_type_*`, `__ds_elem_type_*`, and `__ds_value_type_*` assignment helpers;
+- array/map structured return payload construction;
+- command-result storage/copy helpers.
+
+`bash_stmt.c`, `bash_expr.c`, `bash_function.c`, and `bash_return.c` now consume
+those helpers rather than reimplementing type metadata or structured payload
+layout.
 
 **Preferred fix:**
 
-Continue moving only cohesive ABI helpers into `bash_structured.c` when there is
-clear duplication. Do not move broad statement/expression rendering just to make
-one file look canonical.
+Keep `bash_structured.c` as the Bash ABI owner. Do not move broad
+statement/expression rendering there, and do not move generated shell helper
+bodies out of `bash_helpers.c` unless the helper text itself becomes easier to
+maintain as named fragments.
 
 ## H7 — Type/kind-name helpers remain duplicated
 

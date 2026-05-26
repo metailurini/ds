@@ -63,36 +63,7 @@ static bool emit_user_call_args_with_materialized(BashEmitter *e, const DsLowerE
         }
         if (!emit_call_arg_expr(e, args->items[i], out)) return false;
         buf_append(out, " ");
-        if (args->items[i]->kind == DS_LOWER_EXPR_IDENT) {
-            buf_append(out, "\"${");
-            bash_emit_type_var_name(out, args->items[i]->as.text);
-            buf_append(out, ":-unknown}\"");
-        } else {
-            const char *type = bash_lower_value_type_name(DS_LOWER_VALUE_UNKNOWN);
-            switch (args->items[i]->kind) {
-                case DS_LOWER_EXPR_STRING:
-                case DS_LOWER_EXPR_INTERP: type = "string"; break;
-                case DS_LOWER_EXPR_INT: type = "int"; break;
-                case DS_LOWER_EXPR_BOOL: type = "bool"; break;
-                case DS_LOWER_EXPR_ARRAY: type = "array"; break;
-                case DS_LOWER_EXPR_MAP: type = "map"; break;
-                case DS_LOWER_EXPR_RUN: type = "command_result"; break;
-                case DS_LOWER_EXPR_CALL: type = bash_lower_value_type_name(args->items[i]->as.call.return_kind); break;
-                case DS_LOWER_EXPR_INDEX: type = bash_lower_value_type_name(args->items[i]->as.index.element_kind); break;
-                case DS_LOWER_EXPR_BINARY:
-                    type = (str_eq(args->items[i]->as.binary.op, "+") || str_eq(args->items[i]->as.binary.op, "-") ||
-                            str_eq(args->items[i]->as.binary.op, "*") || str_eq(args->items[i]->as.binary.op, "/") ||
-                            str_eq(args->items[i]->as.binary.op, "%") || str_eq(args->items[i]->as.binary.op, "**")) ? "int" : "bool";
-                    break;
-                case DS_LOWER_EXPR_UNARY:
-                    if (str_eq(args->items[i]->as.unary.op, "!")) type = "bool";
-                    else if (str_eq(args->items[i]->as.unary.op, "-")) type = "int";
-                    break;
-                default:
-                    break;
-            }
-            bash_single_quote(out, type, strlen(type));
-        }
+        bash_emit_expr_type_value(e, args->items[i], out);
     }
     return true;
 }
