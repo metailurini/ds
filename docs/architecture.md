@@ -119,8 +119,8 @@ the umbrella where possible:
   `src/lower_symbols.c` owns scope/name/vector utilities,
   `src/lower_stdlib.c` owns script declarations and literal decoding,
   `src/lower_functions.c` owns function collection/defaults/recursion checks,
-  `src/lower_tests.c` owns test collection, and `src/lower_free.c` owns HIR
-  cleanup. These modules consume `src/ds_stdlib.c` metadata rather than each
+  `src/lower.c` keeps the small test-collection pass near the lowerer
+  orchestration entrypoint, and `src/lower_free.c` owns HIR cleanup. These modules consume `src/ds_stdlib.c` metadata rather than each
   maintaining independent helper arity/name lists.
 - `src/lower_internal.h` contains lowerer-private symbol/value-kind structs and
   prototypes. It is not part of the public user-facing API.
@@ -131,8 +131,8 @@ the umbrella where possible:
   bytecode construction, `src/vm_dump.c` owns bytecode/debug output,
   `src/vm_args.c` owns script argument binding, `src/vm_scope.c` owns VM
   scopes/function calls, `src/vm_process.c` owns command interpolation,
-  redirection, and subprocess execution, and `src/vm_test.c` owns VM-backed
-  test execution setup.
+  redirection, and subprocess execution, while `src/vm.c` keeps the small
+  VM-backed test execution setup next to the public VM entrypoints.
 - `src/vm_stdlib.c` owns VM execution for `file.*`, `dir.*`, `path.*`, `cmd.*`,
   `env.*`, `glob`, `glob!`, and `lines`.
 - Bash emission responsibilities are split by component: `src/bash_emit.c` owns
@@ -749,7 +749,6 @@ src/
     lower_symbols.c
     lower_stdlib.c
     lower_functions.c
-    lower_tests.c
     lower_free.c
     lower_internal.h
 

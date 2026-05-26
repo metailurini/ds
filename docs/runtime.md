@@ -117,7 +117,7 @@ god file. `src/lower_expr.c` owns expression-level value-kind checks, command
 result field validation, collection literal rules, and command-word validation;
 `src/lower_stmt.c` owns statement/block lowering; `src/lower_functions.c` owns
 function signatures, defaults, body lowering, and recursion rejection;
-`src/lower_tests.c` owns test metadata collection; `src/lower_stdlib.c` owns
+`src/lower.c` owns the small test metadata collection pass; `src/lower_stdlib.c` owns
 script declarations and string/default decoding; `src/lower_symbols.c` owns
 scopes and shared vector/name utilities; and `src/lower_free.c` owns lowered HIR
 cleanup. `src/lower_internal.h` is the private boundary between those lowering
@@ -137,7 +137,7 @@ VM is split into focused private components: `src/vm_compile.c` for HIR to
 bytecode construction, `src/vm_dump.c` for bytecode/debug output,
 `src/vm_args.c` for script argument binding, `src/vm_scope.c` for scopes and
 function calls, `src/vm_process.c` for command interpolation/redirection and
-subprocess execution, `src/vm_test.c` for VM-backed test execution setup, and
+subprocess execution, `src/vm.c` for VM-backed test execution setup, and
 `src/vm.c` for the main interpreter loop and public VM entrypoints. This keeps
 file/path/env/cmd/glob/lines runtime implementations and other VM subsystems
 separate while preserving the same spans, ownership rules, and fail-fast

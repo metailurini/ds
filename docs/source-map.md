@@ -95,7 +95,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 
 | File | Owns | Notes |
 | --- | --- | --- |
-| `src/lower.c` | lowerer orchestration and program-level symbol setup | coordinates, but should not absorb concept-specific logic |
+| `src/lower.c` | lowerer orchestration, program-level symbol setup, and test-block collection | coordinates lowering passes; test collection stays here because it is one small pass, not a standalone module |
 | `src/lower_expr.c` | expression lowering and expression value-kind checks | delegates generic string interpolation to `lower_interpolation.c`; keep command-specific interpolation in `lower_command.c` |
 | `src/lower_interpolation.c` | generic string interpolation parsing/lowering for normal string expressions | owns normal-string interpolation segment validation; not command-word policy |
 | `src/lower_collection.c` | collection portability policy gates for named storage, literal/variable indexes, portable elements, and portable array iterables | lowerer-owned VM/Bash parity rules; VM/Bash must not rediscover these acceptance rules |
@@ -104,7 +104,6 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower_symbols.c` | lowerer scopes/symbol facts | no syntax parsing or backend rendering |
 | `src/lower_stdlib.c` | stdlib declaration/use validation | consumes `ds_stdlib.h` metadata |
 | `src/lower_functions.c` | function collection, return-kind discovery/validation, call-return contracts | owns function return contract pressure |
-| `src/lower_tests.c` | test-block lowering | normal language lowering plus test metadata |
 | `src/lower_free.c` | lowered tree cleanup | no policy |
 | `src/hir.c` | HIR allocation/free/debug helpers | mirrors HIR only |
 | `src/checker.c` | warnings/static checks over AST/HIR where applicable | no hard acceptance except checker-owned warnings |
@@ -127,13 +126,12 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | File | Owns | Notes |
 | --- | --- | --- |
 | `src/vm_compile.c` | accepted HIR -> VM instructions | no semantic language validation |
-| `src/vm.c` | VM instruction interpreter, cleanup dispatch, scalar/runtime behavior, and command-result/map field materialization from accepted HIR | consumes shared signal status metadata; lowerer owns field legality; unknown command-result fields here are invariants |
+| `src/vm.c` | VM instruction interpreter, cleanup dispatch, scalar/runtime behavior, command-result/map field materialization, and VM-backed test setup | consumes shared signal status metadata; lowerer owns field legality; unknown command-result fields here are invariants |
 | `src/vm_dump.c` | bytecode/debug dump | presentation only |
 | `src/vm_args.c` | VM argument handling | runtime call boundary only |
 | `src/vm_scope.c` | VM scope stack/storage | runtime state only |
 | `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | uses VM field materialization from `src/vm.c`; consumes shared signal status metadata |
 | `src/vm_stdlib.c` | VM stdlib helper implementations | runtime data/OS failures; lowerer owns helper legality where statically known |
-| `src/vm_test.c` | VM test runner | test execution only |
 
 ### CLI
 

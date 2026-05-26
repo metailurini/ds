@@ -38,25 +38,24 @@ more splitting. Do not create a new `.c` file merely because a concept appears i
 
 ## H1 — Concept micro-files from recent maintenance passes
 
-**Status:** Partly addressed; keep watching
+**Status:** Addressed for one-function recent files; keep watching for new leaves
 **Kind:** cohesion / navigation debt
 **Files:**
 
 - `src/ds_signal.c`
 - `src/ds_interpolation.c`
 - `src/lower_collection.c`
-- `src/lower_tests.c`
-- `src/vm_test.c`
 
 **Problem:**
 
-Several files were created to give concepts a “home”, but some homes are still
-small or narrowly named. The worst case, the one-function
-`src/vm_command_result.c`, has been folded back into `src/vm.c` near the VM
-field opcode/runtime helpers. `src/ds_signal.c` remains a small metadata table,
-and `src/ds_interpolation.c` only owns format-spec metadata, not the full
-interpolation model. Those can be acceptable if the names and source map stay
-honest, but they should not become a pattern for one-predicate files.
+Several files were created to give concepts a “home”, but some homes became too
+small to justify the navigation cost. The one-function `src/vm_command_result.c`
+has been folded back into `src/vm.c`; the one-function `src/lower_tests.c` has
+been folded into `src/lower.c`; and the one-function `src/vm_test.c` has been
+folded into `src/vm.c`. The remaining small files listed above are not
+one-wrapper leaves: each owns a compact shared table or validation cluster. They
+are acceptable only while that cluster stays cohesive and the source map remains
+honest about the narrow ownership.
 
 **Why this matters:**
 
@@ -66,7 +65,7 @@ technically correct.
 
 **Preferred fix:**
 
-Continue consolidation/naming cleanup with no behavior changes:
+Keep the consolidation rule strict:
 
 - Keep VM command-result/map field materialization in `src/vm.c` unless it grows
   into a larger VM value-access cluster.
@@ -75,8 +74,11 @@ Continue consolidation/naming cleanup with no behavior changes:
 - Keep `src/lower_collection.c` only while it remains the collection portability
   policy cluster; otherwise fold tiny validators back into the lowering files
   with clearer section comments.
-- Treat `lower_tests.c`, `vm_test.c`, `parser.c`, and `lower.c` as acceptable
-  façade/entrypoint exceptions only if the source map says so.
+- Do not recreate test-only one-function files; keep small test setup passes near
+  their owning orchestration/runtime entrypoints unless they grow into real
+  clusters.
+- Treat `parser.c` and `lower.c` as façade/entrypoint exceptions only if the
+  source map says so.
 
 **Do not:**
 

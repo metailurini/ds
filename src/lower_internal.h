@@ -120,8 +120,6 @@ bool function_body_reaches(Lower *lower, size_t current_index, size_t target_ind
 void reject_recursive_functions(Lower *lower);
 void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt);
 
-void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *program);
-
 void lower_expr_free(DsLowerExpr *expr);
 void lower_stmt_free(DsLowerStmt *stmt);
 
