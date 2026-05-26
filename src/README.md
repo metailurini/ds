@@ -42,7 +42,13 @@ either backend. The VM and Bash backend should not implement separate languages.
 - `source.c`, `diag.c`, `ds_common.h`: source loading, diagnostics, allocation,
   source spans, and shared primitive declarations.
 - `ds_command.c`, `ds_command.h`: shared command payload containers and
-  command-result field metadata.
+  lifecycle helpers.
+- `ds_command_word.c`, `ds_command_word.h`: raw command-word shape helpers used
+  by lowering, VM argv materialization, and Bash command emission.
+- `ds_command_result.c`, `ds_command_result.h`: command-result field catalog,
+  field kinds, and backend storage aliases.
+- `ds_command_pipeline.c`, `ds_command_pipeline.h`: pipeline shape/status helpers
+  shared by VM and Bash-oriented code.
 - `ds_stdlib.c`, `ds_stdlib.h`: canonical stdlib helper metadata shared by lowering,
   VM, and Bash.
 - `cli_program.c`, `cli_program.h`, `main.c`: CLI orchestration, import-aware

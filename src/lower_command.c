@@ -1,5 +1,6 @@
 #include "lower_internal.h"
 #include "ds_interpolation.h"
+#include "ds_command_word.h"
 
 #include <stdbool.h>
 #include <stdio.h>

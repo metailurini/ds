@@ -1,4 +1,5 @@
 #include "lower_internal.h"
+#include "ds_command_result.h"
 
 #include <regex.h>
 #include <stdbool.h>

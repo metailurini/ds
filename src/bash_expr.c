@@ -1,4 +1,5 @@
 #include "bash_internal.h"
+#include "ds_command_result.h"
 
 #include <stdlib.h>
 #include <stdio.h>

@@ -104,7 +104,7 @@ assert_contains Makefile 'src/bash_helpers.c' "Makefile builds split Bash helper
 assert_contains compile_flags.txt '-Iinclude' "compile flags keep public include path"
 assert_no_grep "no_old_hashmap_build_paths" 'libs/hashmap|-Ilibs/hashmap' Makefile compile_flags.txt docs/editor.md docs/architecture.md docs/runtime.md docs/product-principles.md docs/roadmap.md src include
 assert_no_grep "no_raw_hashmap_leak_outside_runtime_bridge" '#include[[:space:]]+[<"].*hashmap|\bhm_[a-z_]+' \
-  src/ast.c src/bash_emit.c src/bash_helpers.c src/ds_command.c src/diag.c src/lexer.c \
+  src/ast.c src/bash_emit.c src/bash_helpers.c src/ds_command.c src/ds_command_word.c src/ds_command_result.c src/ds_command_pipeline.c src/diag.c src/lexer.c \
   src/lower.c src/main.c src/parser.c src/source.c src/ds_stdlib.c src/vm.c \
   src/vm_stdlib.c include
 [ -f src/runtime/hashmap.LICENSE ] || fail "absorbed hashmap license is missing"

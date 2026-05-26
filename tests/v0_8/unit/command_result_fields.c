@@ -1,4 +1,5 @@
 #include "ds.h"
+#include "ds_command_result.h"
 
 #include <assert.h>
 #include <string.h>

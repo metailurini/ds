@@ -209,32 +209,49 @@ has a cohesive Bash-emitter concern with enough weight to justify its existence.
 - Split by line count.
 - Let helper files become generic dumping grounds.
 
-## H5 — Shared command metadata is becoming a mixed bag
+## H5 — Shared command metadata was becoming a mixed bag
 
-**Status:** Medium priority
+**Status:** Addressed for the current maintenance loop; keep on watch
 **Kind:** module scope debt
-**Files:** `src/ds_command.h`, `src/ds_command.c`
+**Files:** `src/ds_command.h`, `src/ds_command.c`, `src/ds_command_word.*`,
+`src/ds_command_result.*`, `src/ds_command_pipeline.*`
 
 **Problem:**
 
-`ds_command.c` now owns command cloning/freeing, command-word shape classification,
-direct-call interpolation detection, command-result fields, and pipeline
-shape/status helpers. Each addition reduced a duplication point, but together
-they make `ds_command.c` a generic shared-policy bucket.
+`ds_command.c` had grown into a mixed shared-policy bucket. It owned command
+cloning/freeing, command-word shape classification, direct-call interpolation
+detection, command-result fields, and pipeline shape/status helpers. Each
+addition reduced a duplication point, but together they hid distinct ownership
+boundaries behind one broad module name.
 
-**Preferred fix:**
+**Current shape after the H5 cleanup:**
 
-Keep the shared descriptors, but make the module boundary explicit:
+- `ds_command.c` / `ds_command.h` own only command payload data lifecycle:
+  words, stages, redirects, command init/clone/free.
+- `ds_command_word.c` / `.h` own raw command-word shape classification and
+  direct-call interpolation detection. Lowering still owns legality.
+- `ds_command_result.c` / `.h` own the command-result field catalog, field
+  kinds, and Bash storage aliases.
+- `ds_command_pipeline.c` / `.h` own pipeline shape helpers and the shared
+  VM pipefail-style status calculation.
 
-- Either rename it toward `command_model` and accept that it owns the full shared
-  command model; or
-- split only if there are cohesive clusters, such as command-result field catalog
-  versus command-word shape helpers.
+This is a deliberate small cluster split, not a one-file-per-concept pattern:
+each new file has a named command-model subdomain consumed by multiple phases.
+
+**Keep on watch:**
+
+- Do not put new command semantic rules into `ds_command.c`; they belong in
+  lowerer code unless they are backend-neutral descriptors.
+- Do not add unrelated VM/Bash parity helpers to the command modules merely
+  because the feature appears inside command syntax.
+- If any helper cluster shrinks to a one-wrapper file, fold it back into its
+  caller and keep the function name clear.
 
 **Do not:**
 
-- Add more unrelated VM/Bash parity helpers to `ds_command.c` without first asking
-  whether they belong to command representation.
+- Recreate a generic `command_model` bucket by moving unrelated helpers into one
+  broad file.
+- Split command modules by arbitrary line count rather than ownership cluster.
 
 ## H6 — Bash structured-value ABI is clearer but still spread across emitters
 
