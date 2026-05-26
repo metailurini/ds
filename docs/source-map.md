@@ -50,6 +50,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
 | `src/ds_stdlib.h` | stdlib helper metadata shared by lowerer/VM/Bash | metadata, not implementation |
 | `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |
+| `src/ds_signal.h` | shared supported-signal names and conventional INT/TERM runtime status metadata | consumed by VM and Bash; lowerer still owns source-level signal legality |
 | `src/backend.h` | public formatter/checker/Bash/VM/test backend entrypoints | no backend-private state |
 | `src/parser_internal.h` | parser cursor/helpers/component prototypes | parser-private only |
 | `src/lower_internal.h` | lowerer-private state and helper prototypes | keep narrow; avoid becoming a concept dump |
@@ -69,6 +70,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/command.c` | command metadata helpers, pipeline shape/status helpers, command-word shape classification, direct-call interpolation detection, and command-result field catalog | shared descriptor tables/helpers; no backend execution or source-language acceptance |
 | `src/interpolation.c` | interpolation format-spec parser and kind support table | shared contract for format specs only; lowerer still owns acceptance |
 | `src/stdlib.c` | stdlib helper metadata table | canonical helper facts for lowerer/VM/Bash |
+| `src/signal.c` | shared supported-signal names and conventional INT/TERM runtime status metadata | consumed by VM and Bash; lowerer still owns source-level signal legality |
 
 ### Frontend implementations
 
@@ -105,7 +107,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 
 | File | Owns | Notes |
 | --- | --- | --- |
-| `src/bash_emit.c` | standalone script wrapper, prologue, helper emission | artifact assembly only |
+| `src/bash_emit.c` | standalone script wrapper, prologue, helper emission | consumes shared signal status metadata for cleanup-aware wrappers; artifact assembly only |
 | `src/bash_deps.c` | helper dependency detection from accepted HIR | no semantic validation |
 | `src/bash_structured.c` | Bash structured-value ABI naming, declarations, command-result storage helpers, and structured return copy helpers | no language validity or semantic value-kind ownership |
 | `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
@@ -119,12 +121,12 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | File | Owns | Notes |
 | --- | --- | --- |
 | `src/vm_compile.c` | accepted HIR -> VM instructions | no semantic language validation |
-| `src/vm.c` | VM instruction interpreter and scalar/runtime behavior | runtime failures only |
+| `src/vm.c` | VM instruction interpreter, cleanup dispatch, and scalar/runtime behavior | consumes shared signal status metadata; runtime failures only |
 | `src/vm_command_result.c` | VM command-result/map field materialization from accepted HIR | lowerer owns field legality; unknown command-result fields here are invariants |
 | `src/vm_dump.c` | bytecode/debug dump | presentation only |
 | `src/vm_args.c` | VM argument handling | runtime call boundary only |
 | `src/vm_scope.c` | VM scope stack/storage | runtime state only |
-| `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | delegates command-result/map field materialization to `src/vm_command_result.c` |
+| `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | delegates command-result/map field materialization to `src/vm_command_result.c`; consumes shared signal status metadata |
 | `src/vm_stdlib.c` | VM stdlib helper implementations | runtime data/OS failures; lowerer owns helper legality where statically known |
 | `src/vm_test.c` | VM test runner | test execution only |
 
@@ -160,7 +162,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | Bash structured value ABI | `src/bash_structured.c` owns Bash sidecar names, structured target declarations, command-result storage names, and structured return copy helpers; statement/expression emitters consume those helpers | keep the ABI as Bash implementation detail, not language semantics |
 | Mutable collections | accepted literals/indexing/push/array loops are HIR-backed; unsupported assignment syntax is parser-rejected | do not add mutation AST/HIR without a parity contract |
 | Regex | conservative literals are accepted; captures/replacement/runtime regex strings remain rejected | lowerer owns parity gates after lexer syntax |
-| Trap/defer/signal | HIR handler contract with VM/Bash runtime implementations | keep OS/job-control behavior scoped to documented foreground forms |
+| Trap/defer/signal | HIR handler contract plus shared signal status metadata in `src/signal.c`; VM/Bash runtime implementations consume it | keep OS/job-control behavior scoped to documented foreground forms |
 | Pipeline behavior | accepted command pipeline payload plus shared shape/status helpers in `src/command.c` and VM/Bash process implementations | keep process semantics backend-owned, but language restrictions in parser/lowerer |
 | Direct `env.NAME` | AST field/assignment syntax lowered to env helper/set-env behavior | keep env-name validation in lowering where statically known |
 | String interpolation | `src/lower_interpolation.c` owns normal-string interpolation lowering; `src/interpolation.c` owns shared format-spec parsing; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |

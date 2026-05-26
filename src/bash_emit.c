@@ -1,5 +1,6 @@
 #include "bash_internal.h"
 #include "bash_helpers.h"
+#include "ds_signal.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -212,6 +213,10 @@ static void emit_plain_command_fail_helper(BashEmitter *e) {
 }
 
 static void emit_cleanup_helpers(BashEmitter *e) {
+    const char *int_name = ds_handler_signal_name(DS_HANDLER_INT);
+    const char *term_name = ds_handler_signal_name(DS_HANDLER_TERM);
+    int int_status = ds_handler_signal_default_status(DS_HANDLER_INT);
+    int term_status = ds_handler_signal_default_status(DS_HANDLER_TERM);
     /*
      * Trap/defer/signal parity boundary: emitted Bash consumes accepted HIR
      * handlers only. These helpers implement the same cleanup order as the VM:
@@ -228,16 +233,23 @@ static void emit_cleanup_helpers(BashEmitter *e) {
     /*
      * Direct command/pipeline helpers are Bash runtime mechanics for accepted
      * HIR. They preserve the VM cleanup contract: classify INT/TERM foreground
-     * exits as signal cleanup, keep conventional 130/143 statuses unless a
-     * handler overrides them, and avoid reporting generic command/pipeline
-     * failures for signal-triggered cleanup.
+     * exits as signal cleanup, keep conventional statuses from the shared
+     * signal contract unless a handler overrides them, and avoid reporting
+     * generic command/pipeline failures for signal-triggered cleanup.
      */
-    buf_append(&e->out, "__ds_run_direct_command() { local __ds_loc=$1; shift; local __ds_pid __ds_code; set +e; (trap - INT TERM; exec \"$@\") & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '' INT TERM; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal INT 130' INT; trap '__ds_run_signal TERM 143' TERM; set -e; if (( __ds_code == 130 )); then __ds_run_signal INT 130; fi; if (( __ds_code == 143 )); then __ds_run_signal TERM 143; fi; if (( __ds_code != 0 )); then set +e; __ds_fail \"$__ds_loc\" \"$__ds_code\"; __ds_code=$?; return \"$__ds_code\"; fi; return 0; }\n");
+    buf_appendf(&e->out, "__ds_run_direct_command() { local __ds_loc=$1; shift; local __ds_pid __ds_code; set +e; (trap - %s %s; exec \"$@\") & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '' %s %s; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; set -e; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code != 0 )); then set +e; __ds_fail \"$__ds_loc\" \"$__ds_code\"; __ds_code=$?; return \"$__ds_code\"; fi; return 0; }\n",
+                int_name, term_name, int_name, term_name,
+                int_name, int_status, int_name, term_name, term_status, term_name,
+                int_status, int_name, int_status, term_status, term_name, term_status);
     buf_append(&e->out, "if command -v setsid >/dev/null 2>&1; then __ds_setsid() { setsid \"$@\"; }; else __ds_setsid() { python3 -c 'import os,sys; os.setsid(); os.execvp(sys.argv[1],sys.argv[1:])' \"$@\"; }; fi\n");
-    buf_append(&e->out, "__ds_run_pipeline() { local __ds_loc=$1 __ds_pipeline=$2 __ds_pid __ds_code; set +e; __ds_setsid bash -c '__ds_child_int(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit 130; }; __ds_child_term(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit 143; }; trap __ds_child_int INT; trap __ds_child_term TERM; eval \"$1\" & wait \"$!\"' bash \"$__ds_pipeline\" & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '__ds_run_signal INT 130' INT; trap '__ds_run_signal TERM 143' TERM; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal INT 130' INT; trap '__ds_run_signal TERM 143' TERM; set -e; if (( __ds_code == 130 )); then __ds_run_signal INT 130; fi; if (( __ds_code == 143 )); then __ds_run_signal TERM 143; fi; if (( __ds_code != 0 )); then printf '%s: error: pipeline failed with exit %s\\n' \"$__ds_loc\" \"$__ds_code\" >&2; return \"$__ds_code\"; fi; return 0; }\n");
+    buf_appendf(&e->out, "__ds_run_pipeline() { local __ds_loc=$1 __ds_pipeline=$2 __ds_pid __ds_code; set +e; __ds_setsid bash -c '__ds_child_int(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit %d; }; __ds_child_term(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit %d; }; trap __ds_child_int %s; trap __ds_child_term %s; eval \"$1\" & wait \"$!\"' bash \"$__ds_pipeline\" & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; set -e; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code != 0 )); then printf '%%s: error: pipeline failed with exit %%s\\n' \"$__ds_loc\" \"$__ds_code\" >&2; return \"$__ds_code\"; fi; return 0; }\n",
+                int_status, term_status, int_name, term_name,
+                int_name, int_status, int_name, term_name, term_status, term_name,
+                int_name, int_status, int_name, term_name, term_status, term_name,
+                int_status, int_name, int_status, term_status, term_name, term_status);
     buf_append(&e->out, "trap '__ds_run_cleanup \"$?\"' EXIT\n");
-    buf_append(&e->out, "trap '__ds_run_signal INT 130' INT\n");
-    buf_append(&e->out, "trap '__ds_run_signal TERM 143' TERM\n\n");
+    buf_appendf(&e->out, "trap '__ds_run_signal %s %d' %s\n", int_name, int_status, int_name);
+    buf_appendf(&e->out, "trap '__ds_run_signal %s %d' %s\n\n", term_name, term_status, term_name);
 }
 
 bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered, const char *output_path, DsDiag *diag) {

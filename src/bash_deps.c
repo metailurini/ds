@@ -1,4 +1,5 @@
 #include "bash_internal.h"
+#include "ds_signal.h"
 
 #include <string.h>
 
@@ -574,7 +575,7 @@ static bool stmt_uses_signal_handlers(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP:
-            return stmt->as.handler_stmt.signal == DS_HANDLER_INT || stmt->as.handler_stmt.signal == DS_HANDLER_TERM || stmt_uses_signal_handlers(stmt->as.handler_stmt.body);
+            return ds_handler_signal_is_runtime_cleanup(stmt->as.handler_stmt.signal) || stmt_uses_signal_handlers(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_IF:
             return stmt_uses_signal_handlers(stmt->as.if_stmt.then_branch) || stmt_uses_signal_handlers(stmt->as.if_stmt.else_branch);
         case DS_LOWER_STMT_BLOCK:

@@ -2,6 +2,7 @@
 
 #include "vm_internal.h"
 #include "ds_interpolation.h"
+#include "ds_signal.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -542,13 +543,9 @@ static bool fd_set_cloexec(int fd) {
     return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
-static bool vm_signal_is_cleanup_signal(int sig) {
-    return sig == SIGINT || sig == SIGTERM;
-}
-
 static bool vm_command_was_interrupted(const Vm *vm, int code) {
-    return (vm->interrupted_signal == SIGINT && code == 130) ||
-           (vm->interrupted_signal == SIGTERM && code == 143);
+    return vm->interrupted_signal != 0 &&
+           code == ds_posix_signal_default_status(vm->interrupted_signal);
 }
 
 static void vm_forward_signal_to_child_group(Vm *vm, pid_t pgid, int sig) {
@@ -559,7 +556,7 @@ static void vm_forward_signal_to_child_group(Vm *vm, pid_t pgid, int sig) {
      * records INT/TERM for cleanup classification and forwards the signal to
      * the foreground child process group when one exists.
      */
-    if (!vm_signal_is_cleanup_signal(sig)) return;
+    if (!ds_posix_signal_is_runtime_cleanup(sig)) return;
     vm_note_interrupted_signal(vm, sig);
     if (pgid > 0) kill(-pgid, sig);
 }
@@ -601,7 +598,7 @@ static bool vm_wait_foreground_child(Vm *vm, pid_t pid, pid_t pgid, const VmProc
      * Direct foreground commands get their own process group when possible.
      * If the ds runner observes INT/TERM while waiting, forward it to that
      * group and let the VM cleanup dispatcher decide the final handler order
-     * and conventional status (130 for INT, 143 for TERM).
+     * and conventional status from the shared signal contract.
      */
     int tty_fd = -1;
     pid_t shell_pgid = -1;

@@ -108,13 +108,14 @@ large process/runtime rewrite.
 5. VM runtime stores trap replacement slots and defer stacks.
 6. VM cleanup dispatch runs signal trap, matching signal defers LIFO, then EXIT
    cleanup according to the current contract.
-7. VM installs lightweight `INT`/`TERM` observation and forwards supported
-   foreground interruptions to child process groups where possible.
+7. VM installs lightweight `INT`/`TERM` observation, consumes shared signal
+   status metadata, and forwards supported foreground interruptions to child
+   process groups where possible.
 8. Bash emits handler functions in `src/bash_stmt.c`.
 9. Bash emits cleanup stacks, trap slots, trap setup, direct-command wrappers,
    and pipeline wrappers in `src/bash_emit.c`.
-10. Bash helper logic preserves the same cleanup ordering and conventional
-    `130`/`143` status handling unless a handler overrides status.
+10. Bash helper logic preserves the same cleanup ordering and consumes shared
+    `INT`/`TERM` status metadata unless a handler overrides status.
 
 ## Runtime diagnostics ownership
 
@@ -174,7 +175,7 @@ semantic if a new rejection is added there without a lowerer gate.
 - Direct process execution: spawn, redirect, wait, status, OS errors.
 - Command-result capture: stdout/stderr/status as data.
 - Pipeline mechanics: multi-stage pipe setup and pipefail status.
-- Signal cleanup: handler registration, cleanup order, signal classification.
+- Signal cleanup: handler registration, cleanup order, shared signal-status metadata, signal classification.
 - Command-word rendering: argv materialization and interpolation runtime.
 - Bash artifact assembly: helper selection and emitted script prologue.
 
@@ -196,7 +197,8 @@ and prevents command-result capture from becoming the owner of process execution
 - `bash_pipeline.c`: plain/captured pipeline emission and temp-file capture
   assignment.
 - `bash_handlers.c`: handler function emission, cleanup stacks, trap setup, and
-  signal-aware foreground wrappers.
+  signal-aware foreground wrappers; it should consume `src/signal.c` metadata
+  rather than re-listing supported runtime statuses.
 
 These are future cuts only. They should happen one boundary at a time, with
 focused parity tests after each cut.

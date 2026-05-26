@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -g
 CPPFLAGS ?= -Iinclude
 
-SRC := src/main.c src/cli_program.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/parse_expr.c src/parse_command.c src/parse_script.c src/parse_function.c src/parse_stmt.c src/lower.c src/lower_symbols.c src/lower_expr.c src/lower_interpolation.c src/lower_command.c src/lower_stmt.c src/lower_stdlib.c src/lower_functions.c src/lower_tests.c src/lower_free.c src/hir.c src/format.c src/checker.c src/command.c src/interpolation.c src/runtime.c src/runtime/hashmap.c src/stdlib.c src/vm.c src/vm_args.c src/vm_command_result.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/vm_test.c src/bash_helpers.c src/bash_quote.c src/bash_structured.c src/bash_expr.c src/bash_command.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
+SRC := src/main.c src/cli_program.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/parse_expr.c src/parse_command.c src/parse_script.c src/parse_function.c src/parse_stmt.c src/lower.c src/lower_symbols.c src/lower_expr.c src/lower_interpolation.c src/lower_command.c src/lower_stmt.c src/lower_stdlib.c src/lower_functions.c src/lower_tests.c src/lower_free.c src/hir.c src/format.c src/checker.c src/command.c src/interpolation.c src/signal.c src/runtime.c src/runtime/hashmap.c src/stdlib.c src/vm.c src/vm_args.c src/vm_command_result.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/vm_test.c src/bash_helpers.c src/bash_quote.c src/bash_structured.c src/bash_expr.c src/bash_command.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
 PRIVATE_HEADERS := $(wildcard src/*.h src/runtime/*.h)
 BIN := ds

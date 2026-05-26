@@ -1,4 +1,5 @@
 #include "bash_internal.h"
+#include "ds_signal.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -104,16 +105,6 @@ static bool emit_user_call_args_with_materialized(BashEmitter *e, const DsLowerE
         }
     }
     return true;
-}
-
-static const char *handler_signal_name(DsHandlerSignal signal) {
-    switch (signal) {
-        case DS_HANDLER_EXIT: return "EXIT";
-        case DS_HANDLER_INT: return "INT";
-        case DS_HANDLER_TERM: return "TERM";
-        case DS_HANDLER_INVALID: return "<invalid>";
-    }
-    return "EXIT";
 }
 
 static const char *expr_type_name(const DsLowerExpr *expr) {
@@ -1150,7 +1141,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP: {
             size_t id = e->handler_counter++;
-            const char *sig = handler_signal_name(stmt->as.handler_stmt.signal);
+            const char *sig = ds_handler_signal_name(stmt->as.handler_stmt.signal);
             emit_indent(&e->out, indent);
             buf_appendf(&e->out, "__ds_handler_%zu() {\n", id);
             e->handler_depth++;

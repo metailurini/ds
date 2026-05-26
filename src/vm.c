@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "ds_signal.h"
 #include "vm_internal.h"
 
 #include <stdbool.h>
@@ -31,7 +32,7 @@ int vm_take_pending_signal(void) {
 }
 
 void vm_note_interrupted_signal(Vm *vm, int sig) {
-    if (sig == SIGINT || sig == SIGTERM) vm->interrupted_signal = sig;
+    if (ds_posix_signal_is_runtime_cleanup(sig)) vm->interrupted_signal = sig;
 }
 
 static bool int_add_checked(int64_t a, int64_t b, int64_t *out) {
@@ -176,8 +177,8 @@ dispatch_loop:
         if (!handler_mode && ds_vm_pending_signal) {
             int sig = vm_take_pending_signal();
             vm_note_interrupted_signal(&vm, sig);
-            cleanup_signal = sig == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
-            rc = sig == SIGTERM ? 143 : 130;
+            cleanup_signal = ds_handler_signal_from_posix(sig);
+            rc = ds_handler_signal_default_status(cleanup_signal);
             goto done;
         }
         Instr *ins = &p.instrs[ip];
@@ -406,8 +407,8 @@ dispatch_loop:
                 rc = run_command(&vm, ins);
                 if (vm.test_done) goto done;
                 if (vm.control_exit_requested || rc != 0) {
-                    if (vm.interrupted_signal == SIGINT || vm.interrupted_signal == SIGTERM) {
-                        cleanup_signal = vm.interrupted_signal == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
+                    if (ds_posix_signal_is_runtime_cleanup(vm.interrupted_signal)) {
+                        cleanup_signal = ds_handler_signal_from_posix(vm.interrupted_signal);
                     }
                     goto done;
                 }
@@ -590,8 +591,8 @@ done:
         vm.cleanup_running = true;
         final_rc = rc;
         vm.control_exit_requested = false;
-        if (vm.interrupted_signal == SIGINT || vm.interrupted_signal == SIGTERM) {
-            cleanup_signal = vm.interrupted_signal == SIGTERM ? DS_HANDLER_TERM : DS_HANDLER_INT;
+        if (ds_posix_signal_is_runtime_cleanup(vm.interrupted_signal)) {
+            cleanup_signal = ds_handler_signal_from_posix(vm.interrupted_signal);
         }
         cleanup_cursor = vm.handler_len;
         cleanup_trap_done = false;
