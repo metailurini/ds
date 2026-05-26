@@ -97,7 +97,13 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span);
 bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span);
 bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand *command, DsLowerStmt *block);
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg);
-bool collection_element_supported_in_bash(const DsLowerExpr *expr);
+bool lower_collection_receiver_is_portable_storage(const DsLowerExpr *expr);
+void lower_validate_portable_collection_receiver(Lower *lower, const DsLowerExpr *expr, DsSpan span);
+bool lower_collection_index_is_portable(const DsLowerExpr *expr, bool map_index);
+void lower_validate_portable_collection_index(Lower *lower, const DsLowerExpr *expr, bool map_index, DsSpan span);
+bool lower_collection_element_is_portable(const DsLowerExpr *expr);
+bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable);
+void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span);
 bool lower_decode_string_text(DsStr text, DsStr *out);
 
 bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program);

@@ -5,40 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-static bool lower_expr_is_named_storage_ref(const DsLowerExpr *expr) {
-    return expr && expr->kind == DS_LOWER_EXPR_IDENT;
-}
-
-static void lower_reject_temporary_collection_access(Lower *lower, DsSpan span) {
-    /*
-     * VM bytecode can evaluate fields/indexes from temporary structured values,
-     * but standalone Bash currently has one canonical representation for those
-     * values: named storage. Rejecting the temporary form here keeps the parity
-     * contract owned by lowering instead of letting Bash emission become the
-     * semantic validator.
-     */
-    ds_diag_error(lower->diag, span,
-                  "collection and command-result field/index access requires a named binding for VM/Bash parity; bind the value to a variable first");
-}
-
-static bool lower_expr_is_portable_collection_index(const DsLowerExpr *expr, bool map_index) {
-    if (!expr) return false;
-    if (expr->kind == DS_LOWER_EXPR_IDENT) return true;
-    return map_index ? expr->kind == DS_LOWER_EXPR_STRING : expr->kind == DS_LOWER_EXPR_INT;
-}
-
-static void lower_reject_computed_collection_index(Lower *lower, DsSpan span) {
-    /*
-     * VM bytecode can evaluate computed index expressions directly. Standalone
-     * Bash emission currently renders portable collection indexing only from a
-     * literal index/key or a named variable. Keep that language restriction in
-     * lowering so the Bash emitter does not become the semantic gatekeeper.
-     */
-    ds_diag_error(lower->diag, span,
-                  "collection index expression must be a literal or variable for VM/Bash parity; bind the computed index to a variable first");
-}
-
 static bool int_literal_in_range(DsStr text) {
     static const char max_text[] = "9223372036854775807";
     size_t start = 0;
@@ -47,20 +13,6 @@ static bool int_literal_in_range(DsStr text) {
     if (len < sizeof(max_text) - 1) return true;
     if (len > sizeof(max_text) - 1) return false;
     return memcmp(text.data + start, max_text, len) <= 0;
-}
-
-bool collection_element_supported_in_bash(const DsLowerExpr *expr) {
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_IDENT:
-        case DS_LOWER_EXPR_STRING:
-        case DS_LOWER_EXPR_INT:
-        case DS_LOWER_EXPR_BOOL:
-        case DS_LOWER_EXPR_FIELD:
-        case DS_LOWER_EXPR_INDEX:
-            return true;
-        default:
-            return false;
-    }
 }
 
 bool text_contains_recursive_glob(DsStr text) {
@@ -449,16 +401,12 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     SymKind field_kind = SYM_UNKNOWN;
     bool object_is_command_result = object_kind == SYM_COMMAND_RESULT || lower_expr_produces_command_result(object);
     if (object_is_command_result) {
-        if (!lower_expr_is_named_storage_ref(object)) {
-            lower_reject_temporary_collection_access(lower, expr->span);
-        }
+        lower_validate_portable_collection_receiver(lower, object, expr->span);
         if (!command_result_field_kind(expr->as.field.field, &field_kind)) {
             ds_diag_error(lower->diag, expr->span, "unknown command result field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
         }
     } else if (object_kind == SYM_MAP) {
-        if (!lower_expr_is_named_storage_ref(object)) {
-            lower_reject_temporary_collection_access(lower, expr->span);
-        }
+        lower_validate_portable_collection_receiver(lower, object, expr->span);
         return lower_map_field_expr(expr, object, kind_out);
     } else {
         ds_diag_error(lower->diag, expr->span, "field access is only supported on command results and maps in v0.10.0");
@@ -601,7 +549,7 @@ DsLowerExpr *lower_array_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         lower_expr_vec_push(&out->as.array.elements, element);
         if (elem_kind == SYM_ARRAY || elem_kind == SYM_MAP) {
             ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "nested collections are deferred in v0.10.0");
-        } else if (!collection_element_supported_in_bash(element)) {
+        } else if (!lower_collection_element_is_portable(element)) {
             ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
         }
     }
@@ -627,7 +575,7 @@ DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
         lowered.value = lower_expr(lower, entry->value, &value_kind);
         if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
             ds_diag_error(lower->diag, entry->span, "nested collections are deferred in v0.10.0");
-        } else if (!collection_element_supported_in_bash(lowered.value)) {
+        } else if (!lower_collection_element_is_portable(lowered.value)) {
             ds_diag_error(lower->diag, entry->value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
         }
         lower_map_entry_vec_push(&out->as.map.entries, lowered);
@@ -646,12 +594,8 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     out->as.index.index = index;
     if (obj_kind == SYM_ARRAY) {
         out->as.index.object_is_array = true;
-        if (!lower_expr_is_named_storage_ref(object)) {
-            lower_reject_temporary_collection_access(lower, expr->span);
-        }
-        if (!lower_expr_is_portable_collection_index(index, false)) {
-            lower_reject_computed_collection_index(lower, expr->as.index.index->span);
-        }
+        lower_validate_portable_collection_receiver(lower, object, expr->span);
+        lower_validate_portable_collection_index(lower, index, false, expr->as.index.index->span);
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.index.index->as.unary.op, "-") &&
             expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {
@@ -662,12 +606,8 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         *kind_out = element_kind;
     } else if (obj_kind == SYM_MAP) {
         out->as.index.object_is_map = true;
-        if (!lower_expr_is_named_storage_ref(object)) {
-            lower_reject_temporary_collection_access(lower, expr->span);
-        }
-        if (!lower_expr_is_portable_collection_index(index, true)) {
-            lower_reject_computed_collection_index(lower, expr->as.index.index->span);
-        }
+        lower_validate_portable_collection_receiver(lower, object, expr->span);
+        lower_validate_portable_collection_index(lower, index, true, expr->as.index.index->span);
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;
             lower_decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);
