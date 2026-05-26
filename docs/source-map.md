@@ -9,6 +9,11 @@ or roadmap. Use it with:
 - `docs/parity-contracts.md` for VM/Bash acceptance rules.
 - `docs/diagnostics.md` for phase-owned diagnostics.
 - `docs/runtime.md` for VM/runtime substrate behavior.
+- `docs/technical-debt.md` for source-shape, naming, and cohesion debt.
+
+This map describes the current owner for each file. It is not permission to
+create one file per concept; use `docs/technical-debt.md` before adding new
+source files for narrow helper clusters.
 
 ## Layer ownership rules
 
