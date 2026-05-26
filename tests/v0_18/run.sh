@@ -190,13 +190,13 @@ assert_contains Makefile 'src/bash_command.c' 'Bash command source is built'
 assert_contains Makefile 'src/vm_process.c' 'VM process source is built'
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public header does not expose hashmap internals'
-for file in src/command.c src/parse_command.c src/ast.c src/lower_expr.c src/lower_stmt.c src/hir.c src/format.c src/checker.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/bash_command.c src/bash_stmt.c src/bash_deps.c; do
+for file in src/ds_command.c src/parse_command.c src/ast.c src/lower_expr.c src/lower_stmt.c src/hir.c src/format.c src/checker.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/bash_command.c src/bash_stmt.c src/bash_deps.c; do
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
   assert_matches "$file" 'stage|Pipeline|pipeline|stages' "$file handles pipeline-aware command data"
 done
-assert_contains src/command.c 'ds_command_clone' 'command clone handles commands'
-assert_contains src/command.c 'ds_command_free' 'command free handles commands'
+assert_contains src/ds_command.c 'ds_command_clone' 'command clone handles commands'
+assert_contains src/ds_command.c 'ds_command_free' 'command free handles commands'
 assert_contains src/bash_command.c 'emit_command_pipeline_stages' 'Bash uses shared stage emission'
 assert_contains src/vm_process.c 'process_execute_pipeline' 'VM has pipeline executor'
 assert_contains src/vm_process.c 'pipe(' 'VM uses process pipes'

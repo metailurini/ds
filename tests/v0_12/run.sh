@@ -95,7 +95,7 @@ for helper in \
   'file.exists' 'file.is_file' 'file.read' 'file.write' 'file.append' \
   'dir.exists' 'path.cwd' 'path.join' 'path.basename' 'path.dirname' 'path.ext' \
   'cmd.exists' 'cmd.require' 'env.get' 'env.set' 'env.unset' 'glob' 'glob!' 'lines'; do
-  assert_contains src/stdlib.c "$helper" "stdlib metadata contains $helper"
+  assert_contains src/ds_stdlib.c "$helper" "stdlib metadata contains $helper"
 done
 assert_contains Makefile '0-12' "Makefile wires v0.12 suite"
 assert_contains Makefile 'src/runtime/hashmap.c' "Makefile builds absorbed hashmap"
@@ -104,8 +104,8 @@ assert_contains Makefile 'src/bash_helpers.c' "Makefile builds split Bash helper
 assert_contains compile_flags.txt '-Iinclude' "compile flags keep public include path"
 assert_no_grep "no_old_hashmap_build_paths" 'libs/hashmap|-Ilibs/hashmap' Makefile compile_flags.txt docs/editor.md docs/architecture.md docs/runtime.md docs/product-principles.md docs/roadmap.md src include
 assert_no_grep "no_raw_hashmap_leak_outside_runtime_bridge" '#include[[:space:]]+[<"].*hashmap|\bhm_[a-z_]+' \
-  src/ast.c src/bash_emit.c src/bash_helpers.c src/command.c src/diag.c src/lexer.c \
-  src/lower.c src/main.c src/parser.c src/source.c src/stdlib.c src/vm.c \
+  src/ast.c src/bash_emit.c src/bash_helpers.c src/ds_command.c src/diag.c src/lexer.c \
+  src/lower.c src/main.c src/parser.c src/source.c src/ds_stdlib.c src/vm.c \
   src/vm_stdlib.c include
 [ -f src/runtime/hashmap.LICENSE ] || fail "absorbed hashmap license is missing"
 pass "absorbed hashmap license is present"

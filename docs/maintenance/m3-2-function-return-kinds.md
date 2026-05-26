@@ -75,7 +75,7 @@ Function return kind is a lowerer/HIR contract.
 - `src/lower_expr.c`
 - `src/lower_symbols.c`
 - `src/ds_stdlib.h`
-- `src/stdlib.c`
+- `src/ds_stdlib.c`
 - `src/vm_compile.c`
 - `src/vm.c`
 - `src/vm_scope.c`

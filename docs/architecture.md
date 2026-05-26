@@ -109,7 +109,7 @@ the umbrella where possible:
 - `src/backend.h` owns formatter/checker, Bash emission, bytecode, and VM
   entrypoints.
 
-- `src/stdlib.c` owns the table of supported standard-library helpers: public
+- `src/ds_stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
 - Lowering responsibilities are split by component: `src/lower.c` owns the
@@ -120,7 +120,7 @@ the umbrella where possible:
   `src/lower_stdlib.c` owns script declarations and literal decoding,
   `src/lower_functions.c` owns function collection/defaults/recursion checks,
   `src/lower_tests.c` owns test collection, and `src/lower_free.c` owns HIR
-  cleanup. These modules consume `src/stdlib.c` metadata rather than each
+  cleanup. These modules consume `src/ds_stdlib.c` metadata rather than each
   maintaining independent helper arity/name lists.
 - `src/lower_internal.h` contains lowerer-private symbol/value-kind structs and
   prototypes. It is not part of the public user-facing API.

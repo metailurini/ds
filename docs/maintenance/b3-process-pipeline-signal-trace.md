@@ -17,10 +17,10 @@ large process/runtime rewrite.
 - Plain command statements lower to `DS_LOWER_STMT_CMD` with a `DsCommand`.
 - Captured commands lower to `DS_LOWER_EXPR_RUN` with a `DsCommand`.
 - Pipelines are represented as a `DsCommand` with multiple stages; shared
-  helpers in `src/command.c` own pipeline shape checks and VM pipefail-style
+  helpers in `src/ds_command.c` own pipeline shape checks and VM pipefail-style
   status calculation.
-- Command-result fields use the shared descriptor table in `src/command.c`;
-  VM field materialization is isolated in `src/vm_command_result.c`.
+- Command-result fields use the shared descriptor table in `src/ds_command.c`;
+  VM field materialization is isolated in `src/vm.c`.
 - `defer` and `trap` lower to `DS_LOWER_STMT_DEFER` and `DS_LOWER_STMT_TRAP`.
 - Handler signal identity is stored as `DsHandlerSignal` in HIR.
 
@@ -66,7 +66,7 @@ large process/runtime rewrite.
 4. VM `run_capture()` executes either a direct command or pipeline in capture
    mode.
 5. VM capture stores stdout, stderr, and normalized status in `DsCommandResult`.
-   Later VM field reads are materialized by `src/vm_command_result.c`.
+   Later VM field reads are materialized by `src/vm.c`.
 6. Captured non-zero exits are data, not fail-fast errors.
 7. Bash direct capture uses `__ds_capture` helper emission.
 8. Bash captured pipelines use emitter-managed temporary files and assign
@@ -85,7 +85,7 @@ large process/runtime rewrite.
    `process_execute_pipeline()`.
 4. VM creates pipes, forks all stages, assigns process groups when possible,
    waits for each child, and computes pipefail-style status through
-   `src/command.c`.
+   `src/ds_command.c`.
 5. VM plain pipelines are fail-fast on non-zero status unless signal cleanup
    owns the interruption path.
 6. VM captured pipelines collect final stdout plus stage stderr into command
@@ -153,9 +153,9 @@ semantic if a new rejection is added there without a lowerer gate.
 
 - `src/vm_process.c` currently owns argv rendering, interpolation runtime,
   direct process execution, capture, pipelines, redirection, and process groups.
-- `src/command.c` owns shared pipeline shape checks and VM pipefail-style status
+- `src/ds_command.c` owns shared pipeline shape checks and VM pipefail-style status
   calculation; it does not own process execution.
-- `src/vm_command_result.c` owns VM command-result/map field materialization;
+- `src/vm.c` owns VM command-result/map field materialization;
   capture/storage stays in `src/vm_process.c` because it is produced by process
   execution.
 - `src/bash_stmt.c` emits normal statements, direct captures, captured pipeline
@@ -186,7 +186,7 @@ and prevents command-result capture from becoming the owner of process execution
 
 - `vm_process_exec.c`: direct spawn, exec-error pipe, wait, redirection, and
   foreground process-group helpers.
-- `vm_command_result.c`: already owns command-result/map field materialization;
+- `vm.c`: already owns command-result/map field materialization;
   do not expand it into process capture or pipeline execution ownership.
 - `vm_pipeline.c`: pipeline pipe setup, stage spawning, pipefail status, capture
   temp files, and pipeline signal classification.
@@ -197,7 +197,7 @@ and prevents command-result capture from becoming the owner of process execution
 - `bash_pipeline.c`: plain/captured pipeline emission and temp-file capture
   assignment.
 - `bash_handlers.c`: handler function emission, cleanup stacks, trap setup, and
-  signal-aware foreground wrappers; it should consume `src/signal.c` metadata
+  signal-aware foreground wrappers; it should consume `src/ds_signal.c` metadata
   rather than re-listing supported runtime statuses.
 
 These are future cuts only. They should happen one boundary at a time, with

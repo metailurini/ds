@@ -19,11 +19,11 @@ cd "$ROOT"
 
 # Unit coverage for the v0.8.0 cleanup helpers that are intentionally public to internal tests.
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/v0_8/unit/command_model.c" "$ROOT/src/command.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/tests/v0_8/unit/command_model.c" "$ROOT/src/ds_command.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_8_command_model"
 run_ok command_model_unit "$TMP/test_v0_8_command_model"
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/v0_8/unit/command_result_fields.c" "$ROOT/src/command.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
+  "$ROOT/tests/v0_8/unit/command_result_fields.c" "$ROOT/src/ds_command.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
   -o "$TMP/test_v0_8_command_result_fields"
 run_ok command_result_fields_unit "$TMP/test_v0_8_command_result_fields"
 
@@ -219,17 +219,17 @@ assert_contains "$TMP/import_cycle_still_rejected.err" 'import cycle detected' "
 # Static cleanup boundary checks.
 run_ok static_bytecode_command "$DS" bytecode "$FIX/parity/capture_success.ds"
 assert_not_contains "$TMP/static_bytecode_command.out" "0x" "v0.8 bytecode output is pointer-free"
-assert_contains "$ROOT/src/command.c" "ds_command_result_field_lookup" "command-result field lookup is centralized"
-assert_contains "$ROOT/src/command.c" '"status", "code"' "command-result status storage alias is centralized"
-assert_contains "$ROOT/src/command.c" "ds_command_result_field_count" "command-result field catalog exposes iteration"
+assert_contains "$ROOT/src/ds_command.c" "ds_command_result_field_lookup" "command-result field lookup is centralized"
+assert_contains "$ROOT/src/ds_command.c" '"status", "code"' "command-result status storage alias is centralized"
+assert_contains "$ROOT/src/ds_command.c" "ds_command_result_field_count" "command-result field catalog exposes iteration"
 assert_contains "$ROOT/src/bash_structured.c" "ds_command_result_field_count" "Bash structured ABI iterates command-result fields"
 assert_contains "$ROOT/src/bash_stmt.c" "bash_emit_command_result_copy_to_return" "Bash return emission uses structured ABI copy helper"
-assert_contains "$ROOT/src/command.c" "ds_command_word_analyze" "command-word shape classification is centralized"
-assert_contains "$ROOT/src/command.c" "ds_command_word_contains_direct_call_interpolation" "direct call interpolation detection is centralized"
-assert_contains "$ROOT/src/command.c" "ds_command_is_pipeline" "pipeline shape classification is centralized"
-assert_contains "$ROOT/src/command.c" "ds_command_pipeline_status" "pipeline pipefail status policy is centralized"
-assert_contains "$ROOT/Makefile" "src/signal.c" "shared signal runtime contract is linked into ds"
-assert_contains "$ROOT/src/signal.c" "ds_handler_signal_default_status" "signal status policy is centralized"
+assert_contains "$ROOT/src/ds_command.c" "ds_command_word_analyze" "command-word shape classification is centralized"
+assert_contains "$ROOT/src/ds_command.c" "ds_command_word_contains_direct_call_interpolation" "direct call interpolation detection is centralized"
+assert_contains "$ROOT/src/ds_command.c" "ds_command_is_pipeline" "pipeline shape classification is centralized"
+assert_contains "$ROOT/src/ds_command.c" "ds_command_pipeline_status" "pipeline pipefail status policy is centralized"
+assert_contains "$ROOT/Makefile" "src/ds_signal.c" "shared signal runtime contract is linked into ds"
+assert_contains "$ROOT/src/ds_signal.c" "ds_handler_signal_default_status" "signal status policy is centralized"
 assert_contains "$ROOT/src/vm.c" "ds_handler_signal_from_posix" "VM cleanup dispatch consumes shared signal status policy"
 assert_contains "$ROOT/src/vm_process.c" "ds_posix_signal_default_status" "VM process signal classification consumes shared signal status policy"
 assert_contains "$ROOT/src/bash_emit.c" "ds_handler_signal_default_status" "Bash cleanup helpers consume shared signal status policy"

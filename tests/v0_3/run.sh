@@ -166,7 +166,7 @@ run_ok runtime_unit "$TMP/test_v0_3_runtime"
 cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
   "$ROOT/tests/v0_3/unit/lower.c" \
   "$ROOT/src/lexer.c" "$ROOT/src/parser.c" "$ROOT/src/parse_expr.c" "$ROOT/src/parse_command.c" "$ROOT/src/parse_script.c" "$ROOT/src/parse_function.c" "$ROOT/src/parse_stmt.c" "$ROOT/src/ast.c" "$ROOT/src/lower.c" "$ROOT/src/lower_symbols.c" "$ROOT/src/lower_expr.c" "$ROOT/src/lower_interpolation.c" "$ROOT/src/lower_collection.c" "$ROOT/src/lower_command.c" "$ROOT/src/lower_stmt.c" "$ROOT/src/lower_stdlib.c" "$ROOT/src/lower_functions.c" "$ROOT/src/lower_tests.c" "$ROOT/src/lower_free.c" \
-  "$ROOT/src/command.c" "$ROOT/src/interpolation.c" "$ROOT/src/runtime.c" "$ROOT/src/stdlib.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" "$ROOT/src/runtime/hashmap.c" \
+  "$ROOT/src/ds_command.c" "$ROOT/src/ds_interpolation.c" "$ROOT/src/runtime.c" "$ROOT/src/ds_stdlib.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" "$ROOT/src/runtime/hashmap.c" \
   -o "$TMP/test_v0_3_lower"
 run_ok lowering_unit "$TMP/test_v0_3_lower"
 

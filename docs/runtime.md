@@ -104,7 +104,7 @@ function          callable user declarations during lowering
 unknown/error     conservative recovery after a reported diagnostic
 ```
 
-`src/stdlib.c` is the source of truth for standard-library helper return kinds,
+`src/ds_stdlib.c` is the source of truth for standard-library helper return kinds,
 arity, statement-only status, iterable status, and validation flags. Lowering
 maps those metadata return kinds into its local symbol/value-kind model; the VM
 dispatch path validates the helper through the same metadata before executing

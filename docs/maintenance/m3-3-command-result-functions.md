@@ -62,7 +62,7 @@ Command-result function behavior is metadata-driven and lowerer-owned.
 - `src/ds_command.h`
 - `src/ds_hir.h`
 - `src/ds_stdlib.h`
-- `src/stdlib.c`
+- `src/ds_stdlib.c`
 - `src/lower_functions.c`
 - `src/lower_expr.c`
 - `src/lower_stmt.c`

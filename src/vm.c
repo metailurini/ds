@@ -35,6 +35,58 @@ void vm_note_interrupted_signal(Vm *vm, int sig) {
     if (ds_posix_signal_is_runtime_cleanup(sig)) vm->interrupted_signal = sig;
 }
 
+
+/*
+ * VM field materialization owns runtime values for accepted field-access HIR.
+ * Lowering owns source-language field legality and VM/Bash parity gates.
+ * Unknown command-result fields here are internal VM invariants after lowering,
+ * while missing map keys are runtime/data failures.
+ */
+bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out) {
+    if (value->kind == DS_VALUE_MAP) {
+        DsStr key = {(char *)field, strlen(field)};
+        DsValue *found = ds_map_get((DsMap *)&value->as.map, key);
+        if (!found) {
+            ds_diag_error(vm->diag, span, "missing map key `%s`", field);
+            return false;
+        }
+        *out = ds_value_copy(found);
+        return true;
+    }
+    if (value->kind != DS_VALUE_COMMAND_RESULT) {
+        ds_diag_error(vm->diag, span, "internal VM field invariant failed: field receiver should be a command result or map after lowering");
+        return false;
+    }
+
+    DsStr field_view = {(char *)field, strlen(field)};
+    const DsCommandResultField *desc = ds_command_result_field_lookup(field_view);
+    if (desc) {
+        switch (desc->id) {
+            case DS_COMMAND_RESULT_FIELD_STDOUT:
+                ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len);
+                out->kind = DS_VALUE_STRING;
+                return true;
+            case DS_COMMAND_RESULT_FIELD_STDERR:
+                ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len);
+                out->kind = DS_VALUE_STRING;
+                return true;
+            case DS_COMMAND_RESULT_FIELD_STATUS:
+            case DS_COMMAND_RESULT_FIELD_CODE:
+                *out = ds_value_int(value->as.command_result.code);
+                return true;
+            case DS_COMMAND_RESULT_FIELD_OK:
+                *out = ds_value_bool(value->as.command_result.code == 0);
+                return true;
+            case DS_COMMAND_RESULT_FIELD_FAILED:
+                *out = ds_value_bool(value->as.command_result.code != 0);
+                return true;
+        }
+    }
+
+    ds_diag_error(vm->diag, span, "internal VM field invariant failed: unknown command result field `%s` after lowering", field);
+    return false;
+}
+
 static bool int_add_checked(int64_t a, int64_t b, int64_t *out) {
     if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) return false;
     *out = a + b;

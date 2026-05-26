@@ -71,7 +71,7 @@ Regex matching remains conservative.
 - `src/bash_expr.c`
 - `src/bash_quote.c`
 - `src/bash_helpers.c`
-- `src/stdlib.c`
+- `src/ds_stdlib.c`
 - `docs/parity-contracts.md`
 - `docs/diagnostics.md`
 

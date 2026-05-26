@@ -39,9 +39,9 @@ either backend. The VM and Bash backend should not implement separate languages.
   vendored hashmap implementation.
 - `source.c`, `diag.c`, `ds_common.h`: source loading, diagnostics, allocation,
   source spans, and shared primitive declarations.
-- `command.c`, `ds_command.h`: shared command payload containers and
+- `ds_command.c`, `ds_command.h`: shared command payload containers and
   command-result field metadata.
-- `stdlib.c`, `ds_stdlib.h`: canonical stdlib helper metadata shared by lowering,
+- `ds_stdlib.c`, `ds_stdlib.h`: canonical stdlib helper metadata shared by lowering,
   VM, and Bash.
 - `cli_program.c`, `cli_program.h`, `main.c`: CLI orchestration, import-aware
   program loading, command dispatch, and top-level user-facing command behavior.

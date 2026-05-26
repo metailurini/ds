@@ -147,7 +147,7 @@ assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public umbrella does not expose hashmap internals'
 
-for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c src/hir.c src/format.c src/checker.c src/interpolation.c src/vm_stdlib.c src/bash_helpers.c src/bash_expr.c src/bash_deps.c; do
+for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c src/hir.c src/format.c src/checker.c src/ds_interpolation.c src/vm_stdlib.c src/bash_helpers.c src/bash_expr.c src/bash_deps.c; do
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
@@ -156,7 +156,7 @@ for file in src/parse_expr.c src/lower_expr.c src/hir.c src/format.c src/checker
 done
 assert_contains src/ast.c 'CallExpr' 'AST printer handles lowered method calls as call expressions'
 assert_contains src/bash_expr.c 'emit_interpolated_string' 'Bash expression emitter uses interpolation formatter path'
-assert_contains src/interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
+assert_contains src/ds_interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
 assert_contains src/lower_command.c 'ds_interp_parse_format_spec_for_kind' 'lowerer consumes shared interpolation format contract'
 assert_contains src/vm_process.c 'ds_interp_parse_format_spec_for_kind' 'VM consumes shared interpolation format contract'
 assert_contains src/bash_quote.c 'ds_interp_parse_format_spec' 'Bash consumes shared interpolation format contract'

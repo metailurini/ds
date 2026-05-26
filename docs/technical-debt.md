@@ -38,24 +38,25 @@ more splitting. Do not create a new `.c` file merely because a concept appears i
 
 ## H1 — Concept micro-files from recent maintenance passes
 
-**Status:** High priority  
-**Kind:** cohesion / navigation debt  
+**Status:** Partly addressed; keep watching
+**Kind:** cohesion / navigation debt
 **Files:**
 
-- `src/vm_command_result.c`
-- `src/signal.c`
-- `src/interpolation.c`
+- `src/ds_signal.c`
+- `src/ds_interpolation.c`
 - `src/lower_collection.c`
 - `src/lower_tests.c`
 - `src/vm_test.c`
 
 **Problem:**
 
-Several files were created to give concepts a “home”, but some homes are too
-small or too narrowly named. `src/vm_command_result.c` currently contains one
-function. `src/signal.c` is a small metadata table/wrapper. `src/interpolation.c`
-only owns format-spec metadata, not the full interpolation model. This makes the
-source tree look more modular than it really is and increases navigation cost.
+Several files were created to give concepts a “home”, but some homes are still
+small or narrowly named. The worst case, the one-function
+`src/vm_command_result.c`, has been folded back into `src/vm.c` near the VM
+field opcode/runtime helpers. `src/ds_signal.c` remains a small metadata table,
+and `src/ds_interpolation.c` only owns format-spec metadata, not the full
+interpolation model. Those can be acceptable if the names and source map stay
+honest, but they should not become a pattern for one-predicate files.
 
 **Why this matters:**
 
@@ -65,14 +66,13 @@ technically correct.
 
 **Preferred fix:**
 
-Run one consolidation/naming pass with no behavior changes:
+Continue consolidation/naming cleanup with no behavior changes:
 
-- Rename or consolidate `src/vm_command_result.c` into a broader VM value-access
-  home if it grows to include field/index access helpers, or move the function
-  back near the VM field opcode if it stays alone.
-- Rename `src/interpolation.c`/`src/ds_interpolation.h` to make clear that they
-  own **format-spec metadata**, not the entire interpolation segment model.
-- Keep `src/lower_collection.c` only if it remains the collection portability
+- Keep VM command-result/map field materialization in `src/vm.c` unless it grows
+  into a larger VM value-access cluster.
+- Keep `src/ds_interpolation.c` only while docs clearly say it owns
+  **format-spec metadata**, not the entire interpolation segment model.
+- Keep `src/lower_collection.c` only while it remains the collection portability
   policy cluster; otherwise fold tiny validators back into the lowering files
   with clearer section comments.
 - Treat `lower_tests.c`, `vm_test.c`, `parser.c`, and `lower.c` as acceptable
@@ -86,28 +86,26 @@ Run one consolidation/naming pass with no behavior changes:
 
 ## H2 — Header/source naming does not have a consistent rule
 
-**Status:** High priority  
-**Kind:** naming / module boundary debt  
+**Status:** Addressed for shared `ds_*` modules; enforce going forward
+**Kind:** naming / module boundary debt
 **Files:**
 
-- `src/ds_command.h` / `src/command.c`
-- `src/ds_interpolation.h` / `src/interpolation.c`
-- `src/ds_signal.h` / `src/signal.c`
-- `src/ds_stdlib.h` / `src/stdlib.c`
+- `src/ds_command.h` / `src/ds_command.c`
+- `src/ds_interpolation.h` / `src/ds_interpolation.c`
+- `src/ds_signal.h` / `src/ds_signal.c`
+- `src/ds_stdlib.h` / `src/ds_stdlib.c`
 - façade headers such as `src/backend.h`, `src/frontend.h`
 
 **Problem:**
 
-Some public-ish headers use the `ds_` prefix while their implementation files do
-not. Some mismatches are harmless historical style, but others now make module
-ownership harder to guess. `ds_interpolation.h` sounds like the whole
-interpolation model, while `interpolation.c` only implements format-spec parsing.
-`ds_signal.h` exposes shared handler-signal metadata, while `signal.c` can be
-confused with POSIX signal mechanics.
+Shared `ds_*` headers now have matching `ds_*.c` implementations. The remaining
+risk is naming breadth: `ds_interpolation.h`/`.c` and `ds_signal.h`/`.c` are
+matching pairs, but their names are broader than the helper clusters they own.
+The source map must keep that narrow ownership explicit.
 
 **Preferred fix:**
 
-Define a naming rule and apply it once:
+Keep this naming rule enforced:
 
 - Public/shared headers may use `ds_<name>.h`.
 - The matching implementation should normally be `ds_<name>.c`, or the source
@@ -115,19 +113,20 @@ Define a naming rule and apply it once:
 - If the implementation is narrower than the header name, rename the pair to the
   narrower concept instead of using a broad name.
 
-**Likely outcomes:**
+**Current outcome:**
 
-- `ds_interpolation.h` should probably become a format-spec-specific name unless
-  it grows into a real interpolation module.
-- `ds_signal.h`/`signal.c` should be renamed or documented as handler-signal
-  metadata, not process/signal runtime execution.
-- `backend.h` and `frontend.h` can remain façade headers if the convention says
-  they do not need matching `.c` files.
+- `ds_command.h` / `ds_command.c`, `ds_interpolation.h` /
+  `ds_interpolation.c`, `ds_signal.h` / `ds_signal.c`, and `ds_stdlib.h` /
+  `ds_stdlib.c` now match.
+- `backend.h` and `frontend.h` remain façade headers and do not need matching
+  `.c` files.
+- Do not introduce new non-matching shared header/source pairs unless the source
+  map explicitly marks the header as a façade.
 
 ## H3 — `vm_process.c` is long, and some functions are unclear rather than merely large
 
-**Status:** High priority  
-**Kind:** readability / runtime boundary debt  
+**Status:** High priority
+**Kind:** readability / runtime boundary debt
 **File:** `src/vm_process.c`
 
 **Problem:**
@@ -164,8 +163,8 @@ Only after that, consider one cohesive extraction such as:
 
 ## H4 — `bash_stmt.c` remains a broad emitter monolith
 
-**Status:** High priority  
-**Kind:** emitter cohesion debt  
+**Status:** High priority
+**Kind:** emitter cohesion debt
 **File:** `src/bash_stmt.c`
 
 **Problem:**
@@ -199,16 +198,16 @@ Possible future cohesive moves:
 
 ## H5 — Shared command metadata is becoming a mixed bag
 
-**Status:** Medium priority  
-**Kind:** module scope debt  
-**Files:** `src/ds_command.h`, `src/command.c`
+**Status:** Medium priority
+**Kind:** module scope debt
+**Files:** `src/ds_command.h`, `src/ds_command.c`
 
 **Problem:**
 
-`command.c` now owns command cloning/freeing, command-word shape classification,
+`ds_command.c` now owns command cloning/freeing, command-word shape classification,
 direct-call interpolation detection, command-result fields, and pipeline
 shape/status helpers. Each addition reduced a duplication point, but together
-they make `command.c` a generic shared-policy bucket.
+they make `ds_command.c` a generic shared-policy bucket.
 
 **Preferred fix:**
 
@@ -221,13 +220,13 @@ Keep the shared descriptors, but make the module boundary explicit:
 
 **Do not:**
 
-- Add more unrelated VM/Bash parity helpers to `command.c` without first asking
+- Add more unrelated VM/Bash parity helpers to `ds_command.c` without first asking
   whether they belong to command representation.
 
 ## H6 — Bash structured-value ABI is clearer but still spread across emitters
 
-**Status:** Medium priority  
-**Kind:** backend ABI debt  
+**Status:** Medium priority
+**Kind:** backend ABI debt
 **Files:**
 
 - `src/bash_structured.c`
@@ -252,8 +251,8 @@ one file look canonical.
 
 ## H7 — Type/kind-name helpers remain duplicated
 
-**Status:** Medium priority  
-**Kind:** duplicated helper debt  
+**Status:** Medium priority
+**Kind:** duplicated helper debt
 **Files:**
 
 - `src/bash_expr.c`
@@ -279,8 +278,8 @@ clear, for example `bash_expr_value_type_name` versus `script_decl_type_name`.
 
 ## H8 — `checker.c` still crosses façade boundaries and duplicates diagnostic rendering
 
-**Status:** Medium priority  
-**Kind:** layering / diagnostics support debt  
+**Status:** Medium priority
+**Kind:** layering / diagnostics support debt
 **File:** `src/checker.c`
 
 **Problem:**
@@ -297,8 +296,8 @@ need broad backend façade coupling or copied diagnostic rendering mechanics.
 
 ## H9 — Test harnesses hardcode implementation-file lists
 
-**Status:** Medium priority  
-**Kind:** test maintenance debt  
+**Status:** Medium priority
+**Kind:** test maintenance debt
 **Files:** `tests/v*/run.sh`
 
 **Problem:**
@@ -315,7 +314,7 @@ parser, VM, and Bash source groups should not be copy-pasted in many places.
 
 ## H10 — Concept map pressure has been reduced by code, but the tree shape now needs correction
 
-**Status:** High priority  
+**Status:** High priority
 **Kind:** process debt
 
 **Problem:**
