@@ -11,13 +11,18 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
      */
     DsStr word = command_word.text;
     DsSpan span = command_word.span;
-    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
+    DsCommandWordForm form = ds_command_word_analyze(word);
+    if (form.kind == DS_COMMAND_WORD_QUOTED) {
         DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = span};
         fake.as.text = word;
         return emit_interpolated_string(e, &fake, out);
     }
-    if (word.len >= 2 && word.data[0] == '$') {
-        DsStr name = {word.data + 1, word.len - 1};
+    if (form.kind == DS_COMMAND_WORD_VARIABLE) {
+        if (word.data[0] == '$' && form.name.len + 1 < word.len) {
+            ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unsupported variable suffix after lowering");
+            return false;
+        }
+        DsStr name = form.name;
         if (!symbol_exists(&e->symbols, name)) {
             ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
             return false;
@@ -27,27 +32,25 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
         buf_append(out, "\"");
         return true;
     }
-    for (size_t i = 1; i + 1 < word.len; i++) {
-        if (word.data[i] == '.') {
-            DsStr name = {word.data, i};
-            DsStr field = {word.data + i + 1, word.len - i - 1};
-            if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
-                buf_append(out, "\"${");
-                buf_append_len(out, field.data, field.len);
-                buf_append(out, ":-}\"");
-                return true;
-            }
-            if (!symbol_exists(&e->symbols, name)) {
-                ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
-                return false;
-            }
-            buf_append(out, "\"$");
-            emit_var_name(out, name);
-            buf_append(out, "_");
+    if (form.kind == DS_COMMAND_WORD_FIELD) {
+        DsStr name = form.name;
+        DsStr field = form.field;
+        if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
+            buf_append(out, "\"${");
             buf_append_len(out, field.data, field.len);
-            buf_append(out, "\"");
+            buf_append(out, ":-}\"");
             return true;
         }
+        if (!symbol_exists(&e->symbols, name)) {
+            ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
+            return false;
+        }
+        buf_append(out, "\"$");
+        emit_var_name(out, name);
+        buf_append(out, "_");
+        buf_append_len(out, field.data, field.len);
+        buf_append(out, "\"");
+        return true;
     }
     buf_append_len(out, word.data, word.len);
     return true;

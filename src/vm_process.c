@@ -209,7 +209,8 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
 }
 
 static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
-    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') {
+    DsCommandWordForm form = ds_command_word_analyze(word);
+    if (form.kind == DS_COMMAND_WORD_QUOTED) {
         DsString decoded;
         if (!decode_string_text(word, &decoded)) return false;
         DsString rendered;
@@ -220,8 +221,12 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         ds_string_free(&rendered);
         return true;
     }
-    if (word.len >= 2 && word.data[0] == '$') {
-        char *name = ds_str_dup_range(word.data + 1, word.len - 1);
+    if (form.kind == DS_COMMAND_WORD_VARIABLE) {
+        if (word.data[0] == '$' && form.name.len + 1 < word.len) {
+            ds_diag_error(vm->diag, span, "internal VM command-word invariant failed: unsupported variable suffix after lowering");
+            return false;
+        }
+        char *name = ds_str_dup_range(form.name.data, form.name.len);
         DsValue value;
         if (!lookup_var(vm, name, &value, span)) {
             free(name);
@@ -235,34 +240,32 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         free(name);
         return true;
     }
-    for (size_t i = 1; i + 1 < word.len; i++) {
-        if (word.data[i] == '.') {
-            char *name = ds_str_dup_range(word.data, i);
-            char *field = ds_str_dup_range(word.data + i + 1, word.len - i - 1);
-            if (strcmp(name, "env") == 0) {
-                const char *value = getenv(field);
-                *out = ds_str_dup_range(value ? value : "", value ? strlen(value) : 0);
-                free(name); free(field);
-                return true;
-            }
-            DsValue value;
-            if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
-            DsValue field_value = ds_value_null();
-            bool ok = vm_command_result_field(vm, &value, field, span, &field_value);
-            if (!ok) {
-                ds_value_free(&value);
-                free(name); free(field);
-                return false;
-            }
-            DsString rendered;
-            ds_value_to_string(&field_value, &rendered);
-            *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
-            ds_string_free(&rendered);
-            ds_value_free(&field_value);
+    if (form.kind == DS_COMMAND_WORD_FIELD) {
+        char *name = ds_str_dup_range(form.name.data, form.name.len);
+        char *field = ds_str_dup_range(form.field.data, form.field.len);
+        if (strcmp(name, "env") == 0) {
+            const char *value = getenv(field);
+            *out = ds_str_dup_range(value ? value : "", value ? strlen(value) : 0);
+            free(name); free(field);
+            return true;
+        }
+        DsValue value;
+        if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
+        DsValue field_value = ds_value_null();
+        bool ok = vm_command_result_field(vm, &value, field, span, &field_value);
+        if (!ok) {
             ds_value_free(&value);
             free(name); free(field);
-            return !vm->diag->has_error;
+            return false;
         }
+        DsString rendered;
+        ds_value_to_string(&field_value, &rendered);
+        *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+        ds_string_free(&rendered);
+        ds_value_free(&field_value);
+        ds_value_free(&value);
+        free(name); free(field);
+        return !vm->diag->has_error;
     }
     *out = ds_str_dup_range(word.data, word.len);
     return true;

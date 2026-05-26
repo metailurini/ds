@@ -74,6 +74,19 @@ run_ok capture_failed "$DS" run "$FIX/capture/failed.ds"
 assert_same_text $'out\nerr\n7\nfailed\nnot ok\n' "$TMP/capture_failed.out" "captured failure remains inspectable"
 run_ok capture_fields "$DS" run "$FIX/capture/fields.ds"
 assert_same_text $'\n\n2\nnot ok\nfailed\n' "$TMP/capture_fields.out" "all result fields work"
+cat >"$TMP/dollar_command_result_fields.ds" <<'DS'
+let r = run printf hi
+echo $r.stdout
+echo $r.status
+DS
+assert_vm_bash_parity dollar_command_result_fields "$TMP/dollar_command_result_fields.ds" 0 ""
+assert_same_text $'hi\n0\n' "$TMP/dollar_command_result_fields_vm.out" "dollar command-result fields render in VM"
+cat >"$TMP/dollar_command_result_unknown_field.ds" <<'DS'
+let r = run printf hi
+echo $r.missing
+DS
+run_fail dollar_command_result_unknown_field "$DS" check "$TMP/dollar_command_result_unknown_field.ds"
+assert_contains "$TMP/dollar_command_result_unknown_field.err" 'unsupported command result field `missing`' "dollar command-result unknown field is lowerer-owned"
 run_ok capture_command_args "$DS" run "$FIX/capture/command_args.ds"
 assert_same_text $'hello world\n$(echo hacked)\n`echo hacked`\nsemi;colon\n' "$TMP/capture_command_args.out" "command variable arguments preserve data"
 assert_not_contains "$TMP/capture_command_args.out" "hacked\nhacked" "command substitution-looking values are not executed"

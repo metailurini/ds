@@ -6,10 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool command_name_char(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
-}
-
 static DsInterpValueKind interp_kind_from_sym(SymKind kind) {
     switch (kind) {
         case SYM_BOOL: return DS_INTERP_VALUE_BOOL;
@@ -42,10 +38,7 @@ static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr bod
         }
         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
             size_t name_start = i++;
-            while (i < body.len && ((body.data[i] >= 'A' && body.data[i] <= 'Z') ||
-                                    (body.data[i] >= 'a' && body.data[i] <= 'z') ||
-                                    (body.data[i] >= '0' && body.data[i] <= '9') ||
-                                    body.data[i] == '_')) i++;
+            while (i < body.len && ds_command_name_char(body.data[i])) i++;
             if (i < body.len && body.data[i] == '(') {
                 ds_diag_error(lower->diag, span, "function-call interpolation in command words must be bound to a string expression first in v0.21.0");
                 return false;
@@ -194,10 +187,9 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
         ds_diag_error(lower->diag, span, "compound assignment target must be a variable in v0.21.0");
         return false;
     }
-    if (word.len >= 2 && word.data[0] == '$') {
-        size_t name_len = 0;
-        while (1 + name_len < word.len && command_name_char(word.data[1 + name_len])) name_len++;
-        DsStr name = {word.data + 1, name_len};
+    DsCommandWordForm form = ds_command_word_analyze(word);
+    if (word.data[0] == '$' && (form.kind == DS_COMMAND_WORD_VARIABLE || form.kind == DS_COMMAND_WORD_FIELD)) {
+        DsStr name = form.name;
         Symbol *sym = scope_find(lower->scope, name);
         if (!sym) {
             if (find_function(lower->program, name)) {
@@ -212,14 +204,32 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
             return false;
         }
         lower_validate_handler_capture(lower, sym, name, span);
-        if (name_len + 1 < word.len) {
-            char suffix = word.data[name_len + 1];
+        if (word.data[0] == '$' && form.kind == DS_COMMAND_WORD_VARIABLE && name.len + 1 < word.len) {
+            char suffix = word.data[name.len + 1];
             if ((sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) && (suffix == '[' || suffix == '.')) {
                 ds_diag_error(lower->diag, span, "collection access command arguments are deferred in v0.10.0; bind the indexed value to a variable first");
                 return false;
             }
-            if (suffix != '.' || sym->kind != SYM_COMMAND_RESULT) {
+            ds_diag_error(lower->diag, span, "unsupported command variable suffix in v0.10.0");
+            return false;
+        }
+        if (word.data[0] == '$' && form.kind == DS_COMMAND_WORD_FIELD) {
+            if (sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) {
+                ds_diag_error(lower->diag, span, "collection access command arguments are deferred in v0.10.0; bind the indexed value to a variable first");
+                return false;
+            }
+            if (sym->kind != SYM_COMMAND_RESULT) {
                 ds_diag_error(lower->diag, span, "unsupported command variable suffix in v0.10.0");
+                return false;
+            }
+            SymKind field_kind = SYM_UNKNOWN;
+            if (!command_result_field_kind(form.field, &field_kind)) {
+                DsSpan field_span = span;
+                field_span.start.offset = span.start.offset + (int)name.len + 2;
+                field_span.start.column = span.start.column + (int)name.len + 2;
+                field_span.end.offset = field_span.start.offset + (int)form.field.len;
+                field_span.end.column = field_span.start.column + (int)form.field.len;
+                ds_diag_error(lower->diag, field_span, "unsupported command result field `%.*s`", (int)form.field.len, form.field.data);
                 return false;
             }
         }
@@ -228,49 +238,48 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
             return false;
         }
     }
-    if (word.len >= 2 && word.data[0] == '"' && word.data[word.len - 1] == '"') return lower_validate_word_interpolation(lower, word, span);
-    for (size_t i = 1; i < word.len; i++) {
-        if (word.data[i] == '.') {
-            DsStr name = {word.data, i};
-            DsStr field = {word.data + i + 1, word.len - i - 1};
-            DsSpan field_span = span;
-            field_span.start.offset = span.start.offset + (int)i + 1;
-            field_span.start.column = span.start.column + (int)i + 1;
-            field_span.end.offset = field_span.start.offset + (int)field.len;
-            field_span.end.column = field_span.start.column + (int)field.len;
-            if (field.len == 0) {
-                ds_diag_error(lower->diag, field_span, "expected field name after `.`");
+    if (form.kind == DS_COMMAND_WORD_QUOTED) return lower_validate_word_interpolation(lower, word, span);
+    if (form.kind == DS_COMMAND_WORD_FIELD && word.data[0] != '$') {
+        DsStr name = form.name;
+        DsStr field = form.field;
+        size_t i = (size_t)(field.data - word.data - 1);
+        DsSpan field_span = span;
+        field_span.start.offset = span.start.offset + (int)i + 1;
+        field_span.start.column = span.start.column + (int)i + 1;
+        field_span.end.offset = field_span.start.offset + (int)field.len;
+        field_span.end.column = field_span.start.column + (int)field.len;
+        if (field.len == 0) {
+            ds_diag_error(lower->diag, field_span, "expected field name after `.`");
+            return false;
+        }
+        if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
+            if (!is_env_name_text(field)) {
+                ds_diag_error(lower->diag, field_span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);
                 return false;
             }
-            if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
-                if (!is_env_name_text(field)) {
-                    ds_diag_error(lower->diag, field_span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);
-                    return false;
-                }
-                continue;
-            }
-            SymKind field_kind = SYM_UNKNOWN;
-            Symbol *sym = scope_find(lower->scope, name);
-            if (!sym) {
-                DsSpan name_span = span;
-                name_span.end.offset = name_span.start.offset + (int)name.len;
-                name_span.end.column = name_span.start.column + (int)name.len;
-                ds_diag_error(lower->diag, name_span, "unknown command variable `%.*s`", (int)name.len, name.data);
+            return true;
+        }
+        SymKind field_kind = SYM_UNKNOWN;
+        Symbol *sym = scope_find(lower->scope, name);
+        if (!sym) {
+            DsSpan name_span = span;
+            name_span.end.offset = name_span.start.offset + (int)name.len;
+            name_span.end.column = name_span.start.column + (int)name.len;
+            ds_diag_error(lower->diag, name_span, "unknown command variable `%.*s`", (int)name.len, name.data);
+            return false;
+        }
+        lower_validate_handler_capture(lower, sym, name, span);
+        if (sym->kind != SYM_COMMAND_RESULT) {
+            if (sym->kind == SYM_MAP) {
+                ds_diag_error(lower->diag, field_span, "map field command arguments are deferred in v0.10.0; bind the field to a variable first");
                 return false;
             }
-            lower_validate_handler_capture(lower, sym, name, span);
-            if (sym->kind != SYM_COMMAND_RESULT) {
-                if (sym->kind == SYM_MAP) {
-                    ds_diag_error(lower->diag, field_span, "map field command arguments are deferred in v0.10.0; bind the field to a variable first");
-                    return false;
-                }
-                ds_diag_error(lower->diag, field_span, "field access is only supported on command results and maps in v0.10.0");
-                return false;
-            }
-            if (!command_result_field_kind(field, &field_kind)) {
-                ds_diag_error(lower->diag, field_span, "unsupported command result field `%.*s`", (int)field.len, field.data);
-                return false;
-            }
+            ds_diag_error(lower->diag, field_span, "field access is only supported on command results and maps in v0.10.0");
+            return false;
+        }
+        if (!command_result_field_kind(field, &field_kind)) {
+            ds_diag_error(lower->diag, field_span, "unsupported command result field `%.*s`", (int)field.len, field.data);
+            return false;
         }
     }
     return true;
@@ -280,23 +289,7 @@ static bool command_quoted_word_needs_value_call_materialization(Lower *lower, D
     if (word.len < 2 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
     DsStr decoded = {0};
     if (!lower_decode_string_text(word, &decoded)) return false;
-    bool found = false;
-    for (size_t i = 0; i < decoded.len && !found; i++) {
-        if (decoded.data[i] != '{') continue;
-        size_t j = i + 1;
-        while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
-        if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
-                                (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
-                                decoded.data[j] == '_')) {
-            j++;
-            while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
-                                       (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
-                                       (decoded.data[j] >= '0' && decoded.data[j] <= '9') ||
-                                       decoded.data[j] == '_' || decoded.data[j] == '.')) j++;
-            while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
-            if (j < decoded.len && decoded.data[j] == '(') found = true;
-        }
-    }
+    bool found = ds_command_word_contains_direct_call_interpolation(decoded);
     free(decoded.data);
     (void)lower;
     return found;

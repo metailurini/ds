@@ -8,6 +8,19 @@ typedef struct {
     DsSpan span;
 } DsWord;
 
+typedef enum {
+    DS_COMMAND_WORD_LITERAL,
+    DS_COMMAND_WORD_QUOTED,
+    DS_COMMAND_WORD_VARIABLE,
+    DS_COMMAND_WORD_FIELD
+} DsCommandWordKind;
+
+typedef struct {
+    DsCommandWordKind kind;
+    DsStr name;
+    DsStr field;
+} DsCommandWordForm;
+
 typedef struct {
     DsWord *items;
     size_t len;
@@ -91,6 +104,9 @@ void ds_redirect_free(DsRedirect *redirect);
 void ds_command_init(DsCommand *command, DsCommandKind kind, DsSpan span);
 bool ds_command_clone(DsCommand *dst, const DsCommand *src);
 void ds_command_free(DsCommand *command);
+bool ds_command_name_char(char c);
+DsCommandWordForm ds_command_word_analyze(DsStr word);
+bool ds_command_word_contains_direct_call_interpolation(DsStr decoded);
 const DsCommandResultField *ds_command_result_field_lookup(DsStr field);
 const char *ds_command_result_field_kind_name(DsCommandResultFieldKind kind);
 
