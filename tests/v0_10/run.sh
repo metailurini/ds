@@ -75,6 +75,42 @@ for service in services {
 }
 DS
 
+write_fixture "$FIX/arrays_push_preserves_types.ds" <<'DS'
+let values = []
+let number = 1
+values.push(1)
+values.push(true)
+values.push(number)
+
+if 1 in values {
+  echo "int yes"
+} else {
+  echo "int no"
+}
+
+if true in values {
+  echo "bool yes"
+} else {
+  echo "bool no"
+}
+
+if "1" in values {
+  echo "string yes"
+} else {
+  echo "string no"
+}
+
+if 1 in values {
+  echo "number yes"
+} else {
+  echo "number no"
+}
+
+let first = values[0]
+let second = values[1]
+echo "{first}:{second}"
+DS
+
 write_fixture "$FIX/arrays_multiline_mixed.ds" <<'DS'
 let values = [
   "api",
@@ -283,6 +319,8 @@ assert_vm_bash_parity v0_10_arrays_basic "$FIX/arrays_basic.ds" 0 ""
 assert_same_text $'api\nweb\nworker\n' "$TMP/v0_10_arrays_basic_vm.out" "array indexing output"
 assert_vm_bash_parity v0_10_arrays_empty_push_loop "$FIX/arrays_empty_push_loop.ds" 0 ""
 assert_same_text $'service=api\nservice=web service\nservice=worker-$HOME-`nope`\n' "$TMP/v0_10_arrays_empty_push_loop_vm.out" "empty array and push loop output"
+assert_vm_bash_parity v0_10_arrays_push_preserves_types "$FIX/arrays_push_preserves_types.ds" 0 ""
+assert_same_text $'int yes\nbool yes\nstring no\nnumber yes\n1:true\n' "$TMP/v0_10_arrays_push_preserves_types_vm.out" "push preserves element type metadata"
 assert_vm_bash_parity v0_10_arrays_multiline_mixed "$FIX/arrays_multiline_mixed.ds" 0 ""
 assert_same_text $'api:3:true:false\n' "$TMP/v0_10_arrays_multiline_mixed_vm.out" "mixed scalar array output"
 assert_vm_bash_parity v0_10_maps_basic "$FIX/maps_basic.ds" 0 ""

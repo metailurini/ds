@@ -328,6 +328,18 @@ static void emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLo
     }
 }
 
+static void emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *value, EmitBuf *out) {
+    (void)e;
+    if (value->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, "\"${");
+        bash_emit_type_var_name(out, value->as.text);
+        buf_append(out, ":-unknown}\"");
+        return;
+    }
+    const char *type = expr_type_name(value);
+    bash_single_quote(out, type, strlen(type));
+}
+
 static bool emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent) {
     MaterializedArg *mats = NULL;
     if (call->as.call.args.len > 0) {
@@ -878,6 +890,15 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             buf_append(&e->out, "+=(");
             if (!emit_value_expr(e, stmt->as.push_stmt.value, &e->out)) return false;
             buf_append(&e->out, ")\n\n");
+            if (e->needs_case_types) {
+                emit_indent(&e->out, indent);
+                bash_emit_elem_type_var_name(&e->out, stmt->as.push_stmt.name);
+                buf_append(&e->out, "[$((${#");
+                emit_var_name(&e->out, stmt->as.push_stmt.name);
+                buf_append(&e->out, "[@]} - 1))]=");
+                emit_collection_element_type_value(e, stmt->as.push_stmt.value, &e->out);
+                buf_append(&e->out, "\n\n");
+            }
             return true;
 
         case DS_LOWER_STMT_FOR_ARRAY: {
