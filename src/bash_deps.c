@@ -30,7 +30,7 @@ static bool expr_uses_run(const DsLowerExpr *expr) {
 static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
-        case DS_LOWER_EXPR_RUN: return expr->as.run.stages.len > 1;
+        case DS_LOWER_EXPR_RUN: return ds_command_is_pipeline(&expr->as.run);
         case DS_LOWER_EXPR_FIELD: return expr_uses_pipeline_run(expr->as.field.object);
         case DS_LOWER_EXPR_INDEX: return expr_uses_pipeline_run(expr->as.index.object) || expr_uses_pipeline_run(expr->as.index.index);
         case DS_LOWER_EXPR_ARRAY:

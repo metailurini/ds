@@ -66,7 +66,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/diag.c` | diagnostic collection/rendering | displays phase decisions; does not decide them |
 | `src/runtime.c` | `DsValue`/runtime containers/helpers | VM runtime substrate, not syntax policy |
 | `src/runtime/hashmap.*` | generic hashmap implementation | no language semantics |
-| `src/command.c` | command metadata helpers, command-word shape classification, direct-call interpolation detection, and command-result field catalog | shared descriptor tables/helpers; no backend execution or source-language acceptance |
+| `src/command.c` | command metadata helpers, pipeline shape/status helpers, command-word shape classification, direct-call interpolation detection, and command-result field catalog | shared descriptor tables/helpers; no backend execution or source-language acceptance |
 | `src/interpolation.c` | interpolation format-spec parser and kind support table | shared contract for format specs only; lowerer still owns acceptance |
 | `src/stdlib.c` | stdlib helper metadata table | canonical helper facts for lowerer/VM/Bash |
 
@@ -161,7 +161,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | Mutable collections | accepted literals/indexing/push/array loops are HIR-backed; unsupported assignment syntax is parser-rejected | do not add mutation AST/HIR without a parity contract |
 | Regex | conservative literals are accepted; captures/replacement/runtime regex strings remain rejected | lowerer owns parity gates after lexer syntax |
 | Trap/defer/signal | HIR handler contract with VM/Bash runtime implementations | keep OS/job-control behavior scoped to documented foreground forms |
-| Pipeline behavior | accepted command pipeline payload plus VM/Bash process implementations | keep process semantics backend-owned, but language restrictions in parser/lowerer |
+| Pipeline behavior | accepted command pipeline payload plus shared shape/status helpers in `src/command.c` and VM/Bash process implementations | keep process semantics backend-owned, but language restrictions in parser/lowerer |
 | Direct `env.NAME` | AST field/assignment syntax lowered to env helper/set-env behavior | keep env-name validation in lowering where statically known |
 | String interpolation | `src/lower_interpolation.c` owns normal-string interpolation lowering; `src/interpolation.c` owns shared format-spec parsing; VM/Bash render accepted interpolation | backend messages for bad shapes should be internal invariants |
 

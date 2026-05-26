@@ -16,7 +16,9 @@ large process/runtime rewrite.
   `src/ds_command.h`.
 - Plain command statements lower to `DS_LOWER_STMT_CMD` with a `DsCommand`.
 - Captured commands lower to `DS_LOWER_EXPR_RUN` with a `DsCommand`.
-- Pipelines are represented as a `DsCommand` with multiple stages.
+- Pipelines are represented as a `DsCommand` with multiple stages; shared
+  helpers in `src/command.c` own pipeline shape checks and VM pipefail-style
+  status calculation.
 - Command-result fields use the shared descriptor table in `src/command.c`;
   VM field materialization is isolated in `src/vm_command_result.c`.
 - `defer` and `trap` lower to `DS_LOWER_STMT_DEFER` and `DS_LOWER_STMT_TRAP`.
@@ -27,7 +29,8 @@ large process/runtime rewrite.
 - Parser owns command, pipeline, redirection, `defer`, and `trap` syntax shape.
 - Lowerer owns command-word legality, command-result field legality, supported
   handler signals, handler capture restrictions, and rejected handler contexts.
-- HIR/shared command metadata owns the accepted backend-neutral representation.
+- HIR/shared command metadata owns the accepted backend-neutral representation,
+  pipeline shape checks, and the VM's pipefail-style status helper.
 - VM owns accepted command execution, process spawning, waiting, captures,
   process-group mechanics, signal observation, and runtime/OS failures.
 - Bash owns standalone rendering of accepted command/process behavior, helper
@@ -81,7 +84,8 @@ large process/runtime rewrite.
 3. VM `run_command()` dispatches multi-stage commands to
    `process_execute_pipeline()`.
 4. VM creates pipes, forks all stages, assigns process groups when possible,
-   waits for each child, and computes pipefail-style status.
+   waits for each child, and computes pipefail-style status through
+   `src/command.c`.
 5. VM plain pipelines are fail-fast on non-zero status unless signal cleanup
    owns the interruption path.
 6. VM captured pipelines collect final stdout plus stage stderr into command
@@ -148,6 +152,8 @@ semantic if a new rejection is added there without a lowerer gate.
 
 - `src/vm_process.c` currently owns argv rendering, interpolation runtime,
   direct process execution, capture, pipelines, redirection, and process groups.
+- `src/command.c` owns shared pipeline shape checks and VM pipefail-style status
+  calculation; it does not own process execution.
 - `src/vm_command_result.c` owns VM command-result/map field materialization;
   capture/storage stays in `src/vm_process.c` because it is produced by process
   execution.

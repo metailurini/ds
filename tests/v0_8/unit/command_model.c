@@ -21,6 +21,15 @@ static DsWord word(const char *text, int column) {
     return w;
 }
 
+static void append_word_to_stage(DsCommand *cmd, size_t stage_index, DsWord w) {
+    assert(stage_index < cmd->stages.len);
+    DsWordVec *words = &cmd->stages.items[stage_index].words;
+    size_t idx = words->len++;
+    words->items = ds_xrealloc(words->items, words->len * sizeof(DsWord));
+    words->items[idx] = w;
+    words->cap = words->len;
+}
+
 static void append_word(DsCommand *cmd, DsWord w) {
     if (cmd->stages.len == 0) {
         cmd->stages.len = 1;
@@ -29,11 +38,15 @@ static void append_word(DsCommand *cmd, DsWord w) {
         ds_command_stage_init(&cmd->stages.items[0]);
         cmd->stages.items[0].span = cmd->span;
     }
-    DsWordVec *words = &cmd->stages.items[0].words;
-    size_t idx = words->len++;
-    words->items = ds_xrealloc(words->items, words->len * sizeof(DsWord));
-    words->items[idx] = w;
-    words->cap = words->len;
+    append_word_to_stage(cmd, 0, w);
+}
+
+static void append_empty_stage(DsCommand *cmd, int column) {
+    size_t idx = cmd->stages.len++;
+    cmd->stages.items = ds_xrealloc(cmd->stages.items, cmd->stages.len * sizeof(DsCommandStage));
+    cmd->stages.cap = cmd->stages.len;
+    ds_command_stage_init(&cmd->stages.items[idx]);
+    cmd->stages.items[idx].span = span_at(1, column);
 }
 
 int main(void) {
@@ -71,6 +84,23 @@ int main(void) {
     ds_command_init(&original, DS_COMMAND_PLAIN, span_at(2, 3));
     assert(original.kind == DS_COMMAND_PLAIN);
     assert(original.stages.len == 0);
+    assert(ds_command_stage_count(&original) == 0);
+    assert(!ds_command_is_pipeline(&original));
+    append_word(&original, word("printf", 3));
+    assert(ds_command_stage_count(&original) == 1);
+    assert(!ds_command_is_pipeline(&original));
+    append_empty_stage(&original, 12);
+    append_word_to_stage(&original, 1, word("cat", 12));
+    assert(ds_command_stage_count(&original) == 2);
+    assert(ds_command_is_pipeline(&original));
     ds_command_free(&original);
+
+    int ok_codes[] = {0, 0, 0};
+    int left_fail_codes[] = {7, 0, 0};
+    int right_fail_codes[] = {7, 0, 3};
+    assert(ds_command_pipeline_status(ok_codes, 3) == 0);
+    assert(ds_command_pipeline_status(left_fail_codes, 3) == 7);
+    assert(ds_command_pipeline_status(right_fail_codes, 3) == 3);
+    assert(ds_command_pipeline_status(NULL, 3) == 0);
     return 0;
 }

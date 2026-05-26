@@ -744,12 +744,6 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     return true;
 }
 
-static int pipefail_status(const int *codes, size_t len) {
-    int code = 0;
-    for (size_t i = 0; i < len; i++) if (codes[i] != 0) code = codes[i];
-    return code;
-}
-
 static void close_pipe_array(int (*pipes)[2], size_t count) {
     for (size_t i = 0; i < count; i++) {
         if (pipes[i][0] >= 0) close(pipes[i][0]);
@@ -898,7 +892,7 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
         codes[i] = process_status_code(status);
     }
     vm_restore_terminal_pgrp(tty_fd, shell_pgid);
-    result->code = pipefail_status(codes, n);
+    result->code = ds_command_pipeline_status(codes, n);
     if (!capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
         ds_diag_error(vm->diag, ins->span, "failed to launch pipeline command: %s", strerror(exec_errno));
     }

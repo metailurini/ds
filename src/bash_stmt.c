@@ -165,7 +165,7 @@ static const char *expr_type_name(const DsLowerExpr *expr) {
 }
 
 static bool is_control_command(const DsCommand *command, const char *name) {
-    if (!command || command->stages.len != 1) return false;
+    if (!command || ds_command_is_pipeline(command)) return false;
     if (command->redirect.kind != DS_REDIRECT_NONE) return false;
     if (command->stages.items[0].words.len == 0) return false;
     DsStr first = command->stages.items[0].words.items[0].text;
@@ -173,7 +173,7 @@ static bool is_control_command(const DsCommand *command, const char *name) {
 }
 
 static bool can_emit_direct_signal_command(const DsCommand *command) {
-    return command && command->stages.len == 1 && command->redirect.kind == DS_REDIRECT_NONE && command->stages.items[0].words.len > 0;
+    return command && !ds_command_is_pipeline(command) && command->redirect.kind == DS_REDIRECT_NONE && command->stages.items[0].words.len > 0;
 }
 
 static bool emit_direct_signal_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
@@ -560,7 +560,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         }
     }
     if (value->kind == DS_LOWER_EXPR_RUN) {
-        if (value->as.run.stages.len > 1) {
+        if (ds_command_is_pipeline(&value->as.run)) {
             if (!emit_capture_pipeline_assignment(e, name, &value->as.run, value->span, indent)) return false;
             emit_type_assignment_for_expr(e, name, value, indent, false);
             buf_append(&e->out, "\n");
@@ -696,7 +696,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     bash_emit_command_result_storage_decl(e, stmt->as.let_stmt.name, 0, true);
                     emit_indent(&e->out, indent);
                 }
-                if (stmt->as.let_stmt.value->as.run.stages.len > 1) {
+                if (ds_command_is_pipeline(&stmt->as.let_stmt.value->as.run)) {
                     if (!emit_capture_pipeline_assignment(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.value->as.run, stmt->as.let_stmt.value->span, indent)) return false;
                 } else {
                     buf_append(&e->out, "__ds_capture ");
@@ -837,11 +837,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             if (e->has_signal_handlers && can_emit_direct_signal_command(&stmt->as.cmd_stmt)) {
                 return emit_direct_signal_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
-            if (e->has_signal_handlers && stmt->as.cmd_stmt.stages.len > 1) {
+            if (e->has_signal_handlers && ds_command_is_pipeline(&stmt->as.cmd_stmt)) {
                 return emit_signal_pipeline(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
             emit_indent(&e->out, indent);
-            bool is_multi = stmt->as.cmd_stmt.stages.len > 1;
+            bool is_multi = ds_command_is_pipeline(&stmt->as.cmd_stmt);
             if (is_multi) buf_append(&e->out, "( if [[ -t 0 ]]; then exec </dev/null; fi; ");
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
             if (is_multi) {
@@ -1124,7 +1124,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 }
             } else if (stmt->as.return_stmt.return_kind == DS_LOWER_VALUE_COMMAND_RESULT) {
                 if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_RUN) {
-                    if (stmt->as.return_stmt.value->as.run.stages.len > 1) {
+                    if (ds_command_is_pipeline(&stmt->as.return_stmt.value->as.run)) {
                         DsStr ret_name = {"return", strlen("return")};
                         if (!emit_capture_pipeline_assignment(e, ret_name, &stmt->as.return_stmt.value->as.run, stmt->as.return_stmt.value->span, indent)) return false;
                     } else {

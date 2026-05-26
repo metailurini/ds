@@ -121,7 +121,7 @@ static bool emit_stage_words(BashEmitter *e, const DsWordVec *words, EmitBuf *ou
 }
 
 bool emit_command_pipeline(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
-    bool needs_group = command->stages.len > 1 && command->redirect.kind != DS_REDIRECT_NONE;
+    bool needs_group = ds_command_is_pipeline(command) && command->redirect.kind != DS_REDIRECT_NONE;
     if (needs_group) buf_append(out, "{ ");
     if (!emit_command_pipeline_stages(e, command, out)) return false;
     if (needs_group) buf_append(out, "; }");
@@ -137,7 +137,7 @@ bool emit_command_pipeline_stages(BashEmitter *e, const DsCommand *command, Emit
 }
 
 bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
-    if (command->stages.len > 1) {
+    if (ds_command_is_pipeline(command)) {
         EmitBuf cmd = {0};
         DsCommand copy;
         ds_command_clone(&copy, command);
