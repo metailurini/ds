@@ -60,6 +60,9 @@ void bash_emit_type_var_name(EmitBuf *out, DsStr name);
 void bash_emit_elem_type_var_name(EmitBuf *out, DsStr name);
 void bash_emit_map_value_type_var_name(EmitBuf *out, DsStr name);
 void bash_emit_command_result_storage_decl(BashEmitter *e, DsStr name, int indent, bool local_decl);
+DsStr bash_command_result_field_storage_name(DsStr field);
+bool bash_command_result_field_is_bool(DsStr field);
+void bash_emit_command_result_copy_to_return(BashEmitter *e, DsStr source, int indent);
 bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl);
 
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);

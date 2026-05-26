@@ -108,6 +108,8 @@ bool ds_command_name_char(char c);
 DsCommandWordForm ds_command_word_analyze(DsStr word);
 bool ds_command_word_contains_direct_call_interpolation(DsStr decoded);
 const DsCommandResultField *ds_command_result_field_lookup(DsStr field);
+size_t ds_command_result_field_count(void);
+const DsCommandResultField *ds_command_result_field_at(size_t index);
 const char *ds_command_result_field_kind_name(DsCommandResultFieldKind kind);
 
 #endif

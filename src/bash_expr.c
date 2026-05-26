@@ -4,17 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static bool result_field_is_bool(DsStr field) {
-    const DsCommandResultField *desc = ds_command_result_field_lookup(field);
-    return desc && desc->kind == DS_COMMAND_RESULT_FIELD_BOOL;
-}
-
-static DsStr result_field_storage_name(DsStr field) {
-    const DsCommandResultField *desc = ds_command_result_field_lookup(field);
-    if (!desc) return field;
-    return (DsStr){(char *)desc->storage_name, strlen(desc->storage_name)};
-}
-
 static bool is_int_binary_op(DsStr op) {
     return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
@@ -294,7 +283,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 return false;
             }
             {
-                DsStr storage_field = result_field_storage_name(expr->as.field.field);
+                DsStr storage_field = bash_command_result_field_storage_name(expr->as.field.field);
                 buf_append(out, "\"$");
                 emit_var_name(out, expr->as.field.object->as.text);
                 buf_append(out, "_");
@@ -492,7 +481,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         return true;
     }
     if (expr->kind == DS_LOWER_EXPR_FIELD) {
-        if (result_field_is_bool(expr->as.field.field)) {
+        if (bash_command_result_field_is_bool(expr->as.field.field)) {
             buf_append(out, "[[ ");
             emit_value_expr(e, expr, out);
             buf_append(out, " == true ]]");

@@ -107,7 +107,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | `src/bash_emit.c` | standalone script wrapper, prologue, helper emission | artifact assembly only |
 | `src/bash_deps.c` | helper dependency detection from accepted HIR | no semantic validation |
-| `src/bash_structured.c` | Bash structured-value ABI naming and declaration helpers | no language validity or semantic value-kind ownership |
+| `src/bash_structured.c` | Bash structured-value ABI naming, declarations, command-result storage helpers, and structured return copy helpers | no language validity or semantic value-kind ownership |
 | `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
 | `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering | consumes validated `DsCommand`; no command semantics ownership |
 | `src/bash_stmt.c` | Bash rendering for accepted HIR statements/functions/handlers | artifact/runtime mechanics only |
@@ -157,7 +157,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | Command words/interpolation | `src/lower_command.c` is the focused lowerer owner; `src/command.c` owns raw command-word shape helpers; `src/interpolation.c` owns format-spec syntax/kind metadata; VM/Bash consume accepted command payloads | keep semantic validation out of `src/vm_process.c` and `src/bash_command.c` |
 | Function returns/command-result functions | lowerer/HIR return-kind metadata is the contract | do not re-derive return kinds in Bash/VM from helper names |
-| Bash structured value ABI | `src/bash_structured.c` owns Bash sidecar names and structured target declarations; statement/expression emitters consume those helpers | keep the ABI as Bash implementation detail, not language semantics |
+| Bash structured value ABI | `src/bash_structured.c` owns Bash sidecar names, structured target declarations, command-result storage names, and structured return copy helpers; statement/expression emitters consume those helpers | keep the ABI as Bash implementation detail, not language semantics |
 | Mutable collections | accepted literals/indexing/push/array loops are HIR-backed; unsupported assignment syntax is parser-rejected | do not add mutation AST/HIR without a parity contract |
 | Regex | conservative literals are accepted; captures/replacement/runtime regex strings remain rejected | lowerer owns parity gates after lexer syntax |
 | Trap/defer/signal | HIR handler contract with VM/Bash runtime implementations | keep OS/job-control behavior scoped to documented foreground forms |

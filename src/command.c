@@ -181,6 +181,15 @@ const DsCommandResultField *ds_command_result_field_lookup(DsStr field) {
     return NULL;
 }
 
+size_t ds_command_result_field_count(void) {
+    return sizeof(k_fields) / sizeof(k_fields[0]);
+}
+
+const DsCommandResultField *ds_command_result_field_at(size_t index) {
+    if (index >= ds_command_result_field_count()) return NULL;
+    return &k_fields[index];
+}
+
 const char *ds_command_result_field_kind_name(DsCommandResultFieldKind kind) {
     switch (kind) {
         case DS_COMMAND_RESULT_FIELD_STRING: return "string";

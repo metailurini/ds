@@ -693,17 +693,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN) {
                 if (e->function_depth > 0) {
-                    buf_append(&e->out, "local ");
-                    emit_var_name(&e->out, stmt->as.let_stmt.name);
-                    buf_append(&e->out, "_stdout ");
-                    emit_var_name(&e->out, stmt->as.let_stmt.name);
-                    buf_append(&e->out, "_stderr ");
-                    emit_var_name(&e->out, stmt->as.let_stmt.name);
-                    buf_append(&e->out, "_code ");
-                    emit_var_name(&e->out, stmt->as.let_stmt.name);
-                    buf_append(&e->out, "_ok ");
-                    emit_var_name(&e->out, stmt->as.let_stmt.name);
-                    buf_append(&e->out, "_failed\n");
+                    bash_emit_command_result_storage_decl(e, stmt->as.let_stmt.name, 0, true);
                     emit_indent(&e->out, indent);
                 }
                 if (stmt->as.let_stmt.value->as.run.stages.len > 1) {
@@ -1143,18 +1133,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                         buf_append(&e->out, "\n");
                     }
                 } else if (stmt->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                    buf_append(&e->out, "printf -v __ds_return_stdout '%s' \"$");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_stdout\"\n");
-                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_stderr '%s' \"$");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_stderr\"\n");
-                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_code '%s' \"$");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_code\"\n");
-                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_status '%s' \"$");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_code\"\n");
-                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_ok '%s' \"$");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_ok\"\n");
-                    emit_indent(&e->out, indent); buf_append(&e->out, "printf -v __ds_return_failed '%s' \"$");
-                    emit_var_name(&e->out, stmt->as.return_stmt.value->as.text); buf_append(&e->out, "_failed\"\n");
+                    bash_emit_command_result_copy_to_return(e, stmt->as.return_stmt.value->as.text, indent);
                 } else {
                     /* Lowering owns the structured-return portability gate. */
                     ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: command-result return should be run, named, or forwarded after lowering");
