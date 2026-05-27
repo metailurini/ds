@@ -10,6 +10,8 @@ trap 'rm -rf "$TMP"' EXIT
 
 # shellcheck source=tests/lib/testlib.sh
 source "$ROOT/tests/lib/testlib.sh"
+# shellcheck source=tests/lib/build_sources.sh
+source "$ROOT/tests/lib/build_sources.sh"
 
 if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
   make -C "$ROOT" clean all >/dev/null
@@ -18,13 +20,9 @@ fi
 cd "$ROOT"
 
 # Unit coverage for the v0.8.0 cleanup helpers that are intentionally public to internal tests.
-cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" -I"$ROOT/src" \
-  "$ROOT/tests/v0_8/unit/command_model.c" "$ROOT/src/ds_command.c" "$ROOT/src/ds_command_pipeline.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
-  -o "$TMP/test_v0_8_command_model"
+ds_compile_unit "$ROOT" command_model "$ROOT/tests/v0_8/unit/command_model.c" "$TMP/test_v0_8_command_model"
 run_ok command_model_unit "$TMP/test_v0_8_command_model"
-cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" -I"$ROOT/src" \
-  "$ROOT/tests/v0_8/unit/command_result_fields.c" "$ROOT/src/ds_command_result.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" \
-  -o "$TMP/test_v0_8_command_result_fields"
+ds_compile_unit "$ROOT" command_result "$ROOT/tests/v0_8/unit/command_result_fields.c" "$TMP/test_v0_8_command_result_fields"
 run_ok command_result_fields_unit "$TMP/test_v0_8_command_result_fields"
 
 # Public command smoke matrix on representative supported fixtures.
@@ -260,6 +258,13 @@ assert_contains "$ROOT/src/ds_checker.c" "ds_diag_report" "checker warnings use 
 assert_contains "$ROOT/src/diag.c" "ds_diag_report" "diagnostic renderer supports warning-style reports"
 assert_contains "$ROOT/src/ds_checker.h" "ds_check_warnings_ast" "checker warning entrypoint has a narrow header"
 assert_not_contains "$ROOT/src/backend.h" "ds_check_warnings_ast" "backend façade no longer exposes checker warnings"
+assert_contains "$ROOT/tests/lib/build_sources.sh" "ds_project_source_rels" "unit harness source helper reads the Makefile source list"
+assert_contains "$ROOT/tests/v0_3/run.sh" "ds_compile_unit" "v0.3 direct unit builds use shared source helper"
+assert_contains "$ROOT/tests/v0_5/run.sh" "ds_compile_unit" "v0.5 direct unit builds use shared source helper"
+assert_contains "$ROOT/tests/v0_7/run.sh" "ds_compile_unit" "v0.7 direct unit builds use shared source helper"
+assert_contains "$ROOT/tests/v0_8/run.sh" "ds_compile_unit" "v0.8 direct unit builds use shared source helper"
+assert_not_contains "$ROOT/tests/v0_5/run.sh" '"$ROOT/src/lower.c" "$ROOT/src/lower_symbols.c"' "v0.5 no longer carries an inline lowerer source list"
+assert_not_contains "$ROOT/tests/v0_7/run.sh" '"$ROOT/src/lexer.c" "$ROOT/src/parser.c"' "v0.7 no longer carries an inline lowerer source list"
 assert_contains "$ROOT/src/vm_process.c" "ProcessSpec" "VM uses process spec wrapper"
 assert_contains "$ROOT/src/vm_process.c" "ProcessResult" "VM uses process result wrapper"
 assert_contains "$ROOT/tests/lib/testlib.sh" "assert_vm_bash_parity" "shared parity helper exists"

@@ -356,21 +356,30 @@ backend façade coupling or copied diagnostic rendering mechanics.
 
 ## H9 — Test harnesses hardcode implementation-file lists
 
-**Status:** Medium priority
+**Status:** Addressed for current direct unit harnesses; keep on watch
 **Kind:** test maintenance debt
-**Files:** `tests/v*/run.sh`
+**Files:** `tests/lib/build_sources.sh`, `tests/v*/run.sh`
 
 **Problem:**
 
 Recent file additions repeatedly broke focused unit suites because test scripts
-compile explicit source lists. This makes every new helper file require manual
+compiled explicit source lists. This made every new helper file require manual
 updates across unrelated test versions.
+
+The current harnesses now route direct C unit builds through
+`tests/lib/build_sources.sh`. That helper reads the canonical `SRC :=` list from
+`Makefile` for full internal-library unit builds and keeps the few intentionally
+small unit source groups in one place.
 
 **Preferred fix:**
 
-Introduce a shared test compile manifest or helper script for common source
-sets. Individual suites can still add small extras, but the default lowerer,
-parser, VM, and Bash source groups should not be copy-pasted in many places.
+Keep implementation source groups centralized in `tests/lib/build_sources.sh`.
+Individual suites may choose a named group such as `runtime`, `library`,
+`command_model`, or `command_result`, but they should not copy large `src/*.c`
+lists inline.
+
+Remaining watch rule: if a future unit needs a new focused internal source set,
+add a named helper group rather than editing several versioned `run.sh` files.
 
 ## H10 — Concept map pressure has been reduced by code, but the tree shape now needs correction
 
@@ -390,7 +399,7 @@ feature and concept extraction work and make the source tree coherent again.
 2. Decide which micro-files are real modules and which should be merged/renamed.
 3. Reformat and clarify long functions in `vm_process.c`.
 4. Add section boundaries and helper renames in `bash_stmt.c`.
-5. Centralize test compile source lists.
+5. Keep test compile source lists centralized in `tests/lib/build_sources.sh`.
 6. Only then revisit remaining high-pressure concepts.
 
 ## Out of scope for this debt file

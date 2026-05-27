@@ -146,6 +146,13 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/main.c` | command-line parsing and top-level dispatch | no grammar or feature policy |
 | `src/cli_program.c` | source loading/import composition and backend orchestration | no semantics beyond orchestration failures |
 
+### Test harness infrastructure
+
+| File | Owns | Notes |
+| --- | --- | --- |
+| `tests/lib/testlib.sh` | shared shell assertions and VM/Bash parity helpers | no implementation source lists |
+| `tests/lib/build_sources.sh` | focused C unit-test compile groups | reads canonical project sources from `Makefile`; versioned `run.sh` files should choose named groups, not copy large `src/*.c` lists |
+
 ## Cross-layer contracts
 
 - Accepted user-facing behavior must lower into backend-neutral HIR/shared metadata

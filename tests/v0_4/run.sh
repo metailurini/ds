@@ -9,14 +9,14 @@ trap 'rm -rf "$TMP"' EXIT
 
 # shellcheck source=tests/lib/testlib.sh
 source "$ROOT/tests/lib/testlib.sh"
+# shellcheck source=tests/lib/build_sources.sh
+source "$ROOT/tests/lib/build_sources.sh"
 
 if [[ "${DS_SKIP_BUILD:-0}" != 1 ]]; then
   make -C "$ROOT" clean all >/dev/null
 fi
 
-cc -std=c99 -Wall -Wextra -Wpedantic -I"$ROOT/include" \
-  "$ROOT/tests/v0_4/unit/runtime.c" "$ROOT/src/runtime.c" "$ROOT/src/source.c" "$ROOT/src/diag.c" "$ROOT/src/runtime/hashmap.c" \
-  -o "$TMP/test_v0_4_runtime"
+ds_compile_unit "$ROOT" runtime "$ROOT/tests/v0_4/unit/runtime.c" "$TMP/test_v0_4_runtime"
 run_ok runtime_ownership_unit "$TMP/test_v0_4_runtime"
 
 cat >"$TMP/pipeline_valid.ds" <<'DS'
