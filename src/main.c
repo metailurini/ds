@@ -1,6 +1,7 @@
 #define _XOPEN_SOURCE 700
 #include "backend.h"
 #include "cli_program.h"
+#include "ds_checker.h"
 
 #include <errno.h>
 #include <stdio.h>

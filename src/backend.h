@@ -18,7 +18,6 @@ typedef struct {
 } DsVmOptions;
 
 bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, DsDiag *diag);
-size_t ds_check_warnings_ast(const DsAst *ast, FILE *out);
 
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag);
 bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *program, const char *output_path, DsDiag *diag);

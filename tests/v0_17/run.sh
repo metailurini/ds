@@ -109,11 +109,11 @@ assert_contains Makefile 'src/vm_compile.c' 'VM compiler source is built'
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public umbrella does not expose hashmap internals'
 
-for file in src/parser.c src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c src/format.c src/checker.c src/vm_compile.c src/vm_dump.c src/bash_stmt.c src/bash_deps.c; do
+for file in src/parser.c src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c src/format.c src/ds_checker.c src/vm_compile.c src/vm_dump.c src/bash_stmt.c src/bash_deps.c; do
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-for file in src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c src/format.c src/checker.c src/vm_compile.c src/bash_stmt.c src/bash_deps.c; do
+for file in src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c src/format.c src/ds_checker.c src/vm_compile.c src/bash_stmt.c src/bash_deps.c; do
   assert_matches "$file" 'While|WHILE|while' "$file handles while/control-flow path"
 done
 assert_contains src/vm_dump.c 'OP_JUMP_POP' 'VM dump handles patched loop-control jumps'

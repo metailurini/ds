@@ -39,6 +39,7 @@ void ds_source_free(DsSource *source);
 
 void ds_diag_init(DsDiag *diag, const DsSource *source);
 void ds_diag_format_location(const DsSource *source, DsSpan span, char *buf, size_t buf_len);
+void ds_diag_report(FILE *out, const DsSource *source, DsSpan span, const char *severity, const char *fmt, ...);
 void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...);
 
 char *ds_str_dup_range(const char *data, size_t len);

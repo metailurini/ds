@@ -74,7 +74,7 @@ Command words stay syntax-preserving until lowering validates them.
 - `src/ds_command_word.c`
 - `src/ast.c`
 - `src/format.c`
-- `src/checker.c`
+- `src/ds_checker.c`
 - `src/lower_command.c`
 - `src/lower_stmt.c`
 - `src/lower_functions.c`

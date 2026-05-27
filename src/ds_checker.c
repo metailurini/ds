@@ -1,5 +1,5 @@
+#include "ds_checker.h"
 #include "frontend.h"
-#include "backend.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -42,40 +42,13 @@ static void symbol_push(Checker *c, DsStr name, DsSpan span, SymKind kind, size_
     c->items[c->len++] = (Symbol){name, span, kind, depth, false};
 }
 
-static void print_source_line(FILE *out, const DsSource *source, int wanted_line, int column) {
-    if (!source || !source->data || wanted_line <= 0) return;
-    const char *start = source->data;
-    int line = 1;
-    bool found = wanted_line == 1;
-    for (size_t i = 0; i < source->len; i++) {
-        if (line == wanted_line) {
-            start = source->data + i;
-            found = true;
-            break;
-        }
-        if (source->data[i] == '\n') line++;
-    }
-    if (!found) return;
-    const char *end = start;
-    while (*end && *end != '\n' && *end != '\r') end++;
-    fprintf(out, "\n  %.*s\n  ", (int)(end - start), start);
-    for (int i = 1; i < column; i++) fputc(' ', out);
-    fputs("^\n", out);
-}
-
 static void warning_name(Checker *c, DsSpan span, const char *kind, DsStr name) {
-    char location[1024];
-    ds_diag_format_location(span.source, span, location, sizeof(location));
-    fprintf(c->out, "%s: warning: unused %s `%.*s`\n", location, kind, (int)name.len, name.data);
-    print_source_line(c->out, span.source, span.start.line, span.start.column);
+    ds_diag_report(c->out, span.source, span, "warning", "unused %s `%.*s`", kind, (int)name.len, name.data);
     c->warnings++;
 }
 
 static void warning_text(Checker *c, DsSpan span, const char *message) {
-    char location[1024];
-    ds_diag_format_location(span.source, span, location, sizeof(location));
-    fprintf(c->out, "%s: warning: %s\n", location, message);
-    print_source_line(c->out, span.source, span.start.line, span.start.column);
+    ds_diag_report(c->out, span.source, span, "warning", "%s", message);
     c->warnings++;
 }
 

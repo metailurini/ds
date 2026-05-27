@@ -329,23 +329,30 @@ sidecar emission.
 
 - Fold backend-specific static-expression inference into generic HIR helpers.
 
-## H8 — `checker.c` still crosses façade boundaries and duplicates diagnostic rendering
+## H8 — `ds_checker.c` checker façade and diagnostic rendering boundary
 
-**Status:** Medium priority
+**Status:** Addressed for current shape; keep on watch
 **Kind:** layering / diagnostics support debt
-**File:** `src/checker.c`
+**Files:** `src/ds_checker.c`, `src/ds_checker.h`, `src/diag.c`, `src/ds_common.h`
 
-**Problem:**
+**Original problem:**
 
-`checker.c` includes `backend.h` and carries local source-line diagnostic display
-logic. The checker should be a presentation/warning backend, but it should not
-need broad backend façade coupling or copied diagnostic rendering mechanics.
+`ds_checker.c` included `backend.h` and carried local source-line diagnostic
+display logic. The checker should be a warning pass, but it should not need broad
+backend façade coupling or copied diagnostic rendering mechanics.
 
-**Preferred fix:**
+**Current state:**
 
-- Give checker a narrow declaration home if needed.
-- Reuse diagnostic/source rendering support instead of keeping local copies.
+- The checker declaration lives in narrow `src/ds_checker.h`.
+- `src/ds_checker.c` no longer includes `backend.h`.
+- Error and warning rendering share `ds_diag_report(...)` in `src/diag.c`.
+- `src/backend.h` no longer exposes checker warnings.
+
+**Watch rule:**
+
 - Keep checker warnings separate from hard semantic diagnostics.
+- Do not add VM/Bash/backend declarations to `ds_checker.h`.
+- Do not add checker-local source-line rendering copies; use `ds_diag_report`.
 
 ## H9 — Test harnesses hardcode implementation-file lists
 

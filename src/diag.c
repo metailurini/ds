@@ -15,37 +15,60 @@ void ds_diag_format_location(const DsSource *source, DsSpan span, char *buf, siz
     snprintf(buf, buf_len, "%s:%d:%d", path, span.start.line, span.start.column);
 }
 
-static void print_source_line(const DsSource *source, int wanted_line, int column) {
-    if (!source || !source->data || wanted_line <= 0) return;
+static void ds_diag_print_source_line(FILE *out, const DsSource *source, int wanted_line, int column) {
+    if (!out || !source || !source->data || wanted_line <= 0) return;
 
     const char *start = source->data;
     int line = 1;
+    bool found = wanted_line == 1;
     for (size_t i = 0; i < source->len; i++) {
         if (line == wanted_line) {
             start = source->data + i;
+            found = true;
             break;
         }
-        if (source->data[i] == '\n') line++;
+        if (source->data[i] == '\n') {
+            line++;
+            if (line == wanted_line) {
+                start = source->data + i + 1;
+                found = true;
+                break;
+            }
+        }
     }
-    if (line != wanted_line && wanted_line != 1) return;
+    if (!found) return;
 
     const char *end = start;
     while (*end && *end != '\n' && *end != '\r') end++;
-    fprintf(stderr, "\n  %.*s\n  ", (int)(end - start), start);
-    for (int i = 1; i < column; i++) fputc(' ', stderr);
-    fprintf(stderr, "^\n");
+    fprintf(out, "\n  %.*s\n  ", (int)(end - start), start);
+    for (int i = 1; i < column; i++) fputc(' ', out);
+    fputs("^\n", out);
+}
+
+static void ds_diag_vreport(FILE *out, const DsSource *source, DsSpan span, const char *severity, const char *fmt, va_list args) {
+    if (!out) out = stderr;
+    if (!severity) severity = "diagnostic";
+
+    char location[1024];
+    ds_diag_format_location(source, span, location, sizeof(location));
+    fprintf(out, "%s: %s: ", location, severity);
+    vfprintf(out, fmt, args);
+    fputc('\n', out);
+    ds_diag_print_source_line(out, span.source ? span.source : source, span.start.line, span.start.column);
+}
+
+void ds_diag_report(FILE *out, const DsSource *source, DsSpan span, const char *severity, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    ds_diag_vreport(out, source, span, severity, fmt, args);
+    va_end(args);
 }
 
 void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...) {
     diag->has_error = true;
-    char location[1024];
-    ds_diag_format_location(diag->source, span, location, sizeof(location));
-    fprintf(stderr, "%s: error: ", location);
 
     va_list args;
     va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
+    ds_diag_vreport(stderr, diag->source, span, "error", fmt, args);
     va_end(args);
-    fputc('\n', stderr);
-    print_source_line(span.source ? span.source : diag->source, span.start.line, span.start.column);
 }

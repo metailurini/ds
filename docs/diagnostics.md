@@ -43,7 +43,7 @@ The current source tree emits diagnostics from several layers:
 - `src/parse_*.c` and `src/parser.c`: malformed syntax and parse-shape errors.
 - `src/lower_*.c`: semantic validation, unsupported forms, parity gates, symbol
   and value-kind checks, function/handler/test lowering checks.
-- `src/checker.c`: AST-level warnings for `ds check`, such as unused/shadowed
+- `src/ds_checker.c`: AST-level warnings for `ds check`, such as unused/shadowed
   declarations.
 - `src/vm*.c`: VM runtime failures, script-argument runtime binding failures,
   process/subprocess failures, stdlib runtime failures, and defensive runtime
@@ -54,10 +54,12 @@ The current source tree emits diagnostics from several layers:
 - `src/source.c` and `src/cli_program.c`: source loading, import resolution,
   filesystem, import-cycle, and program-composition diagnostics.
 - `src/main.c`: command-line usage and top-level command dispatch diagnostics.
-- `src/diag.c`: diagnostic formatting and source-location rendering only.
+- `src/diag.c`: diagnostic formatting and source-location rendering for errors
+  and warnings only.
 
 `src/diag.c` owns how diagnostics are displayed. It does not own which language
-rules are errors.
+rules are errors. Use `ds_diag_report(...)` for warning-style diagnostics that
+need the same location/source-line rendering as errors.
 
 ## Phase ownership
 
@@ -169,9 +171,13 @@ diagnostic test.
 
 ### Checker and formatter: warnings and presentation
 
-`src/checker.c` owns AST-level warnings used by `ds check`, such as unused or
+`src/ds_checker.c` owns AST-level warnings used by `ds check`, such as unused or
 shadowed declarations. These warnings may help the user, but they must not become
 a second semantic validator for hard errors that belong in lowering.
+
+Checker warnings use the shared diagnostic renderer and a narrow `ds_checker.h`
+entrypoint. The checker must not include the broad backend façade just to expose
+its warning API.
 
 `src/format.c` owns formatting output. Formatter diagnostics should be limited to
 parse/format orchestration failures. Formatting policy should not change language

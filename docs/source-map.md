@@ -56,7 +56,8 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/ds_stdlib.h` | stdlib helper metadata shared by lowerer/VM/Bash | metadata, not implementation |
 | `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |
 | `src/ds_signal.h` | shared supported-signal names and conventional INT/TERM runtime status metadata | consumed by VM and Bash; lowerer still owns source-level signal legality |
-| `src/backend.h` | public formatter/checker/Bash/VM/test backend entrypoints | no backend-private state |
+| `src/ds_checker.h` | checker warning entrypoint for `ds check` | narrow checker façade; no Bash/VM/backend dependency |
+| `src/backend.h` | public formatter/Bash/VM/test backend entrypoints | no backend-private state; checker declarations stay in `ds_checker.h` |
 | `src/parser_internal.h` | parser cursor/helpers/component prototypes | parser-private only |
 | `src/lower_internal.h` | lowerer-private state and helper prototypes | keep narrow; avoid becoming a concept dump |
 | `src/vm_internal.h` | VM-private bytecode/runtime/process/test declarations | no parser/lowerer policy |
@@ -69,7 +70,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | File | Owns | Notes |
 | --- | --- | --- |
 | `src/source.c` | source manager and span/source lookup | diagnostics support only |
-| `src/diag.c` | diagnostic collection/rendering | displays phase decisions; does not decide them |
+| `src/diag.c` | diagnostic collection/rendering for errors and warnings | displays phase decisions; does not decide them |
 | `src/runtime.c` | `DsValue`/runtime containers/helpers | VM runtime substrate, not syntax policy |
 | `src/runtime/hashmap.*` | generic hashmap implementation | no language semantics |
 | `src/ds_command.c` | command payload lifecycle helpers: clone/free/init for words, stages, redirects, and command payloads | data ownership only; no command-word policy, command-result fields, or pipeline semantics |
@@ -109,7 +110,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower_functions.c` | function collection, return-kind discovery/validation, call-return contracts | owns function return contract pressure |
 | `src/lower_free.c` | lowered tree cleanup | no policy |
 | `src/hir.c` | HIR allocation/free/debug helpers | mirrors HIR only |
-| `src/checker.c` | warnings/static checks over AST/HIR where applicable | no hard acceptance except checker-owned warnings |
+| `src/ds_checker.c` | warnings/static checks over AST/HIR where applicable | uses shared diagnostic rendering; no hard acceptance except checker-owned warnings |
 
 ### Bash backend
 

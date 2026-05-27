@@ -55,7 +55,8 @@ either backend. The VM and Bash backend should not implement separate languages.
   VM, and Bash.
 - `cli_program.c`, `cli_program.h`, `main.c`: CLI orchestration, import-aware
   program loading, command dispatch, and top-level user-facing command behavior.
-- `backend.h`: public backend/checker/formatter entrypoints used by CLI/tests.
+- `ds_checker.h`: narrow checker warning entrypoint used by the CLI.
+- `backend.h`: public backend/formatter entrypoints used by CLI/tests.
 
 ## Refactoring checklist
 

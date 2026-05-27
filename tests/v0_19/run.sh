@@ -147,11 +147,11 @@ assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public umbrella does not expose hashmap internals'
 
-for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c src/hir.c src/format.c src/checker.c src/ds_interpolation.c src/vm_stdlib.c src/bash_helpers.c src/bash_expr.c src/bash_deps.c; do
+for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c src/hir.c src/format.c src/ds_checker.c src/ds_interpolation.c src/vm_stdlib.c src/bash_helpers.c src/bash_expr.c src/bash_deps.c; do
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-for file in src/parse_expr.c src/lower_expr.c src/hir.c src/format.c src/checker.c src/bash_deps.c; do
+for file in src/parse_expr.c src/lower_expr.c src/hir.c src/format.c src/ds_checker.c src/bash_deps.c; do
   assert_matches "$file" 'MethodCall|method|format|specifier|string\.' "$file handles v0.19 string/format path"
 done
 assert_contains src/ast.c 'CallExpr' 'AST printer handles lowered method calls as call expressions'

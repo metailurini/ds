@@ -106,8 +106,8 @@ the umbrella where possible:
   formatter/checker support, and debug output.
 - `src/ds_runtime.h` owns runtime values, strings, arrays, and `DsMap`.
 - `src/ds_stdlib.h` owns standard-library helper metadata.
-- `src/backend.h` owns formatter/checker, Bash emission, bytecode, and VM
-  entrypoints.
+- `src/ds_checker.h` owns the narrow checker warning entrypoint.
+- `src/backend.h` owns formatter, Bash emission, bytecode, and VM entrypoints.
 
 - `src/ds_stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
@@ -737,7 +737,7 @@ src/
 
   semantic/
     resolver.c
-    checker.c
+    ds_checker.c
     imports.c
 
   ir/
