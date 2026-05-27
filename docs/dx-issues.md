@@ -1,0 +1,147 @@
+# ds DX issues observed while writing scripts
+
+This document records developer-experience issues observed while writing a pure `ds` approximation of a C function analyzer in `scripts/analyze_c_functions_pure.ds`.
+
+The goal is not to decide syntax yet. These are notes for future language/runtime design.
+
+## Literal braces in strings are awkward
+
+Writing a literal `{` or `}` in a string currently conflicts with interpolation parsing.
+
+Example that was awkward:
+
+```ds
+line.contains("{")
+```
+
+The workaround used in the script was to shell out to `printf`:
+
+```ds
+let lbrace_result = run printf "\\173"
+let rbrace_result = run printf "\\175"
+let lbrace = lbrace_result.stdout
+let rbrace = rbrace_result.stdout
+```
+
+This is not good DX for text-processing scripts.
+
+## No indexing directly after method calls
+
+This did not work:
+
+```ds
+sig.split("(")[0].trim()
+```
+
+The script had to split it into temporary variables:
+
+```ds
+let paren_parts = sig.split("(")
+let before_paren = paren_parts[0].trim()
+```
+
+That is more verbose than expected for common string/array processing.
+
+## Function parameters need defaults for string method inference
+
+A helper like this could not call string methods on the parameter:
+
+```ds
+fn clean_line(line) {
+  let t = line.trim()
+}
+```
+
+The script had to provide a default value so the parameter was known as a string:
+
+```ds
+fn clean_line(line = "") {
+  let t = line.trim()
+}
+```
+
+This works, but it makes ordinary helper functions feel surprising.
+
+## No native recursive directory walking
+
+The script had to shell out to `find`:
+
+```ds
+find '{root}' -type f \( -name '*.c' -o -name '*.h' \)
+```
+
+A future standard-library helper for recursive walking/filtering may improve script readability.
+
+## No native sort-by-field helper
+
+To sort analyzer results by LOC descending, the script shells out to `sort`:
+
+```sh
+sort -t ':' -k4,4nr
+```
+
+This is acceptable for shell-native scripting, but it makes structured in-language data processing harder.
+
+## No lightweight structured records for rows
+
+The analyzer naturally wants to store rows like:
+
+```ds
+{ file: file, line: start_line, name: func_name, loc: loc }
+```
+
+Instead, the script writes colon-separated text lines to a temporary file and sorts externally.
+
+This is workable, but limits clean data transformations inside `ds`.
+
+## Broken pipe diagnostics are noisy
+
+Testing with `head` caused a broken-pipe style failure:
+
+```sh
+./ds run scripts/analyze_c_functions_pure.ds --root . | head
+```
+
+Observed diagnostic:
+
+```text
+command `echo` failed with exit 141
+```
+
+For CLI-style scripts, this may be too noisy. Writing to a closed pipe is common when users pipe output to tools like `head`.
+
+## String parsing APIs are limited
+
+The analyzer needed common string scanning operations, including:
+
+- `index_of`
+- `last_index_of`
+- `slice`
+- `char_at`
+- count occurrences of a substring/character
+
+Without these, even an approximate parser required awkward workarounds.
+
+## Regex support does not expose captures
+
+The current `matches` support can answer yes/no questions, but this task wanted extraction:
+
+```ds
+# illustrative only
+let m = sig.match(/([A-Za-z_][A-Za-z0-9_]*)\s*\()/
+let name = m.group(1)
+```
+
+Without captures, the script approximated function-name extraction using `.split()`.
+
+## Temporary files were needed for buffering
+
+Because results need to be sorted after collection, the script writes intermediate output to:
+
+```text
+.ds-c-functions.out
+```
+
+and removes it with `defer`.
+
+This works, but an ergonomic in-memory collection/sort flow would be nicer for data-processing scripts.
