@@ -88,7 +88,6 @@ bool bash_emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, D
 bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent);
 bool bash_emit_user_call_statement(BashEmitter *e, DsStr name, const DsLowerExprVec *args, int indent);
 bool bash_emit_user_call_capture_return(BashEmitter *e, const DsLowerExpr *call, DsLowerValueKind return_kind, int indent);
-bool bash_emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent);
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out);
 bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span);

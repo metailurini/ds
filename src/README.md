@@ -34,8 +34,8 @@ either backend. The VM and Bash backend should not implement separate languages.
 - `bash_*.c`, `bash_internal.h`, `bash_helpers.h`: HIR-to-standalone-Bash
   emission. Keep concerns cohesive: command rendering in `bash_command.c`,
   structured-value ABI helpers in `bash_structured.c`, function wrappers and
-  user-call materialization in `bash_function.c`, return control flow in
-  `bash_return.c`, and statement dispatch in `bash_stmt.c`.
+  user-call materialization in `bash_function.c`, and statement/return dispatch
+  in `bash_stmt.c`.
 - `vm*.c`, `vm_internal.h`: HIR-to-bytecode construction, bytecode dumping, VM
   execution, scopes, script argv binding, subprocess/runtime behavior, stdlib
   execution, and VM test setup.
@@ -45,12 +45,10 @@ either backend. The VM and Bash backend should not implement separate languages.
   source spans, and shared primitive declarations.
 - `ds_command.c`, `ds_command.h`: shared command payload containers and
   lifecycle helpers.
-- `ds_command_word.c`, `ds_command_word.h`: raw command-word shape helpers used
-  by lowering, VM argv materialization, and Bash command emission.
-- `ds_command_result.c`, `ds_command_result.h`: command-result field catalog,
-  field kinds, and backend storage aliases.
-- `ds_command_pipeline.c`, `ds_command_pipeline.h`: pipeline shape/status helpers
-  shared by VM and Bash-oriented code.
+- `ds_command_facts.c`, `ds_command_facts.h`: compact policy-neutral command
+  facts used across lowerer, VM, and Bash: raw word shape, command-result field
+  descriptors, and pipeline shape/status helpers. They do not decide
+  source-language legality or execute processes.
 - `ds_stdlib.c`, `ds_stdlib.h`: canonical stdlib helper metadata shared by lowering,
   VM, and Bash.
 - `cli_program.c`, `cli_program.h`, `main.c`: CLI orchestration, import-aware

@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
-#include "ds_command_result.h"
+#include "ds_command_facts.h"
 
 #include "ds_signal.h"
 #include "vm_internal.h"

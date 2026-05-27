@@ -169,7 +169,7 @@ Consider one cohesive extraction such as:
 
 **Status:** Addressed enough for now; keep on watch
 **Kind:** emitter cohesion debt
-**Files:** `src/bash_stmt.c`, `src/bash_function.c`, `src/bash_return.c`, `src/bash_command.c`
+**Files:** `src/bash_stmt.c`, `src/bash_function.c`, `src/bash_command.c`
 
 **What was wrong:**
 
@@ -187,13 +187,14 @@ switch, making future edits easy to misplace.
 - `bash_function.c` owns Bash function wrapper/parameter/default binding and
   user-function call materialization, including nested user-call argument capture
   and value-call plumbing.
-- `bash_return.c` owns return statement payload emission, including structured
-  array/map/command-result returns.
+- Return statement control flow is folded back into `bash_stmt.c`; the return
+  logic was too small to justify a standalone file after structured payload
+  construction moved to `bash_structured.c`.
 - `bash_command.c` owns command rendering and captured pipeline assignment
   mechanics.
 
-This is intentionally not a one-file-per-statement split. Each extracted file
-has a cohesive Bash-emitter concern with enough weight to justify its existence.
+This is intentionally not a one-file-per-statement split. Extracted files need a
+cohesive emitter concern with enough weight to justify their existence.
 
 **Remaining watch points:**
 
@@ -213,8 +214,7 @@ has a cohesive Bash-emitter concern with enough weight to justify its existence.
 
 **Status:** Addressed for the current maintenance loop; keep on watch
 **Kind:** module scope debt
-**Files:** `src/ds_command.h`, `src/ds_command.c`, `src/ds_command_word.*`,
-`src/ds_command_result.*`, `src/ds_command_pipeline.*`
+**Files:** `src/ds_command.h`, `src/ds_command.c`, `src/ds_command_facts.*`
 
 **Problem:**
 
@@ -228,15 +228,13 @@ boundaries behind one broad module name.
 
 - `ds_command.c` / `ds_command.h` own only command payload data lifecycle:
   words, stages, redirects, command init/clone/free.
-- `ds_command_word.c` / `.h` own raw command-word shape classification and
-  direct-call interpolation detection. Lowering still owns legality.
-- `ds_command_result.c` / `.h` own the command-result field catalog, field
-  kinds, and Bash storage aliases.
-- `ds_command_pipeline.c` / `.h` own pipeline shape helpers and the shared
-  VM pipefail-style status calculation.
+- `ds_command_facts.c` / `.h` own compact policy-neutral command facts:
+  command-word shape detection, command-result field descriptors, and pipeline
+  shape/status helpers. Lowering still owns legality; VM/Bash still own runtime
+  and emission mechanics.
 
-This is a deliberate small cluster split, not a one-file-per-concept pattern:
-each new file has a named command-model subdomain consumed by multiple phases.
+This keeps command payload storage separate from shared command facts without
+creating one tiny file per descriptor table.
 
 **Keep on watch:**
 
@@ -281,7 +279,7 @@ This pass moved the cohesive ABI pieces into `bash_structured.c`:
 - array/map structured return payload construction;
 - command-result storage/copy helpers.
 
-`bash_stmt.c`, `bash_expr.c`, `bash_function.c`, and `bash_return.c` now consume
+`bash_stmt.c`, `bash_expr.c`, and `bash_function.c` now consume
 those helpers rather than reimplementing type metadata or structured payload
 layout.
 
@@ -383,24 +381,37 @@ add a named helper group rather than editing several versioned `run.sh` files.
 
 ## H10 — Concept map pressure has been reduced by code, but the tree shape now needs correction
 
-**Status:** High priority
-**Kind:** process debt
+**Status:** Addressed for the current maintenance loop; keep on watch
+**Kind:** tree-shape / process debt
 
 **Problem:**
 
 The recent pattern was: identify high-pressure concept, add a shared helper/home,
 update docs/tests. That was useful for parity and ownership, but it also trained
-the codebase toward one-file-per-concept. The next maintenance loop should pause
-feature and concept extraction work and make the source tree coherent again.
+the codebase toward one-file-per-concept. H1-H9 corrected the worst effects by
+consolidating one-function files, matching shared header/source stems,
+clarifying long files in place, and centralizing unit-test source lists.
 
-**Preferred next loop:**
+**Current correction:**
 
-1. Establish header/source naming rules.
-2. Decide which micro-files are real modules and which should be merged/renamed.
-3. Reformat and clarify long functions in `vm_process.c`.
-4. Add section boundaries and helper renames in `bash_stmt.c`.
-5. Keep test compile source lists centralized in `tests/lib/build_sources.sh`.
-6. Only then revisit remaining high-pressure concepts.
+- `bash_return.c` was folded back into `bash_stmt.c`; return control flow is a
+  statement concern, while structured return payload layout remains in
+  `bash_structured.c`.
+- `ds_command_word.*`, `ds_command_result.*`, and `ds_command_pipeline.*` were
+  consolidated into `ds_command_facts.*`. This keeps payload lifecycle in
+  `ds_command.*` but avoids three tiny command fact modules.
+- The source map now describes `ds_command_facts.*` as a compact
+  policy-neutral command-facts module, not a generic dumping ground.
+
+**Keep on watch:**
+
+- Do not recreate tiny files for one table, one wrapper, or one statement case.
+- Do not fold unrelated runtime/emitter mechanics into `ds_command_facts.*`; it
+  may own shared facts, not semantic diagnostics or process execution.
+- Prefer section comments and clear functions inside long cohesive files before
+  creating a new module.
+- If a helper cluster grows beyond one coherent concern, split by real owner,
+  not by concept-map row.
 
 ## Out of scope for this debt file
 

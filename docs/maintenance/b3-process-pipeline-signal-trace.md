@@ -17,9 +17,9 @@ large process/runtime rewrite.
 - Plain command statements lower to `DS_LOWER_STMT_CMD` with a `DsCommand`.
 - Captured commands lower to `DS_LOWER_EXPR_RUN` with a `DsCommand`.
 - Pipelines are represented as a `DsCommand` with multiple stages; shared
-  helpers in `src/ds_command_pipeline.c` own pipeline shape checks and VM pipefail-style
+  helpers in `src/ds_command_facts.c` own pipeline shape checks and VM pipefail-style
   status calculation.
-- Command-result fields use the shared descriptor table in `src/ds_command_result.c`;
+- Command-result fields use the shared descriptor table in `src/ds_command_facts.c`;
   VM field materialization is isolated in `src/vm.c`.
 - `defer` and `trap` lower to `DS_LOWER_STMT_DEFER` and `DS_LOWER_STMT_TRAP`.
 - Handler signal identity is stored as `DsHandlerSignal` in HIR.
@@ -85,7 +85,7 @@ large process/runtime rewrite.
    `process_execute_pipeline()`.
 4. VM creates pipes, forks all stages, assigns process groups when possible,
    waits for each child, and computes pipefail-style status through
-   `src/ds_command_result.c`.
+   `src/ds_command_facts.c`.
 5. VM plain pipelines are fail-fast on non-zero status unless signal cleanup
    owns the interruption path.
 6. VM captured pipelines collect final stdout plus stage stderr into command
@@ -153,7 +153,7 @@ semantic if a new rejection is added there without a lowerer gate.
 
 - `src/vm_process.c` currently owns argv rendering, interpolation runtime,
   direct process execution, capture, pipelines, redirection, and process groups.
-- `src/ds_command_pipeline.c` owns shared pipeline shape checks and VM pipefail-style status
+- `src/ds_command_facts.c` owns shared pipeline shape checks and VM pipefail-style status
   calculation; it does not own process execution.
 - `src/vm.c` owns VM command-result/map field materialization;
   capture/storage stays in `src/vm_process.c` because it is produced by process

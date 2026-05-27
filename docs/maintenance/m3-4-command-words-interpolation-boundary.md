@@ -71,7 +71,7 @@ Command words stay syntax-preserving until lowering validates them.
 ## Files touched / relevant files
 - `src/ds_command.h`
 - `src/ds_ast.h`
-- `src/ds_command_word.c`
+- `src/ds_command_facts.c`
 - `src/ast.c`
 - `src/format.c`
 - `src/ds_checker.c`

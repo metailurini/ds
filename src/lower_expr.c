@@ -1,5 +1,5 @@
 #include "lower_internal.h"
-#include "ds_command_result.h"
+#include "ds_command_facts.h"
 
 #include <regex.h>
 #include <stdbool.h>

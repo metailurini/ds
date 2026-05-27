@@ -1,6 +1,6 @@
 #include "bash_internal.h"
 #include "ds_signal.h"
-#include "ds_command_pipeline.h"
+#include "ds_command_facts.h"
 
 #include <string.h>
 
