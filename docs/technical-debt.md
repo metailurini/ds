@@ -294,30 +294,40 @@ maintain as named fragments.
 
 ## H7 — Type/kind-name helpers remain duplicated
 
-**Status:** Medium priority
+**Status:** Addressed for shared labels; keep backend-specific names local
 **Kind:** duplicated helper debt
 **Files:**
 
-- `src/bash_expr.c`
-- `src/bash_stmt.c`
-- `src/bash_emit.c`
-- `src/vm_args.c`
-- `src/lower_stdlib.c`
+- `src/ds_ast.h`
+- `src/ast.c`
+- `src/ds_hir.h`
+- `src/hir.c`
+- Bash/VM/formatter consumers
 
-**Problem:**
+**Resolution:**
 
-There are still local helpers for expression/value/script type names. Some are
-backend-specific, but several exist only to print the same kind labels.
+The truly shared labels now have one owner:
 
-**Preferred fix:**
+- `ds_script_type_name()` owns source-level script type names (`string`, `int`,
+  `bool`) used by AST/HIR dumps, formatting, VM help, and Bash help/type
+  sidecars.
+- `ds_lower_value_kind_name()` owns lowered value-kind metadata labels
+  (`unknown`, `bool`, `int`, `string`, `array`, `map`, `command_result`) used by
+  Bash structured metadata and HIR consumers.
 
-Create or reuse small shared name helpers only when the label is truly a shared
-contract. Otherwise rename local helpers to make their backend-specific purpose
-clear, for example `bash_expr_value_type_name` versus `script_decl_type_name`.
+Backend-specific helpers remain local when they describe backend behavior rather
+than a shared contract, for example Bash static-expression type inference for
+sidecar emission.
+
+**Keep on watch:**
+
+- Do not add another local `script_type_name()` or lowered-value-kind switch.
+- Do not create a global string table for labels that are intentionally
+  backend-specific.
 
 **Do not:**
 
-- Create a global string table for labels that are intentionally backend-specific.
+- Fold backend-specific static-expression inference into generic HIR helpers.
 
 ## H8 — `checker.c` still crosses façade boundaries and duplicates diagnostic rendering
 

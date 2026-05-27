@@ -14,15 +14,6 @@ static const char *script_basename(const DsSource *source) {
     return slash ? slash + 1 : path;
 }
 
-static const char *script_type_name(DsScriptType type) {
-    switch (type) {
-        case DS_SCRIPT_TYPE_STRING: return "string";
-        case DS_SCRIPT_TYPE_INT: return "int";
-        case DS_SCRIPT_TYPE_BOOL: return "bool";
-    }
-    return "unknown";
-}
-
 static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_type_");
     buf_append_len(out, name.data, name.len);
@@ -32,7 +23,7 @@ static void emit_script_type_assignment(BashEmitter *e, DsStr name, DsScriptType
     if (!e->needs_case_types) return;
     emit_type_var_name(&e->out, name);
     buf_append(&e->out, "=");
-    const char *type_name = script_type_name(type);
+    const char *type_name = ds_script_type_name(type);
     bash_single_quote(&e->out, type_name, strlen(type_name));
     buf_append(&e->out, "\n");
 }
@@ -55,14 +46,14 @@ static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
         buf_append(&e->out, "\nArguments:\n");
         for (size_t i = 0; i < program->script_decls.len; i++) {
             const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-            if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+            if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
         }
     }
     buf_append(&e->out, "\nOptions:\n");
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_OPTION) {
-            buf_appendf(&e->out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+            buf_appendf(&e->out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
             if (decl->type == DS_SCRIPT_TYPE_STRING) buf_append_len(&e->out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
             else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
             else buf_append(&e->out, decl->default_bool ? "true" : "false");

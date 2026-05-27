@@ -10,19 +10,6 @@
  * sidecars. It does not decide source-language validity or semantic value
  * kinds; those are lowerer/HIR responsibilities.
  */
-const char *bash_lower_value_type_name(DsLowerValueKind kind) {
-    switch (kind) {
-        case DS_LOWER_VALUE_BOOL: return "bool";
-        case DS_LOWER_VALUE_INT: return "int";
-        case DS_LOWER_VALUE_STRING: return "string";
-        case DS_LOWER_VALUE_ARRAY: return "array";
-        case DS_LOWER_VALUE_MAP: return "map";
-        case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
-        case DS_LOWER_VALUE_UNKNOWN: return "unknown";
-    }
-    return "unknown";
-}
-
 static bool bash_int_binary_op(DsStr op) {
     return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
            str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
@@ -32,44 +19,40 @@ const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING:
         case DS_LOWER_EXPR_INTERP:
-            return "string";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_STRING);
         case DS_LOWER_EXPR_INT:
-            return "int";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_INT);
         case DS_LOWER_EXPR_BOOL:
-            return "bool";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
         case DS_LOWER_EXPR_ARRAY:
-            return "array";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_ARRAY);
         case DS_LOWER_EXPR_MAP:
-            return "map";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_MAP);
         case DS_LOWER_EXPR_RUN:
-            return "command_result";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_COMMAND_RESULT);
         case DS_LOWER_EXPR_BINARY:
-            return bash_int_binary_op(expr->as.binary.op) ? "int" : "bool";
+            return bash_int_binary_op(expr->as.binary.op)
+                ? ds_lower_value_kind_name(DS_LOWER_VALUE_INT)
+                : ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
         case DS_LOWER_EXPR_UNARY:
-            if (str_eq(expr->as.unary.op, "!")) return "bool";
-            if (str_eq(expr->as.unary.op, "-")) return "int";
-            return "unknown";
+            if (str_eq(expr->as.unary.op, "!")) return ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
+            if (str_eq(expr->as.unary.op, "-")) return ds_lower_value_kind_name(DS_LOWER_VALUE_INT);
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
         case DS_LOWER_EXPR_CALL:
-            return bash_lower_value_type_name(expr->as.call.return_kind);
+            return ds_lower_value_kind_name(expr->as.call.return_kind);
         case DS_LOWER_EXPR_FIELD: {
             const DsCommandResultField *desc = ds_command_result_field_lookup(expr->as.field.field);
-            if (!desc) return "unknown";
-            switch (desc->kind) {
-                case DS_COMMAND_RESULT_FIELD_STRING: return "string";
-                case DS_COMMAND_RESULT_FIELD_INT: return "int";
-                case DS_COMMAND_RESULT_FIELD_BOOL: return "bool";
-            }
-            return "unknown";
+            return desc ? ds_command_result_field_kind_name(desc->kind) : ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
         }
         case DS_LOWER_EXPR_INDEX:
-            return bash_lower_value_type_name(expr->as.index.element_kind);
+            return ds_lower_value_kind_name(expr->as.index.element_kind);
         case DS_LOWER_EXPR_IDENT:
         case DS_LOWER_EXPR_REGEX:
         case DS_LOWER_EXPR_RANGE:
         case DS_LOWER_EXPR_ERROR:
-            return "unknown";
+            return ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
     }
-    return "unknown";
+    return ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
 }
 
 void bash_emit_type_var_name(EmitBuf *out, DsStr name) {
@@ -297,7 +280,7 @@ void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *
 void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_return_type=");
-    const char *return_type = bash_lower_value_type_name(kind);
+    const char *return_type = ds_lower_value_kind_name(kind);
     bash_single_quote(&e->out, return_type, strlen(return_type));
     buf_append(&e->out, "\n");
 }

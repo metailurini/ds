@@ -464,7 +464,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             size_t mark = e->symbols.len;
             DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
             symbol_vec_push(&e->symbols, copy);
-            bash_emit_type_assignment(e, stmt->as.for_stmt.name, bash_lower_value_type_name(stmt->as.for_stmt.element_kind), indent + 1, false);
+            bash_emit_type_assignment(e, stmt->as.for_stmt.name, ds_lower_value_kind_name(stmt->as.for_stmt.element_kind), indent + 1, false);
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
             emit_indent(&e->out, indent);
@@ -558,7 +558,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "__ds_type_");
                 buf_append_len(&e->out, raw.data, raw.len);
                 buf_append(&e->out, "=");
-                bash_single_quote(&e->out, bash_lower_value_type_name(stmt->as.case_stmt.selector->as.call.return_kind), strlen(bash_lower_value_type_name(stmt->as.case_stmt.selector->as.call.return_kind)));
+                bash_single_quote(&e->out, ds_lower_value_kind_name(stmt->as.case_stmt.selector->as.call.return_kind), strlen(ds_lower_value_kind_name(stmt->as.case_stmt.selector->as.call.return_kind)));
                 buf_append(&e->out, "\n");
                 case_temp_expr = *stmt->as.case_stmt.selector;
                 case_temp_expr.kind = DS_LOWER_EXPR_IDENT;

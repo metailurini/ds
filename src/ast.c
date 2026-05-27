@@ -249,7 +249,7 @@ static const char *decl_kind_name(DsScriptDeclKind kind) {
     return "Decl";
 }
 
-static const char *decl_type_name(DsScriptType type) {
+const char *ds_script_type_name(DsScriptType type) {
     switch (type) {
         case DS_SCRIPT_TYPE_STRING: return "string";
         case DS_SCRIPT_TYPE_INT: return "int";
@@ -266,7 +266,7 @@ void ds_ast_print(const DsAst *ast, FILE *out) {
         for (size_t i = 0; i < ast->script.declarations.len; i++) {
             const DsScriptDecl *decl = &ast->script.declarations.items[i];
             indent(out, 2);
-            fprintf(out, "%s %.*s: %s\n", decl_kind_name(decl->kind), (int)decl->name.len, decl->name.data, decl_type_name(decl->type));
+            fprintf(out, "%s %.*s: %s\n", decl_kind_name(decl->kind), (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
             if (decl->default_value) {
                 indent(out, 3);
                 fputs("Default\n", out);

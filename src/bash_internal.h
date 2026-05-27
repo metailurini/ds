@@ -55,7 +55,6 @@ void emit_source_loc(EmitBuf *out, const DsSource *fallback, DsSpan span);
 bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_data, size_t *out_len);
 bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 
-const char *bash_lower_value_type_name(DsLowerValueKind kind);
 const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr);
 void bash_emit_type_var_name(EmitBuf *out, DsStr name);
 void bash_emit_elem_type_var_name(EmitBuf *out, DsStr name);

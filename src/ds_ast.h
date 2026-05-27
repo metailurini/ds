@@ -145,6 +145,8 @@ typedef enum {
     DS_SCRIPT_TYPE_BOOL
 } DsScriptType;
 
+const char *ds_script_type_name(DsScriptType type);
+
 typedef struct {
     DsScriptDeclKind kind;
     DsScriptType type;

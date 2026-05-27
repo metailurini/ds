@@ -23,7 +23,7 @@ bool bash_emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, D
     buf_append(&e->out, "__ds_call_value_into ");
     emit_var_name(&e->out, raw_name);
     buf_append(&e->out, " ");
-    const char *return_type = bash_lower_value_type_name(expr->as.call.return_kind);
+    const char *return_type = ds_lower_value_kind_name(expr->as.call.return_kind);
     bash_single_quote(&e->out, return_type, strlen(return_type));
     buf_append(&e->out, " ");
     emit_fn_name(&e->out, expr->as.call.name);
@@ -57,7 +57,7 @@ static bool emit_user_call_args_with_materialized(BashEmitter *e, const DsLowerE
             buf_append(out, "\"$");
             emit_var_name(out, raw);
             buf_append(out, "\" ");
-            const char *type = bash_lower_value_type_name(mats[i].kind);
+            const char *type = ds_lower_value_kind_name(mats[i].kind);
             bash_single_quote(out, type, strlen(type));
             continue;
         }
@@ -79,7 +79,7 @@ bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const D
     buf_append(&e->out, "__ds_call_value_into ");
     emit_var_name(&e->out, name);
     buf_append(&e->out, " ");
-    const char *return_type = bash_lower_value_type_name(call->as.call.return_kind);
+    const char *return_type = ds_lower_value_kind_name(call->as.call.return_kind);
     bash_single_quote(&e->out, return_type, strlen(return_type));
     buf_append(&e->out, " ");
     emit_fn_name(&e->out, call->as.call.name);
@@ -114,7 +114,7 @@ bool bash_emit_user_call_capture_return(BashEmitter *e, const DsLowerExpr *call,
         if (!emit_materialized_user_call_args(e, &call->as.call.args, mats, indent)) { free(mats); return false; }
     }
     buf_append(&e->out, "__ds_call_value_capture ");
-    const char *return_type = bash_lower_value_type_name(return_kind);
+    const char *return_type = ds_lower_value_kind_name(return_kind);
     bash_single_quote(&e->out, return_type, strlen(return_type));
     buf_append(&e->out, " ");
     emit_fn_name(&e->out, call->as.call.name);
@@ -162,7 +162,7 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
             bash_emit_type_var_name(&e->out, param->name);
             buf_append(&e->out, "=");
             buf_appendf(&e->out, "\"${%zu:-", i * 2 + 2);
-            const char *type = param->has_default ? bash_lower_value_type_name(param->default_kind) : "unknown";
+            const char *type = param->has_default ? ds_lower_value_kind_name(param->default_kind) : ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
             buf_append(&e->out, type);
             buf_append(&e->out, "}\"");
         }
@@ -181,7 +181,7 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
             buf_append(&e->out, "; ");
             bash_emit_type_var_name(&e->out, param->name);
             buf_append(&e->out, "=");
-            const char *type = param->has_default ? bash_lower_value_type_name(param->default_kind) : "unknown";
+            const char *type = param->has_default ? ds_lower_value_kind_name(param->default_kind) : ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
             bash_single_quote(&e->out, type, strlen(type));
         }
         buf_append(&e->out, "; fi\n");

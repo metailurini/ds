@@ -12,15 +12,6 @@ static const char *script_basename(const DsSource *source) {
     return slash ? slash + 1 : path;
 }
 
-static const char *script_type_name(DsScriptType type) {
-    switch (type) {
-        case DS_SCRIPT_TYPE_STRING: return "string";
-        case DS_SCRIPT_TYPE_INT: return "int";
-        case DS_SCRIPT_TYPE_BOOL: return "bool";
-    }
-    return "unknown";
-}
-
 static bool parse_runtime_int(const char *text, int64_t *out) {
     if (!text || text[0] == '\0') return false;
     errno = 0;
@@ -57,7 +48,7 @@ static void print_script_help(const DsSource *source, const DsLowerProgram *prog
         fputs("\nArguments:\n", out);
         for (size_t i = 0; i < program->script_decls.len; i++) {
             const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-            if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+            if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
         }
     }
 
@@ -65,7 +56,7 @@ static void print_script_help(const DsSource *source, const DsLowerProgram *prog
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_OPTION) {
-            fprintf(out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, script_type_name(decl->type));
+            fprintf(out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
             if (decl->type == DS_SCRIPT_TYPE_STRING) fprintf(out, "%.*s", (int)decl->default_text.len, decl->default_text.data ? decl->default_text.data : "");
             else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, "%lld", (long long)decl->default_int);
             else fprintf(out, "%s", decl->default_bool ? "true" : "false");

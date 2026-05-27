@@ -52,15 +52,6 @@ SymKind script_type_to_sym(DsScriptType type) {
     return SYM_UNKNOWN;
 }
 
-const char *script_type_name(DsScriptType type) {
-    switch (type) {
-        case DS_SCRIPT_TYPE_STRING: return "string";
-        case DS_SCRIPT_TYPE_INT: return "int";
-        case DS_SCRIPT_TYPE_BOOL: return "bool";
-    }
-    return "unknown";
-}
-
 bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program) {
     DsLowerScriptDecl out;
     memset(&out, 0, sizeof(out));
@@ -108,6 +99,5 @@ bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *p
 
     scope_define(lower, lower->scope, decl->name, script_type_to_sym(decl->type), decl->span);
     lower_decl_vec_push(&program->script_decls, out);
-    (void)script_type_name;
     return !lower->diag->has_error;
 }

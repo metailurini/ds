@@ -26,10 +26,11 @@ either backend. The VM and Bash backend should not implement separate languages.
 - `lexer.c`, `parser.c`, `parse_*.c`, `parser_internal.h`, `frontend.h`: frontend
   syntax ownership. These files produce tokens/AST and should not know backend
   runtime behavior.
-- `ds_ast.h`, `ast.c`, `format.c`: AST shape, AST debug output, AST cleanup, and
-  source formatting.
+- `ds_ast.h`, `ast.c`, `format.c`: AST shape, AST debug output, AST cleanup,
+  source formatting, and shared source-level script type labels.
 - `lower*.c`, `lower_internal.h`, `ds_hir.h`, `hir.c`: semantic validation,
-  AST-to-HIR lowering, lowered-program ownership, and HIR debug output.
+  AST-to-HIR lowering, lowered-program ownership, HIR debug output, and shared
+  lowered value-kind labels.
 - `bash_*.c`, `bash_internal.h`, `bash_helpers.h`: HIR-to-standalone-Bash
   emission. Keep concerns cohesive: command rendering in `bash_command.c`,
   structured-value ABI helpers in `bash_structured.c`, function wrappers and

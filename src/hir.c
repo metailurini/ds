@@ -16,6 +16,19 @@ static void print_str(FILE *out, DsStr s) {
     fprintf(out, "%.*s", (int)s.len, s.data ? s.data : "");
 }
 
+const char *ds_lower_value_kind_name(DsLowerValueKind kind) {
+    switch (kind) {
+        case DS_LOWER_VALUE_BOOL: return "bool";
+        case DS_LOWER_VALUE_INT: return "int";
+        case DS_LOWER_VALUE_STRING: return "string";
+        case DS_LOWER_VALUE_ARRAY: return "array";
+        case DS_LOWER_VALUE_MAP: return "map";
+        case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
+        case DS_LOWER_VALUE_UNKNOWN: return "unknown";
+    }
+    return "unknown";
+}
+
 static const char *script_decl_kind(DsScriptDeclKind kind) {
     switch (kind) {
         case DS_SCRIPT_DECL_ARG: return "Arg";
@@ -23,15 +36,6 @@ static const char *script_decl_kind(DsScriptDeclKind kind) {
         case DS_SCRIPT_DECL_FLAG: return "Flag";
     }
     return "Decl";
-}
-
-static const char *script_type(DsScriptType type) {
-    switch (type) {
-        case DS_SCRIPT_TYPE_STRING: return "string";
-        case DS_SCRIPT_TYPE_INT: return "int";
-        case DS_SCRIPT_TYPE_BOOL: return "bool";
-    }
-    return "unknown";
 }
 
 static void print_escaped(FILE *out, const char *data, size_t len) {
@@ -312,7 +316,7 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
             indent(out, 2);
             fprintf(out, "%s ", script_decl_kind(decl->kind));
             print_str(out, decl->name);
-            fprintf(out, ": %s", script_type(decl->type));
+            fprintf(out, ": %s", ds_script_type_name(decl->type));
             if (decl->has_default) {
                 if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); print_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len); fputc('"', out); }
                 else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, " = %lld", (long long)decl->default_int);

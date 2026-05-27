@@ -49,9 +49,9 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `include/ds.h` | compatibility umbrella for small harnesses/external includes | do not add feature policy here |
 | `src/ds_common.h` | shared source/string/span/diagnostic/allocation declarations | no token, AST, HIR, runtime value, or backend policy |
 | `src/ds_command.h` | command word/stage/redirection/capture metadata and command-word shape helpers shared by AST/HIR/lowerer/backends | no parser cursor, command validation, VM execution, or Bash quoting |
-| `src/ds_ast.h` | parser-facing AST node shapes | syntax preservation only; no semantic value kinds or backend contracts |
+| `src/ds_ast.h` | parser-facing AST node shapes and source-level script type names | syntax preservation only; no semantic value kinds or backend contracts; `ds_script_type_name()` is the shared label helper for `string`/`int`/`bool` |
 | `src/frontend.h` | lexer/parser public entrypoints and token vectors | no lower/backend APIs |
-| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract | backend-neutral only |
+| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract and lowered value-kind labels | backend-neutral only; `ds_lower_value_kind_name()` owns shared lowered-value metadata labels |
 | `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
 | `src/ds_stdlib.h` | stdlib helper metadata shared by lowerer/VM/Bash | metadata, not implementation |
 | `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |

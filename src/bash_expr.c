@@ -21,7 +21,7 @@ static bool emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr,
     buf_append(out, "__ds_call_value_into ");
     emit_var_name(out, raw_name);
     buf_append(out, " ");
-    bash_single_quote(out, bash_lower_value_type_name(expr->as.call.return_kind), strlen(bash_lower_value_type_name(expr->as.call.return_kind)));
+    bash_single_quote(out, ds_lower_value_kind_name(expr->as.call.return_kind), strlen(ds_lower_value_kind_name(expr->as.call.return_kind)));
     buf_append(out, " ");
     emit_fn_name(out, expr->as.call.name);
     return emit_user_call_args(e, &expr->as.call.args, out);
@@ -77,7 +77,7 @@ static bool emit_bash_regex_quoted(EmitBuf *out, DsStr pattern) {
 
 static void emit_membership_left_type(const DsLowerExpr *left, DsLowerValueKind left_kind, EmitBuf *out) {
     if (left_kind != DS_LOWER_VALUE_UNKNOWN) {
-        const char *type = bash_lower_value_type_name(left_kind);
+        const char *type = ds_lower_value_kind_name(left_kind);
         bash_single_quote(out, type, strlen(type));
     } else if (left->kind == DS_LOWER_EXPR_IDENT) {
         buf_append(out, "\"${"); bash_emit_type_var_name(out, left->as.text); buf_append(out, ":-unknown}\"");
@@ -92,7 +92,7 @@ static bool emit_membership_compare(BashEmitter *e, const DsLowerExpr *left, DsL
     (void)left_kind;
     buf_append(out, "[[ ");
     buf_append(out, "$__ds_needle_type == ");
-    const char *elem_type = bash_lower_value_type_name(elem_kind);
+    const char *elem_type = ds_lower_value_kind_name(elem_kind);
     bash_single_quote(out, elem_type, strlen(elem_type));
     buf_append(out, " && \"$__ds_needle\" == ");
     if (elem) {
@@ -155,7 +155,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
         if (!emit_call_args(e, &right->as.call.args, out)) return false;
         buf_appendf(out, " >\"$__ds_iter_%zu\"; while IFS= read -r __ds_item; do [[ ", temp_id);
         buf_append(out, "$__ds_needle_type == ");
-        const char *elem_type = bash_lower_value_type_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
+        const char *elem_type = ds_lower_value_kind_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
         buf_appendf(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done <\"$__ds_iter_%zu\"; rm -f \"$__ds_iter_%zu\"; [[ $__ds_found == true ]]; }", temp_id, temp_id);
         return true;
@@ -172,7 +172,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     if (elem_kind == DS_LOWER_VALUE_UNKNOWN) {
         buf_append(out, "\"${"); bash_emit_elem_type_var_name(out, right->as.text); buf_append(out, "[$__ds_i]:-unknown}\"");
     } else {
-        const char *elem_type = bash_lower_value_type_name(elem_kind);
+        const char *elem_type = ds_lower_value_kind_name(elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
     }
     buf_append(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done; [[ $__ds_found == true ]]; }");
@@ -273,7 +273,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         case DS_LOWER_EXPR_CALL:
             if (expr->as.call.is_user_function) {
                 buf_append(out, "\"$(__ds_call_value ");
-                bash_single_quote(out, bash_lower_value_type_name(expr->as.call.return_kind), strlen(bash_lower_value_type_name(expr->as.call.return_kind)));
+                bash_single_quote(out, ds_lower_value_kind_name(expr->as.call.return_kind), strlen(ds_lower_value_kind_name(expr->as.call.return_kind)));
                 buf_append(out, " ");
                 emit_fn_name(out, expr->as.call.name);
                 if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;

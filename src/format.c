@@ -27,15 +27,6 @@ static void indent(Formatter *fmt, int level) {
     for (int i = 0; i < level; i++) append_cstr(fmt, "  ");
 }
 
-static const char *type_name(DsScriptType type) {
-    switch (type) {
-        case DS_SCRIPT_TYPE_STRING: return "string";
-        case DS_SCRIPT_TYPE_INT: return "int";
-        case DS_SCRIPT_TYPE_BOOL: return "bool";
-    }
-    return "string";
-}
-
 static const char *redirect_op(DsRedirectKind kind) {
     switch (kind) {
         case DS_REDIRECT_OUT: return "|>";
@@ -249,7 +240,7 @@ static void format_params(Formatter *fmt, const DsFnParamVec *params) {
         append_str(fmt, param->name);
         if (param->has_type) {
             append_cstr(fmt, ": ");
-            append_cstr(fmt, type_name(param->type));
+            append_cstr(fmt, ds_script_type_name(param->type));
         }
         if (param->default_value) {
             append_cstr(fmt, " = ");
@@ -503,7 +494,7 @@ bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, D
             append_cstr(&fmt, decl->kind == DS_SCRIPT_DECL_ARG ? "arg " : decl->kind == DS_SCRIPT_DECL_OPTION ? "option " : "flag ");
             append_str(&fmt, decl->name);
             append_cstr(&fmt, ": ");
-            append_cstr(&fmt, type_name(decl->type));
+            append_cstr(&fmt, ds_script_type_name(decl->type));
             if (decl->default_value) {
                 append_cstr(&fmt, " = ");
                 format_expr(&fmt, decl->default_value);

@@ -51,6 +51,8 @@ typedef enum {
     DS_LOWER_VALUE_COMMAND_RESULT
 } DsLowerValueKind;
 
+const char *ds_lower_value_kind_name(DsLowerValueKind kind);
+
 typedef struct {
     DsLowerExpr **items;
     size_t len;
