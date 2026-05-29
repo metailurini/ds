@@ -565,14 +565,15 @@ for item in ["api", "web"] {
 DS
 assert_diag loop_array_literal "$FIX/bad_loop_array_literal.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first'
 
-write_fixture "$FIX/bad_map_iteration.ds" <<'DS'
+write_fixture "$FIX/map_iteration_supported.ds" <<'DS'
 let ports = { api: 3000 }
 
 for name, port in ports {
   echo "{name}:{port}"
 }
 DS
-assert_single_diag map_iteration "$FIX/bad_map_iteration.ds" 'map iteration is deferred in v0.10.0; use direct map access instead'
+assert_vm_bash_parity v0_10_map_iteration_supported "$FIX/map_iteration_supported.ds" 0 ""
+assert_same_text $'api:3000\n' "$TMP/v0_10_map_iteration_supported_vm.out" "map iteration is supported after v0.29.0"
 
 write_fixture "$FIX/bad_loop_variable_leak.ds" <<'DS'
 let services = ["api"]

@@ -397,7 +397,14 @@ static DsStmt *parse_for(Parser *p) {
         stmt->as.for_stmt.value_name = parser_copy_token_text(parser_previous(p));
     }
     if (!parser_expect(p, DS_TOK_IN, "expected `in` after loop variable")) return stmt;
-    if (parser_at(p, DS_TOK_LBRACE)) ds_diag_error(p->diag, parser_peek(p)->span, "expected iterable expression after `in`");
+    if (parser_at(p, DS_TOK_LBRACE)) {
+        if (stmt->as.for_stmt.has_value_name) {
+            ds_diag_error(p->diag, parser_peek(p)->span,
+                          "temporary map literals are not supported as map loop iterables in v0.29.0; bind the map to a variable first");
+        } else {
+            ds_diag_error(p->diag, parser_peek(p)->span, "expected iterable expression after `in`");
+        }
+    }
     stmt->as.for_stmt.iterable = parse_expr(p);
     if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after for iterable")) return stmt;
     stmt->as.for_stmt.body = parse_block(p);

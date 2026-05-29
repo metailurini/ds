@@ -515,6 +515,55 @@ bool program_uses_map_literal(const DsLowerProgram *program) {
     return false;
 }
 
+static bool command_is_control(const DsCommand *command) {
+    if (!command || ds_command_is_pipeline(command) || command->redirect.kind != DS_REDIRECT_NONE) return false;
+    if (command->stages.len == 0 || command->stages.items[0].words.len == 0) return false;
+    DsStr first = command->stages.items[0].words.items[0].text;
+    return (first.len == 4 && memcmp(first.data, "fail", 4) == 0) ||
+           (first.len == 4 && memcmp(first.data, "exit", 4) == 0);
+}
+
+static bool stmt_uses_control_commands(const DsLowerStmt *stmt) {
+    if (!stmt) return false;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_CMD:
+            return command_is_control(&stmt->as.cmd_stmt);
+        case DS_LOWER_STMT_IF:
+            return stmt_uses_control_commands(stmt->as.if_stmt.then_branch) || stmt_uses_control_commands(stmt->as.if_stmt.else_branch);
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_control_commands(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_MAP:
+        case DS_LOWER_STMT_FOR_RANGE:
+            return stmt_uses_control_commands(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE:
+            return stmt_uses_control_commands(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_control_commands(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt_uses_control_commands(stmt->as.handler_stmt.body);
+        case DS_LOWER_STMT_LET:
+        case DS_LOWER_STMT_ASSIGN:
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+        case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_ASSERT:
+        case DS_LOWER_STMT_RETURN:
+            return false;
+    }
+    return false;
+}
+
+bool program_uses_control_commands(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_control_commands(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_control_commands(program->statements.items[i])) return true;
+    return false;
+}
+
 static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
     if (!stmt) return false;
     switch (stmt->kind) {

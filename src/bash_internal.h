@@ -111,6 +111,7 @@ bool program_uses_int_helpers(const DsLowerProgram *program);
 bool program_uses_function_value_helpers(const DsLowerProgram *program);
 bool program_uses_handlers(const DsLowerProgram *program);
 bool program_uses_signal_handlers(const DsLowerProgram *program);
+bool program_uses_control_commands(const DsLowerProgram *program);
 
 bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent);
 bool emit_function(BashEmitter *e, const DsLowerFn *fn);

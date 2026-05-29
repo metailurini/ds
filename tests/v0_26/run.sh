@@ -687,18 +687,17 @@ DS
 assert_check_fails structured_interpolation_rejected "$FIX/structured_interpolation_rejected.ds" 'interpolation expression must be scalar'
 assert_emit_fails structured_interpolation_rejected "$FIX/structured_interpolation_rejected.ds" 'interpolation expression must be scalar'
 
-write_fixture "$FIX/map_iteration_rejected.ds" <<'DS'
+write_fixture "$FIX/map_iteration_supported.ds" <<'DS'
 fn service() {
   return { name: "api", port: 8080 }
 }
 
 let data = service()
 for key, value in data {
-  echo key
+  echo "{key}:{value}"
 }
 DS
-assert_check_fails map_iteration_rejected "$FIX/map_iteration_rejected.ds" 'map iteration is deferred'
-assert_emit_fails map_iteration_rejected "$FIX/map_iteration_rejected.ds" 'map iteration is deferred'
+assert_parity map_iteration_supported "$FIX/map_iteration_supported.ds" 0 $'name:api\nport:8080\n'
 
 write_fixture "$FIX/function_array_loop_rejected.ds" <<'DS'
 fn apps() {

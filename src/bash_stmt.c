@@ -530,7 +530,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             if (!emit_trace_redirect_args(e, &stmt->as.cmd_stmt.redirect, &e->out)) return false;
             buf_append(&e->out, "\n");
-            if (e->has_cleanup_helpers && (is_control_command(&stmt->as.cmd_stmt, "fail") || is_control_command(&stmt->as.cmd_stmt, "exit"))) {
+            if (is_control_command(&stmt->as.cmd_stmt, "fail") || is_control_command(&stmt->as.cmd_stmt, "exit")) {
                 return emit_control_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
             if (e->has_signal_handlers && can_emit_direct_signal_command(&stmt->as.cmd_stmt)) {

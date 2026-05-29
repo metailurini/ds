@@ -807,6 +807,10 @@ assert_not_matches "$TMP/scalar_returns_one.sh" '(^|[^A-Za-z0-9_./-])ds([[:space
 # Formatter and git whitespace checks.
 run_ok arithmetic_fmt_check "$DS" fmt --check "$FIX/arithmetic_precedence.ds"
 run_ok compound_fmt_check "$DS" fmt --check "$FIX/compound_basic.ds"
-run_ok diff_check git diff --check
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  run_ok diff_check git diff --check
+else
+  pass "diff_check skipped outside a git work tree"
+fi
 
 echo "v0.21 tests passed ($pass_count assertions)"

@@ -25,6 +25,7 @@ typedef struct {
     char *name;
     SymKind kind;
     SymKind element_kind;
+    bool dynamic_scalar;
     int function_depth;
 } Symbol;
 

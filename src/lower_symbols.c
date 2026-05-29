@@ -102,6 +102,7 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     if (current && current->kind == SYM_TOPLEVEL_PREDECLARED) {
         current->kind = kind;
         current->element_kind = element_kind;
+        current->dynamic_scalar = false;
         current->function_depth = lower->function_depth;
         return;
     }
@@ -116,6 +117,7 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     scope->items[scope->len].name = ds_str_dup_range(name.data, name.len);
     scope->items[scope->len].kind = kind;
     scope->items[scope->len].element_kind = element_kind;
+    scope->items[scope->len].dynamic_scalar = false;
     scope->items[scope->len].function_depth = lower->function_depth;
     scope->len++;
 }

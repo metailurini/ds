@@ -203,6 +203,11 @@ static void emit_plain_command_fail_helper(BashEmitter *e) {
     buf_append(&e->out, "}\n\n");
 }
 
+static void emit_plain_control_helpers(BashEmitter *e) {
+    buf_append(&e->out, "__ds_control_fail() { local __ds_loc=$1; shift; local __ds_msg=\"$*\"; if [[ -n \"$__ds_msg\" ]]; then echo \"$__ds_loc: error: $__ds_msg\" >&2; else echo \"$__ds_loc: error: fail\" >&2; fi; exit 1; }\n");
+    buf_append(&e->out, "__ds_control_exit() { local __ds_loc=$1; shift; if (( $# != 1 )); then echo \"$__ds_loc: error: `exit` expects exactly one integer code\" >&2; exit 1; fi; if [[ ! \"$1\" =~ ^[0-9]+$ ]] || (( $1 < 0 || $1 > 255 )); then echo \"$__ds_loc: error: `exit` code must be an integer from 0 to 255\" >&2; exit 1; fi; exit \"$1\"; }\n\n");
+}
+
 static void emit_cleanup_helpers(BashEmitter *e) {
     const char *int_name = ds_handler_signal_name(DS_HANDLER_INT);
     const char *term_name = ds_handler_signal_name(DS_HANDLER_TERM);
@@ -262,6 +267,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
     bool needs_signal_handlers = program_uses_signal_handlers(lowered);
+    bool needs_control_helpers = program_uses_control_commands(lowered);
     bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers || program_uses_run(lowered) || needs_collection_helpers || needs_stdlib;
     e.has_cleanup_helpers = needs_cleanup_helpers;
     e.has_signal_handlers = needs_signal_handlers;
@@ -289,7 +295,10 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_function_value_helpers) emit_function_value_helpers(&e);
     if (needs_debug) emit_debug_helpers(&e);
     if (needs_cleanup_helpers) emit_cleanup_helpers(&e);
-    else if (needs_debug) emit_plain_command_fail_helper(&e);
+    else {
+        if (needs_debug) emit_plain_command_fail_helper(&e);
+        if (needs_control_helpers) emit_plain_control_helpers(&e);
+    }
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
     if (needs_collection_helpers) emit_collection_helpers(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);

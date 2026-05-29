@@ -615,7 +615,7 @@ for item in \
   'process_sub|cat <(printf hi)|unsupported' \
   'heredoc|cat <<EOF\nhello\nEOF|unsupported' \
   'defer_hup|defer on: "HUP" {\n  echo hup\n}|unsupported defer on: signal' \
-  'map_destructure|for key, value in { api: 1 } {\n  echo "{key}={value}"\n}|expected'; do
+  'map_destructure|for key, value in { api: 1 } {\n  echo "{key}={value}"\n}|temporary map literals are not supported as map loop iterables'; do
   IFS='|' read -r name src frag <<<"$item"
   f="$FIX/$name.ds"
   printf '%b\n' "$src" >"$f"

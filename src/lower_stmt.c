@@ -399,6 +399,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "two-name map loops require a map iterable in v0.29.0; arrays use `for item in array`");
                 } else if (iterable_kind == SYM_COMMAND_RESULT) {
                     ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "command-result values are not maps; use `for key, value in map` only with flat maps in v0.29.0");
+                } else if (iterable_kind == SYM_UNKNOWN) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span,
+                                  "map loop iterable kind must be known in v0.29.0; use a named map or supported flat map-returning function call");
                 } else if (iterable_kind != SYM_MAP && iterable_kind != SYM_UNKNOWN) {
                     ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "two-name map loops require a map iterable in v0.29.0");
                 }
@@ -429,6 +432,10 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             if (out->kind == DS_LOWER_STMT_FOR_MAP) {
                 scope_define(lower, &local, stmt->as.for_stmt.key_name, SYM_STRING, stmt->span);
                 scope_define(lower, &local, stmt->as.for_stmt.value_name, element_kind, stmt->span);
+                if (element_kind == SYM_UNKNOWN) {
+                    Symbol *value_sym = scope_find_current(&local, stmt->as.for_stmt.value_name);
+                    if (value_sym) value_sym->dynamic_scalar = true;
+                }
             } else {
                 scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
             }
@@ -458,7 +465,13 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CASE, stmt->span);
             SymKind selector_kind = SYM_UNKNOWN;
             out->as.case_stmt.selector = lower_expr(lower, stmt->as.case_stmt.selector, &selector_kind);
-            if (selector_kind == SYM_ARRAY || selector_kind == SYM_MAP || selector_kind == SYM_COMMAND_RESULT || selector_kind == SYM_UNKNOWN) {
+            bool selector_is_dynamic_scalar = false;
+            if (selector_kind == SYM_UNKNOWN && out->as.case_stmt.selector && out->as.case_stmt.selector->kind == DS_LOWER_EXPR_IDENT) {
+                Symbol *selector_sym = scope_find(lower->scope, out->as.case_stmt.selector->as.text);
+                selector_is_dynamic_scalar = selector_sym && selector_sym->dynamic_scalar;
+            }
+            if (selector_kind == SYM_ARRAY || selector_kind == SYM_MAP || selector_kind == SYM_COMMAND_RESULT ||
+                (selector_kind == SYM_UNKNOWN && !selector_is_dynamic_scalar)) {
                 ds_diag_error(lower->diag, stmt->as.case_stmt.selector->span, "case selectors must have a known scalar string, int, or bool kind in v0.17.0");
             }
             if (stmt->as.case_stmt.arms.len == 0) ds_diag_error(lower->diag, stmt->span, "case statements require at least one arm");
