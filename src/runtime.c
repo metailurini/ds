@@ -292,6 +292,49 @@ size_t ds_map_len(const DsMap *map) {
     return map->impl ? hm_len(ds_map_impl_const(map)) : 0;
 }
 
+static int ds_str_key_cmp(const void *a, const void *b) {
+    const DsStr *left = (const DsStr *)a;
+    const DsStr *right = (const DsStr *)b;
+    size_t min = left->len < right->len ? left->len : right->len;
+    int cmp = memcmp(left->data ? left->data : "", right->data ? right->data : "", min);
+    if (cmp != 0) return cmp;
+    if (left->len < right->len) return -1;
+    if (left->len > right->len) return 1;
+    return 0;
+}
+
+bool ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len) {
+    *out_keys = NULL;
+    *out_len = 0;
+    if (!map->impl) return true;
+    size_t len = ds_map_len(map);
+    if (len == 0) return true;
+    DsStr *keys = (DsStr *)ds_xcalloc(len, sizeof(DsStr));
+    hm_iter it;
+    const char *key = NULL;
+    size_t key_len = 0;
+    void *raw = NULL;
+    size_t i = 0;
+    if (hm_iter_init(ds_map_impl_const(map), &it) == HM_OK) {
+        while (i < len && hm_iter_next_len(ds_map_impl_const(map), &it, &key, &key_len, &raw) == HM_OK) {
+            (void)raw;
+            keys[i].data = ds_str_dup_range(key, key_len);
+            keys[i].len = key_len;
+            i++;
+        }
+    }
+    *out_len = i;
+    qsort(keys, i, sizeof(DsStr), ds_str_key_cmp);
+    *out_keys = keys;
+    return true;
+}
+
+void ds_map_sorted_keys_free(DsStr *keys, size_t len) {
+    if (!keys) return;
+    for (size_t i = 0; i < len; i++) free(keys[i].data);
+    free(keys);
+}
+
 void ds_map_clear(DsMap *map) {
     hm_iter it;
     void *raw = NULL;

@@ -34,6 +34,7 @@ typedef enum {
     OP_GET_INDEX,
     OP_PUSH_ARRAY,
     OP_FOR_ARRAY,
+    OP_FOR_MAP,
     OP_FOR_RANGE,
     OP_RESET_FOR,
     OP_ASSERT,
@@ -90,6 +91,9 @@ typedef struct {
     size_t loop_index;
     int64_t loop_current;
     bool loop_active;
+    char *value_name;
+    DsStr *loop_keys;
+    size_t loop_key_count;
 } Instr;
 
 typedef struct {

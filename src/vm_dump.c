@@ -50,6 +50,7 @@ const char *op_name(OpCode op) {
         case OP_GET_INDEX: return "GET_INDEX";
         case OP_PUSH_ARRAY: return "PUSH_ARRAY";
         case OP_FOR_ARRAY: return "FOR_ARRAY";
+        case OP_FOR_MAP: return "FOR_MAP";
         case OP_FOR_RANGE: return "FOR_RANGE";
         case OP_RESET_FOR: return "RESET_FOR";
         case OP_ASSERT: return "ASSERT";
@@ -237,6 +238,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_GET_INDEX: fprintf(out, " r%d, r%d[r%d]", ins->dst, ins->a, ins->b); break;
             case OP_PUSH_ARRAY: fprintf(out, " %s, r%d", ins->name, ins->a); break;
             case OP_FOR_ARRAY: fprintf(out, " %s in r%d -> %d", ins->name, ins->a, ins->target); break;
+            case OP_FOR_MAP: fprintf(out, " %s, %s in r%d -> %d", ins->name, ins->value_name, ins->a, ins->target); break;
             case OP_FOR_RANGE: fprintf(out, " %s in r%d..r%d -> %d", ins->name, ins->a, ins->b, ins->target); break;
             case OP_RESET_FOR: fprintf(out, " %d", ins->target); break;
             case OP_ASSERT: fprintf(out, " r%d", ins->a); break;

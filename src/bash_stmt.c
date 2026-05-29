@@ -212,6 +212,108 @@ static bool emit_case_pattern_condition(BashEmitter *e, const DsLowerExpr *selec
     return true;
 }
 
+static void emit_decl_name_for_kind(EmitBuf *out, DsStr name, int kind) {
+    switch (kind) {
+        case 0: emit_var_name(out, name); break;
+        case 1: bash_emit_type_var_name(out, name); break;
+        case 2: bash_emit_elem_type_var_name(out, name); break;
+        case 3: bash_emit_map_value_type_var_name(out, name); break;
+    }
+}
+
+static void emit_save_decl_for_kind(BashEmitter *e, size_t loop_id, const char *label, DsStr name, int kind, int indent) {
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "__ds_map_save_%zu_%s_%d=\n", loop_id, label, kind);
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "if declare -p ");
+    emit_decl_name_for_kind(&e->out, name, kind);
+    buf_append(&e->out, " >/dev/null 2>&1; then __ds_map_save_");
+    buf_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
+    buf_append(&e->out, "=\"$(declare -p ");
+    emit_decl_name_for_kind(&e->out, name, kind);
+    buf_append(&e->out, ")\"; fi\n");
+}
+
+static void emit_restore_decl_for_kind(BashEmitter *e, size_t loop_id, const char *label, DsStr name, int kind, int indent) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "unset ");
+    emit_decl_name_for_kind(&e->out, name, kind);
+    buf_append(&e->out, "\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "if [[ -n \"$__ds_map_save_");
+    buf_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
+    buf_append(&e->out, "\" ]]; then eval \"$__ds_map_save_");
+    buf_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
+    buf_append(&e->out, "\"; fi\n");
+}
+
+static void emit_unset_loop_name(BashEmitter *e, DsStr name, int indent) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "unset ");
+    emit_var_name(&e->out, name);
+    buf_append(&e->out, " ");
+    bash_emit_type_var_name(&e->out, name);
+    buf_append(&e->out, " ");
+    bash_emit_elem_type_var_name(&e->out, name);
+    buf_append(&e->out, " ");
+    bash_emit_map_value_type_var_name(&e->out, name);
+    buf_append(&e->out, " 2>/dev/null || true\n");
+}
+
+static void emit_save_loop_name(BashEmitter *e, size_t loop_id, const char *label, DsStr name, int indent) {
+    for (int kind = 0; kind < 4; kind++) emit_save_decl_for_kind(e, loop_id, label, name, kind, indent);
+}
+
+static void emit_restore_loop_name(BashEmitter *e, size_t loop_id, const char *label, DsStr name, int indent) {
+    for (int kind = 0; kind < 4; kind++) emit_restore_decl_for_kind(e, loop_id, label, name, kind, indent);
+}
+
+static void emit_map_loop_copy_ident(BashEmitter *e, DsStr source, DsStr raw_map, int indent, size_t loop_id) {
+    emit_indent(&e->out, indent);
+    buf_appendf(&e->out, "for __ds_map_copy_key_%zu in \"${!", loop_id);
+    emit_var_name(&e->out, source);
+    buf_append(&e->out, "[@]}\"; do\n");
+
+    emit_indent(&e->out, indent + 1);
+    emit_var_name(&e->out, raw_map);
+    buf_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=\"${", loop_id);
+    emit_var_name(&e->out, source);
+    buf_appendf(&e->out, "[$__ds_map_copy_key_%zu]}\"\n", loop_id);
+
+    emit_indent(&e->out, indent + 1);
+    buf_append(&e->out, "if declare -p ");
+    bash_emit_map_value_type_var_name(&e->out, source);
+    buf_append(&e->out, " >/dev/null 2>&1; then\n");
+    emit_indent(&e->out, indent + 2);
+    bash_emit_map_value_type_var_name(&e->out, raw_map);
+    buf_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=\"${", loop_id);
+    bash_emit_map_value_type_var_name(&e->out, source);
+    buf_appendf(&e->out, "[$__ds_map_copy_key_%zu]:-unknown}\"\n", loop_id);
+    emit_indent(&e->out, indent + 1);
+    buf_append(&e->out, "else\n");
+    emit_indent(&e->out, indent + 2);
+    bash_emit_map_value_type_var_name(&e->out, raw_map);
+    buf_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=unknown\n", loop_id);
+    emit_indent(&e->out, indent + 1);
+    buf_append(&e->out, "fi\n");
+
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "done\n");
+}
+
+static bool emit_map_loop_materialize(BashEmitter *e, const DsLowerStmt *stmt, DsStr raw_map, int indent, size_t loop_id) {
+    if (!bash_emit_structured_target_decl(e, raw_map, DS_LOWER_VALUE_MAP, indent, e->function_depth > 0)) return false;
+    if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) {
+        emit_map_loop_copy_ident(e, stmt->as.for_stmt.iterable->as.text, raw_map, indent, loop_id);
+        return true;
+    }
+    if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stmt->as.for_stmt.iterable->as.call.is_user_function) {
+        return bash_emit_user_function_value_call_into(e, raw_map, stmt->as.for_stmt.iterable, indent);
+    }
+    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: map loop iterable should be named or a supported map-returning function after lowering");
+    return false;
+}
+
 /* Return statement emission. Kept in bash_stmt.c so tiny statement-only logic
  * does not become a standalone micro-file; structured payload details stay in
  * bash_structured.c. */
@@ -524,6 +626,92 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"\n\n", temp_id);
             }
+            return true;
+        }
+
+        case DS_LOWER_STMT_FOR_MAP: {
+            size_t loop_id = e->temp_counter++;
+            char raw_map_buf[64];
+            char raw_keys_buf[64];
+            char raw_key_buf[64];
+            bash_temp_ds_name(raw_map_buf, sizeof(raw_map_buf), "map_iter", loop_id);
+            bash_temp_ds_name(raw_keys_buf, sizeof(raw_keys_buf), "map_keys", loop_id);
+            bash_temp_ds_name(raw_key_buf, sizeof(raw_key_buf), "map_key", loop_id);
+            DsStr raw_map = {raw_map_buf, strlen(raw_map_buf)};
+            DsStr raw_keys = {raw_keys_buf, strlen(raw_keys_buf)};
+            DsStr raw_key = {raw_key_buf, strlen(raw_key_buf)};
+
+            if (!emit_map_loop_materialize(e, stmt, raw_map, indent, loop_id)) return false;
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, e->function_depth > 0 ? "local -a " : "declare -a ");
+            emit_var_name(&e->out, raw_keys);
+            buf_append(&e->out, "=()\n");
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "__ds_map_sorted_keys ");
+            emit_var_name(&e->out, raw_map);
+            buf_append(&e->out, " ");
+            emit_var_name(&e->out, raw_keys);
+            buf_append(&e->out, "\n");
+
+            emit_save_loop_name(e, loop_id, "key", stmt->as.for_stmt.name, indent);
+            emit_save_loop_name(e, loop_id, "value", stmt->as.for_stmt.value_name, indent);
+
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "for ");
+            emit_var_name(&e->out, raw_key);
+            buf_append(&e->out, " in \"${");
+            emit_var_name(&e->out, raw_keys);
+            buf_append(&e->out, "[@]}\"; do\n");
+
+            emit_unset_loop_name(e, stmt->as.for_stmt.name, indent + 1);
+            emit_unset_loop_name(e, stmt->as.for_stmt.value_name, indent + 1);
+
+            emit_indent(&e->out, indent + 1);
+            emit_var_name(&e->out, stmt->as.for_stmt.name);
+            buf_append(&e->out, "=\"$");
+            emit_var_name(&e->out, raw_key);
+            buf_append(&e->out, "\"\n");
+            emit_indent(&e->out, indent + 1);
+            emit_var_name(&e->out, stmt->as.for_stmt.value_name);
+            buf_append(&e->out, "=\"${");
+            emit_var_name(&e->out, raw_map);
+            buf_append(&e->out, "[$");
+            emit_var_name(&e->out, raw_key);
+            buf_append(&e->out, "]}\"\n");
+
+            bash_emit_type_assignment(e, stmt->as.for_stmt.name, "string", indent + 1, false);
+            emit_indent(&e->out, indent + 1);
+            bash_emit_type_var_name(&e->out, stmt->as.for_stmt.value_name);
+            buf_append(&e->out, "=\"${");
+            bash_emit_map_value_type_var_name(&e->out, raw_map);
+            buf_append(&e->out, "[$");
+            emit_var_name(&e->out, raw_key);
+            buf_append(&e->out, "]:-");
+            buf_append(&e->out, ds_lower_value_kind_name(stmt->as.for_stmt.element_kind));
+            buf_append(&e->out, "}\"\n");
+
+            size_t mark = e->symbols.len;
+            DsStr key_copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
+            DsStr value_copy = {ds_str_dup_range(stmt->as.for_stmt.value_name.data, stmt->as.for_stmt.value_name.len), stmt->as.for_stmt.value_name.len};
+            symbol_vec_push(&e->symbols, key_copy);
+            symbol_vec_push(&e->symbols, value_copy);
+            if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
+            symbols_truncate(&e->symbols, mark);
+
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "done\n");
+            emit_restore_loop_name(e, loop_id, "value", stmt->as.for_stmt.value_name, indent);
+            emit_restore_loop_name(e, loop_id, "key", stmt->as.for_stmt.name, indent);
+            emit_indent(&e->out, indent);
+            buf_append(&e->out, "unset ");
+            emit_var_name(&e->out, raw_map);
+            buf_append(&e->out, " ");
+            bash_emit_map_value_type_var_name(&e->out, raw_map);
+            buf_append(&e->out, " ");
+            emit_var_name(&e->out, raw_keys);
+            buf_append(&e->out, " ");
+            emit_var_name(&e->out, raw_key);
+            buf_append(&e->out, " 2>/dev/null || true\n\n");
             return true;
         }
 

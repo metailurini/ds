@@ -543,6 +543,42 @@ dispatch_loop:
                 ip++;
                 break;
             }
+            case OP_FOR_MAP: {
+                DsValue *iter = &vm.regs[ins->a];
+                if (iter->kind != DS_VALUE_MAP) { ds_diag_error(diag, ins->span, "runtime map loop iterable must be a map"); rc = 1; goto done; }
+                if (!ins->loop_active) {
+                    ins->loop_active = true;
+                    ins->loop_index = 0;
+                    ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);
+                    ins->loop_keys = NULL;
+                    ins->loop_key_count = 0;
+                    if (!ds_map_sorted_keys(&iter->as.map, &ins->loop_keys, &ins->loop_key_count)) {
+                        ds_diag_error(diag, ins->span, "failed to prepare sorted map keys");
+                        rc = 1; goto done;
+                    }
+                }
+                if (ins->loop_index >= ins->loop_key_count) {
+                    ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);
+                    ins->loop_keys = NULL;
+                    ins->loop_key_count = 0;
+                    ins->loop_active = false;
+                    ip = (size_t)ins->target;
+                    break;
+                }
+                DsStr map_key = ins->loop_keys[ins->loop_index];
+                DsValue *found = ds_map_get(&iter->as.map, map_key);
+                if (!found) { ds_diag_error(diag, ins->span, "runtime map loop key disappeared during iteration"); rc = 1; goto done; }
+                vm_push_scope(&vm);
+                DsString key_text;
+                ds_string_from_range(&key_text, map_key.data ? map_key.data : "", map_key.len);
+                DsStr key_var = {ins->name, strlen(ins->name)};
+                DsStr value_var = {ins->value_name, strlen(ins->value_name)};
+                ds_map_set(&vm.scope->vars, key_var, ds_value_string_take(&key_text));
+                ds_map_set(&vm.scope->vars, value_var, ds_value_copy(found));
+                ins->loop_index++;
+                ip++;
+                break;
+            }
             case OP_FOR_RANGE: {
                 DsValue *start = &vm.regs[ins->a];
                 DsValue *end = &vm.regs[ins->b];
@@ -559,10 +595,15 @@ dispatch_loop:
             case OP_RESET_FOR: {
                 if (ins->target >= 0 && (size_t)ins->target < p.instr_len) {
                     Instr *for_ins = &p.instrs[ins->target];
-                    if (for_ins->op == OP_FOR_ARRAY || for_ins->op == OP_FOR_RANGE) {
+                    if (for_ins->op == OP_FOR_ARRAY || for_ins->op == OP_FOR_MAP || for_ins->op == OP_FOR_RANGE) {
                         for_ins->loop_active = false;
                         for_ins->loop_index = 0;
                         for_ins->loop_current = 0;
+                        if (for_ins->op == OP_FOR_MAP) {
+                            ds_map_sorted_keys_free(for_ins->loop_keys, for_ins->loop_key_count);
+                            for_ins->loop_keys = NULL;
+                            for_ins->loop_key_count = 0;
+                        }
                     }
                 }
                 ip++;

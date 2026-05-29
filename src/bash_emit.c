@@ -253,8 +253,9 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");
 
-    bool needs_map_guard = program_uses_map_literal(lowered);
-    bool needs_collection_helpers = program_uses_collection_index(lowered);
+    bool needs_map_iteration = program_uses_map_iteration(lowered);
+    bool needs_map_guard = program_uses_map_literal(lowered) || needs_map_iteration;
+    bool needs_collection_helpers = program_uses_collection_index(lowered) || needs_map_iteration;
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_debug = program_has_command(lowered);
     bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);

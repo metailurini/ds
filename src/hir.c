@@ -235,6 +235,12 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             indent(out, level + 1); fputs("Body\n", out);
             dump_block(out, stmt->as.for_stmt.body, level + 2);
             break;
+        case DS_LOWER_STMT_FOR_MAP:
+            fputs("ForMap ", out); print_str(out, stmt->as.for_stmt.name); fputs(", ", out); print_str(out, stmt->as.for_stmt.value_name); fputs(" in", out); print_span(out, stmt->span); fputc('\n', out);
+            dump_expr(out, stmt->as.for_stmt.iterable, level + 1);
+            indent(out, level + 1); fputs("Body\n", out);
+            dump_block(out, stmt->as.for_stmt.body, level + 2);
+            break;
         case DS_LOWER_STMT_FOR_RANGE:
             fputs("ForRange ", out); print_str(out, stmt->as.for_stmt.name); fputs(" in", out); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.for_stmt.iterable, level + 1);

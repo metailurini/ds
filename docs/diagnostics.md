@@ -332,7 +332,7 @@ These areas still need careful source review before behavior changes:
 - regex expansion beyond conservative literals needs lowerer-owned rejection
   until captures/replacement/runtime regex strings have a portable HIR model;
   see `docs/maintenance/m3-5-regex-boundary.md` for the current boundary;
-- mutable collections and map iteration need explicit HIR nodes before runtime or
+- future mutable collection features need explicit HIR nodes before runtime or
   Bash helpers become canonical semantics;
 - backend files still contain runtime/data-dependent `unsupported` diagnostics
   for dynamic values such as glob patterns and string helper separators; keep

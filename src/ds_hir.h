@@ -99,6 +99,7 @@ typedef enum {
     DS_LOWER_STMT_CMD,
     DS_LOWER_STMT_CALL,
     DS_LOWER_STMT_FOR_ARRAY,
+    DS_LOWER_STMT_FOR_MAP,
     DS_LOWER_STMT_FOR_RANGE,
     DS_LOWER_STMT_WHILE,
     DS_LOWER_STMT_BREAK,
@@ -180,6 +181,7 @@ typedef struct {
     DsLowerStmt *body;
     size_t required_count;
     DsLowerValueKind return_kind;
+    DsLowerValueKind return_element_kind;
     bool has_return;
     bool all_paths_return;
     bool contains_plain_command;
@@ -213,7 +215,7 @@ struct DsLowerStmt {
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; bool scoped; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
-        struct { DsStr name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; } for_stmt;
+        struct { DsStr name; DsStr value_name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; } for_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *body; } while_stmt;
         struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
         struct { DsStr name; DsLowerExpr *value; } push_stmt;

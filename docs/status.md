@@ -195,7 +195,6 @@ milestones:
   patterns;
 - first-class range values, stepped/reverse ranges, slices, index assignment,
   and nested collections;
-- map iteration;
 - passing whole collection values directly to functions or commands;
 - direct collection access inside command words without first binding a scalar;
 - empty map literal inference and empty map keys;

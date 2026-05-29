@@ -301,8 +301,9 @@ Execution owner: VM runtime values and Bash collection encodings/helpers. Both
 backends must agree on construction, indexing, iteration order where specified,
 mutation semantics where supported, and error behavior.
 
-Tests: VM collection tests, Bash parity tests, diagnostics for unsupported map
-iteration/index assignment, and edge cases for keys, bounds, and value kinds.
+Tests: VM collection tests, Bash parity tests, diagnostics for unsupported
+iteration/index-assignment forms, and edge cases for keys, bounds, and value
+kinds.
 
 Current maintenance rule: mutable collection features require explicit HIR
 assignment/iteration nodes before implementation. Bash helper sidecars and VM
@@ -315,7 +316,10 @@ variable first so the lowerer, not the Bash emitter, owns the unsupported-form
 diagnostic. Array iteration currently requires a named array or a known stdlib
 array result; looping over array literals or user-function array calls directly
 is rejected by lowering until there is a portable temporary iterable
-representation shared by VM and Bash emission.
+representation shared by VM and Bash emission. Map iteration is accepted only
+through the explicit two-name HIR loop over named maps or supported flat
+map-returning user-function calls, and both VM and Bash must visit keys in
+ascending bytewise/ASCII order.
 
 ### Regex
 

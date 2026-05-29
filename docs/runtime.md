@@ -693,6 +693,13 @@ Bash copies both the associative-array payload and the per-key scalar kind
 sidecar used by field/index reads, so returned `false` and `0` values keep ds
 truthiness instead of becoming truthy shell strings.
 
+The v0.29.0 map-iteration path lowers `for key, value in map` to an explicit
+two-name HIR loop. VM execution snapshots and sorts map keys before each loop;
+standalone Bash materializes the accepted map source into a private associative
+array and sorts the key list with `LC_ALL=C`. Both backends therefore expose the
+same deterministic ascending bytewise/ASCII key order while keeping loop key and
+value variables scoped to the loop body.
+
 User-function calls that initialize, assign, forward-return, participate in
 string-sensitive conditions, select `case` arms, or feed direct user-function
 arguments use temporary assignment-by-reference materialization rather than
@@ -936,7 +943,7 @@ emission contract before the `1.0.0` release checklist:
   common `__ds_error` and plain-command failure helpers are emitted once when
   needed instead of being repeated by each helper family.
 - Bash-version guards remain required for Bash-4-only behavior such as
-  associative-array-backed maps.
+  associative-array-backed maps and map iteration.
 - Unsupported or deferred constructs should fail in checking/lowering/emission
   before user commands run or invalid Bash is written.
 - Sanitizer-backed aggregate runs are part of the release checklist for source

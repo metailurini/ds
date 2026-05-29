@@ -55,6 +55,13 @@ bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable) {
     return false;
 }
 
+bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable) {
+    if (!iterable) return false;
+    if (iterable->kind == DS_LOWER_EXPR_IDENT) return true;
+    return iterable->kind == DS_LOWER_EXPR_CALL && iterable->as.call.is_user_function &&
+           iterable->as.call.return_kind == DS_LOWER_VALUE_MAP;
+}
+
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span) {
     ds_diag_error(lower->diag, span,
                   "for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first");

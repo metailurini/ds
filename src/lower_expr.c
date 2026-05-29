@@ -692,6 +692,28 @@ SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr) {
     return common;
 }
 
+SymKind infer_map_value_kind(Lower *lower, const DsLowerExpr *expr) {
+    if (!expr) return SYM_UNKNOWN;
+    if (expr->kind == DS_LOWER_EXPR_IDENT) {
+        Symbol *sym = scope_find(lower->scope, expr->as.text);
+        return sym ? sym->element_kind : SYM_UNKNOWN;
+    }
+    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function) {
+        DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
+        return fn ? sym_kind_from_lower_value_kind(fn->return_element_kind) : SYM_UNKNOWN;
+    }
+    if (expr->kind != DS_LOWER_EXPR_MAP) return SYM_UNKNOWN;
+
+    SymKind common = SYM_UNKNOWN;
+    for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+        SymKind value = infer_lower_expr_kind(lower, expr->as.map.entries.items[i].value);
+        if (value == SYM_UNKNOWN) return SYM_UNKNOWN;
+        if (common == SYM_UNKNOWN) common = value;
+        else if (common != value) return SYM_UNKNOWN;
+    }
+    return common;
+}
+
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     *kind_out = SYM_UNKNOWN;
     if (!expr) return expr_new(DS_LOWER_EXPR_ERROR, (DsSpan){0});

@@ -17,6 +17,7 @@ void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
 
 static void instr_free(Instr *ins) {
     free(ins->name);
+    free(ins->value_name);
     free(ins->cmp);
     free(ins->field);
     free(ins->args);
@@ -24,6 +25,7 @@ static void instr_free(Instr *ins) {
     free(ins->words);
     free(ins->stage_word_counts);
     free(ins->redirect.target.data);
+    ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);
 }
 
 static void copy_command_to_instr(Instr *ins, const DsCommand *command) {
@@ -616,6 +618,33 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             pop_loop(p, p->instr_len);
             break;
         }
+        case DS_LOWER_STMT_FOR_MAP: {
+            int iterable = compile_expr(p, stmt->as.for_stmt.iterable);
+            Instr begin = {0};
+            begin.op = OP_FOR_MAP;
+            begin.span = stmt->span;
+            begin.a = iterable;
+            begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
+            begin.value_name = ds_str_dup_range(stmt->as.for_stmt.value_name.data, stmt->as.for_stmt.value_name.len);
+            size_t begin_pos = emit_instr(p, begin);
+            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
+            p->scope_depth++;
+            compile_block(p, stmt->as.for_stmt.body);
+            Instr pop = {0};
+            pop.op = OP_POP_SCOPE;
+            pop.span = stmt->span;
+            emit_instr(p, pop);
+            p->scope_depth--;
+            Instr jump = {0};
+            jump.op = OP_JUMP;
+            jump.span = stmt->span;
+            jump.target = (int)begin_pos;
+            emit_instr(p, jump);
+            p->instrs[begin_pos].target = (int)p->instr_len;
+            (void)loop;
+            pop_loop(p, p->instr_len);
+            break;
+        }
         case DS_LOWER_STMT_FOR_RANGE: {
             int start = compile_expr(p, stmt->as.for_stmt.iterable->as.range.start);
             int end = compile_expr(p, stmt->as.for_stmt.iterable->as.range.end);
@@ -677,7 +706,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE: {
             LoopPatch *loop = current_loop(p);
-            if (stmt->kind == DS_LOWER_STMT_BREAK && loop && p->instrs[loop->start].op == OP_FOR_ARRAY) {
+            if (stmt->kind == DS_LOWER_STMT_BREAK && loop && (p->instrs[loop->start].op == OP_FOR_ARRAY || p->instrs[loop->start].op == OP_FOR_MAP)) {
                 Instr reset = {0};
                 reset.op = OP_RESET_FOR;
                 reset.span = stmt->span;

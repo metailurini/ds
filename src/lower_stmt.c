@@ -209,8 +209,18 @@ static void lower_validate_function_return_contract(Lower *lower, const DsStmt *
     } else if (!lower->current_function->has_return) {
         lower->current_function->has_return = true;
         lower->current_function->return_kind = ret;
+        if (ret == DS_LOWER_VALUE_ARRAY) lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.return_stmt.value));
+        else if (ret == DS_LOWER_VALUE_MAP) lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
     } else if (lower->current_function->return_kind != ret) {
         ds_diag_error(lower->diag, src->span, "all return statements in a function must have the same value kind in v0.21.0");
+    } else if (ret == DS_LOWER_VALUE_ARRAY) {
+        DsLowerValueKind element = lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.return_stmt.value));
+        if (lower->current_function->return_element_kind == DS_LOWER_VALUE_UNKNOWN) lower->current_function->return_element_kind = element;
+        else if (element != DS_LOWER_VALUE_UNKNOWN && lower->current_function->return_element_kind != element) lower->current_function->return_element_kind = DS_LOWER_VALUE_UNKNOWN;
+    } else if (ret == DS_LOWER_VALUE_MAP) {
+        DsLowerValueKind element = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
+        if (lower->current_function->return_element_kind == DS_LOWER_VALUE_UNKNOWN) lower->current_function->return_element_kind = element;
+        else if (element != DS_LOWER_VALUE_UNKNOWN && lower->current_function->return_element_kind != element) lower->current_function->return_element_kind = DS_LOWER_VALUE_UNKNOWN;
     }
 }
 
@@ -252,7 +262,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     out->as.let_stmt.value = lower_expr(lower, &fake, &kind);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
-                                       kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN,
+                                       kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
+                                       (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
                                        stmt->span);
                     lower_stmt_vec_push(&block->as.block_stmt.statements, out);
                     ds_command_free(&command_copy);
@@ -267,7 +278,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
             out->as.let_stmt.value = lower_expr(lower, stmt->as.let_stmt.value, &kind);
             scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
-                               kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN,
+                               kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
+                               (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
                                stmt->span);
             return out;
         }
@@ -360,10 +372,14 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             return out;
         }
         case DS_STMT_FOR: {
-            DsLowerStmt *out = stmt_new(stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_RANGE ? DS_LOWER_STMT_FOR_RANGE : DS_LOWER_STMT_FOR_ARRAY, stmt->span);
+            DsLowerStmtKind loop_kind = stmt->as.for_stmt.has_value_name ? DS_LOWER_STMT_FOR_MAP :
+                                        (stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_RANGE ? DS_LOWER_STMT_FOR_RANGE : DS_LOWER_STMT_FOR_ARRAY);
+            DsLowerStmt *out = stmt_new(loop_kind, stmt->span);
             out->as.for_stmt.name = str_clone(stmt->as.for_stmt.key_name);
-            if (stmt->as.for_stmt.has_value_name) {
-                ds_diag_error(lower->diag, stmt->span, "map iteration is deferred in v0.10.0; use direct map access instead");
+            if (stmt->as.for_stmt.has_value_name) out->as.for_stmt.value_name = str_clone(stmt->as.for_stmt.value_name);
+            if (stmt->as.for_stmt.has_value_name && stmt->as.for_stmt.key_name.len == stmt->as.for_stmt.value_name.len &&
+                memcmp(stmt->as.for_stmt.key_name.data, stmt->as.for_stmt.value_name.data, stmt->as.for_stmt.key_name.len) == 0) {
+                ds_diag_error(lower->diag, stmt->span, "map loop key and value variables must be different in v0.29.0");
             }
             SymKind element_kind = SYM_UNKNOWN;
             if (out->kind == DS_LOWER_STMT_FOR_RANGE) {
@@ -376,11 +392,27 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 if (end_kind != SYM_INT && end_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, range->as.range.end->span, "range end must be an int in v0.23.0");
                 out->as.for_stmt.iterable = lowered_range;
                 element_kind = SYM_INT;
+            } else if (out->kind == DS_LOWER_STMT_FOR_MAP) {
+                SymKind iterable_kind = SYM_UNKNOWN;
+                out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
+                if (iterable_kind == SYM_ARRAY) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "two-name map loops require a map iterable in v0.29.0; arrays use `for item in array`");
+                } else if (iterable_kind == SYM_COMMAND_RESULT) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "command-result values are not maps; use `for key, value in map` only with flat maps in v0.29.0");
+                } else if (iterable_kind != SYM_MAP && iterable_kind != SYM_UNKNOWN) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "two-name map loops require a map iterable in v0.29.0");
+                }
+                if (iterable_kind == SYM_MAP && !lower_collection_map_for_iterable_is_portable(out->as.for_stmt.iterable)) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span,
+                                  "map loop iterable must be a named map or supported map-returning function call for VM/Bash parity in v0.29.0; bind temporary maps to a variable first");
+                }
+                element_kind = infer_map_value_kind(lower, out->as.for_stmt.iterable);
             } else {
                 SymKind iterable_kind = SYM_UNKNOWN;
                 out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
                 if (!stmt->as.for_stmt.has_value_name && iterable_kind != SYM_ARRAY && iterable_kind != SYM_UNKNOWN) {
-                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
+                    if (iterable_kind == SYM_MAP) ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "one-name loop over a map is not supported in v0.29.0; use `for key, value in map`");
+                    else ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "for loop iterable must be an array in v0.10.0");
                 }
                 if (iterable_kind == SYM_ARRAY && !lower_collection_for_iterable_is_portable(out->as.for_stmt.iterable)) {
                     lower_reject_nonportable_collection_for_iterable(lower, stmt->as.for_stmt.iterable->span);
@@ -394,7 +426,12 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             int saved_depth = lower->loop_depth;
             lower->loop_depth++;
             lower->scope = &local;
-            scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
+            if (out->kind == DS_LOWER_STMT_FOR_MAP) {
+                scope_define(lower, &local, stmt->as.for_stmt.key_name, SYM_STRING, stmt->span);
+                scope_define(lower, &local, stmt->as.for_stmt.value_name, element_kind, stmt->span);
+            } else {
+                scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
+            }
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
             lower->scope = saved;
             lower->loop_depth = saved_depth;

@@ -103,6 +103,7 @@ bool program_uses_run(const DsLowerProgram *program);
 bool program_uses_pipeline_run(const DsLowerProgram *program);
 bool program_uses_stdlib(const DsLowerProgram *program);
 bool program_uses_collection_index(const DsLowerProgram *program);
+bool program_uses_map_iteration(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);
 bool program_uses_case(const DsLowerProgram *program);
 bool program_uses_membership(const DsLowerProgram *program);

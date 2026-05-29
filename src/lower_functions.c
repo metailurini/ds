@@ -87,6 +87,18 @@ void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {
             if (i == 0) element_kind = current;
             else if (element_kind != current) { element_kind = SYM_UNKNOWN; break; }
         }
+    } else if (stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_EXPR_MAP) {
+        element_kind = SYM_UNKNOWN;
+        for (size_t i = 0; i < stmt->as.let_stmt.value->as.map.entries.len; i++) {
+            const DsExpr *value = stmt->as.let_stmt.value->as.map.entries.items[i].value;
+            SymKind current = SYM_UNKNOWN;
+            if (value->kind == DS_EXPR_STRING) current = SYM_STRING;
+            else if (value->kind == DS_EXPR_INT) current = SYM_INT;
+            else if (value->kind == DS_EXPR_BOOL) current = SYM_BOOL;
+            else { element_kind = SYM_UNKNOWN; break; }
+            if (i == 0) element_kind = current;
+            else if (element_kind != current) { element_kind = SYM_UNKNOWN; break; }
+        }
     }
     scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, SYM_TOPLEVEL_PREDECLARED, element_kind, stmt->span);
 }
@@ -451,6 +463,7 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
             }
             return false;
         case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_MAP:
         case DS_LOWER_STMT_FOR_RANGE:
             if (expr_reaches_function(lower, stmt->as.for_stmt.iterable, target_index, seen, cycle_span)) return true;
             return stmt_reaches_function(lower, stmt->as.for_stmt.body, target_index, seen, cycle_span);
@@ -555,6 +568,8 @@ static bool stmt_contains_plain_command(const DsLowerStmt *stmt, DsSpan *span_ou
             return stmt_contains_plain_command(stmt->as.if_stmt.then_branch, span_out) ||
                    stmt_contains_plain_command(stmt->as.if_stmt.else_branch, span_out);
         case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_MAP:
+        case DS_LOWER_STMT_FOR_RANGE:
             return stmt_contains_plain_command(stmt->as.for_stmt.body, span_out);
         case DS_LOWER_STMT_WHILE:
             return stmt_contains_plain_command(stmt->as.while_stmt.body, span_out);

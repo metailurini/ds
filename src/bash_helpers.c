@@ -161,6 +161,23 @@ const char *ds_bash_collection_helpers_source(void) {
         "  local __ds_name=$1 __ds_key=$2\n"
         "  eval \"[[ \\${${__ds_name}[\\$__ds_key]+__ds_set} == __ds_set ]]\" || __ds_error \"missing map key '$__ds_key'\"\n"
         "  eval \"printf '%s' \\\"\\${${__ds_name}[\\$__ds_key]}\\\"\"\n"
+        "}\n"
+        "__ds_map_sorted_keys() {\n"
+        "  local __ds_source=$1 __ds_target=$2 __ds_len __ds_i __ds_j __ds_tmp __ds_prev\n"
+        "  local LC_ALL=C\n"
+        "  eval \"$__ds_target=(\\\"\\${!${__ds_source}[@]}\\\")\"\n"
+        "  eval \"__ds_len=\\${#${__ds_target}[@]}\"\n"
+        "  for (( __ds_i = 1; __ds_i < __ds_len; __ds_i++ )); do\n"
+        "    eval \"__ds_tmp=\\\"\\${${__ds_target}[\\$__ds_i]}\\\"\"\n"
+        "    __ds_j=$__ds_i\n"
+        "    while (( __ds_j > 0 )); do\n"
+        "      eval \"__ds_prev=\\\"\\${${__ds_target}[\\$((__ds_j - 1))]}\\\"\"\n"
+        "      if [[ \"$__ds_prev\" < \"$__ds_tmp\" || \"$__ds_prev\" == \"$__ds_tmp\" ]]; then break; fi\n"
+        "      eval \"${__ds_target}[\\$__ds_j]=\\\"\\$__ds_prev\\\"\"\n"
+        "      __ds_j=$((__ds_j - 1))\n"
+        "    done\n"
+        "    eval \"${__ds_target}[\\$__ds_j]=\\\"\\$__ds_tmp\\\"\"\n"
+        "  done\n"
         "}\n\n";
 }
 
