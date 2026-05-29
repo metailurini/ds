@@ -76,6 +76,11 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.assign_stmt.name.data);
             lower_expr_free(stmt->as.assign_stmt.value);
             break;
+        case DS_LOWER_STMT_INDEX_ASSIGN:
+            free(stmt->as.index_assign_stmt.name.data);
+            lower_expr_free(stmt->as.index_assign_stmt.index);
+            lower_expr_free(stmt->as.index_assign_stmt.value);
+            break;
         case DS_LOWER_STMT_IF:
             lower_expr_free(stmt->as.if_stmt.condition);
             lower_stmt_free(stmt->as.if_stmt.then_branch);

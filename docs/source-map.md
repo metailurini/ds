@@ -89,7 +89,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/parse_command.c` | command/pipeline/redirection syntax and recovery | no command-word semantic validation |
 | `src/parse_script.c` | script declaration/import/test syntax | frontend shape only |
 | `src/parse_function.c` | function declaration syntax | no return-kind semantics |
-| `src/parse_stmt.c` | statement syntax and syntax-level unsupported assignment rejection | rejects collection assignment while no AST/HIR mutation form exists |
+| `src/parse_stmt.c` | statement syntax and assignment-shape preservation | preserves parseable bracket index assignment for lowerer validation; still rejects statement syntax errors |
 | `src/ast.c` | AST allocation/free/debug printing | mirrors AST only |
 | `src/format.c` | AST-preserving formatting | formatting policy, not language acceptance |
 
@@ -102,7 +102,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower_interpolation.c` | generic string interpolation parsing/lowering for normal string expressions | owns normal-string interpolation segment validation; not command-word policy |
 | `src/lower_collection.c` | collection portability policy gates for named storage, literal/variable indexes, portable elements, and portable array iterables | lowerer-owned VM/Bash parity rules; VM/Bash must not rediscover these acceptance rules |
 | `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, direct scalar value-call interpolation materialization | consumes shared command-word shape and format-spec metadata; stable owner for command-word lowering |
-| `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | delegates command-word details to `lower_command.c` |
+| `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | owns flat index-assignment target/RHS validation, collection loop legality, and delegates command-word details to `lower_command.c` |
 | `src/lower_symbols.c` | lowerer scopes/symbol facts | no syntax parsing or backend rendering |
 | `src/lower_stdlib.c` | stdlib declaration/use validation | consumes `ds_stdlib.h` metadata |
 | `src/lower_functions.c` | function collection, return-kind discovery/validation, call-return contracts | owns function return contract pressure |

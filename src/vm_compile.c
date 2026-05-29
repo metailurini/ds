@@ -562,6 +562,18 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             emit_instr(p, ins);
             break;
         }
+        case DS_LOWER_STMT_INDEX_ASSIGN: {
+            int index = compile_expr(p, stmt->as.index_assign_stmt.index);
+            int value = compile_expr(p, stmt->as.index_assign_stmt.value);
+            Instr ins = {0};
+            ins.op = OP_SET_INDEX;
+            ins.span = stmt->span;
+            ins.a = index;
+            ins.b = value;
+            ins.name = ds_str_dup_range(stmt->as.index_assign_stmt.name.data, stmt->as.index_assign_stmt.name.len);
+            emit_instr(p, ins);
+            break;
+        }
         case DS_LOWER_STMT_CMD: {
             Instr ins = {0};
             ins.op = OP_RUN_CMD;

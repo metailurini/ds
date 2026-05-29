@@ -220,6 +220,15 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.assign_stmt.value, level + 1);
             break;
         }
+        case DS_LOWER_STMT_INDEX_ASSIGN:
+            fprintf(out, "IndexAssign "); print_str(out, stmt->as.index_assign_stmt.name);
+            fprintf(out, stmt->as.index_assign_stmt.target_is_map ? " map[] =" : " array[] =");
+            print_span(out, stmt->span); fputc('\n', out);
+            indent(out, level + 1); fputs("Index\n", out);
+            dump_expr(out, stmt->as.index_assign_stmt.index, level + 2);
+            indent(out, level + 1); fputs("Value\n", out);
+            dump_expr(out, stmt->as.index_assign_stmt.value, level + 2);
+            break;
         case DS_LOWER_STMT_CMD:
             fputs("Command ", out); dump_command(out, &stmt->as.cmd_stmt); print_span(out, stmt->span); fputc('\n', out);
             break;

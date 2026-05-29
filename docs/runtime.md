@@ -949,3 +949,22 @@ emission contract before the `1.0.0` release checklist:
 - Sanitizer-backed aggregate runs are part of the release checklist for source
   buffers, diagnostics, HIR/bytecode, VM values, command captures, cleanup
   handler state, and Bash emission buffers.
+
+## v0.30.0 flat index-assignment runtime notes
+
+`v0.30.0` adds mutation only for named flat collections represented by an
+explicit HIR index-assignment statement. Arrays replace existing elements at
+integer indexes; out-of-range, negative, and non-integer indexes are runtime data
+failures in both VM execution and emitted Bash. Assignment never appends and does
+not create sparse arrays.
+
+Maps insert or replace entries at non-empty string keys. Empty or non-string keys
+are rejected by the lowerer when statically known and by VM/Bash helpers when the
+key value is only known at runtime. Emitted Bash updates the value-kind sidecar
+for every accepted assignment so later map reads, conditions, `case`, returns,
+and map iteration preserve VM/Bash scalar-kind parity.
+
+Nested mutation, field-style map assignment, temporary/function-result mutation,
+compound index assignment, deletion, aliases/references, and same-map mutation
+during map iteration remain unsupported language forms rather than backend
+runtime behavior.

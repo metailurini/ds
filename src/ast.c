@@ -110,6 +110,17 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             print_expr(stmt->as.assign_stmt.value, out, level + 1);
             break;
         }
+        case DS_STMT_INDEX_ASSIGN: {
+            const char *op = stmt->as.index_assign_stmt.op == DS_ASSIGN_ADD ? "+=" :
+                             (stmt->as.index_assign_stmt.op == DS_ASSIGN_SUB ? "-=" :
+                              (stmt->as.index_assign_stmt.op == DS_ASSIGN_MUL ? "*=" :
+                               (stmt->as.index_assign_stmt.op == DS_ASSIGN_DIV ? "/=" :
+                                (stmt->as.index_assign_stmt.op == DS_ASSIGN_MOD ? "%=" : "="))));
+            fprintf(out, "IndexAssignStmt %s\n", op);
+            print_expr(stmt->as.index_assign_stmt.target, out, level + 1);
+            print_expr(stmt->as.index_assign_stmt.value, out, level + 1);
+            break;
+        }
         case DS_STMT_IF:
             fputs("IfStmt\n", out);
             indent(out, level + 1);
@@ -347,6 +358,10 @@ static void free_stmt(DsStmt *stmt) {
         case DS_STMT_ASSIGN:
             free(stmt->as.assign_stmt.name.data);
             free_expr(stmt->as.assign_stmt.value);
+            break;
+        case DS_STMT_INDEX_ASSIGN:
+            free_expr(stmt->as.index_assign_stmt.target);
+            free_expr(stmt->as.index_assign_stmt.value);
             break;
         case DS_STMT_IF:
             free_expr(stmt->as.if_stmt.condition);

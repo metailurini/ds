@@ -298,6 +298,8 @@ static bool ast_collect_return_kind(Lower *lower, const DsStmt *stmt, AstKindEnv
             }
             return true;
         }
+        case DS_STMT_INDEX_ASSIGN:
+            return true;
         case DS_STMT_BLOCK:
         {
             AstKindEnv block_env = ast_kind_env_clone(env);
@@ -480,6 +482,9 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
             return expr_reaches_function(lower, stmt->as.let_stmt.value, target_index, seen, cycle_span);
         case DS_LOWER_STMT_ASSIGN:
             return expr_reaches_function(lower, stmt->as.assign_stmt.value, target_index, seen, cycle_span);
+        case DS_LOWER_STMT_INDEX_ASSIGN:
+            return expr_reaches_function(lower, stmt->as.index_assign_stmt.index, target_index, seen, cycle_span) ||
+                   expr_reaches_function(lower, stmt->as.index_assign_stmt.value, target_index, seen, cycle_span);
         case DS_LOWER_STMT_PUSH:
             return expr_reaches_function(lower, stmt->as.push_stmt.value, target_index, seen, cycle_span);
         case DS_LOWER_STMT_ASSERT:

@@ -94,6 +94,7 @@ struct DsLowerExpr {
 typedef enum {
     DS_LOWER_STMT_LET,
     DS_LOWER_STMT_ASSIGN,
+    DS_LOWER_STMT_INDEX_ASSIGN,
     DS_LOWER_STMT_IF,
     DS_LOWER_STMT_BLOCK,
     DS_LOWER_STMT_CMD,
@@ -212,6 +213,14 @@ struct DsLowerStmt {
     union {
         struct { DsStr name; DsLowerExpr *value; } let_stmt;
         struct { DsStr name; DsLowerAssignOp op; DsLowerExpr *value; } assign_stmt;
+        struct {
+            DsStr name;
+            DsLowerExpr *index;
+            DsLowerExpr *value;
+            bool target_is_array;
+            bool target_is_map;
+            DsLowerValueKind value_kind;
+        } index_assign_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; bool scoped; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;

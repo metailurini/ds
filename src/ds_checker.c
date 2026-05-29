@@ -222,6 +222,10 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             use_name(c, stmt->as.assign_stmt.name);
             check_expr(c, stmt->as.assign_stmt.value);
             break;
+        case DS_STMT_INDEX_ASSIGN:
+            check_expr(c, stmt->as.index_assign_stmt.target);
+            check_expr(c, stmt->as.index_assign_stmt.value);
+            break;
         case DS_STMT_IF:
             check_expr(c, stmt->as.if_stmt.condition);
             check_block(c, stmt->as.if_stmt.then_branch, depth + 1);

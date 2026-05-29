@@ -47,6 +47,9 @@ typedef struct {
     int handler_function_depth;
     DsLowerFn *current_function;
     size_t temp_counter;
+    DsStr *map_loop_names;
+    size_t map_loop_len;
+    size_t map_loop_cap;
 } Lower;
 
 bool lower_str_eq(DsStr a, const char *b);

@@ -32,6 +32,7 @@ typedef enum {
     OP_ARRAY_LITERAL,
     OP_MAP_LITERAL,
     OP_GET_INDEX,
+    OP_SET_INDEX,
     OP_PUSH_ARRAY,
     OP_FOR_ARRAY,
     OP_FOR_MAP,

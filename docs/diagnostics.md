@@ -207,8 +207,11 @@ source can be parsed far enough to know them:
   flow placement;
 - helper/function arity, call form, statement-only/expression-only misuse, and
   return-kind errors;
-- unsupported syntax that has no accepted AST/HIR shape, including collection
-  assignment while index assignment and map field assignment are deferred;
+- unsupported syntax that has no accepted AST/HIR shape;
+- unsupported mutation forms that parse as assignment targets but have no
+  accepted v0.30 semantics, including field-style map assignment, nested
+  mutation, temporary/function-result targets, sparse array assignment, deletion,
+  and compound index assignment;
 - unsupported syntax that has an AST shape but no accepted semantics;
 - unsupported VM/Bash parity forms, including forms that one backend could
   execute but the other cannot represent;

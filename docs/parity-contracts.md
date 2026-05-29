@@ -290,12 +290,13 @@ backend grows ad hoc behavior.
 
 ### Collections
 
-Canonical representation: HIR collection literals, index expressions, iterable
-metadata, and runtime value kinds for arrays/maps.
+Canonical representation: HIR collection literals, index expressions, explicit
+flat index-assignment statements, iterable metadata, and runtime value kinds for
+arrays/maps.
 
-Validation owner: parser for literal/index syntax; lowerer for element/key rules,
-iterability, duplicate/invalid keys, mutation support, and unsupported assignment
-forms.
+Validation owner: parser for literal/index/assignment syntax shape; lowerer for
+element/key rules, iterability, duplicate/invalid keys, accepted mutation
+support, same-map iteration mutation rejection, and unsupported assignment forms.
 
 Execution owner: VM runtime values and Bash collection encodings/helpers. Both
 backends must agree on construction, indexing, iteration order where specified,
@@ -307,13 +308,18 @@ kinds.
 
 Current maintenance rule: mutable collection features require explicit HIR
 assignment/iteration nodes before implementation. Bash helper sidecars and VM
-runtime containers are not the canonical semantics. Field/index reads currently
-require named collection storage; indexing array literals or function-call
-collection results directly is rejected by lowering until HIR/Bash have a
-portable temporary collection representation. Collection index expressions are
-also limited to literals or named variables; computed indexes must be bound to a
-variable first so the lowerer, not the Bash emitter, owns the unsupported-form
-diagnostic. Array iteration currently requires a named array or a known stdlib
+runtime containers are not the canonical semantics. v0.30 accepts only named
+flat `array[index] = scalar` and `map[key] = scalar` mutation. Arrays replace
+existing in-bounds elements; maps insert/replace non-empty string keys. Nested
+mutation, field-style map assignment, temporary/function-result targets, sparse
+arrays, deletion, aliases/references, and compound index assignment remain
+rejected by lowering. Field/index reads currently require named collection
+storage; indexing array literals or function-call collection results directly is
+rejected by lowering until HIR/Bash have a portable temporary collection
+representation. Collection index expressions are also limited to literals or
+named variables; computed indexes must be bound to a variable first so the
+lowerer, not the Bash emitter, owns the unsupported-form diagnostic. Array
+iteration currently requires a named array or a known stdlib
 array result; looping over array literals or user-function array calls directly
 is rejected by lowering until there is a portable temporary iterable
 representation shared by VM and Bash emission. Map iteration is accepted only

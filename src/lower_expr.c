@@ -615,6 +615,9 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         } else if (idx_kind != SYM_STRING && idx_kind != SYM_UNKNOWN) {
             ds_diag_error(lower->diag, expr->as.index.index->span, "map index must be a string in v0.10.0");
         }
+        SymKind value_kind = infer_map_value_kind(lower, object);
+        out->as.index.element_kind = lower_value_kind_from_sym(value_kind);
+        *kind_out = value_kind;
     } else {
         ds_diag_error(lower->diag, expr->span, "indexing requires an array or map in v0.10.0");
     }

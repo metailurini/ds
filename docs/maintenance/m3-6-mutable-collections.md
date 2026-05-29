@@ -11,31 +11,32 @@ first.
 Collection behavior is accepted only through lowerer/HIR contracts with explicit
 VM/Bash parity.
 
-- Parser preserves collection literal, read-only indexing, and field-read syntax
-  shape.
-- Parser rejects unsupported collection-assignment syntax before AST/HIR when no
-  accepted semantics exist.
+- Parser preserves collection literal, read-only indexing, field-read syntax,
+  and parseable bracket index-assignment shape.
 - Lowering owns collection semantic validation, parity gates, and unsupported
   mutation diagnostics for parseable collection forms.
-- There is no HIR mutation node for deferred index assignment, map field
-  assignment, or nested mutation.
+- v0.30.0 adds an explicit HIR mutation node for named flat array/map index
+  assignment. Map field assignment and nested mutation remain deferred.
 - VM and Bash execute/render accepted list/map literals, read-only indexing, map
-  field reads, array loops, array `push`, and flat structured returns.
+  field reads, array loops, map loops, array `push`, flat structured returns,
+  and named flat index assignment.
 - Bash associative-array sidecar metadata is an implementation detail, not the
   language contract.
 
 ## Ownership
 - Syntax owner: parser (`src/parse_expr.c`, `src/parse_stmt.c`, `src/ds_ast.h`);
-  parser also owns unsupported collection-assignment syntax rejection while no
-  AST/HIR mutation form exists.
+  parser preserves parseable mutation shape so the lowerer can own semantic
+  acceptance/rejection.
 - Semantic owner: lowerer (`src/lower_expr.c`, `src/lower_stmt.c`,
   `src/lower_functions.c`, `src/lower_symbols.c`) for parseable accepted-form
   constraints and parity gates.
 - Canonical representation: HIR array/map expressions, HIR index expressions,
-  accepted array-loop/push statements, value-kind metadata, and no HIR node for
-  deferred mutation forms.
+  accepted array/map loop and `push` statements, explicit flat index-assignment
+  statements, and value-kind metadata. Deferred mutation forms still have no
+  accepted HIR representation.
 - VM owner: runtime arrays/maps, accepted indexing, missing-key/out-of-range
-  runtime failures, array `push`, array loops, and flat collection returns.
+  runtime failures, array `push`, array/map loops, flat collection returns, and
+  accepted flat index assignment.
 - Bash owner: indexed arrays, associative arrays, value-type sidecars, indexing
   helpers, map-key runtime checks, array append, array loops, and emitted-script
   invariants for accepted HIR.
@@ -108,18 +109,17 @@ VM/Bash parity.
 - Supported list/map literals and duplicate/empty-key diagnostics.
 - Supported read-only indexing and runtime missing-key/out-of-range failures.
 - Rejected computed, temporary, and unsupported indexing forms.
-- Supported array loops and rejected map iteration.
-- Rejected index assignment, map field assignment, compound assignment, and nested
-  mutation.
+- Supported array and map loops.
+- Supported named flat index assignment.
+- Rejected map field assignment, compound assignment, and nested mutation.
 - Supported `array.push(value)` parity.
 - Command-result and function-returned collection edges.
 - VM/Bash parity tests for all accepted collection behavior.
 - Diagnostic tests proving deferred mutation forms fail before backend selection.
 
 ## Future work
-- Design map iteration only after defining iteration order and backend parity.
-- Design index assignment only after explicit HIR assignment-target and mutation
-  semantics exist.
+- Keep map iteration and flat index assignment limited to their explicit HIR
+  contracts.
 - Design nested mutation only after value/reference semantics and Bash encoding
   are specified.
 - Do not add collection-valued parameters or destructuring through maintenance

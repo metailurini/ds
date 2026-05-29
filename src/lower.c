@@ -24,7 +24,11 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     Scope root;
     scope_init(&root, NULL);
     DsLowerProgram *program = (DsLowerProgram *)ds_xcalloc(1, sizeof(DsLowerProgram));
-    Lower lower = {diag, &root, program, 0, 0, 0, 0, NULL, 0};
+    Lower lower;
+    memset(&lower, 0, sizeof(lower));
+    lower.diag = diag;
+    lower.scope = &root;
+    lower.program = program;
     program->span = ast->span;
     program->has_script = ast->has_script;
     if (ast->has_script) {
@@ -45,6 +49,8 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
         if (ast->statements.items[i]->kind != DS_STMT_FN && ast->statements.items[i]->kind != DS_STMT_TEST) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
     }
     scope_free(&root);
+    for (size_t i = 0; i < lower.map_loop_len; i++) free(lower.map_loop_names[i].data);
+    free(lower.map_loop_names);
     if (diag->has_error) {
         ds_lower_program_free(program);
         return NULL;

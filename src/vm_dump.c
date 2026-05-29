@@ -48,6 +48,7 @@ const char *op_name(OpCode op) {
         case OP_ARRAY_LITERAL: return "ARRAY_LITERAL";
         case OP_MAP_LITERAL: return "MAP_LITERAL";
         case OP_GET_INDEX: return "GET_INDEX";
+        case OP_SET_INDEX: return "SET_INDEX";
         case OP_PUSH_ARRAY: return "PUSH_ARRAY";
         case OP_FOR_ARRAY: return "FOR_ARRAY";
         case OP_FOR_MAP: return "FOR_MAP";
@@ -236,6 +237,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 fputc('}', out);
                 break;
             case OP_GET_INDEX: fprintf(out, " r%d, r%d[r%d]", ins->dst, ins->a, ins->b); break;
+            case OP_SET_INDEX: fprintf(out, " %s[r%d] = r%d", ins->name, ins->a, ins->b); break;
             case OP_PUSH_ARRAY: fprintf(out, " %s, r%d", ins->name, ins->a); break;
             case OP_FOR_ARRAY: fprintf(out, " %s in r%d -> %d", ins->name, ins->a, ins->target); break;
             case OP_FOR_MAP: fprintf(out, " %s, %s in r%d -> %d", ins->name, ins->value_name, ins->a, ins->target); break;

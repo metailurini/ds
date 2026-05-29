@@ -246,6 +246,161 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     return out;
 }
 
+static bool lower_push_map_loop_name(Lower *lower, DsStr name) {
+    if (lower->map_loop_len == lower->map_loop_cap) {
+        lower->map_loop_cap = lower->map_loop_cap ? lower->map_loop_cap * 2 : 4;
+        lower->map_loop_names = (DsStr *)ds_xrealloc(lower->map_loop_names, lower->map_loop_cap * sizeof(DsStr));
+    }
+    lower->map_loop_names[lower->map_loop_len++] = str_clone(name);
+    return true;
+}
+
+static void lower_pop_map_loop_name(Lower *lower) {
+    if (lower->map_loop_len == 0) return;
+    lower->map_loop_len--;
+    free(lower->map_loop_names[lower->map_loop_len].data);
+    lower->map_loop_names[lower->map_loop_len] = (DsStr){0};
+}
+
+static bool lower_in_map_loop_for_name(const Lower *lower, DsStr name) {
+    for (size_t i = 0; i < lower->map_loop_len; i++) {
+        DsStr cur = lower->map_loop_names[i];
+        if (cur.len == name.len && memcmp(cur.data, name.data, name.len) == 0) return true;
+    }
+    return false;
+}
+
+static bool lowered_expr_has_dynamic_scalar_value(Lower *lower, const DsLowerExpr *expr) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_IDENT) {
+        Symbol *sym = scope_find(lower->scope, expr->as.text);
+        return sym && sym->dynamic_scalar;
+    }
+    if (expr->kind == DS_LOWER_EXPR_INDEX) {
+        return expr->as.index.object_is_array || expr->as.index.object_is_map;
+    }
+    return false;
+}
+
+static void lower_update_collection_element_kind(Symbol *sym, SymKind value_kind) {
+    if (!sym || value_kind == SYM_UNKNOWN) return;
+    if (sym->element_kind == SYM_UNKNOWN) sym->element_kind = value_kind;
+    else if (sym->element_kind != value_kind) sym->element_kind = SYM_UNKNOWN;
+}
+
+static bool expr_is_negative_int_literal(const DsExpr *expr) {
+    return expr && expr->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.unary.op, "-") &&
+           expr->as.unary.right && expr->as.unary.right->kind == DS_EXPR_INT;
+}
+
+static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
+    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_INDEX_ASSIGN, stmt->span);
+    const DsExpr *target = stmt->as.index_assign_stmt.target;
+    const DsExpr *object = NULL;
+    const DsExpr *index_expr = NULL;
+
+    if (stmt->as.index_assign_stmt.op != DS_ASSIGN_SET) {
+        ds_diag_error(lower->diag, stmt->span,
+                      "compound index assignment is unsupported in v0.30.0; use `target[index] = value`");
+    }
+
+    if (!target || target->kind != DS_EXPR_INDEX) {
+        if (target && target->kind == DS_EXPR_FIELD) {
+            ds_diag_error(lower->diag, target->span,
+                          "field-style map assignment is deferred in v0.30.0; use bracket syntax like `map[key] = value`");
+        } else {
+            ds_diag_error(lower->diag, stmt->span,
+                          "index assignment target must be a named array or map element in v0.30.0");
+        }
+        SymKind tmp_kind = SYM_UNKNOWN;
+        out->as.index_assign_stmt.index = expr_new(DS_LOWER_EXPR_ERROR, stmt->span);
+        out->as.index_assign_stmt.value = lower_expr(lower, stmt->as.index_assign_stmt.value, &tmp_kind);
+        return out;
+    }
+
+    object = target->as.index.object;
+    index_expr = target->as.index.index;
+    if (!object || object->kind != DS_EXPR_IDENT) {
+        if (object && object->kind == DS_EXPR_FIELD) {
+            ds_diag_error(lower->diag, object->span,
+                          "nested or field-based index assignment targets are deferred in v0.30.0; assign only to named flat arrays or maps");
+        } else if (object && object->kind == DS_EXPR_CALL) {
+            ds_diag_error(lower->diag, object->span,
+                          "function-result index assignment is deferred in v0.30.0; bind the collection to a variable first");
+        } else {
+            ds_diag_error(lower->diag, target->span,
+                          "index assignment target must be a named flat array or map in v0.30.0");
+        }
+        SymKind idx_kind = SYM_UNKNOWN, value_kind = SYM_UNKNOWN;
+        out->as.index_assign_stmt.index = lower_expr(lower, index_expr, &idx_kind);
+        out->as.index_assign_stmt.value = lower_expr(lower, stmt->as.index_assign_stmt.value, &value_kind);
+        out->as.index_assign_stmt.value_kind = lower_value_kind_from_sym(value_kind);
+        return out;
+    }
+
+    out->as.index_assign_stmt.name = str_clone(object->as.text);
+    Symbol *sym = scope_find(lower->scope, object->as.text);
+    if (!sym) {
+        ds_diag_error(lower->diag, object->span,
+                      "index assignment target `%.*s` is not defined; use `let` to declare a collection", (int)object->as.text.len, object->as.text.data);
+    } else if (sym->kind == SYM_ARRAY) {
+        out->as.index_assign_stmt.target_is_array = true;
+    } else if (sym->kind == SYM_MAP) {
+        out->as.index_assign_stmt.target_is_map = true;
+        if (lower_in_map_loop_for_name(lower, object->as.text)) {
+            ds_diag_error(lower->diag, object->span,
+                          "mutating the map currently being iterated is unsupported in v0.30.0; mutate a different map or collect changes first");
+        }
+    } else if (sym->kind == SYM_UNKNOWN || sym->kind == SYM_TOPLEVEL_PREDECLARED) {
+        ds_diag_error(lower->diag, object->span,
+                      "index assignment target kind must be a known array or map in v0.30.0");
+    } else {
+        ds_diag_error(lower->diag, object->span,
+                      "index assignment target `%.*s` must be a named array or map in v0.30.0", (int)object->as.text.len, object->as.text.data);
+    }
+    if (sym) lower_validate_handler_capture(lower, sym, object->as.text, object->span);
+
+    SymKind idx_kind = SYM_UNKNOWN;
+    out->as.index_assign_stmt.index = lower_expr(lower, index_expr, &idx_kind);
+    if (out->as.index_assign_stmt.target_is_array) {
+        lower_validate_portable_collection_index(lower, out->as.index_assign_stmt.index, false, index_expr ? index_expr->span : target->span);
+        if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) {
+            ds_diag_error(lower->diag, index_expr ? index_expr->span : target->span, "array index assignment requires an int index in v0.30.0");
+        }
+        if (expr_is_negative_int_literal(index_expr)) {
+            ds_diag_error(lower->diag, index_expr->span, "array index assignment requires a non-negative index in v0.30.0");
+        }
+    } else if (out->as.index_assign_stmt.target_is_map) {
+        lower_validate_portable_collection_index(lower, out->as.index_assign_stmt.index, true, index_expr ? index_expr->span : target->span);
+        if (index_expr && index_expr->kind == DS_EXPR_STRING) {
+            DsStr decoded = {0};
+            if (lower_decode_string_text(index_expr->as.text, &decoded)) {
+                if (decoded.len == 0) ds_diag_error(lower->diag, index_expr->span, "empty map keys are deferred in v0.30.0");
+                free(decoded.data);
+            }
+        } else if (idx_kind != SYM_STRING && idx_kind != SYM_UNKNOWN) {
+            ds_diag_error(lower->diag, index_expr ? index_expr->span : target->span, "map index assignment requires a string key in v0.30.0");
+        }
+    }
+
+    SymKind value_kind = SYM_UNKNOWN;
+    out->as.index_assign_stmt.value = lower_expr(lower, stmt->as.index_assign_stmt.value, &value_kind);
+    bool dynamic_scalar_rhs = value_kind == SYM_UNKNOWN && lowered_expr_has_dynamic_scalar_value(lower, out->as.index_assign_stmt.value);
+    if (value_kind == SYM_ARRAY || value_kind == SYM_MAP || value_kind == SYM_COMMAND_RESULT) {
+        ds_diag_error(lower->diag, stmt->as.index_assign_stmt.value->span,
+                      "index assignment value must be a flat scalar in v0.30.0; nested collections and command results are deferred");
+    } else if (value_kind == SYM_UNKNOWN && !dynamic_scalar_rhs) {
+        ds_diag_error(lower->diag, stmt->as.index_assign_stmt.value->span,
+                      "index assignment value kind must be a known scalar in v0.30.0; bind unsupported values first");
+    }
+    out->as.index_assign_stmt.value_kind = lower_value_kind_from_sym(value_kind);
+    if (sym && (out->as.index_assign_stmt.target_is_array || out->as.index_assign_stmt.target_is_map)) {
+        if (dynamic_scalar_rhs) sym->element_kind = SYM_UNKNOWN;
+        else lower_update_collection_element_kind(sym, value_kind);
+    }
+    return out;
+}
+
 DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
     switch (stmt->kind) {
         case DS_STMT_LET: {
@@ -336,6 +491,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             else maybe_update_symbol(sym, SYM_INT);
             return out;
         }
+        case DS_STMT_INDEX_ASSIGN:
+            return lower_index_assign_stmt(lower, stmt);
         case DS_STMT_CMD: {
             DsCommand command_copy;
             ds_command_clone(&command_copy, &stmt->as.cmd_stmt);
@@ -460,7 +617,13 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             } else {
                 scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
             }
+            bool pushed_map_loop_name = false;
+            if (out->kind == DS_LOWER_STMT_FOR_MAP && stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_IDENT) {
+                lower_push_map_loop_name(lower, stmt->as.for_stmt.iterable->as.text);
+                pushed_map_loop_name = true;
+            }
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
+            if (pushed_map_loop_name) lower_pop_map_loop_name(lower);
             lower->scope = saved;
             lower->loop_depth = saved_depth;
             scope_free(&local);
@@ -486,11 +649,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CASE, stmt->span);
             SymKind selector_kind = SYM_UNKNOWN;
             out->as.case_stmt.selector = lower_expr(lower, stmt->as.case_stmt.selector, &selector_kind);
-            bool selector_is_dynamic_scalar = false;
-            if (selector_kind == SYM_UNKNOWN && out->as.case_stmt.selector && out->as.case_stmt.selector->kind == DS_LOWER_EXPR_IDENT) {
-                Symbol *selector_sym = scope_find(lower->scope, out->as.case_stmt.selector->as.text);
-                selector_is_dynamic_scalar = selector_sym && selector_sym->dynamic_scalar;
-            }
+            bool selector_is_dynamic_scalar = selector_kind == SYM_UNKNOWN &&
+                                              lowered_expr_has_dynamic_scalar_value(lower, out->as.case_stmt.selector);
             if (selector_kind == SYM_ARRAY || selector_kind == SYM_MAP || selector_kind == SYM_COMMAND_RESULT ||
                 (selector_kind == SYM_UNKNOWN && !selector_is_dynamic_scalar)) {
                 ds_diag_error(lower->diag, stmt->as.case_stmt.selector->span, "case selectors must have a known scalar string, int, or bool kind in v0.17.0");

@@ -397,6 +397,24 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
     }
 }
 
+static void emit_index_type_lookup(const DsLowerExpr *expr, EmitBuf *out) {
+    const DsLowerExpr *object = expr->as.index.object;
+    const DsLowerExpr *index = expr->as.index.index;
+    buf_append(out, "\"${");
+    if (expr->as.index.object_is_array) bash_emit_elem_type_var_name(out, object->as.text);
+    else bash_emit_map_value_type_var_name(out, object->as.text);
+    buf_append(out, "[");
+    if (expr->as.index.object_is_map && expr->as.index.map_key_literal) {
+        bash_single_quote(out, expr->as.index.map_key.data, expr->as.index.map_key.len);
+    } else if (index->kind == DS_LOWER_EXPR_INT) {
+        buf_append_len(out, index->as.text.data, index->as.text.len);
+    } else if (index->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, "$");
+        emit_var_name(out, index->as.text);
+    }
+    buf_append(out, "]:-unknown}\"");
+}
+
 bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     if (expr->kind == DS_LOWER_EXPR_IDENT) {
         if (!symbol_exists(&e->symbols, expr->as.text)) {
@@ -424,6 +442,42 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         buf_append(out, "[[ \"$");
         emit_var_name(out, expr->as.text);
         buf_append(out, "\" == true ]]");
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_INDEX) {
+        if (expr->as.index.element_kind == DS_LOWER_VALUE_BOOL) {
+            buf_append(out, "[[ ");
+            if (!emit_value_expr(e, expr, out)) return false;
+            buf_append(out, " == true ]]");
+            return true;
+        }
+        if (expr->as.index.element_kind == DS_LOWER_VALUE_INT) {
+            buf_append(out, "[[ ");
+            if (!emit_value_expr(e, expr, out)) return false;
+            buf_append(out, " != 0 ]]");
+            return true;
+        }
+        if (expr->as.index.element_kind == DS_LOWER_VALUE_STRING) {
+            buf_append(out, "[[ -n ");
+            if (!emit_value_expr(e, expr, out)) return false;
+            buf_append(out, " ]]");
+            return true;
+        }
+        buf_append(out, "[[ ( ");
+        emit_index_type_lookup(expr, out);
+        buf_append(out, " == bool && ");
+        if (!emit_value_expr(e, expr, out)) return false;
+        buf_append(out, " == true ) || ( ");
+        emit_index_type_lookup(expr, out);
+        buf_append(out, " == int && ");
+        if (!emit_value_expr(e, expr, out)) return false;
+        buf_append(out, " != 0 ) || ( ");
+        emit_index_type_lookup(expr, out);
+        buf_append(out, " != bool && ");
+        emit_index_type_lookup(expr, out);
+        buf_append(out, " != int && -n ");
+        if (!emit_value_expr(e, expr, out)) return false;
+        buf_append(out, " ) ]]");
         return true;
     }
     if (expr->kind == DS_LOWER_EXPR_FIELD) {

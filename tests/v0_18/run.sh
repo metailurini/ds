@@ -219,7 +219,7 @@ assert_contains CHANGELOG.md 'v0.18.0' 'changelog mentions v0.18.0'
 assert_contains examples/pipeline.ds 'run printf' 'pipeline example has captured run pipeline'
 
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.29.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.30.0' 'help reports current version'
 
 # Lexer/parser/token tests.
 write_fixture "$FIX/tokens.ds" <<'DS'

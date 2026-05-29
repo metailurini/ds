@@ -67,6 +67,7 @@ bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKi
 void bash_emit_expr_type_value(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 void bash_emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl);
 void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl);
+void bash_emit_type_assignment_for_expr_required(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl);
 void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *value, EmitBuf *out);
 void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent);
 bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
@@ -104,6 +105,7 @@ bool program_uses_pipeline_run(const DsLowerProgram *program);
 bool program_uses_stdlib(const DsLowerProgram *program);
 bool program_uses_collection_index(const DsLowerProgram *program);
 bool program_uses_map_iteration(const DsLowerProgram *program);
+bool program_uses_map_assignment(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);
 bool program_uses_case(const DsLowerProgram *program);
 bool program_uses_membership(const DsLowerProgram *program);

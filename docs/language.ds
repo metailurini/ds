@@ -311,8 +311,8 @@ fn deploy_default(target = "staging") {
 # execution and emitted Bash cannot confuse user stdout with the private typed
 # scalar return payload. Statement-style calls may still stream stdout and ignore
 # the scalar return. Use captured `run` expressions inside value functions when
-# command output should participate in a returned value. Nested collections,
-# collection-valued parameters, and index assignment remain deferred. Scalar
+# command output should participate in a returned value. Nested collections and
+# collection-valued parameters remain deferred. Scalar
 # function-call interpolation is supported in expression-backed strings and
 # quoted command words; command words pre-evaluate those calls before launching
 # the outer command.
@@ -359,6 +359,11 @@ let services = ["api", "web", "worker"]
 let first_service = services[0]
 services.push("cron")
 
+# v0.30.0 supports replacement assignment into existing elements of named flat
+# arrays. Assignment does not append or create sparse arrays; out-of-range
+# indexes fail at runtime.
+services[0] = "gateway"
+
 for service in services {
   docker compose restart $service
 }
@@ -377,6 +382,13 @@ let ports = {
 let api_port = ports.api
 let web_port = ports["web"]
 
+# v0.30.0 supports insert/replace assignment into named flat maps via bracket
+# syntax. Keys must be strings and non-empty; field-style map assignment remains
+# deferred.
+ports["api"] = 3001
+let service_name = "admin"
+ports[service_name] = 9443
+
 # Map iteration is implemented in v0.29.0 for named maps and supported flat
 # map-returning user-function calls. Iteration order is deterministic: keys are
 # visited in ascending bytewise/ASCII order.
@@ -385,11 +397,12 @@ for name, port in ports {
 }
 
 # Empty map literals, empty map keys, nested maps, nested arrays, computed
-# non-string keys, and element/value expressions that cannot yet be assigned
-# inside emitted Bash collections are deferred. Bind complex scalar expressions
-# first. Bash emission uses Bash associative arrays for maps and emits a Bash 4+
-# guard only for scripts that use maps. Missing keys fail with an explicit
-# runtime error in emitted Bash.
+# non-string keys, field-style assignment, deletion, compound index assignment,
+# and element/value expressions that cannot yet be represented inside emitted
+# Bash collections are deferred. Bind complex scalar expressions first. Bash
+# emission uses Bash associative arrays for maps and emits a Bash 4+ guard only
+# for scripts that use maps. Missing keys fail with an explicit runtime error in
+# emitted Bash.
 
 
 # -----------------------------------------------------------------------------

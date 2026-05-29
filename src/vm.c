@@ -521,6 +521,26 @@ dispatch_loop:
                 ip++;
                 break;
             }
+            case OP_SET_INDEX: {
+                DsValue *obj = lookup_var_ref(&vm, ins->name);
+                DsValue *idx = &vm.regs[ins->a];
+                DsValue *value = &vm.regs[ins->b];
+                if (!obj) { ds_diag_error(diag, ins->span, "internal VM invariant failed: index assignment target `%s` should exist after lowering", ins->name); rc = 1; goto done; }
+                if (obj->kind == DS_VALUE_ARRAY) {
+                    if (idx->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "runtime array index must be an int"); rc = 1; goto done; }
+                    if (idx->as.integer < 0 || (size_t)idx->as.integer >= obj->as.array.len) { ds_diag_error(diag, ins->span, "array index %lld out of range", (long long)idx->as.integer); rc = 1; goto done; }
+                    DsValue *slot = (DsValue *)obj->as.array.items[idx->as.integer];
+                    ds_value_free(slot);
+                    *slot = ds_value_copy(value);
+                } else if (obj->kind == DS_VALUE_MAP) {
+                    if (idx->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "runtime map key must be a string"); rc = 1; goto done; }
+                    DsStr key = {idx->as.string.data ? idx->as.string.data : "", idx->as.string.len};
+                    if (key.len == 0) { ds_diag_error(diag, ins->span, "map key must be non-empty"); rc = 1; goto done; }
+                    if (!ds_map_set(&obj->as.map, key, ds_value_copy(value))) { ds_diag_error(diag, ins->span, "failed to set map key `%.*s`", (int)key.len, key.data); rc = 1; goto done; }
+                } else { ds_diag_error(diag, ins->span, "internal VM invariant failed: index assignment target should be an array or map after lowering"); rc = 1; goto done; }
+                ip++;
+                break;
+            }
             case OP_PUSH_ARRAY: {
                 DsValue *array = lookup_var_ref(&vm, ins->name);
                 if (!array) { ds_diag_error(diag, ins->span, "internal VM invariant failed: array push target `%s` should exist after lowering", ins->name); rc = 1; goto done; }

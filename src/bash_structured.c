@@ -255,8 +255,7 @@ static void emit_index_type_assignment(BashEmitter *e, DsStr name, const DsLower
     }
 }
 
-void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl) {
-    if (!e->needs_case_types) return;
+static void bash_emit_type_assignment_for_expr_impl(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl) {
     emit_indent(&e->out, indent);
     if (local_decl) buf_append(&e->out, "local ");
     bash_emit_type_var_name(&e->out, name);
@@ -271,6 +270,15 @@ void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowe
     } else {
         emit_index_type_assignment(e, name, value, indent, local_decl);
     }
+}
+
+void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl) {
+    if (!e->needs_case_types) return;
+    bash_emit_type_assignment_for_expr_impl(e, name, value, indent, local_decl);
+}
+
+void bash_emit_type_assignment_for_expr_required(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl) {
+    bash_emit_type_assignment_for_expr_impl(e, name, value, indent, local_decl);
 }
 
 void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *value, EmitBuf *out) {
