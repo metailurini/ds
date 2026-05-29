@@ -104,6 +104,8 @@ bool program_uses_run(const DsLowerProgram *program);
 bool program_uses_pipeline_run(const DsLowerProgram *program);
 bool program_uses_stdlib(const DsLowerProgram *program);
 bool program_uses_collection_index(const DsLowerProgram *program);
+bool program_uses_array_helpers(const DsLowerProgram *program);
+bool program_uses_map_helpers(const DsLowerProgram *program);
 bool program_uses_map_iteration(const DsLowerProgram *program);
 bool program_uses_map_assignment(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);

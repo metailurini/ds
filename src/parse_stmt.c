@@ -131,6 +131,20 @@ static bool token_is_assignment_operator_at(const DsTokenVec *tokens, size_t i) 
 
 static DsStmt *parse_index_assign_stmt(Parser *p) {
     DsToken *start = parser_peek(p);
+    for (size_t i = p->pos; i < p->tokens->len; i++) {
+        DsTokenKind kind = p->tokens->items[i].kind;
+        if (kind == DS_TOK_NEWLINE || kind == DS_TOK_EOF || kind == DS_TOK_RBRACE) break;
+        if (token_is_assignment_operator_at(p->tokens, i)) {
+            if (kind != DS_TOK_EQUAL) {
+                ds_diag_error(p->diag, p->tokens->items[i].span,
+                              "compound index assignment is unsupported in v0.30.0; use `target[index] = value`");
+                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_consume_statement_end(p);
+                return NULL;
+            }
+            break;
+        }
+    }
     DsExpr *target = parse_expr(p);
     DsAssignOp op = DS_ASSIGN_SET;
     if (!parse_assignment_operator(p, &op)) {

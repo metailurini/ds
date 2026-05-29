@@ -169,8 +169,16 @@ static void emit_command_result_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_command_result_helpers_source());
 }
 
-static void emit_collection_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_collection_helpers_source());
+static void emit_array_helpers(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_array_helpers_source());
+}
+
+static void emit_map_helpers(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_map_helpers_source());
+}
+
+static void emit_dynamic_index_helper(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_dynamic_index_helper_source());
 }
 
 static void emit_stdlib_helpers(BashEmitter *e) {
@@ -262,6 +270,9 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_map_assignment = program_uses_map_assignment(lowered);
     bool needs_map_guard = program_uses_map_literal(lowered) || needs_map_iteration || needs_map_assignment;
     bool needs_collection_helpers = program_uses_collection_index(lowered) || needs_map_iteration;
+    bool needs_array_helpers = program_uses_array_helpers(lowered);
+    bool needs_map_helpers = program_uses_map_helpers(lowered) || needs_map_iteration;
+    bool needs_dynamic_index_helper = needs_array_helpers && needs_map_helpers && needs_collection_helpers;
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_debug = program_has_command(lowered);
     bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);
@@ -301,7 +312,9 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
         if (needs_control_helpers) emit_plain_control_helpers(&e);
     }
     if (program_uses_run(lowered)) emit_command_result_helpers(&e);
-    if (needs_collection_helpers) emit_collection_helpers(&e);
+    if (needs_array_helpers) emit_array_helpers(&e);
+    if (needs_map_helpers) emit_map_helpers(&e);
+    if (needs_dynamic_index_helper) emit_dynamic_index_helper(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {

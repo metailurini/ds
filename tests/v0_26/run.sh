@@ -728,40 +728,39 @@ assert_emit_fails stdlib_array_return_rejected "$FIX/stdlib_array_return_rejecte
 run_fail stdlib_array_return_rejected_run "$DS" run "$FIX/stdlib_array_return_rejected.ds"
 assert_diag "$TMP/stdlib_array_return_rejected_run.err" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity' 'stdlib_array_return_rejected run diagnostic'
 
-write_fixture "$FIX/index_assignment_rejected.ds" <<'DS'
+write_fixture "$FIX/index_assignment_supported.ds" <<'DS'
 fn apps() {
   return ["api", "web"]
 }
 
 let names = apps()
 names[0] = "worker"
+let first = names[0]
+echo $first
 DS
-run_fail index_assignment_ast "$DS" ast "$FIX/index_assignment_rejected.ds"
-assert_diag "$TMP/index_assignment_ast.err" 'index assignment is deferred in v0.10.0' 'index assignment rejected before AST ownership'
-assert_check_fails index_assignment_rejected "$FIX/index_assignment_rejected.ds" 'index assignment is deferred in v0.10.0'
-assert_emit_fails index_assignment_rejected "$FIX/index_assignment_rejected.ds" 'index assignment is deferred in v0.10.0'
-run_fail index_assignment_rejected_run "$DS" run "$FIX/index_assignment_rejected.ds"
-assert_diag "$TMP/index_assignment_rejected_run.err" 'index assignment is deferred in v0.10.0' 'index_assignment_rejected run diagnostic'
+run_ok index_assignment_ast "$DS" ast "$FIX/index_assignment_supported.ds"
+assert_contains "$TMP/index_assignment_ast.out" 'IndexAssignStmt' 'index assignment AST is owned after v0.30'
+assert_parity index_assignment_supported "$FIX/index_assignment_supported.ds" 0 $'worker\n'
 
 write_fixture "$FIX/map_field_assignment_rejected.ds" <<'DS'
 let app = { name: "api", port: 8080 }
 app.name = "worker"
 DS
-run_fail map_field_assignment_ast "$DS" ast "$FIX/map_field_assignment_rejected.ds"
-assert_diag "$TMP/map_field_assignment_ast.err" 'map field assignment is deferred in v0.10.0' 'map field assignment rejected before AST ownership'
-assert_check_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'map field assignment is deferred in v0.10.0'
-assert_emit_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'map field assignment is deferred in v0.10.0'
+run_ok map_field_assignment_ast "$DS" ast "$FIX/map_field_assignment_rejected.ds"
+assert_contains "$TMP/map_field_assignment_ast.out" 'IndexAssignStmt' 'map field assignment shape is preserved for v0.30 lowering'
+assert_check_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'field-style map assignment is deferred in v0.30.0'
+assert_emit_fails map_field_assignment_rejected "$FIX/map_field_assignment_rejected.ds" 'field-style map assignment is deferred in v0.30.0'
 run_fail map_field_assignment_rejected_run "$DS" run "$FIX/map_field_assignment_rejected.ds"
-assert_diag "$TMP/map_field_assignment_rejected_run.err" 'map field assignment is deferred in v0.10.0' 'map_field_assignment_rejected run diagnostic'
+assert_diag "$TMP/map_field_assignment_rejected_run.err" 'field-style map assignment is deferred in v0.30.0' 'map_field_assignment_rejected run diagnostic'
 
 write_fixture "$FIX/nested_mutation_rejected.ds" <<'DS'
 let matrix = [[1]]
 matrix[0][0] = 2
 DS
-assert_check_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collection mutation is deferred in v0.10.0'
-assert_emit_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collection mutation is deferred in v0.10.0'
+assert_check_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collections are deferred in v0.10.0'
+assert_emit_fails nested_mutation_rejected "$FIX/nested_mutation_rejected.ds" 'nested collections are deferred in v0.10.0'
 run_fail nested_mutation_rejected_run "$DS" run "$FIX/nested_mutation_rejected.ds"
-assert_diag "$TMP/nested_mutation_rejected_run.err" 'nested collection mutation is deferred in v0.10.0' 'nested_mutation_rejected run diagnostic'
+assert_diag "$TMP/nested_mutation_rejected_run.err" 'nested collections are deferred in v0.10.0' 'nested_mutation_rejected run diagnostic'
 
 # 6. Stdout safety and ABI regression.
 write_fixture "$FIX/structured_stdout_rejected.ds" <<'DS'

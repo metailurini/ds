@@ -326,6 +326,16 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
             lower_str_eq(object->as.field.object->as.text, "env")) {
             ds_diag_error(lower->diag, object->span,
                           "environment values are scalar strings, not mutable arrays in v0.30.0");
+        } else if (object && object->kind == DS_EXPR_FIELD && object->as.field.object &&
+                   object->as.field.object->kind == DS_EXPR_IDENT) {
+            Symbol *field_receiver = scope_find(lower->scope, object->as.field.object->as.text);
+            if (field_receiver && field_receiver->kind == SYM_COMMAND_RESULT) {
+                ds_diag_error(lower->diag, object->span,
+                              "command-result fields are not mutable collection targets in v0.30.0");
+            } else {
+                ds_diag_error(lower->diag, object->span,
+                              "nested or field-based index assignment targets are deferred in v0.30.0; assign only to named flat arrays or maps");
+            }
         } else if (object && object->kind == DS_EXPR_FIELD) {
             ds_diag_error(lower->diag, object->span,
                           "nested or field-based index assignment targets are deferred in v0.30.0; assign only to named flat arrays or maps");
