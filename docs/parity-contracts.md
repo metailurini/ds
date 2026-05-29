@@ -246,8 +246,12 @@ current direct function-call interpolation boundary is documented in
 `docs/maintenance/m3-4-command-words-interpolation-boundary.md`: only scalar
 function calls in quoted command-word interpolation are accepted, and they are
 portable because lowering pre-materializes the call into a private string binding
-before either backend sees the command. Other direct command-word interpolation
-forms remain rejected until they have an equally backend-neutral representation.
+before either backend sees the command. v0.30 also accepts flat named collection
+index reads in command-word interpolation (`{items[0]}` / `{map[key]}`) because
+lowering validates the named collection and index/key shape while VM/Bash render
+the accepted read through the same collection access helpers. Other direct
+command-word interpolation forms remain rejected until they have an equally
+backend-neutral representation.
 
 ### Pipelines
 

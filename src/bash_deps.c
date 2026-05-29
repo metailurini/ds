@@ -66,6 +66,19 @@ static bool string_literal_needs_stdlib(DsStr text) {
     return false;
 }
 
+static bool string_literal_contains_index_interpolation(DsStr text) {
+    if (text.len < 2 || text.data[0] != '"') return false;
+    for (size_t i = 0; i < text.len; i++) {
+        if (text.data[i] != '{') continue;
+        bool saw_bracket = false;
+        for (size_t j = i + 1; j < text.len && text.data[j] != '}'; j++) {
+            if (text.data[j] == '[') saw_bracket = true;
+        }
+        if (saw_bracket) return true;
+    }
+    return false;
+}
+
 static bool expr_uses_stdlib(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
@@ -106,6 +119,7 @@ static bool command_uses_stdlib(const DsCommand *command) {
 static bool expr_uses_collection_index(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING: return string_literal_contains_index_interpolation(expr->as.text);
         case DS_LOWER_EXPR_INDEX: return true;
         case DS_LOWER_EXPR_FIELD: return expr_uses_collection_index(expr->as.field.object);
         case DS_LOWER_EXPR_ARRAY:
@@ -125,6 +139,18 @@ static bool expr_uses_collection_index(const DsLowerExpr *expr) {
             return false;
         default: return false;
     }
+}
+
+static bool command_uses_collection_index(const DsCommand *command) {
+    if (!command) return false;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        const DsCommandStage *stage = &command->stages.items[s];
+        for (size_t i = 0; i < stage->words.len; i++) {
+            if (string_literal_contains_index_interpolation(stage->words.items[i].text)) return true;
+        }
+    }
+    if (command->redirect.kind != DS_REDIRECT_NONE && string_literal_contains_index_interpolation(command->redirect.target)) return true;
+    return false;
 }
 
 static bool expr_uses_map_literal(const DsLowerExpr *expr) {
@@ -408,7 +434,7 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
             }
             return false;
         case DS_LOWER_STMT_CMD:
-            return false;
+            return command_uses_collection_index(&stmt->as.cmd_stmt);
     }
     return false;
 }

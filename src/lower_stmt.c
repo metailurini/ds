@@ -321,7 +321,12 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
     object = target->as.index.object;
     index_expr = target->as.index.index;
     if (!object || object->kind != DS_EXPR_IDENT) {
-        if (object && object->kind == DS_EXPR_FIELD) {
+        if (object && object->kind == DS_EXPR_FIELD && object->as.field.object &&
+            object->as.field.object->kind == DS_EXPR_IDENT &&
+            lower_str_eq(object->as.field.object->as.text, "env")) {
+            ds_diag_error(lower->diag, object->span,
+                          "environment values are scalar strings, not mutable arrays in v0.30.0");
+        } else if (object && object->kind == DS_EXPR_FIELD) {
             ds_diag_error(lower->diag, object->span,
                           "nested or field-based index assignment targets are deferred in v0.30.0; assign only to named flat arrays or maps");
         } else if (object && object->kind == DS_EXPR_CALL) {

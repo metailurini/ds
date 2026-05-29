@@ -225,6 +225,80 @@ static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char 
     return true;
 }
 
+static void interp_skip_ws(const char *data, size_t len, size_t *i) {
+    while (*i < len && (data[*i] == ' ' || data[*i] == '\t' || data[*i] == '\n' || data[*i] == '\r')) (*i)++;
+}
+
+static bool interp_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static bool interp_ident_char(char c) {
+    return interp_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static bool emit_interpolation_index(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsStr name, DsSpan span, EmitBuf *out) {
+    (*j)++;
+    interp_skip_ws(decoded, len, j);
+    buf_append(out, "$(");
+    if (*j < len && decoded[*j] == '"') {
+        size_t literal_start = *j;
+        (*j)++;
+        while (*j < len) {
+            if (decoded[*j] == '\\' && *j + 1 < len) { *j += 2; continue; }
+            if (decoded[*j] == '"') { (*j)++; break; }
+            (*j)++;
+        }
+        DsLowerExpr tmp;
+        memset(&tmp, 0, sizeof(tmp));
+        tmp.kind = DS_LOWER_EXPR_STRING;
+        tmp.span = span;
+        tmp.as.text = (DsStr){(char *)decoded + literal_start, *j - literal_start};
+        char *key = NULL;
+        size_t key_len = 0;
+        if (!decode_string_literal(e->diag, &tmp, &key, &key_len)) return false;
+        buf_append(out, "__ds_map_get ");
+        emit_var_name(out, name);
+        buf_append(out, " ");
+        bash_single_quote(out, key, key_len);
+        free(key);
+    } else if (*j < len && ((decoded[*j] == '-' && *j + 1 < len && decoded[*j + 1] >= '0' && decoded[*j + 1] <= '9') ||
+                            (decoded[*j] >= '0' && decoded[*j] <= '9'))) {
+        size_t index_start = *j;
+        if (decoded[*j] == '-') (*j)++;
+        while (*j < len && decoded[*j] >= '0' && decoded[*j] <= '9') (*j)++;
+        buf_append(out, "__ds_array_get ");
+        emit_var_name(out, name);
+        buf_append(out, " ");
+        buf_append_len(out, decoded + index_start, *j - index_start);
+    } else if (*j < len && interp_ident_start(decoded[*j])) {
+        size_t index_start = *j;
+        (*j)++;
+        while (*j < len && interp_ident_char(decoded[*j])) (*j)++;
+        DsStr index_name = {(char *)decoded + index_start, *j - index_start};
+        if (!symbol_exists(&e->symbols, index_name)) {
+            ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unknown interpolation index variable `%.*s`", (int)index_name.len, index_name.data);
+            return false;
+        }
+        buf_append(out, "__ds_index_get ");
+        emit_var_name(out, name);
+        buf_append(out, " \"$");
+        emit_var_name(out, index_name);
+        buf_append(out, "\"");
+    } else {
+        ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unsupported index interpolation shape");
+        return false;
+    }
+    interp_skip_ws(decoded, len, j);
+    if (*j >= len || decoded[*j] != ']') {
+        ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unsupported index interpolation shape");
+        return false;
+    }
+    (*j)++;
+    buf_append(out, ")");
+    return true;
+}
+
 typedef struct {
     BashEmitter *e;
     const char *data;
@@ -389,7 +463,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
             if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
                 j++;
                 while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
-                if (j < len && (decoded[j] == '}' || decoded[j] == '.' || decoded[j] == ':')) {
+                if (j < len && (decoded[j] == '}' || decoded[j] == '.' || decoded[j] == ':' || decoded[j] == '[')) {
                     DsStr name = {decoded + start, j - start};
                     if (name.len == 3 && memcmp(name.data, "env", 3) == 0 && decoded[j] == '.') {
                         size_t field_start = ++j;
@@ -415,7 +489,11 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                         return false;
                     }
                     const char *field = NULL; size_t field_len = 0;
-                    if (decoded[j] == '.') {
+                    bool indexed_interp = false;
+                    if (decoded[j] == '[') {
+                        if (!emit_interpolation_index(e, decoded, len, &j, name, expr->span, out)) { free(decoded); return false; }
+                        indexed_interp = true;
+                    } else if (decoded[j] == '.') {
                         size_t field_start = ++j;
                         if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
                             j++;
@@ -425,6 +503,11 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                     }
                     const char *spec = NULL; size_t spec_len = 0;
                     if (j < len && decoded[j] == ':') {
+                        if (indexed_interp) {
+                            ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: index interpolation format specifier should be rejected by lowering");
+                            free(decoded);
+                            return false;
+                        }
                         size_t spec_start = ++j;
                         while (j < len && decoded[j] != '}') j++;
                         spec = decoded + spec_start; spec_len = j - spec_start;
@@ -434,7 +517,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                         free(decoded);
                         return false;
                     }
-                    if (!emit_formatted_interpolation(e, name, field, field_len, spec, spec_len, expr->span, out)) { free(decoded); return false; }
+                    if (!indexed_interp && !emit_formatted_interpolation(e, name, field, field_len, spec, spec_len, expr->span, out)) { free(decoded); return false; }
                     i = j;
                     continue;
                 }

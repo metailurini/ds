@@ -404,6 +404,136 @@ static bool append_arithmetic_interpolation(Vm *vm, const char *data, size_t len
     return ds_string_append_cstr(out, buf);
 }
 
+static void interp_skip_ws(const char *data, size_t len, size_t *i) {
+    while (*i < len && (data[*i] == ' ' || data[*i] == '\t' || data[*i] == '\n' || data[*i] == '\r')) (*i)++;
+}
+
+static bool interp_parse_int_literal(const char *data, size_t len, size_t *i, int64_t *out) {
+    bool neg = false;
+    if (*i < len && data[*i] == '-') { neg = true; (*i)++; }
+    if (*i >= len || data[*i] < '0' || data[*i] > '9') return false;
+    int64_t value = 0;
+    while (*i < len && data[*i] >= '0' && data[*i] <= '9') {
+        int digit = data[*i] - '0';
+        if (value > (INT64_MAX - digit) / 10) return false;
+        value = value * 10 + digit;
+        (*i)++;
+    }
+    *out = neg ? -value : value;
+    return true;
+}
+
+static bool interp_parse_string_literal(const char *data, size_t len, size_t *i, DsString *out) {
+    size_t start = *i;
+    if (start >= len || data[start] != '"') return false;
+    (*i)++;
+    while (*i < len) {
+        if (data[*i] == '\\' && *i + 1 < len) { *i += 2; continue; }
+        if (data[*i] == '"') { (*i)++; break; }
+        (*i)++;
+    }
+    DsStr literal = {(char *)data + start, *i - start};
+    return decode_string_text(literal, out);
+}
+
+static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data, size_t len, size_t *j, DsSpan span) {
+    (*j)++;
+    interp_skip_ws(data, len, j);
+    DsValue indexed = ds_value_null();
+
+    if (value->kind == DS_VALUE_ARRAY) {
+        int64_t index = 0;
+        bool have_index = false;
+        if (*j < len && ((data[*j] == '-' && *j + 1 < len && data[*j + 1] >= '0' && data[*j + 1] <= '9') ||
+                         (data[*j] >= '0' && data[*j] <= '9'))) {
+            have_index = interp_parse_int_literal(data, len, j, &index);
+        } else if (*j < len && ascii_is_ident_start(data[*j])) {
+            size_t name_start = *j;
+            (*j)++;
+            while (*j < len && ascii_is_ident_continue(data[*j])) (*j)++;
+            char *idx_name = ds_str_dup_range(data + name_start, *j - name_start);
+            DsValue idx_value;
+            if (!lookup_var(vm, idx_name, &idx_value, span)) { free(idx_name); return false; }
+            free(idx_name);
+            if (idx_value.kind != DS_VALUE_INT) {
+                ds_diag_error(vm->diag, span, "runtime array index must be an int");
+                ds_value_free(&idx_value);
+                return false;
+            }
+            index = idx_value.as.integer;
+            ds_value_free(&idx_value);
+            have_index = true;
+        }
+        if (!have_index) {
+            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported array index interpolation shape");
+            return false;
+        }
+        interp_skip_ws(data, len, j);
+        if (*j >= len || data[*j] != ']') {
+            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported array index interpolation shape");
+            return false;
+        }
+        (*j)++;
+        if (index < 0 || (size_t)index >= value->as.array.len) {
+            ds_diag_error(vm->diag, span, "array index %lld out of range", (long long)index);
+            return false;
+        }
+        indexed = ds_value_copy((DsValue *)value->as.array.items[index]);
+    } else if (value->kind == DS_VALUE_MAP) {
+        DsString key;
+        bool have_key = false;
+        ds_string_init(&key);
+        if (*j < len && data[*j] == '"') {
+            have_key = interp_parse_string_literal(data, len, j, &key);
+        } else if (*j < len && ascii_is_ident_start(data[*j])) {
+            size_t name_start = *j;
+            (*j)++;
+            while (*j < len && ascii_is_ident_continue(data[*j])) (*j)++;
+            char *idx_name = ds_str_dup_range(data + name_start, *j - name_start);
+            DsValue idx_value;
+            if (!lookup_var(vm, idx_name, &idx_value, span)) { free(idx_name); ds_string_free(&key); return false; }
+            free(idx_name);
+            if (idx_value.kind != DS_VALUE_STRING) {
+                ds_diag_error(vm->diag, span, "runtime map index must be a string");
+                ds_value_free(&idx_value);
+                ds_string_free(&key);
+                return false;
+            }
+            ds_string_append_range(&key, idx_value.as.string.data ? idx_value.as.string.data : "", idx_value.as.string.len);
+            ds_value_free(&idx_value);
+            have_key = true;
+        }
+        if (!have_key) {
+            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported map index interpolation shape");
+            ds_string_free(&key);
+            return false;
+        }
+        interp_skip_ws(data, len, j);
+        if (*j >= len || data[*j] != ']') {
+            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported map index interpolation shape");
+            ds_string_free(&key);
+            return false;
+        }
+        (*j)++;
+        DsStr key_view = {key.data ? key.data : "", key.len};
+        DsValue *found = ds_map_get(&value->as.map, key_view);
+        if (!found) {
+            ds_diag_error(vm->diag, span, "missing map key `%.*s`", (int)key_view.len, key_view.data);
+            ds_string_free(&key);
+            return false;
+        }
+        indexed = ds_value_copy(found);
+        ds_string_free(&key);
+    } else {
+        ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: index receiver should be an array or map after lowering");
+        return false;
+    }
+
+    ds_value_free(value);
+    *value = indexed;
+    return true;
+}
+
 /* -------------------------------------------------------------------------
  * Command-word and redirect materialization
  * ------------------------------------------------------------------------- */
@@ -423,7 +553,7 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
             if (j < input->len && ascii_is_ident_start(input->data[j])) {
                 j++;
                 while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
-                if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':')) {
+                if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':' || input->data[j] == '[')) {
                     char *name = ds_str_dup_range(input->data + start, j - start);
                     if (strcmp(name, "env") == 0 && input->data[j] == '.') {
                         size_t field_start = ++j;
@@ -443,7 +573,9 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                     }
                     DsValue value;
                     if (!lookup_var(vm, name, &value, span)) { free(name); ds_string_free(out); return false; }
-                    if (input->data[j] == '.') {
+                    if (input->data[j] == '[') {
+                        if (!interp_parse_indexed_value(vm, &value, input->data, input->len, &j, span)) { free(name); ds_string_free(out); return false; }
+                    } else if (input->data[j] == '.') {
                         size_t field_start = ++j;
                         if (j < input->len && ascii_is_ident_start(input->data[j])) {
                             j++;

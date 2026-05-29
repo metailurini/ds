@@ -232,6 +232,20 @@ static DsExpr *parse_postfix(Parser *p) {
             expr = call;
         }
     }
+    while (parser_advance_if(p, DS_TOK_LBRACKET)) {
+        DsToken *open = parser_previous(p);
+        DsExpr *idx = NULL;
+        if (parser_at(p, DS_TOK_RBRACKET)) {
+            ds_diag_error(p->diag, open->span, "expected index expression after `[` ");
+        } else {
+            idx = parse_expr(p);
+        }
+        if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
+        DsExpr *index_expr = parser_new_expr(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, parser_previous(p)->span.end, open->span.source});
+        index_expr->as.index.object = expr;
+        index_expr->as.index.index = idx;
+        expr = index_expr;
+    }
     return expr;
 }
 

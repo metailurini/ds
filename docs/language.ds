@@ -363,6 +363,7 @@ services.push("cron")
 # arrays. Assignment does not append or create sparse arrays; out-of-range
 # indexes fail at runtime.
 services[0] = "gateway"
+echo "first service is {services[0]}"
 
 for service in services {
   docker compose restart $service
@@ -388,6 +389,7 @@ let web_port = ports["web"]
 ports["api"] = 3001
 let service_name = "admin"
 ports[service_name] = 9443
+echo "admin port is {ports[service_name]}"
 
 # Map iteration is implemented in v0.29.0 for named maps and supported flat
 # map-returning user-function calls. Iteration order is deterministic: keys are

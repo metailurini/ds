@@ -86,6 +86,98 @@ static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr bod
     return !expect_operand && depth == 0;
 }
 
+static void word_interp_skip_ws(DsStr text, size_t *i) {
+    while (*i < text.len && (text.data[*i] == ' ' || text.data[*i] == '\t' || text.data[*i] == '\n' || text.data[*i] == '\r')) (*i)++;
+}
+
+static bool word_interp_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static bool word_interp_ident_char(char c) {
+    return word_interp_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded, size_t *j, DsStr name, Symbol *sym, DsSpan span, SymKind *value_kind) {
+    if (!sym) {
+        ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
+        return false;
+    }
+    if (sym->kind != SYM_ARRAY && sym->kind != SYM_MAP) {
+        ds_diag_error(lower->diag, span, "index interpolation requires an array or map value in v0.30.0");
+        return false;
+    }
+
+    (*j)++;
+    word_interp_skip_ws(decoded, j);
+    bool index_is_int = false;
+    bool index_is_string = false;
+    bool negative_int = false;
+
+    if (*j < decoded.len && decoded.data[*j] == '"') {
+        size_t literal_start = *j;
+        (*j)++;
+        while (*j < decoded.len) {
+            if (decoded.data[*j] == '\\' && *j + 1 < decoded.len) { *j += 2; continue; }
+            if (decoded.data[*j] == '"') { (*j)++; break; }
+            (*j)++;
+        }
+        index_is_string = true;
+        if (sym->kind == SYM_MAP) {
+            DsStr literal = {decoded.data + literal_start, *j - literal_start};
+            DsStr key = {0};
+            if (lower_decode_string_text(literal, &key)) {
+                if (key.len == 0) ds_diag_error(lower->diag, span, "empty map keys are deferred in v0.30.0");
+                free(key.data);
+            }
+        }
+    } else if (*j < decoded.len && ((decoded.data[*j] == '-' && *j + 1 < decoded.len && decoded.data[*j + 1] >= '0' && decoded.data[*j + 1] <= '9') ||
+                                    (decoded.data[*j] >= '0' && decoded.data[*j] <= '9'))) {
+        if (decoded.data[*j] == '-') { negative_int = true; (*j)++; }
+        while (*j < decoded.len && decoded.data[*j] >= '0' && decoded.data[*j] <= '9') (*j)++;
+        index_is_int = true;
+    } else if (*j < decoded.len && word_interp_ident_start(decoded.data[*j])) {
+        size_t idx_start = *j;
+        (*j)++;
+        while (*j < decoded.len && word_interp_ident_char(decoded.data[*j])) (*j)++;
+        DsStr idx_name = {decoded.data + idx_start, *j - idx_start};
+        Symbol *idx_sym = scope_find(lower->scope, idx_name);
+        if (!idx_sym) {
+            ds_diag_error(lower->diag, span, "unknown interpolation index variable `%.*s`", (int)idx_name.len, idx_name.data);
+            return false;
+        }
+        lower_validate_handler_capture(lower, idx_sym, idx_name, span);
+        index_is_int = idx_sym->kind == SYM_INT;
+        index_is_string = idx_sym->kind == SYM_STRING;
+    } else {
+        ds_diag_error(lower->diag, span, "unsupported index interpolation; expected a literal or named index in v0.30.0");
+        return false;
+    }
+
+    word_interp_skip_ws(decoded, j);
+    if (*j >= decoded.len || decoded.data[*j] != ']') {
+        ds_diag_error(lower->diag, span, "unsupported index interpolation; expected `]` after index expression in v0.30.0");
+        return false;
+    }
+    (*j)++;
+
+    if (sym->kind == SYM_ARRAY) {
+        if (!index_is_int) {
+            ds_diag_error(lower->diag, span, "array index interpolation requires an int index in v0.30.0");
+            return false;
+        }
+        if (negative_int) {
+            ds_diag_error(lower->diag, span, "array index interpolation requires a non-negative index in v0.30.0");
+            return false;
+        }
+    } else if (sym->kind == SYM_MAP && !index_is_string) {
+        ds_diag_error(lower->diag, span, "map index interpolation requires a string key in v0.30.0");
+        return false;
+    }
+    *value_kind = sym->element_kind;
+    return true;
+}
+
 bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
     DsStr decoded = {0};
     if (!lower_decode_string_text(text, &decoded)) return true;
@@ -125,7 +217,14 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
             }
             lower_validate_handler_capture(lower, sym, name, span);
             SymKind value_kind = sym->kind;
-            if (j < decoded.len && decoded.data[j] == '.') {
+            bool indexed_interp = false;
+            if (j < decoded.len && decoded.data[j] == '[') {
+                if (!lower_validate_word_index_interpolation(lower, decoded, &j, name, sym, span, &value_kind)) {
+                    free(decoded.data);
+                    return false;
+                }
+                indexed_interp = true;
+            } else if (j < decoded.len && decoded.data[j] == '.') {
                 size_t field_start = ++j;
                 if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
                     j++;
@@ -144,6 +243,11 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 }
             }
             if (j < decoded.len && decoded.data[j] == ':') {
+                if (indexed_interp) {
+                    ds_diag_error(lower->diag, span, "format specifiers on index interpolation are deferred in v0.30.0; bind the indexed value first");
+                    free(decoded.data);
+                    return false;
+                }
                 size_t spec_start = ++j;
                 while (j < decoded.len && decoded.data[j] != '}') j++;
                 if (j >= decoded.len) break;

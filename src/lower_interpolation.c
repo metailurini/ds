@@ -249,6 +249,18 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
         left = parse_interp_primary(s, len, i, span);
     }
     if (!left) return NULL;
+    for (;;) {
+        interp_skip_ws(s, len, i);
+        if (*i >= len || s[*i] != '[') break;
+        (*i)++;
+        DsExpr *idx = parse_interp_expr_bp(s, len, i, span, 0);
+        interp_skip_ws(s, len, i);
+        if (*i < len && s[*i] == ']') (*i)++;
+        DsExpr *index_expr = temp_expr_new(DS_EXPR_INDEX, span);
+        index_expr->as.index.object = left;
+        index_expr->as.index.index = idx;
+        left = index_expr;
+    }
     while (*i < len) {
         size_t op_i = *i;
         DsStr op = {0};
@@ -278,6 +290,7 @@ static bool decoded_needs_expr_interpolation(DsStr decoded) {
         if (!parse_interp_name(decoded.data, decoded.len, &j, &name)) continue;
         interp_skip_ws(decoded.data, decoded.len, &j);
         if (j < decoded.len && decoded.data[j] == '(') return true;
+        if (j < decoded.len && decoded.data[j] == '[') return true;
         while (j < decoded.len && decoded.data[j] != '}') {
             if (decoded.data[j] == '+' || decoded.data[j] == '-' || decoded.data[j] == '*' || decoded.data[j] == '/' || decoded.data[j] == '%' || decoded.data[j] == '<' || decoded.data[j] == '>' || decoded.data[j] == '=') return true;
             if (j + 2 <= decoded.len && memcmp(decoded.data + j, "in", 2) == 0 && (j == 0 || !interp_is_ident_char(decoded.data[j - 1])) && (j + 2 == decoded.len || !interp_is_ident_char(decoded.data[j + 2]))) return true;

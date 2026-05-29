@@ -961,8 +961,11 @@ not create sparse arrays.
 Maps insert or replace entries at non-empty string keys. Empty or non-string keys
 are rejected by the lowerer when statically known and by VM/Bash helpers when the
 key value is only known at runtime. Emitted Bash updates the value-kind sidecar
-for every accepted assignment so later map reads, conditions, `case`, returns,
-and map iteration preserve VM/Bash scalar-kind parity.
+for every accepted assignment so later map reads, interpolation, conditions,
+`case`, returns, and map iteration preserve VM/Bash scalar-kind parity. Quoted
+command-word interpolation accepts flat named collection index reads such as
+`{items[0]}` and `{map[key]}`; formatting those indexed segments directly remains
+deferred, so bind the indexed value first when a format specifier is needed.
 
 Nested mutation, field-style map assignment, temporary/function-result mutation,
 compound index assignment, deletion, aliases/references, and same-map mutation
