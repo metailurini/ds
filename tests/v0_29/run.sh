@@ -174,9 +174,18 @@ assert_repo_doc_contains 'environment iteration' 'docs keep environment iteratio
 assert_repo_doc_contains 'recursive glob' 'docs keep recursive glob deferred'
 assert_repo_doc_contains 'regex captures' 'docs keep advanced regex deferred'
 
-# Low-level empty-map and bytewise-sort runtime coverage where source-level empty map literals remain deferred.
-ds_compile_unit "$ROOT" runtime "$ROOT/tests/v0_29/unit/map_iteration.c" "$TMP/test_v0_29_map_iteration"
-run_ok runtime_empty_and_sorted_keys_unit "$TMP/test_v0_29_map_iteration"
+# Low-level empty-map and bytewise-sort coverage where source-level empty map literals remain deferred.
+# The unit also builds HIR-level VM and emitted Bash map loops over an empty map
+# whose bodies contain unreachable `break`/`continue` control flow.
+ds_compile_unit "$ROOT" library "$ROOT/tests/v0_29/unit/map_iteration.c" "$TMP/test_v0_29_map_iteration"
+run_ok runtime_empty_and_sorted_keys_unit "$TMP/test_v0_29_map_iteration" "$TMP"
+for empty_script in "$TMP/empty_map_break.sh" "$TMP/empty_map_continue.sh"; do
+  run_ok "$(basename "$empty_script" .sh)_bash_n" bash -n "$empty_script"
+  assert_no_ds_call "$empty_script" "$(basename "$empty_script" .sh) emitted Bash standalone"
+  run_ok "$(basename "$empty_script" .sh)_run" bash "$empty_script"
+  assert_text "$(basename "$empty_script" .sh)_stdout" '' "$TMP/$(basename "$empty_script" .sh)_run.out"
+  assert_text "$(basename "$empty_script" .sh)_stderr" '' "$TMP/$(basename "$empty_script" .sh)_run.err"
+done
 
 # 2. Basic map iteration parity.
 basic=$(write_fixture basic_literal <<'DS'
@@ -284,6 +293,25 @@ for key, value in values {
 DS
 )
 run_parity punct_keys "$punct_keys" $'a-b:dash\na.b:dot\na_b:underscore\nz:zed\n'
+
+shell_sensitive_keys=$(write_fixture shell_sensitive_keys <<'DS'
+let values = {
+  "a b": "space",
+  "a\"q": "quote",
+  "a$d": "dollar",
+  "a\\b": "slash",
+  "a[0]": "bracket"
+}
+
+for key, value in values {
+  echo "{key}:{value}"
+}
+DS
+)
+run_parity shell_sensitive_keys "$shell_sensitive_keys" $'a b:space\na"q:quote\na$d:dollar\na[0]:bracket\na\\b:slash\n'
+assert_contains "$TMP/shell_sensitive_keys.sh" "['a b']=\"space\"" 'shell-sensitive space key remains quoted in Bash'
+assert_contains "$TMP/shell_sensitive_keys.sh" "['a\$d']=\"dollar\"" 'shell-sensitive dollar key remains quoted in Bash'
+assert_contains "$TMP/shell_sensitive_keys.sh" "['a[0]']=\"bracket\"" 'shell-sensitive bracket key remains quoted in Bash'
 
 duplicate_key=$(write_fixture duplicate_key <<'DS'
 let values = {
@@ -662,7 +690,7 @@ for key, value in env {
 }
 DS
 )
-assert_rejected reject_env_namespace "$env_ns" 'map loop iterable kind must be known'
+assert_rejected reject_env_namespace "$env_ns" 'environment iteration is unsupported in v0.29.0; `env` is a namespace, not a map'
 
 env_value=$(write_fixture reject_env_value <<'DS'
 for key, value in env.PATH {
@@ -670,7 +698,7 @@ for key, value in env.PATH {
 }
 DS
 )
-assert_rejected reject_env_value "$env_value" 'two-name map loops require a map iterable'
+assert_rejected reject_env_value "$env_value" 'environment iteration is unsupported in v0.29.0; `env.NAME` is a string value, not a map'
 
 # 13. Rejection tests: malformed headers.
 malformed_cases=(

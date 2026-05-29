@@ -26,6 +26,14 @@ static bool lower_validate_handler_signal(Lower *lower, const DsStmt *stmt) {
     return false;
 }
 
+static bool expr_is_env_namespace(const DsExpr *expr) {
+    return expr && expr->kind == DS_EXPR_IDENT && lower_str_eq(expr->as.text, "env");
+}
+
+static bool expr_is_env_value_access(const DsExpr *expr) {
+    return expr && expr->kind == DS_EXPR_FIELD && expr_is_env_namespace(expr->as.field.object);
+}
+
 DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CALL, stmt->span);
     out->as.call_stmt.name = str_clone(stmt->as.call_stmt.name);
@@ -394,8 +402,21 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 element_kind = SYM_INT;
             } else if (out->kind == DS_LOWER_STMT_FOR_MAP) {
                 SymKind iterable_kind = SYM_UNKNOWN;
-                out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
-                if (iterable_kind == SYM_ARRAY) {
+                bool env_namespace_iterable = expr_is_env_namespace(stmt->as.for_stmt.iterable);
+                bool env_value_iterable = expr_is_env_value_access(stmt->as.for_stmt.iterable);
+                if (env_namespace_iterable) {
+                    out->as.for_stmt.iterable = expr_new(DS_LOWER_EXPR_IDENT, stmt->as.for_stmt.iterable->span);
+                    out->as.for_stmt.iterable->as.text = str_clone(stmt->as.for_stmt.iterable->as.text);
+                } else {
+                    out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
+                }
+                if (env_namespace_iterable) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span,
+                                  "environment iteration is unsupported in v0.29.0; `env` is a namespace, not a map");
+                } else if (env_value_iterable) {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span,
+                                  "environment iteration is unsupported in v0.29.0; `env.NAME` is a string value, not a map");
+                } else if (iterable_kind == SYM_ARRAY) {
                     ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "two-name map loops require a map iterable in v0.29.0; arrays use `for item in array`");
                 } else if (iterable_kind == SYM_COMMAND_RESULT) {
                     ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span, "command-result values are not maps; use `for key, value in map` only with flat maps in v0.29.0");
