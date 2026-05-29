@@ -317,7 +317,9 @@ flat `array[index] = scalar` and `map[key] = scalar` mutation. Arrays replace
 existing in-bounds elements; maps insert/replace non-empty string keys. Nested
 mutation, field-style map assignment, temporary/function-result targets, sparse
 arrays, deletion, aliases/references, and compound index assignment remain
-rejected by lowering. Field/index reads currently require named collection
+rejected by lowering. Collection binding copies such as `let b = a` are value
+copies, not aliases; emitted Bash must copy both the array/map payload and the
+sidecar kind metadata so later mutation of `b` does not mutate `a`. Field/index reads currently require named collection
 storage; indexing array literals or function-call collection results directly is
 rejected by lowering until HIR/Bash have a portable temporary collection
 representation. Collection index expressions are also limited to literals or

@@ -327,6 +327,46 @@ DS
 )
 run_parity no_aliasing "$no_aliasing" $'A\nx\n'
 
+array_copy_no_aliasing=$(write_fixture array_copy_no_aliasing <<'DS'
+let a = ["x", "y"]
+let b = a
+b[0] = "B"
+echo "{a[0]}"
+echo "{b[0]}"
+DS
+)
+run_parity array_copy_no_aliasing "$array_copy_no_aliasing" $'x\nB\n'
+
+map_copy_no_aliasing=$(write_fixture map_copy_no_aliasing <<'DS'
+let a = { x: 1 }
+let b = a
+b["y"] = 2
+for key, value in a {
+  echo "a:{key}:{value}"
+}
+for key, value in b {
+  echo "b:{key}:{value}"
+}
+DS
+)
+run_parity map_copy_no_aliasing "$map_copy_no_aliasing" $'a:x:1\nb:x:1\nb:y:2\n'
+
+collection_copy_sidecars=$(write_fixture collection_copy_sidecars <<'DS'
+let a = [1, false]
+let b = a
+b[1] = true
+if a[1] {
+  echo "wrong-a"
+} else {
+  echo "a-false"
+}
+if b[1] {
+  echo "b-true"
+}
+DS
+)
+run_parity collection_copy_sidecars "$collection_copy_sidecars" $'a-false\nb-true\n'
+
 interpolation_after_mutation=$(write_fixture interpolation_after_mutation <<'DS'
 let xs = ["old"]
 xs[0] = "new"
@@ -375,6 +415,32 @@ DS
 run_parity append_by_assignment "$append_by_assignment" '' 1
 assert_contains "$TMP/append_by_assignment_vm.err" 'array index 2 out of range' 'append by assignment VM diagnostic'
 assert_contains "$TMP/append_by_assignment_bash.err" 'array index 2 out of range' 'append by assignment Bash diagnostic'
+
+dynamic_negative_index=$(write_fixture dynamic_negative_index <<'DS'
+let xs = ["a"]
+let i = -1
+xs[i] = "x"
+echo "unreachable"
+DS
+)
+run_parity dynamic_negative_index "$dynamic_negative_index" '' 1
+assert_contains "$TMP/dynamic_negative_index_vm.err" 'array index -1 out of range' 'dynamic negative index VM diagnostic'
+assert_contains "$TMP/dynamic_negative_index_bash.err" 'array index -1 out of range' 'dynamic negative index Bash diagnostic'
+assert_not_contains "$TMP/dynamic_negative_index_vm.out" 'unreachable' 'VM dynamic negative index stops before later command'
+assert_not_contains "$TMP/dynamic_negative_index_bash.out" 'unreachable' 'Bash dynamic negative index stops before later command'
+
+dynamic_empty_key=$(write_fixture dynamic_empty_key <<'DS'
+let m = { a: 1 }
+let key = ""
+m[key] = 2
+echo "unreachable"
+DS
+)
+run_parity dynamic_empty_key "$dynamic_empty_key" '' 1
+assert_contains "$TMP/dynamic_empty_key_vm.err" 'map key must be non-empty' 'dynamic empty key VM diagnostic'
+assert_contains "$TMP/dynamic_empty_key_bash.err" 'map key must be non-empty' 'dynamic empty key Bash diagnostic'
+assert_not_contains "$TMP/dynamic_empty_key_vm.out" 'unreachable' 'VM dynamic empty key stops before later command'
+assert_not_contains "$TMP/dynamic_empty_key_bash.out" 'unreachable' 'Bash dynamic empty key stops before later command'
 
 failed_assignment_no_side_effect=$(write_fixture failed_assignment_no_side_effect <<'DS'
 let marker = "marker.txt"
@@ -506,6 +572,17 @@ DS
 )
 assert_rejected same_map_mutation "$same_map_mutation" 'mutating the map currently being iterated is unsupported'
 
+shadowed_same_name_map_mutation=$(write_fixture shadowed_same_name_map_mutation <<'DS'
+let ports = { api: 3000 }
+for name, port in ports {
+  let ports = { seed: 1 }
+  ports["web"] = 2
+  echo "{ports["web"]}"
+}
+DS
+)
+run_parity shadowed_same_name_map_mutation "$shadowed_same_name_map_mutation" $'2\n'
+
 different_map_mutation=$(write_fixture different_map_mutation <<'DS'
 let src = { api: 3000, web: 5173 }
 let dst = { seed: 1 }
@@ -518,6 +595,90 @@ for name, port in dst {
 DS
 )
 run_parity different_map_mutation "$different_map_mutation" $'api:3000\nseed:1\nweb:5173\n'
+
+# 7.1 Control transfer after successful mutation.
+mutation_then_break=$(write_fixture mutation_then_break <<'DS'
+let xs = ["a", "b"]
+for item in xs {
+  xs[0] = "B"
+  break
+}
+echo "{xs[0]}"
+DS
+)
+run_parity mutation_then_break "$mutation_then_break" $'B\n'
+
+mutation_then_continue=$(write_fixture mutation_then_continue <<'DS'
+let xs = ["a", "b"]
+let out = ["", ""]
+let i = 0
+for item in xs {
+  out[i] = item.upper()
+  i += 1
+  continue
+  echo "unreachable"
+}
+for value in out {
+  echo $value
+}
+DS
+)
+run_parity mutation_then_continue "$mutation_then_continue" $'A\nB\n'
+
+mutation_then_return=$(write_fixture mutation_then_return <<'DS'
+fn pick() {
+  let xs = ["a"]
+  xs[0] = "A"
+  return xs[0]
+}
+
+echo "{pick()}"
+DS
+)
+run_parity mutation_then_return "$mutation_then_return" $'A\n'
+
+mutation_then_fail=$(write_fixture mutation_then_fail <<'DS'
+let xs = ["a"]
+xs[0] = "A"
+echo "{xs[0]}"
+fail "stop"
+echo "unreachable"
+DS
+)
+run_parity mutation_then_fail "$mutation_then_fail" $'A\n' 1
+assert_contains "$TMP/mutation_then_fail_vm.err" 'stop' 'VM fail after mutation reports stop'
+assert_contains "$TMP/mutation_then_fail_bash.err" 'stop' 'Bash fail after mutation reports stop'
+assert_not_contains "$TMP/mutation_then_fail_vm.out" 'unreachable' 'VM fail after mutation stops later command'
+assert_not_contains "$TMP/mutation_then_fail_bash.out" 'unreachable' 'Bash fail after mutation stops later command'
+
+mutation_then_exit=$(write_fixture mutation_then_exit <<'DS'
+let xs = ["a"]
+xs[0] = "A"
+echo "{xs[0]}"
+exit 7
+echo "unreachable"
+DS
+)
+mutation_then_exit_script="$TMP/mutation_then_exit.sh"
+run_ok mutation_then_exit_check "$DS" check "$mutation_then_exit"
+run_ok mutation_then_exit_emit "$DS" emit bash "$mutation_then_exit" -o "$mutation_then_exit_script"
+run_ok mutation_then_exit_bash_n bash -n "$mutation_then_exit_script"
+assert_no_ds_call "$mutation_then_exit_script" 'mutation_then_exit emitted Bash standalone'
+set +e
+"$DS" run "$mutation_then_exit" >"$TMP/mutation_then_exit_vm.out" 2>"$TMP/mutation_then_exit_vm.err"
+mutation_then_exit_vm_rc=$?
+bash "$mutation_then_exit_script" >"$TMP/mutation_then_exit_bash.out" 2>"$TMP/mutation_then_exit_bash.err"
+mutation_then_exit_bash_rc=$?
+set -e
+printf '%s' "$mutation_then_exit_vm_rc" >"$TMP/mutation_then_exit_vm.rc"
+printf '%s' "$mutation_then_exit_bash_rc" >"$TMP/mutation_then_exit_bash.rc"
+assert_status mutation_then_exit_vm 7
+assert_status mutation_then_exit_bash 7
+assert_same "$TMP/mutation_then_exit_vm.out" "$TMP/mutation_then_exit_bash.out" 'mutation_then_exit VM/Bash stdout parity'
+assert_text mutation_then_exit_expected_stdout $'A\n' "$TMP/mutation_then_exit_vm.out"
+assert_same "$TMP/mutation_then_exit_vm.err" "$TMP/mutation_then_exit_bash.err" 'mutation_then_exit VM/Bash stderr parity'
+assert_not_contains "$TMP/mutation_then_exit_vm.out" 'unreachable' 'VM exit after mutation stops later command'
+assert_not_contains "$TMP/mutation_then_exit_bash.out" 'unreachable' 'Bash exit after mutation stops later command'
 
 # 8. Formatter and debug-output coverage.
 fmt_assignment=$(write_fixture fmt_assignment <<'DS'

@@ -211,7 +211,7 @@ struct DsLowerStmt {
     DsLowerStmtKind kind;
     DsSpan span;
     union {
-        struct { DsStr name; DsLowerExpr *value; } let_stmt;
+        struct { DsStr name; DsLowerExpr *value; DsLowerValueKind value_kind; DsLowerValueKind element_kind; } let_stmt;
         struct { DsStr name; DsLowerAssignOp op; DsLowerExpr *value; } assign_stmt;
         struct {
             DsStr name;

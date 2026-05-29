@@ -420,6 +420,8 @@ static DsLowerStmt *lower_command_interpolation_temp_string_let(Lower *lower, Ds
     DsLowerStmt *let = stmt_new(DS_LOWER_STMT_LET, span);
     let->as.let_stmt.name = str_clone(name);
     let->as.let_stmt.value = lower_expr(lower, &fake, &kind);
+    let->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
+    let->as.let_stmt.element_kind = DS_LOWER_VALUE_UNKNOWN;
     if (kind != SYM_STRING && kind != SYM_UNKNOWN) {
         ds_diag_error(lower->diag, span, "function call in command interpolation must return a scalar string-renderable value in v0.27.0");
     }

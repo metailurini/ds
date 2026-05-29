@@ -322,7 +322,9 @@ append behavior. `map[key] = scalar` inserts new keys or replaces existing
 non-empty string keys. Mutation targets must be named flat collections,
 RHS values stay within the flat scalar collection boundary, and generated Bash
 remains standalone while VM/Bash keep scalar value kinds aligned for
-interpolation, conditions, `case`, returns, and later reads. Temporary mutation,
+interpolation, conditions, `case`, returns, and later reads. Collection variable
+copies such as `let copy = original` are value copies in both VM and Bash, so
+mutating `copy[index]` does not alias or mutate `original[index]`. Temporary mutation,
 function-call result mutation, command-result mutation, nested mutation, sparse
 arrays, slice assignment, deletion, references/aliases, compound index
 assignment, and field-style map assignment remain deferred.

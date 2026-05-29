@@ -47,7 +47,7 @@ typedef struct {
     int handler_function_depth;
     DsLowerFn *current_function;
     size_t temp_counter;
-    DsStr *map_loop_names;
+    Symbol **map_loop_symbols;
     size_t map_loop_len;
     size_t map_loop_cap;
 } Lower;

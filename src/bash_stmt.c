@@ -172,6 +172,86 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
     return true;
 }
 
+static bool emit_collection_ident_copy(BashEmitter *e, DsStr dest, const DsLowerExpr *source, DsLowerValueKind kind, int indent) {
+    if (!source || source->kind != DS_LOWER_EXPR_IDENT) return false;
+    bool local_decl = e->function_depth > 0;
+    if (kind == DS_LOWER_VALUE_ARRAY) {
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
+        emit_var_name(&e->out, dest);
+        buf_append(&e->out, "=(\"${");
+        emit_var_name(&e->out, source->as.text);
+        buf_append(&e->out, "[@]}\")\n");
+
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
+        bash_emit_elem_type_var_name(&e->out, dest);
+        buf_append(&e->out, "=()\n");
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "if declare -p ");
+        bash_emit_elem_type_var_name(&e->out, source->as.text);
+        buf_append(&e->out, " >/dev/null 2>&1; then ");
+        bash_emit_elem_type_var_name(&e->out, dest);
+        buf_append(&e->out, "=(\"${");
+        bash_emit_elem_type_var_name(&e->out, source->as.text);
+        buf_append(&e->out, "[@]}\"); fi\n");
+        return true;
+    }
+    if (kind == DS_LOWER_VALUE_MAP) {
+        char key_buf[64];
+        bash_temp_ds_name(key_buf, sizeof(key_buf), "copy_key", e->temp_counter++);
+        DsStr key_tmp = {key_buf, strlen(key_buf)};
+
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+        emit_var_name(&e->out, dest);
+        buf_append(&e->out, "=()\n");
+        emit_indent(&e->out, indent);
+        if (local_decl) {
+            buf_append(&e->out, "local ");
+            emit_var_name(&e->out, key_tmp);
+            buf_append(&e->out, "\n");
+            emit_indent(&e->out, indent);
+        }
+        buf_append(&e->out, "for ");
+        emit_var_name(&e->out, key_tmp);
+        buf_append(&e->out, " in \"${!");
+        emit_var_name(&e->out, source->as.text);
+        buf_append(&e->out, "[@]}\"; do ");
+        emit_var_name(&e->out, dest);
+        buf_append(&e->out, "[\"$");
+        emit_var_name(&e->out, key_tmp);
+        buf_append(&e->out, "\"]=\"${");
+        emit_var_name(&e->out, source->as.text);
+        buf_append(&e->out, "[$");
+        emit_var_name(&e->out, key_tmp);
+        buf_append(&e->out, "]}\"; done\n");
+
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+        bash_emit_map_value_type_var_name(&e->out, dest);
+        buf_append(&e->out, "=()\n");
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "if declare -p ");
+        bash_emit_map_value_type_var_name(&e->out, source->as.text);
+        buf_append(&e->out, " >/dev/null 2>&1; then for ");
+        emit_var_name(&e->out, key_tmp);
+        buf_append(&e->out, " in \"${!");
+        bash_emit_map_value_type_var_name(&e->out, source->as.text);
+        buf_append(&e->out, "[@]}\"; do ");
+        bash_emit_map_value_type_var_name(&e->out, dest);
+        buf_append(&e->out, "[\"$");
+        emit_var_name(&e->out, key_tmp);
+        buf_append(&e->out, "\"]=\"${");
+        bash_emit_map_value_type_var_name(&e->out, source->as.text);
+        buf_append(&e->out, "[$");
+        emit_var_name(&e->out, key_tmp);
+        buf_append(&e->out, "]}\"; done; fi\n");
+        return true;
+    }
+    return false;
+}
+
 static bool emit_index_assignment(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     if (!is_safe_identifier(stmt->as.index_assign_stmt.name)) {
         ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: unsafe index assignment target `%.*s` reached Bash emission", (int)stmt->as.index_assign_stmt.name.len, stmt->as.index_assign_stmt.name.data);
@@ -502,6 +582,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_var_name(&e->out, stmt->as.let_stmt.name);
                     if (!emit_capture_command(e, &stmt->as.let_stmt.value->as.run, &e->out, stmt->as.let_stmt.value->span)) return false;
                 }
+            } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT &&
+                       (stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_ARRAY || stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_MAP)) {
+                if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, stmt->as.let_stmt.value_kind, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -a ");
                 else buf_append(&e->out, "declare -a ");

@@ -567,7 +567,7 @@ static bool stmt_uses_map_helper(const DsLowerStmt *stmt) {
 
 static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
-        case DS_LOWER_STMT_LET: return expr_uses_map_literal(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_LET: return stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_MAP || expr_uses_map_literal(stmt->as.let_stmt.value);
         case DS_LOWER_STMT_ASSIGN: return expr_uses_map_literal(stmt->as.assign_stmt.value);
         case DS_LOWER_STMT_INDEX_ASSIGN: return expr_uses_map_literal(stmt->as.index_assign_stmt.index) || expr_uses_map_literal(stmt->as.index_assign_stmt.value);
         case DS_LOWER_STMT_IF:

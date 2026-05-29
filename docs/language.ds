@@ -365,6 +365,11 @@ services.push("cron")
 services[0] = "gateway"
 echo "first service is {services[0]}"
 
+# Collection bindings are copied by value, not by reference.
+let services_copy = services
+services_copy[0] = "copy-only"
+echo "original service is still {services[0]}"
+
 for service in services {
   docker compose restart $service
 }
@@ -390,6 +395,10 @@ ports["api"] = 3001
 let service_name = "admin"
 ports[service_name] = 9443
 echo "admin port is {ports[service_name]}"
+
+let port_copy = ports
+port_copy["admin"] = 9555
+echo "copied admin port is {port_copy["admin"]}"
 
 # Map iteration is implemented in v0.29.0 for named maps and supported flat
 # map-returning user-function calls. Iteration order is deterministic: keys are

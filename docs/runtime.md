@@ -967,6 +967,11 @@ command-word interpolation accepts flat named collection index reads such as
 `{items[0]}` and `{map[key]}`; formatting those indexed segments directly remains
 deferred, so bind the indexed value first when a format specifier is needed.
 
+Collection bindings copy by value, not by reference. `let b = a` where `a` is a
+flat array or map deep-copies the collection payload and its scalar-kind sidecar
+metadata in emitted Bash, matching the VM's `ds_value_copy()` behavior. Later
+`b[index] = value` or `b[key] = value` mutations therefore do not mutate `a`.
+
 Nested mutation, field-style map assignment, temporary/function-result mutation,
 compound index assignment, deletion, aliases/references, and same-map mutation
 during map iteration remain unsupported language forms rather than backend

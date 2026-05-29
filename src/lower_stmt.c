@@ -246,26 +246,26 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     return out;
 }
 
-static bool lower_push_map_loop_name(Lower *lower, DsStr name) {
+static bool lower_push_map_loop_symbol(Lower *lower, Symbol *symbol) {
+    if (!symbol) return false;
     if (lower->map_loop_len == lower->map_loop_cap) {
         lower->map_loop_cap = lower->map_loop_cap ? lower->map_loop_cap * 2 : 4;
-        lower->map_loop_names = (DsStr *)ds_xrealloc(lower->map_loop_names, lower->map_loop_cap * sizeof(DsStr));
+        lower->map_loop_symbols = (Symbol **)ds_xrealloc(lower->map_loop_symbols, lower->map_loop_cap * sizeof(Symbol *));
     }
-    lower->map_loop_names[lower->map_loop_len++] = str_clone(name);
+    lower->map_loop_symbols[lower->map_loop_len++] = symbol;
     return true;
 }
 
-static void lower_pop_map_loop_name(Lower *lower) {
+static void lower_pop_map_loop_symbol(Lower *lower) {
     if (lower->map_loop_len == 0) return;
     lower->map_loop_len--;
-    free(lower->map_loop_names[lower->map_loop_len].data);
-    lower->map_loop_names[lower->map_loop_len] = (DsStr){0};
+    lower->map_loop_symbols[lower->map_loop_len] = NULL;
 }
 
-static bool lower_in_map_loop_for_name(const Lower *lower, DsStr name) {
+static bool lower_in_map_loop_for_symbol(const Lower *lower, const Symbol *symbol) {
+    if (!symbol) return false;
     for (size_t i = 0; i < lower->map_loop_len; i++) {
-        DsStr cur = lower->map_loop_names[i];
-        if (cur.len == name.len && memcmp(cur.data, name.data, name.len) == 0) return true;
+        if (lower->map_loop_symbols[i] == symbol) return true;
     }
     return false;
 }
@@ -362,7 +362,7 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
         out->as.index_assign_stmt.target_is_array = true;
     } else if (sym->kind == SYM_MAP) {
         out->as.index_assign_stmt.target_is_map = true;
-        if (lower_in_map_loop_for_name(lower, object->as.text)) {
+        if (lower_in_map_loop_for_symbol(lower, sym)) {
             ds_diag_error(lower->diag, object->span,
                           "mutating the map currently being iterated is unsupported in v0.30.0; mutate a different map or collect changes first");
         }
@@ -438,6 +438,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
                     out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
                     out->as.let_stmt.value = lower_expr(lower, &fake, &kind);
+                    out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
+                    out->as.let_stmt.element_kind = kind == SYM_ARRAY ? lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.let_stmt.value)) :
+                                                    (kind == SYM_MAP ? lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.let_stmt.value)) : DS_LOWER_VALUE_UNKNOWN);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
                                        kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
@@ -455,6 +458,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
             out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
             out->as.let_stmt.value = lower_expr(lower, stmt->as.let_stmt.value, &kind);
+            out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
+            out->as.let_stmt.element_kind = kind == SYM_ARRAY ? lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.let_stmt.value)) :
+                                            (kind == SYM_MAP ? lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.let_stmt.value)) : DS_LOWER_VALUE_UNKNOWN);
             scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
                                kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
                                (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
@@ -616,6 +622,10 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 element_kind = infer_array_element_kind(lower, out->as.for_stmt.iterable);
             }
             out->as.for_stmt.element_kind = lower_value_kind_from_sym(element_kind);
+            Symbol *map_loop_symbol = NULL;
+            if (out->kind == DS_LOWER_STMT_FOR_MAP && stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_IDENT) {
+                map_loop_symbol = scope_find(lower->scope, stmt->as.for_stmt.iterable->as.text);
+            }
             Scope local;
             scope_init(&local, lower->scope);
             Scope *saved = lower->scope;
@@ -632,13 +642,13 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             } else {
                 scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
             }
-            bool pushed_map_loop_name = false;
-            if (out->kind == DS_LOWER_STMT_FOR_MAP && stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_IDENT) {
-                lower_push_map_loop_name(lower, stmt->as.for_stmt.iterable->as.text);
-                pushed_map_loop_name = true;
+            bool pushed_map_loop_symbol = false;
+            if (out->kind == DS_LOWER_STMT_FOR_MAP && map_loop_symbol && map_loop_symbol->kind == SYM_MAP) {
+                lower_push_map_loop_symbol(lower, map_loop_symbol);
+                pushed_map_loop_symbol = true;
             }
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);
-            if (pushed_map_loop_name) lower_pop_map_loop_name(lower);
+            if (pushed_map_loop_symbol) lower_pop_map_loop_symbol(lower);
             lower->scope = saved;
             lower->loop_depth = saved_depth;
             scope_free(&local);
