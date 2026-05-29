@@ -361,11 +361,11 @@ DS
 assert_diag "bad_env_direct" "$FIX/bad_env_direct.ds" 'environment assignment supports only `=`'
 
 write_fixture "$FIX/bad_recursive_glob.ds" <<'DS'
-for file in glob("**/*.txt") {
+for file in glob("**file.txt") {
   echo $file
 }
 DS
-assert_diag "bad_recursive_glob" "$FIX/bad_recursive_glob.ds" 'recursive `**` glob patterns are deferred'
+assert_diag "bad_recursive_glob" "$FIX/bad_recursive_glob.ds" 'recursive `**` glob patterns must use `**` as a complete path segment'
 
 write_fixture "$FIX/bad_path_join_arity.ds" <<'DS'
 let p = path.join()
@@ -492,12 +492,12 @@ DS
 assert_runtime_failure "fail_env_dynamic" "$FIX/fail_env_dynamic.ds" "$seed_basic" 'invalid environment variable name'
 
 write_fixture "$FIX/fail_recursive_glob_dynamic.ds" <<'DS'
-let pattern = "**/*.txt"
+let pattern = "**file.txt"
 for file in glob(pattern) {
   echo $file
 }
 DS
-assert_runtime_failure "fail_recursive_glob_dynamic" "$FIX/fail_recursive_glob_dynamic.ds" "$seed_basic" 'runtime glob pattern contains recursive'
+assert_runtime_failure "fail_recursive_glob_dynamic" "$FIX/fail_recursive_glob_dynamic.ds" "$seed_basic" 'recursive `**` glob patterns must use `**` as a complete path segment'
 
 # Direct execution behaves like `run` for a representative fixture.
 capture_status "direct_vm" bash -c "cd '$seed_basic' && '$DS' '$FIX/basic_helpers.ds'"

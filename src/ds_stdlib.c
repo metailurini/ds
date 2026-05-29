@@ -57,3 +57,59 @@ bool ds_stdlib_arity_ok(const DsStdlibHelper *helper, size_t argc) {
     return helper && argc >= helper->min_arity &&
            (helper->max_arity == (size_t)-1 || argc <= helper->max_arity);
 }
+
+static bool segment_has_recursive_marker(const char *data, size_t len) {
+    if (len < 2) return false;
+    for (size_t i = 0; i + 1 < len; i++) {
+        if (data[i] == '*' && data[i + 1] == '*') return true;
+    }
+    return false;
+}
+
+bool ds_glob_pattern_contains_recursive(DsStr pattern) {
+    return segment_has_recursive_marker(pattern.data, pattern.len);
+}
+
+DsGlobPatternStatus ds_glob_pattern_validate(DsStr pattern, size_t *recursive_count_out) {
+    bool has_recursive = ds_glob_pattern_contains_recursive(pattern);
+    size_t recursive_count = 0;
+    size_t start = 0;
+    for (size_t i = 0; i <= pattern.len; i++) {
+        if (i < pattern.len && pattern.data[i] != '/') continue;
+
+        size_t len = i - start;
+        const char *seg = pattern.data + start;
+        if (len == 2 && memcmp(seg, "**", 2) == 0) {
+            recursive_count++;
+            if (recursive_count > 1) {
+                if (recursive_count_out) *recursive_count_out = recursive_count;
+                return DS_GLOB_PATTERN_ERR_MULTIPLE_RECURSIVE_SEGMENTS;
+            }
+        } else if (segment_has_recursive_marker(seg, len)) {
+            if (recursive_count_out) *recursive_count_out = recursive_count;
+            return DS_GLOB_PATTERN_ERR_BAD_RECURSIVE_SEGMENT;
+        } else if (has_recursive && len == 2 && memcmp(seg, "..", 2) == 0) {
+            if (recursive_count_out) *recursive_count_out = recursive_count;
+            return DS_GLOB_PATTERN_ERR_PARENT_SEGMENT;
+        }
+
+        start = i + 1;
+    }
+
+    if (recursive_count_out) *recursive_count_out = recursive_count;
+    return DS_GLOB_PATTERN_OK;
+}
+
+const char *ds_glob_pattern_status_message(DsGlobPatternStatus status) {
+    switch (status) {
+        case DS_GLOB_PATTERN_OK:
+            return "glob pattern is valid";
+        case DS_GLOB_PATTERN_ERR_BAD_RECURSIVE_SEGMENT:
+            return "recursive `**` glob patterns must use `**` as a complete path segment in v0.31.0";
+        case DS_GLOB_PATTERN_ERR_MULTIPLE_RECURSIVE_SEGMENTS:
+            return "multiple recursive `**` glob segments are unsupported in v0.31.0";
+        case DS_GLOB_PATTERN_ERR_PARENT_SEGMENT:
+            return "recursive `**` glob patterns with `..` path segments are unsupported in v0.31.0";
+    }
+    return "invalid recursive glob pattern";
+}

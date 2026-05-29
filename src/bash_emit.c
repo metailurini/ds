@@ -186,6 +186,10 @@ static void emit_stdlib_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_string_helpers_source());
 }
 
+static void emit_glob_helpers(BashEmitter *e, bool recursive) {
+    buf_append(&e->out, recursive ? ds_bash_recursive_glob_helpers_source() : ds_bash_glob_helpers_source());
+}
+
 static void emit_debug_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_debug_helpers_source());
 }
@@ -274,6 +278,8 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_map_helpers = program_uses_map_helpers(lowered) || needs_map_iteration;
     bool needs_dynamic_index_helper = needs_array_helpers && needs_map_helpers && needs_collection_helpers;
     bool needs_stdlib = program_uses_stdlib(lowered);
+    bool needs_glob_helpers = program_uses_glob_helpers(lowered);
+    bool needs_recursive_glob_helpers = program_uses_recursive_glob_helpers(lowered);
     bool needs_debug = program_has_command(lowered);
     bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
@@ -316,6 +322,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_map_helpers) emit_map_helpers(&e);
     if (needs_dynamic_index_helper) emit_dynamic_index_helper(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);
+    if (needs_glob_helpers) emit_glob_helpers(&e, needs_recursive_glob_helpers);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {
         if (!emit_function(&e, &lowered->functions.items[i])) {

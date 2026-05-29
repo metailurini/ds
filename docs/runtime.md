@@ -976,3 +976,31 @@ Nested mutation, field-style map assignment, temporary/function-result mutation,
 compound index assignment, deletion, aliases/references, and same-map mutation
 during map iteration remain unsupported language forms rather than backend
 runtime behavior.
+
+## v0.31.0 recursive glob runtime notes
+
+`v0.31.0` extends the existing `glob` and `glob!` helpers with scoped recursive
+`**` support. The accepted recursive surface is exactly one path segment equal to
+`**`; partial segments such as `foo**bar`, multiple recursive segments, and
+recursive patterns containing `..` segments are rejected by the lowerer when the
+pattern is a literal and by VM/Bash helpers when the pattern is produced
+dynamically.
+
+In the VM, recursive globbing traverses the process current working directory
+without invoking a shell. It treats `**` as zero or more directory segments,
+collects matching path strings, sorts them bytewise, removes duplicates, and
+returns a string array. Hidden child directories are not traversed by recursive
+`**`, hidden path components are matched only when the corresponding pattern
+segment begins with `.`, and directory symlinks are not followed; symlink entries
+may still be returned when the final path itself matches the non-recursive
+suffix. `glob` no-match returns an empty array; `glob!` no-match is a runtime
+failure before loop bodies run.
+
+Emitted Bash remains standalone. Its recursive-glob helper does not require
+ambient `globstar`, `dotglob`, `nullglob`, or `failglob` settings and keeps helper
+names in the reserved `__ds_` namespace. It uses explicit traversal and
+`LC_ALL=C sort -u` to match the VM's deterministic ordering and duplicate policy
+for the supported POSIX-style path surface, including spaces and leading-dash
+paths. Custom glob flags, hidden traversal flags, symlink-following traversal,
+brace expansion, extglob, shell variable expansion, `~` expansion, Windows path
+semantics, and streaming filesystem iterators remain deferred.

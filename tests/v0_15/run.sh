@@ -495,7 +495,7 @@ assert_contains "$TMP/string_fmt.out" 'let s = "a  b"' 'formatter preserves doub
 assert_contains "$TMP/string_fmt.out" 'let quoted = "quote \" here"' 'formatter preserves quote escape meaning'
 assert_contains "$TMP/string_fmt.out" 'let interp = "hello {name}"' 'formatter preserves interpolation braces'
 write_fixture "$FIX/glob_bad.ds" <<'DS'
-for x in glob("**/*.ds") {
+for x in glob("**file.ds") {
   echo "{x}"
 }
 DS
@@ -504,7 +504,7 @@ run_ok glob_bad_fmt "$DS" fmt "$FIX/glob_bad.ds"
 cp "$TMP/glob_bad_fmt.out" "$TMP/glob_bad_formatted.ds"
 capture_status glob_bad_formatted "$DS" check "$TMP/glob_bad_formatted.ds"
 assert_same "$TMP/glob_bad_orig.rc" "$TMP/glob_bad_formatted.rc" 'recursive glob validation status preserved after formatting'
-assert_contains "$TMP/glob_bad_formatted.err" 'recursive `**` glob patterns are deferred' 'recursive glob validation message preserved'
+assert_contains "$TMP/glob_bad_formatted.err" 'recursive `**` glob patterns must use `**` as a complete path segment' 'recursive glob validation message preserved'
 
 # Larger mixed fixture without comments: idempotent and behavior-preserving.
 write_fixture "$FIX/large.ds" <<'DS'

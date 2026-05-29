@@ -86,6 +86,10 @@ regex/range/membership implementation and test pass:
 - local `import "./file.ds"` composition;
 - shell-oriented helpers from `file`, `dir`, `path`, `cmd`, `env`, `glob`,
   `glob!`, and `lines` within the scoped standard-library surface;
+- recursive `**` glob segments through `glob` and `glob!`, with exactly one
+  complete `**` path segment per pattern, zero-or-more directory semantics,
+  sorted duplicate-free string results, default hidden-path skipping, and no
+  directory-symlink traversal;
 - ASCII string methods: `.trim()`, `.upper()`, `.lower()`, `.replace()`,
   `.contains()`, `.split()`, `.starts_with()`, and `.ends_with()`, including
   known string-array elements from `split`, `lines`, `glob`, and `glob!` when
@@ -201,7 +205,9 @@ milestones:
 - direct collection access inside command words without first binding a scalar;
 - empty map literal inference and empty map keys;
 - environment append/prepend shorthand and scoped environment blocks;
-- recursive `**` glob patterns;
+- multiple recursive `**` glob segments, partial `**` segments, custom glob
+  flags, hidden traversal flags, symlink-following traversal, brace expansion,
+  extglob, shell variable expansion, and `~` expansion in glob patterns;
 - binary file helpers and streaming `lines`;
 - formatter configuration, warning suppression comments, workspace formatting,
   and range formatting;
@@ -329,6 +335,21 @@ function-call result mutation, command-result mutation, nested mutation, sparse
 arrays, slice assignment, deletion, references/aliases, compound index
 assignment, and field-style map assignment remain deferred.
 
+`v0.31.0` adds recursive `**` glob support through the existing `glob` and
+`glob!` helpers. Recursive matching is accepted only when `**` is a complete path
+segment and appears once in the pattern. It means zero or more directory
+segments, so `src/**/*.ds` can match both `src/main.ds` and
+`src/nested/deep.ds`. Results are sorted in bytewise/ASCII order, duplicate-free,
+and string-kind preserving in both VM execution and emitted Bash. Hidden path
+components are not matched or traversed unless named explicitly by a non-`**`
+segment such as `.config`, directory symlinks are not traversed, `glob` no-match
+returns an empty collection, and `glob!` no-match fails before loop bodies run.
+Literal invalid recursive patterns fail in lowering; dynamically produced
+invalid recursive patterns fail as runtime data errors in VM/Bash helpers.
+Multiple recursive segments, partial `**` segments, custom glob flags, hidden
+traversal flags, symlink following, brace expansion, extglob, shell variable
+expansion, and `~` expansion remain deferred.
+
 `v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. `v0.22.1` stabilizes the deterministic non-signal cleanup core with VM/Bash parity tests for normal completion, explicit `exit`, explicit `fail`, direct command failure, captured command failure, `trap "EXIT"` replacement, handler failure continuation, handler `exit` status override, imports, script args, and function calls from handlers. `v0.22.2` stabilizes the `INT`/`TERM` syntax and diagnostic surface with tests for parser/token output, AST/HIR/bytecode visibility, formatter normalization, emitted-Bash helper structure, and unsupported or malformed signal diagnostics without sending real OS signals. `v0.22.3` adds the deterministic signal harness: VM and emitted-Bash scripts run in isolated process sessions, tests wait for a `ready` marker, signal the process group, capture stdout/stderr/status through files, and clean up leftovers on timeout. It proves the smallest cooperative `TERM` direct-command fixture. `v0.22.4` extends that harness to non-cooperative foreground direct commands for both `INT` and `TERM`, preserving statuses `130` and `143`, running signal-specific cleanup before `EXIT` cleanup, and avoiding generic command-failure diagnostics or Bash job-control noise. `v0.22.5` extends the same runtime contract to simple foreground pipelines and verifies the harness does not hang when pipeline children inherit stdout/stderr handles. `v0.22.6` finalizes the v0.22 documentation contract: supported behavior is process-scope cleanup for `EXIT`/`INT`/`TERM`, rejected behavior includes function-local handler captures and direct handler `return`, handler context values such as line numbers remain deferred, and broad job-control behavior remains out of scope. The final v0.22 test-plan audit fills deterministic coverage gaps for cleanup side effects, imported signal handlers and diagnostics, function-registered handlers, handler control flow, arithmetic/return interaction, test-block isolation, and malformed/dynamic/numeric/empty signal diagnostics. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers, checks for pending signals between bytecode instructions, and treats interrupted foreground commands/pipelines as signal cleanup events while forwarding observed `INT`/`TERM` to the foreground child process group when possible. Emitted Bash installs standalone traps. Background jobs, public job-control/process-group APIs, asynchronous pipelines, handler context objects/line numbers, and broad signal-forwarding semantics outside foreground commands and simple foreground pipelines remain out of scope.
 
 Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag for both defaulted and explicit arguments that are validated against the default kind, so defaulted parameters can participate in kind-aware `case` matching without VM/Bash coercion drift. Required unknown-kind parameters remain unknown until typed parameters or a broader runtime type-tag design is deliberately added.
@@ -338,8 +359,9 @@ array-loop lowering model, scalar return transport, and process-level cleanup
 model are the safe pieces to build on. The latest feature wave adds scoped
 `v0.23.0` regex, ranges, and membership. `v0.24.0` hardens documentation,
 examples, diagnostics, sanitizer expectations, and generated-Bash helper hygiene
-without adding production syntax. `v0.29.0` adds map iteration and `v0.30.0`
-adds named flat array/map index assignment. Nested collections, formatter trivia
+without adding production syntax. `v0.29.0` adds map iteration, `v0.30.0`
+adds named flat array/map index assignment, and `v0.31.0` adds scoped recursive
+glob patterns. Nested collections, formatter trivia
 preservation, warning suppression, command-level shell logical operators, deeper
 job-control behavior, and advanced pipeline forms remain out of scope unless
 their own milestones explicitly pull them in.

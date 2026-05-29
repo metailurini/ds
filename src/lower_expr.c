@@ -17,11 +17,7 @@ static bool int_literal_in_range(DsStr text) {
 }
 
 bool text_contains_recursive_glob(DsStr text) {
-    if (text.len < 2) return false;
-    for (size_t i = 0; i + 1 < text.len; i++) {
-        if (text.data[i] == '*' && text.data[i + 1] == '*') return true;
-    }
-    return false;
+    return ds_glob_pattern_contains_recursive(text);
 }
 
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg) {
@@ -29,9 +25,10 @@ void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *ar
     if (!arg || arg->kind != DS_EXPR_STRING) return;
     DsStr decoded = {0};
     if (lower_decode_string_text(arg->as.text, &decoded)) {
-        if (text_contains_recursive_glob(decoded)) {
-            ds_diag_error(lower->diag, arg->span,
-                          "recursive `**` glob patterns are deferred in v0.11.0");
+        size_t recursive_count = 0;
+        DsGlobPatternStatus status = ds_glob_pattern_validate(decoded, &recursive_count);
+        if (status != DS_GLOB_PATTERN_OK) {
+            ds_diag_error(lower->diag, arg->span, "%s", ds_glob_pattern_status_message(status));
         }
         free(decoded.data);
     }

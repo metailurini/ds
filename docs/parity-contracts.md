@@ -361,18 +361,21 @@ Canonical representation: stdlib metadata plus HIR iterable/string results for
 supported `glob` and `glob!` forms.
 
 Validation owner: lowerer and stdlib validation for arity, pattern argument
-rules, recursive `**` support status, and iterable eligibility.
+rules, literal recursive `**` segment validity, and iterable eligibility.
 
 Execution owner: VM stdlib glob implementation and Bash glob helpers/emission.
 Both backends must agree on match ordering, no-match behavior, hidden-file rules,
-and recursive-pattern rejection/support.
+single-`**` zero-or-more directory semantics, no directory-symlink traversal, and
+dynamic recursive-pattern rejection/support.
 
 Tests: VM glob tests, Bash parity tests with controlled fixtures, sorted output
-or documented ordering tests, and diagnostics for unsupported recursive patterns.
+or documented ordering tests, and diagnostics for invalid literal and dynamic
+recursive patterns.
 
-Current maintenance rule: new glob pattern power is not accepted until VM and
-Bash matching semantics can be made observably equivalent or the difference is
-documented and tested.
+Current maintenance rule: additional glob power beyond the scoped v0.31 single
+recursive segment, such as custom flags, multiple `**` segments, hidden traversal
+flags, or symlink following, is not accepted until VM and Bash matching semantics
+can be made observably equivalent or the difference is documented and tested.
 
 ### Environment variables
 

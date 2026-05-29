@@ -122,7 +122,7 @@ assert_contains README.md 'keeps comment-preserving formatting deferred' 'README
 
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.30.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.31.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 write_fixture "$FIX/usage_side_effect.ds" <<'DS'
 touch SHOULD_NOT_EXIST
@@ -584,13 +584,13 @@ for pair in "${unsupported_cases[@]}"; do
   [ ! -s "$TMP/$name.sh" ] || fail "unsupported $name should not emit successful Bash"
 done
 write_fixture "$FIX/recursive_glob.ds" <<'DS'
-for path in glob("**/*.ds") {
+for path in glob("**file.ds") {
   echo $path
 }
 DS
 capture_status recursive_glob "$DS" run "$FIX/recursive_glob.ds"
 assert_nonzero_status recursive_glob
-assert_contains "$TMP/recursive_glob.err" 'recursive `**` glob patterns are deferred' 'recursive glob rejected clearly'
+assert_contains "$TMP/recursive_glob.err" 'recursive `**` glob patterns must use `**` as a complete path segment' 'recursive glob rejected clearly'
 
 # Runtime ownership smoke: allocation-heavy supported paths remain stable and leave no command-capture temp files.
 write_fixture "$FIX/ownership.ds" <<'DS'

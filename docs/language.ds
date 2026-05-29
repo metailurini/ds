@@ -532,10 +532,16 @@ for file in glob("*.txt") {
   echo $file
 }
 
-# Recursive `**` globbing is rejected until VM/Bash parity is defined.
-# for file in glob("src/**/*.c") {
-#   echo $file
-# }
+# v0.31.0 supports one recursive `**` segment as a complete path segment.
+# It means zero or more directory segments. Results are sorted, duplicate-free
+# strings; hidden directories are not traversed unless named explicitly.
+for file in glob("src/**/*.c") {
+  echo $file
+}
+
+# Deferred: multiple `**` segments, partial `**` segments like `foo**bar`,
+# custom glob flags, hidden traversal flags, symlink following, brace expansion,
+# extglob, shell variable expansion, and `~` expansion.
 
 # glob! means the pattern must match at least one file.
 for file in glob!("*.ds") {

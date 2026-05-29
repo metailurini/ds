@@ -7,6 +7,8 @@ const char *ds_bash_map_helpers_source(void);
 const char *ds_bash_dynamic_index_helper_source(void);
 const char *ds_bash_collection_helpers_source(void);
 const char *ds_bash_stdlib_helpers_source(void);
+const char *ds_bash_glob_helpers_source(void);
+const char *ds_bash_recursive_glob_helpers_source(void);
 const char *ds_bash_string_helpers_source(void);
 const char *ds_bash_debug_helpers_source(void);
 const char *ds_bash_int_helpers_source(void);

@@ -286,11 +286,11 @@ DS
 assert_diag "bad_env_direct" "$FIX/bad_env_direct.ds" 'environment assignment supports only `=`'
 
 write_fixture "$FIX/bad_recursive_glob.ds" <<'DS'
-for f in glob("**/*.txt") {
+for f in glob("**file.txt") {
   echo $f
 }
 DS
-assert_diag "bad_recursive_glob" "$FIX/bad_recursive_glob.ds" 'recursive `**` glob patterns are deferred'
+assert_diag "bad_recursive_glob" "$FIX/bad_recursive_glob.ds" 'recursive `**` glob patterns must use `**` as a complete path segment'
 
 write_fixture "$FIX/bad_duplicate_key.ds" <<'DS'
 let ports = { api: 3000, api: 4000 }

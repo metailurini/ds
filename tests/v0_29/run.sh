@@ -171,7 +171,7 @@ assert_repo_doc_contains 'nested collections' 'docs keep nested collections defe
 assert_repo_doc_contains 'custom iterator' 'docs keep custom iterators deferred'
 assert_repo_doc_contains 'command-result values are not maps' 'docs keep command-result map iteration deferred'
 assert_repo_doc_contains 'environment iteration' 'docs keep environment iteration deferred'
-assert_repo_doc_contains 'recursive glob' 'docs keep recursive glob deferred'
+assert_repo_doc_contains 'recursive `**` glob support' 'docs document recursive glob support'
 assert_repo_doc_contains 'regex captures' 'docs keep advanced regex deferred'
 
 # Low-level empty-map and bytewise-sort coverage where source-level empty map literals remain deferred.

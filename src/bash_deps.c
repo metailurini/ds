@@ -2,6 +2,7 @@
 #include "ds_signal.h"
 #include "ds_command_facts.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static bool expr_uses_run(const DsLowerExpr *expr) {
@@ -103,6 +104,89 @@ static bool expr_uses_stdlib(const DsLowerExpr *expr) {
             return false;
         default: return false;
     }
+}
+
+static bool call_name_is_glob(DsStr name) {
+    return str_eq(name, "glob") || str_eq(name, "glob!");
+}
+
+static bool literal_glob_arg_is_recursive(const DsLowerExpr *expr) {
+    if (!expr || expr->kind != DS_LOWER_EXPR_STRING) return true;
+    char *decoded = NULL;
+    size_t len = 0;
+    if (!decode_string_literal(NULL, expr, &decoded, &len)) return true;
+    DsStr text = {decoded, len};
+    bool recursive = ds_glob_pattern_contains_recursive(text);
+    free(decoded);
+    return recursive;
+}
+
+static bool expr_uses_glob_helper(const DsLowerExpr *expr, bool recursive_only) {
+    if (!expr) return false;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_CALL:
+            if (call_name_is_glob(expr->as.call.name)) {
+                if (!recursive_only) return true;
+                if (expr->as.call.args.len == 0) return true;
+                return literal_glob_arg_is_recursive(expr->as.call.args.items[0]);
+            }
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_glob_helper(expr->as.call.args.items[i], recursive_only)) return true;
+            return false;
+        case DS_LOWER_EXPR_FIELD: return expr_uses_glob_helper(expr->as.field.object, recursive_only);
+        case DS_LOWER_EXPR_INDEX: return expr_uses_glob_helper(expr->as.index.object, recursive_only) || expr_uses_glob_helper(expr->as.index.index, recursive_only);
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_glob_helper(expr->as.array.elements.items[i], recursive_only)) return true;
+            return false;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_glob_helper(expr->as.map.entries.items[i].value, recursive_only)) return true;
+            return false;
+        case DS_LOWER_EXPR_UNARY: return expr_uses_glob_helper(expr->as.unary.right, recursive_only);
+        case DS_LOWER_EXPR_BINARY: return expr_uses_glob_helper(expr->as.binary.left, recursive_only) || expr_uses_glob_helper(expr->as.binary.right, recursive_only);
+        case DS_LOWER_EXPR_RANGE: return expr_uses_glob_helper(expr->as.range.start, recursive_only) || expr_uses_glob_helper(expr->as.range.end, recursive_only);
+        case DS_LOWER_EXPR_INTERP:
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_glob_helper(expr->as.interp.parts.items[i], recursive_only)) return true;
+            return false;
+        default: return false;
+    }
+}
+
+static bool stmt_uses_glob_helper(const DsLowerStmt *stmt, bool recursive_only) {
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET: return expr_uses_glob_helper(stmt->as.let_stmt.value, recursive_only);
+        case DS_LOWER_STMT_ASSIGN: return expr_uses_glob_helper(stmt->as.assign_stmt.value, recursive_only);
+        case DS_LOWER_STMT_INDEX_ASSIGN: return expr_uses_glob_helper(stmt->as.index_assign_stmt.index, recursive_only) || expr_uses_glob_helper(stmt->as.index_assign_stmt.value, recursive_only);
+        case DS_LOWER_STMT_IF:
+            return expr_uses_glob_helper(stmt->as.if_stmt.condition, recursive_only) || stmt_uses_glob_helper(stmt->as.if_stmt.then_branch, recursive_only) ||
+                   (stmt->as.if_stmt.else_branch && stmt_uses_glob_helper(stmt->as.if_stmt.else_branch, recursive_only));
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_glob_helper(stmt->as.block_stmt.statements.items[i], recursive_only)) return true;
+            return false;
+        case DS_LOWER_STMT_CALL:
+            if (call_name_is_glob(stmt->as.call_stmt.name)) {
+                if (!recursive_only) return true;
+                if (stmt->as.call_stmt.args.len == 0) return true;
+                return literal_glob_arg_is_recursive(stmt->as.call_stmt.args.items[0]);
+            }
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) if (expr_uses_glob_helper(stmt->as.call_stmt.args.items[i], recursive_only)) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_MAP:
+        case DS_LOWER_STMT_FOR_RANGE: return expr_uses_glob_helper(stmt->as.for_stmt.iterable, recursive_only) || stmt_uses_glob_helper(stmt->as.for_stmt.body, recursive_only);
+        case DS_LOWER_STMT_WHILE: return expr_uses_glob_helper(stmt->as.while_stmt.condition, recursive_only) || stmt_uses_glob_helper(stmt->as.while_stmt.body, recursive_only);
+        case DS_LOWER_STMT_CASE:
+            if (expr_uses_glob_helper(stmt->as.case_stmt.selector, recursive_only)) return true;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_glob_helper(stmt->as.case_stmt.arms.items[i].body, recursive_only)) return true;
+            return false;
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE: return false;
+        case DS_LOWER_STMT_PUSH: return expr_uses_glob_helper(stmt->as.push_stmt.value, recursive_only);
+        case DS_LOWER_STMT_ASSERT: return expr_uses_glob_helper(stmt->as.assert_stmt.condition, recursive_only);
+        case DS_LOWER_STMT_RETURN: return expr_uses_glob_helper(stmt->as.return_stmt.value, recursive_only);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_glob_helper(stmt->as.handler_stmt.body, recursive_only);
+        case DS_LOWER_STMT_CMD: return false;
+    }
+    return false;
 }
 
 static bool command_uses_stdlib(const DsCommand *command) {
@@ -617,6 +701,18 @@ bool program_uses_pipeline_run(const DsLowerProgram *program) {
 bool program_uses_stdlib(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_stdlib(program->functions.items[i].body)) return true;
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_stdlib(program->statements.items[i])) return true;
+    return false;
+}
+
+bool program_uses_glob_helpers(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_glob_helper(program->functions.items[i].body, false)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_glob_helper(program->statements.items[i], false)) return true;
+    return false;
+}
+
+bool program_uses_recursive_glob_helpers(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_glob_helper(program->functions.items[i].body, true)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_glob_helper(program->statements.items[i], true)) return true;
     return false;
 }
 

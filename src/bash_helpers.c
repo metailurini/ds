@@ -297,10 +297,74 @@ const char *ds_bash_stdlib_helpers_source(void) {
         "__ds_stdlib_env_set() { __ds_stdlib_env_valid \"$1\"; export \"$1=$2\"; }\n"
         "__ds_stdlib_env_unset() { __ds_stdlib_env_valid \"$1\"; unset \"$1\"; }\n"
         "__ds_stdlib_capture() { local __ds_var=\"$1\" __ds_data __ds_status; shift; set +e; __ds_data=\"$(\"$@\"; printf x)\"; __ds_status=$?; set -e; if (( __ds_status != 0 )); then exit \"$__ds_status\"; fi; __ds_data=\"${__ds_data%x}\"; printf -v \"$__ds_var\" '%s' \"$__ds_data\"; }\n"
-        "__ds_stdlib_reject_recursive_glob() { [[ \"$1\" != *'**'* ]] || __ds_error \"runtime glob pattern contains recursive **; recursive glob patterns are deferred in v0.11.0\"; }\n"
-        "__ds_stdlib_glob() { __ds_stdlib_reject_recursive_glob \"$1\"; { compgen -G \"$1\" || true; } | sort; }\n"
-        "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
         "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; __ds_stdlib_reject_nul \"$1\" \"lines from\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\\n' \"$line\"; done <\"$1\"; }\n\n";
+}
+
+
+const char *ds_bash_glob_helpers_source(void) {
+    return
+        "__ds_stdlib_glob() { { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; }\n"
+        "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n\n";
+}
+
+const char *ds_bash_recursive_glob_helpers_source(void) {
+    return
+        "__ds_glob_has_recursive() { [[ \"$1\" == *'**'* ]]; }\n"
+        "__ds_glob_validate_recursive() {\n"
+        "  local p=\"$1\" part count=0\n"
+        "  IFS=/ read -r -a __ds_glob_parts <<<\"$p\"\n"
+        "  for part in \"${__ds_glob_parts[@]}\"; do\n"
+        "    if [[ \"$part\" == '**' ]]; then\n"
+        "      count=$((count + 1))\n"
+        "      (( count <= 1 )) || __ds_error 'multiple recursive `**` glob segments are unsupported in v0.31.0'\n"
+        "    elif [[ \"$part\" == *'**'* ]]; then\n"
+        "      __ds_error 'recursive `**` glob patterns must use `**` as a complete path segment in v0.31.0'\n"
+        "    elif [[ \"$part\" == '..' ]]; then\n"
+        "      __ds_error 'recursive `**` glob patterns with `..` path segments are unsupported in v0.31.0'\n"
+        "    fi\n"
+        "  done\n"
+        "}\n"
+        "__ds_glob_prefix_for_recursive() { local p=\"$1\"; printf '%s' \"${p%%\\*\\**}\"; }\n"
+        "__ds_glob_suffix_for_recursive() { local p=\"$1\" s; s=\"${p#*\\*\\*}\"; printf '%s' \"${s#/}\"; }\n"
+        "__ds_glob_base_pattern() {\n"
+        "  local prefix=\"$1\"\n"
+        "  if [[ -z \"$prefix\" ]]; then printf .; return; fi\n"
+        "  while [[ \"$prefix\" != / && \"$prefix\" == */ ]]; do prefix=\"${prefix%/}\"; done\n"
+        "  [[ -n \"$prefix\" ]] || prefix=.\n"
+        "  printf '%s' \"$prefix\"\n"
+        "}\n"
+        "__ds_glob_recursive_dirs() {\n"
+        "  local base=\"$1\"\n"
+        "  find \"$base\" -type d \\( ! -path \"$base\" -name '.*' -prune -o -print \\) 2>/dev/null || __ds_error \"failed to traverse recursive glob directory '$base'\"\n"
+        "}\n"
+        "__ds_glob_recursive() {\n"
+        "  local pattern=\"$1\" prefix suffix base_pattern base dir glob_pat match strip_dot=false\n"
+        "  __ds_glob_validate_recursive \"$pattern\"\n"
+        "  prefix=$(__ds_glob_prefix_for_recursive \"$pattern\")\n"
+        "  suffix=$(__ds_glob_suffix_for_recursive \"$pattern\")\n"
+        "  base_pattern=$(__ds_glob_base_pattern \"$prefix\")\n"
+        "  [[ -n \"$prefix\" ]] || strip_dot=true\n"
+        "  { compgen -G \"$base_pattern\" || true; } | while IFS= read -r base; do\n"
+        "    local strip_match=\"$strip_dot\"\n"
+        "    if [[ \"$base\" == -* ]]; then base=\"./$base\"; strip_match=true; fi\n"
+        "    [[ -d \"$base\" && ! -L \"$base\" ]] || continue\n"
+        "    while IFS= read -r dir; do\n"
+        "      if [[ -z \"$suffix\" ]]; then glob_pat=\"$dir\"\n"
+        "      elif [[ \"$dir\" == . && \"$strip_match\" == true ]]; then glob_pat=\"$suffix\"\n"
+        "      elif [[ \"$strip_match\" == true && \"$dir\" == ./* ]]; then glob_pat=\"${dir#./}/$suffix\"\n"
+        "      else glob_pat=\"$dir/$suffix\"\n"
+        "      fi\n"
+        "      while IFS= read -r match; do\n"
+        "        [[ -n \"$match\" ]] || continue\n"
+        "        if [[ \"$strip_match\" == true && \"$match\" == ./* ]]; then match=\"${match#./}\"; fi\n"
+        "        printf '%s\\n' \"$match\"\n"
+        "      done < <({ compgen -G \"$glob_pat\" || true; })\n"
+        "    done < <(__ds_glob_recursive_dirs \"$base\")\n"
+        "  done | LC_ALL=C sort -u\n"
+        "}\n"
+        "__ds_stdlib_glob() { if __ds_glob_has_recursive \"$1\"; then __ds_glob_recursive \"$1\"; else { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; fi; }\n"
+        "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
+        "\n";
 }
 
 const char *ds_bash_string_helpers_source(void) {

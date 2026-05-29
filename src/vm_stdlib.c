@@ -2,6 +2,7 @@
 
 #include "vm_internal.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <glob.h>
 #include <stdio.h>
@@ -92,6 +93,235 @@ static int cmp_cstr_ptr(const void *a, const void *b) {
     const char *const *sa = (const char *const *)a;
     const char *const *sb = (const char *const *)b;
     return strcmp(*sa, *sb);
+}
+
+typedef struct {
+    char **items;
+    size_t len;
+    size_t cap;
+} VmStringVec;
+
+static char *vm_strdup_range(const char *data, size_t len) {
+    char *out = (char *)ds_xcalloc(len + 1, 1);
+    if (len) memcpy(out, data, len);
+    out[len] = '\0';
+    return out;
+}
+
+static char *vm_strdup_cstr(const char *data) {
+    return vm_strdup_range(data ? data : "", data ? strlen(data) : 0);
+}
+
+static void vm_string_vec_free(VmStringVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) free(vec->items[i]);
+    free(vec->items);
+    vec->items = NULL;
+    vec->len = 0;
+    vec->cap = 0;
+}
+
+static bool vm_string_vec_push_owned(VmStringVec *vec, char *text) {
+    if (vec->len == vec->cap) {
+        vec->cap = vec->cap ? vec->cap * 2 : 16;
+        vec->items = (char **)ds_xrealloc(vec->items, vec->cap * sizeof(char *));
+    }
+    vec->items[vec->len++] = text;
+    return true;
+}
+
+static bool vm_string_vec_push_copy(VmStringVec *vec, const char *text) {
+    return vm_string_vec_push_owned(vec, vm_strdup_cstr(text));
+}
+
+static char *path_join2(const char *a, const char *b) {
+    if (!a || !*a) return vm_strdup_cstr(b ? b : "");
+    if (!b || !*b) return vm_strdup_cstr(a);
+    size_t alen = strlen(a);
+    size_t blen = strlen(b);
+    bool slash = a[alen - 1] == '/';
+    char *out = (char *)ds_xcalloc(alen + blen + (slash ? 1 : 2), 1);
+    memcpy(out, a, alen);
+    size_t pos = alen;
+    if (!slash) out[pos++] = '/';
+    memcpy(out + pos, b, blen);
+    out[pos + blen] = '\0';
+    return out;
+}
+
+static bool has_glob_meta(const char *s) {
+    for (; s && *s; s++) {
+        if (*s == '*' || *s == '?' || *s == '[') return true;
+    }
+    return false;
+}
+
+static void normalize_recursive_prefix(const char *prefix, char **base_pattern, bool *strip_root_dot) {
+    *strip_root_dot = false;
+    if (!prefix || !*prefix) {
+        *base_pattern = vm_strdup_cstr(".");
+        *strip_root_dot = true;
+        return;
+    }
+    size_t len = strlen(prefix);
+    while (len > 1 && prefix[len - 1] == '/') len--;
+    if (len == 1 && prefix[0] == '.') {
+        *base_pattern = vm_strdup_cstr(".");
+        return;
+    }
+    *base_pattern = vm_strdup_range(prefix, len);
+}
+
+static bool collect_base_dirs(Vm *vm, Instr *ins, const char *base_pattern, VmStringVec *bases) {
+    if (!has_glob_meta(base_pattern)) {
+        struct stat st;
+        if (lstat(base_pattern, &st) == 0 && S_ISDIR(st.st_mode) && !S_ISLNK(st.st_mode)) {
+            return vm_string_vec_push_copy(bases, base_pattern);
+        }
+        return true;
+    }
+
+    glob_t g;
+    memset(&g, 0, sizeof(g));
+    int grc = glob(base_pattern, 0, NULL, &g);
+    if (grc == GLOB_NOMATCH) {
+        globfree(&g);
+        return true;
+    }
+    if (grc != 0) {
+        ds_diag_error(vm->diag, ins->span, "failed to evaluate recursive glob base `%s`", base_pattern);
+        globfree(&g);
+        return false;
+    }
+    for (size_t i = 0; i < g.gl_pathc; i++) {
+        struct stat st;
+        if (lstat(g.gl_pathv[i], &st) == 0 && S_ISDIR(st.st_mode) && !S_ISLNK(st.st_mode)) {
+            vm_string_vec_push_copy(bases, g.gl_pathv[i]);
+        }
+    }
+    globfree(&g);
+    return true;
+}
+
+static bool should_skip_hidden_child(const char *name) {
+    return name && name[0] == '.' && strcmp(name, ".") != 0 && strcmp(name, "..") != 0;
+}
+
+static bool collect_dirs_recursive(Vm *vm, Instr *ins, const char *dir, VmStringVec *dirs) {
+    if (!vm_string_vec_push_copy(dirs, dir)) return false;
+    DIR *dp = opendir(dir);
+    if (!dp) {
+        ds_diag_error(vm->diag, ins->span, "failed to traverse recursive glob directory `%s`: %s", dir, strerror(errno));
+        return false;
+    }
+
+    struct dirent *ent = NULL;
+    while ((ent = readdir(dp)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+        if (should_skip_hidden_child(ent->d_name)) continue;
+        char *child = path_join2(dir, ent->d_name);
+        struct stat st;
+        bool descend = lstat(child, &st) == 0 && S_ISDIR(st.st_mode) && !S_ISLNK(st.st_mode);
+        if (descend && !collect_dirs_recursive(vm, ins, child, dirs)) {
+            free(child);
+            closedir(dp);
+            return false;
+        }
+        free(child);
+    }
+    closedir(dp);
+    return true;
+}
+
+static char *strip_leading_dot_slash_copy(const char *path, bool strip_root_dot) {
+    if (strip_root_dot && path && path[0] == '.' && path[1] == '/') return vm_strdup_cstr(path + 2);
+    return vm_strdup_cstr(path);
+}
+
+static bool collect_recursive_matches_for_dir(Vm *vm, Instr *ins, const char *dir, const char *suffix, bool strip_root_dot, VmStringVec *matches) {
+    char *pattern = NULL;
+    if (!suffix || !*suffix) {
+        pattern = vm_strdup_cstr(dir);
+    } else if (strcmp(dir, ".") == 0 && strip_root_dot) {
+        pattern = vm_strdup_cstr(suffix);
+    } else {
+        pattern = path_join2(dir, suffix);
+    }
+
+    glob_t g;
+    memset(&g, 0, sizeof(g));
+    int grc = glob(pattern, 0, NULL, &g);
+    if (grc == GLOB_NOMATCH) {
+        free(pattern);
+        globfree(&g);
+        return true;
+    }
+    if (grc != 0) {
+        ds_diag_error(vm->diag, ins->span, "failed to evaluate recursive glob `%s`", pattern);
+        free(pattern);
+        globfree(&g);
+        return false;
+    }
+    for (size_t i = 0; i < g.gl_pathc; i++) {
+        vm_string_vec_push_owned(matches, strip_leading_dot_slash_copy(g.gl_pathv[i], strip_root_dot));
+    }
+    free(pattern);
+    globfree(&g);
+    return true;
+}
+
+static bool stdlib_recursive_glob(Vm *vm, Instr *ins, const char *pattern, DsValue *out) {
+    DsStr pattern_str = { (char *)pattern, strlen(pattern) };
+    size_t recursive_count = 0;
+    DsGlobPatternStatus status = ds_glob_pattern_validate(pattern_str, &recursive_count);
+    if (status != DS_GLOB_PATTERN_OK) {
+        ds_diag_error(vm->diag, ins->span, "%s", ds_glob_pattern_status_message(status));
+        return false;
+    }
+
+    const char *marker = strstr(pattern, "**");
+    if (!marker) return false;
+    size_t prefix_len = (size_t)(marker - pattern);
+    size_t suffix_start = prefix_len + 2;
+    char *prefix = vm_strdup_range(pattern, prefix_len);
+    char *suffix = vm_strdup_cstr(pattern + suffix_start);
+    if (suffix[0] == '/') memmove(suffix, suffix + 1, strlen(suffix));
+
+    char *base_pattern = NULL;
+    bool strip_root_dot = false;
+    normalize_recursive_prefix(prefix, &base_pattern, &strip_root_dot);
+
+    VmStringVec bases = {0};
+    VmStringVec dirs = {0};
+    VmStringVec matches = {0};
+    bool ok = collect_base_dirs(vm, ins, base_pattern, &bases);
+    for (size_t i = 0; ok && i < bases.len; i++) ok = collect_dirs_recursive(vm, ins, bases.items[i], &dirs);
+    for (size_t i = 0; ok && i < dirs.len; i++) ok = collect_recursive_matches_for_dir(vm, ins, dirs.items[i], suffix, strip_root_dot, &matches);
+
+    free(prefix);
+    free(suffix);
+    free(base_pattern);
+    vm_string_vec_free(&bases);
+    vm_string_vec_free(&dirs);
+
+    if (!ok) {
+        vm_string_vec_free(&matches);
+        return false;
+    }
+
+    qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
+
+    DsValue array = ds_value_null();
+    array.kind = DS_VALUE_ARRAY;
+    ds_array_init(&array.as.array);
+    const char *prev = NULL;
+    for (size_t i = 0; i < matches.len; i++) {
+        if (prev && strcmp(prev, matches.items[i]) == 0) continue;
+        array_push_string(&array, matches.items[i], strlen(matches.items[i]));
+        prev = matches.items[i];
+    }
+    vm_string_vec_free(&matches);
+    *out = array;
+    return true;
 }
 
 static bool is_executable_file(const char *path) {
@@ -367,10 +597,17 @@ static bool stdlib_env_unset(Vm *vm, Instr *ins) {
 static bool stdlib_glob(Vm *vm, Instr *ins, DsValue *out) {
     char *pattern = vm_string_arg_dup(vm, ins, 0);
     if (!pattern) return false;
-    if (strstr(pattern, "**")) {
-        ds_diag_error(vm->diag, ins->span, "runtime glob pattern contains recursive `**`; recursive glob patterns are deferred in v0.11.0");
+
+    DsStr pattern_str = {pattern, strlen(pattern)};
+    if (ds_glob_pattern_contains_recursive(pattern_str)) {
+        bool ok = stdlib_recursive_glob(vm, ins, pattern, out);
+        if (ok && helper_is(ins, "glob!") && out->kind == DS_VALUE_ARRAY && out->as.array.len == 0) {
+            ds_diag_error(vm->diag, ins->span, "required glob `%s` had no matches", pattern);
+            ds_value_free(out);
+            ok = false;
+        }
         free(pattern);
-        return false;
+        return ok;
     }
 
     glob_t g;

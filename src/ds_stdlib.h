@@ -23,12 +23,22 @@ typedef struct {
     bool string_args_only;
     bool iterable;
     bool validates_env_name;
-    bool rejects_recursive_glob;
+    bool validates_glob_pattern;
 } DsStdlibHelper;
+
+typedef enum {
+    DS_GLOB_PATTERN_OK,
+    DS_GLOB_PATTERN_ERR_BAD_RECURSIVE_SEGMENT,
+    DS_GLOB_PATTERN_ERR_MULTIPLE_RECURSIVE_SEGMENTS,
+    DS_GLOB_PATTERN_ERR_PARENT_SEGMENT
+} DsGlobPatternStatus;
 
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name);
 bool ds_stdlib_is_name(DsStr name);
 bool ds_stdlib_is_namespace(DsStr name);
 bool ds_stdlib_arity_ok(const DsStdlibHelper *helper, size_t argc);
+bool ds_glob_pattern_contains_recursive(DsStr pattern);
+DsGlobPatternStatus ds_glob_pattern_validate(DsStr pattern, size_t *recursive_count_out);
+const char *ds_glob_pattern_status_message(DsGlobPatternStatus status);
 
 #endif
