@@ -343,7 +343,12 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_BLOCK:
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_stdlib(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
-        case DS_LOWER_STMT_CALL: return ds_stdlib_is_name(stmt->as.call_stmt.name);
+        case DS_LOWER_STMT_CALL:
+            if (ds_stdlib_is_name(stmt->as.call_stmt.name)) return true;
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
+                if (expr_uses_stdlib(stmt->as.call_stmt.args.items[i])) return true;
+            }
+            return false;
         case DS_LOWER_STMT_FOR_ARRAY:
         case DS_LOWER_STMT_FOR_RANGE: return expr_uses_stdlib(stmt->as.for_stmt.iterable) || stmt_uses_stdlib(stmt->as.for_stmt.body);
         case DS_LOWER_STMT_WHILE: return expr_uses_stdlib(stmt->as.while_stmt.condition) || stmt_uses_stdlib(stmt->as.while_stmt.body);
@@ -387,8 +392,12 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_RETURN: return expr_uses_collection_index(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP: return stmt_uses_collection_index(stmt->as.handler_stmt.body);
-        case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
+                if (expr_uses_collection_index(stmt->as.call_stmt.args.items[i])) return true;
+            }
+            return false;
+        case DS_LOWER_STMT_CMD:
             return false;
     }
     return false;
@@ -418,8 +427,12 @@ static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_RETURN: return expr_uses_map_literal(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP: return stmt_uses_map_literal(stmt->as.handler_stmt.body);
-        case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_CALL:
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
+                if (expr_uses_map_literal(stmt->as.call_stmt.args.items[i])) return true;
+            }
+            return false;
+        case DS_LOWER_STMT_CMD:
             return false;
     }
     return false;
@@ -480,6 +493,10 @@ static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_TRAP: return stmt_uses_int_helpers(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD: return command_uses_int_helpers(&stmt->as.cmd_stmt);
         case DS_LOWER_STMT_CALL:
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
+                if (expr_uses_int_helpers(stmt->as.call_stmt.args.items[i])) return true;
+            }
+            return false;
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
             return false;

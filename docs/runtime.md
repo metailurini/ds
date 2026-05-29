@@ -146,7 +146,9 @@ diagnostics.
 Standalone Bash emission is split into focused backend components:
 `src/bash_emit.c` owns the public entrypoint, script-argument prelude, helper
 selection, and artifact writing; `src/bash_deps.c` decides which embedded helper
-bodies are needed; `src/bash_expr.c`, `src/bash_command.c`, and
+bodies are needed by walking accepted HIR expression payloads, including
+statement-style user function call arguments; `src/bash_expr.c`,
+`src/bash_command.c`, and
 `src/bash_stmt.c` render expressions, commands, and statements respectively;
 `src/bash_quote.c` owns shared quoting/interpolation and emitter utilities; and
 `src/bash_helpers.c` owns the embedded helper body strings. This keeps helper

@@ -3,8 +3,9 @@
 This document is the user-facing snapshot after the completed implementation
 surface through `v0.23.0`, the `v0.24.0` pre-1.0 hardening pass, the completed
 `v0.25.0` scalar function value-return ABI pass, the completed `v0.26.0`
-flat structured function-return implementation and test pass, and the initial
-`v0.27.0` direct environment read/assignment implementation. It is a
+flat structured function-return implementation and test pass, the initial
+`v0.27.0` direct environment read/assignment implementation, and the `v0.28.0`
+cleanup pass for value/environment/interpolation helper hygiene. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -299,6 +300,16 @@ deferred. Statement-style calls may still ignore returned values.
 expression interpolation path.
 The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
 diagnostic, formatting, example, and generated-Bash boundary behavior.
+
+`v0.28.0` is a cleanup-only pass over the supported `v0.25.0` through `v0.27.0`
+surface. It does not add syntax. It keeps helper dependency discovery aligned
+with the accepted HIR so statement-style user function calls whose arguments
+contain formatted interpolation, integer arithmetic interpolation, or collection
+index reads emit the same standalone Bash helpers those expressions would have
+needed in `let`, assignment, return, or condition positions. Map iteration,
+index assignment, nested collections, recursive glob behavior, and advanced
+regex captures/replacement/runtime regex strings remain deferred to their named
+roadmap milestones.
 
 `v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. `v0.22.1` stabilizes the deterministic non-signal cleanup core with VM/Bash parity tests for normal completion, explicit `exit`, explicit `fail`, direct command failure, captured command failure, `trap "EXIT"` replacement, handler failure continuation, handler `exit` status override, imports, script args, and function calls from handlers. `v0.22.2` stabilizes the `INT`/`TERM` syntax and diagnostic surface with tests for parser/token output, AST/HIR/bytecode visibility, formatter normalization, emitted-Bash helper structure, and unsupported or malformed signal diagnostics without sending real OS signals. `v0.22.3` adds the deterministic signal harness: VM and emitted-Bash scripts run in isolated process sessions, tests wait for a `ready` marker, signal the process group, capture stdout/stderr/status through files, and clean up leftovers on timeout. It proves the smallest cooperative `TERM` direct-command fixture. `v0.22.4` extends that harness to non-cooperative foreground direct commands for both `INT` and `TERM`, preserving statuses `130` and `143`, running signal-specific cleanup before `EXIT` cleanup, and avoiding generic command-failure diagnostics or Bash job-control noise. `v0.22.5` extends the same runtime contract to simple foreground pipelines and verifies the harness does not hang when pipeline children inherit stdout/stderr handles. `v0.22.6` finalizes the v0.22 documentation contract: supported behavior is process-scope cleanup for `EXIT`/`INT`/`TERM`, rejected behavior includes function-local handler captures and direct handler `return`, handler context values such as line numbers remain deferred, and broad job-control behavior remains out of scope. The final v0.22 test-plan audit fills deterministic coverage gaps for cleanup side effects, imported signal handlers and diagnostics, function-registered handlers, handler control flow, arithmetic/return interaction, test-block isolation, and malformed/dynamic/numeric/empty signal diagnostics. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers, checks for pending signals between bytecode instructions, and treats interrupted foreground commands/pipelines as signal cleanup events while forwarding observed `INT`/`TERM` to the foreground child process group when possible. Emitted Bash installs standalone traps. Background jobs, public job-control/process-group APIs, asynchronous pipelines, handler context objects/line numbers, and broad signal-forwarding semantics outside foreground commands and simple foreground pipelines remain out of scope.
 
