@@ -554,6 +554,20 @@ DS
 )
 run_parity replace_grow "$replace_grow" $'<a><b>\n' 0
 
+replace_anchored_alt_left=$(write_fixture replace_anchored_alt_left <<'DS'
+let out = regex.replace("aba", /^a|a$/, "X")
+echo $out
+DS
+)
+run_parity replace_anchored_alt_left "$replace_anchored_alt_left" $'XbX\n' 0
+
+replace_anchored_alt_right=$(write_fixture replace_anchored_alt_right <<'DS'
+let out = regex.replace("aba", /a$|^a/, "X")
+echo $out
+DS
+)
+run_parity replace_anchored_alt_right "$replace_anchored_alt_right" $'XbX\n' 0
+
 replace_optional=$(write_fixture replace_optional <<'DS'
 let out = regex.replace("c", /^(a)?(b)?(c)$/, "$1-$2-$3")
 echo $out

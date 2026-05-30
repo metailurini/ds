@@ -473,7 +473,7 @@ const char *ds_bash_regex_replace_helpers_source(void) {
         "      if (( __ds_status == 0 )) && [[ -z \"${BASH_REMATCH[1]}\" ]]; then __ds_regex_error 'regex.replace patterns that match empty strings are unsupported in v0.32.0'; fi\n"
         "      break\n"
         "    fi\n"
-        "    __ds_found=false; __ds_limit=${#__ds_rest}; [[ \"$__ds_pattern\" == ^* ]] && __ds_limit=0\n"
+        "    __ds_found=false; __ds_limit=${#__ds_rest}\n"
         "    for (( __ds_i=0; __ds_i<=__ds_limit; __ds_i++ )); do\n"
         "      set +e; [[ \"${__ds_rest:__ds_i}\" =~ ^($__ds_pattern) ]]; __ds_status=$?; set -e\n"
         "      if (( __ds_status == 0 )); then __ds_found=true; __ds_full=\"${BASH_REMATCH[1]}\"; break; fi\n"
