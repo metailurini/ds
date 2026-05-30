@@ -190,10 +190,10 @@ static void emit_glob_helpers(BashEmitter *e, bool recursive) {
     buf_append(&e->out, recursive ? ds_bash_recursive_glob_helpers_source() : ds_bash_glob_helpers_source());
 }
 
-static void emit_regex_helpers(BashEmitter *e) {
+static void emit_regex_helpers(BashEmitter *e, bool needs_match, bool needs_replace) {
     buf_append(&e->out, ds_bash_regex_helpers_source());
-    buf_append(&e->out, ds_bash_regex_match_helpers_source());
-    buf_append(&e->out, ds_bash_regex_replace_helpers_source());
+    if (needs_match) buf_append(&e->out, ds_bash_regex_match_helpers_source());
+    if (needs_replace) buf_append(&e->out, ds_bash_regex_replace_helpers_source());
 }
 
 static void emit_debug_helpers(BashEmitter *e) {
@@ -286,7 +286,9 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_glob_helpers = program_uses_glob_helpers(lowered);
     bool needs_recursive_glob_helpers = program_uses_recursive_glob_helpers(lowered);
-    bool needs_regex_helpers = program_uses_regex_helpers(lowered);
+    bool needs_regex_helpers = program_uses_regex_base_helpers(lowered);
+    bool needs_regex_match_helpers = program_uses_regex_match_helpers(lowered);
+    bool needs_regex_replace_helpers = program_uses_regex_replace_helpers(lowered);
     bool needs_debug = program_has_command(lowered);
     bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
@@ -330,7 +332,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_dynamic_index_helper) emit_dynamic_index_helper(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);
     if (needs_glob_helpers) emit_glob_helpers(&e, needs_recursive_glob_helpers);
-    if (needs_regex_helpers) emit_regex_helpers(&e);
+    if (needs_regex_helpers) emit_regex_helpers(&e, needs_regex_match_helpers, needs_regex_replace_helpers);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {
         if (!emit_function(&e, &lowered->functions.items[i])) {

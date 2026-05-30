@@ -716,78 +716,120 @@ bool program_uses_recursive_glob_helpers(const DsLowerProgram *program) {
     return false;
 }
 
-static bool call_name_is_regex(DsStr name) {
-    return str_eq(name, "regex.match") || str_eq(name, "regex.replace");
+enum {
+    DS_BASH_REGEX_BASE_HELPER = 1 << 0,
+    DS_BASH_REGEX_MATCH_HELPER = 1 << 1,
+    DS_BASH_REGEX_REPLACE_HELPER = 1 << 2,
+};
+
+static int regex_call_helper_mask(DsStr name) {
+    if (str_eq(name, "regex.match")) return DS_BASH_REGEX_BASE_HELPER | DS_BASH_REGEX_MATCH_HELPER;
+    if (str_eq(name, "regex.replace")) return DS_BASH_REGEX_BASE_HELPER | DS_BASH_REGEX_REPLACE_HELPER;
+    return 0;
 }
 
-static bool expr_uses_regex_helper(const DsLowerExpr *expr) {
-    if (!expr) return false;
+static int expr_regex_helper_mask(const DsLowerExpr *expr) {
+    if (!expr) return 0;
     switch (expr->kind) {
         case DS_LOWER_EXPR_CALL:
-            if (call_name_is_regex(expr->as.call.name)) return true;
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_regex_helper(expr->as.call.args.items[i])) return true;
-            return false;
+        {
+            int mask = regex_call_helper_mask(expr->as.call.name);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) mask |= expr_regex_helper_mask(expr->as.call.args.items[i]);
+            return mask;
+        }
         case DS_LOWER_EXPR_BINARY:
-            if (str_eq(expr->as.binary.op, "matches") && expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX) return true;
-            return expr_uses_regex_helper(expr->as.binary.left) || expr_uses_regex_helper(expr->as.binary.right);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_regex_helper(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_regex_helper(expr->as.index.object) || expr_uses_regex_helper(expr->as.index.index);
+        {
+            int mask = 0;
+            if (str_eq(expr->as.binary.op, "matches") && expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX) mask |= DS_BASH_REGEX_BASE_HELPER;
+            return mask | expr_regex_helper_mask(expr->as.binary.left) | expr_regex_helper_mask(expr->as.binary.right);
+        }
+        case DS_LOWER_EXPR_FIELD: return expr_regex_helper_mask(expr->as.field.object);
+        case DS_LOWER_EXPR_INDEX: return expr_regex_helper_mask(expr->as.index.object) | expr_regex_helper_mask(expr->as.index.index);
         case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_regex_helper(expr->as.array.elements.items[i])) return true;
-            return false;
+        {
+            int mask = 0;
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) mask |= expr_regex_helper_mask(expr->as.array.elements.items[i]);
+            return mask;
+        }
         case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_regex_helper(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_regex_helper(expr->as.unary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_regex_helper(expr->as.range.start) || expr_uses_regex_helper(expr->as.range.end);
+        {
+            int mask = 0;
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) mask |= expr_regex_helper_mask(expr->as.map.entries.items[i].value);
+            return mask;
+        }
+        case DS_LOWER_EXPR_UNARY: return expr_regex_helper_mask(expr->as.unary.right);
+        case DS_LOWER_EXPR_RANGE: return expr_regex_helper_mask(expr->as.range.start) | expr_regex_helper_mask(expr->as.range.end);
         case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_regex_helper(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
+        {
+            int mask = 0;
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) mask |= expr_regex_helper_mask(expr->as.interp.parts.items[i]);
+            return mask;
+        }
+        default: return 0;
     }
 }
 
-static bool stmt_uses_regex_helper(const DsLowerStmt *stmt) {
-    if (!stmt) return false;
+static int stmt_regex_helper_mask(const DsLowerStmt *stmt) {
+    if (!stmt) return 0;
     switch (stmt->kind) {
-        case DS_LOWER_STMT_LET: return expr_uses_regex_helper(stmt->as.let_stmt.value);
-        case DS_LOWER_STMT_ASSIGN: return expr_uses_regex_helper(stmt->as.assign_stmt.value);
-        case DS_LOWER_STMT_INDEX_ASSIGN: return expr_uses_regex_helper(stmt->as.index_assign_stmt.index) || expr_uses_regex_helper(stmt->as.index_assign_stmt.value);
+        case DS_LOWER_STMT_LET: return expr_regex_helper_mask(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return expr_regex_helper_mask(stmt->as.assign_stmt.value);
+        case DS_LOWER_STMT_INDEX_ASSIGN: return expr_regex_helper_mask(stmt->as.index_assign_stmt.index) | expr_regex_helper_mask(stmt->as.index_assign_stmt.value);
         case DS_LOWER_STMT_IF:
-            return expr_uses_regex_helper(stmt->as.if_stmt.condition) || stmt_uses_regex_helper(stmt->as.if_stmt.then_branch) ||
-                   (stmt->as.if_stmt.else_branch && stmt_uses_regex_helper(stmt->as.if_stmt.else_branch));
+            return expr_regex_helper_mask(stmt->as.if_stmt.condition) | stmt_regex_helper_mask(stmt->as.if_stmt.then_branch) |
+                   stmt_regex_helper_mask(stmt->as.if_stmt.else_branch);
         case DS_LOWER_STMT_BLOCK:
-            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_regex_helper(stmt->as.block_stmt.statements.items[i])) return true;
-            return false;
+        {
+            int mask = 0;
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) mask |= stmt_regex_helper_mask(stmt->as.block_stmt.statements.items[i]);
+            return mask;
+        }
         case DS_LOWER_STMT_FOR_ARRAY:
         case DS_LOWER_STMT_FOR_MAP:
-        case DS_LOWER_STMT_FOR_RANGE: return expr_uses_regex_helper(stmt->as.for_stmt.iterable) || stmt_uses_regex_helper(stmt->as.for_stmt.body);
-        case DS_LOWER_STMT_WHILE: return expr_uses_regex_helper(stmt->as.while_stmt.condition) || stmt_uses_regex_helper(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_FOR_RANGE: return expr_regex_helper_mask(stmt->as.for_stmt.iterable) | stmt_regex_helper_mask(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return expr_regex_helper_mask(stmt->as.while_stmt.condition) | stmt_regex_helper_mask(stmt->as.while_stmt.body);
         case DS_LOWER_STMT_CASE:
-            if (expr_uses_regex_helper(stmt->as.case_stmt.selector)) return true;
-            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_regex_helper(stmt->as.case_stmt.arms.items[i].body)) return true;
-            return false;
-        case DS_LOWER_STMT_PUSH: return expr_uses_regex_helper(stmt->as.push_stmt.value);
-        case DS_LOWER_STMT_ASSERT: return expr_uses_regex_helper(stmt->as.assert_stmt.condition);
-        case DS_LOWER_STMT_RETURN: return expr_uses_regex_helper(stmt->as.return_stmt.value);
+        {
+            int mask = expr_regex_helper_mask(stmt->as.case_stmt.selector);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) mask |= stmt_regex_helper_mask(stmt->as.case_stmt.arms.items[i].body);
+            return mask;
+        }
+        case DS_LOWER_STMT_PUSH: return expr_regex_helper_mask(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return expr_regex_helper_mask(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return expr_regex_helper_mask(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_DEFER:
-        case DS_LOWER_STMT_TRAP: return stmt_uses_regex_helper(stmt->as.handler_stmt.body);
+        case DS_LOWER_STMT_TRAP: return stmt_regex_helper_mask(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CALL:
-            if (call_name_is_regex(stmt->as.call_stmt.name)) return true;
-            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) if (expr_uses_regex_helper(stmt->as.call_stmt.args.items[i])) return true;
-            return false;
+        {
+            int mask = regex_call_helper_mask(stmt->as.call_stmt.name);
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) mask |= expr_regex_helper_mask(stmt->as.call_stmt.args.items[i]);
+            return mask;
+        }
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
-            return false;
+            return 0;
     }
-    return false;
+    return 0;
 }
 
-bool program_uses_regex_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_regex_helper(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_regex_helper(program->statements.items[i])) return true;
-    return false;
+static int program_regex_helper_mask(const DsLowerProgram *program) {
+    int mask = 0;
+    for (size_t i = 0; i < program->functions.len; i++) mask |= stmt_regex_helper_mask(program->functions.items[i].body);
+    for (size_t i = 0; i < program->statements.len; i++) mask |= stmt_regex_helper_mask(program->statements.items[i]);
+    return mask;
+}
+
+bool program_uses_regex_base_helpers(const DsLowerProgram *program) {
+    return (program_regex_helper_mask(program) & DS_BASH_REGEX_BASE_HELPER) != 0;
+}
+
+bool program_uses_regex_match_helpers(const DsLowerProgram *program) {
+    return (program_regex_helper_mask(program) & DS_BASH_REGEX_MATCH_HELPER) != 0;
+}
+
+bool program_uses_regex_replace_helpers(const DsLowerProgram *program) {
+    return (program_regex_helper_mask(program) & DS_BASH_REGEX_REPLACE_HELPER) != 0;
 }
 
 bool program_uses_collection_index(const DsLowerProgram *program) {

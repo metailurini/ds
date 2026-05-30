@@ -414,11 +414,7 @@ const char *ds_bash_regex_helpers_source(void) {
         "__ds_regex_map_type(){ local __ds_name=$1 __ds_key=$2 __ds_value=$3 __ds_q; printf -v __ds_q '%q' \"$__ds_value\"; eval \"${__ds_name}[\\$__ds_key]=$__ds_q\"; }\n"
         "__ds_regex_prepare(){ local __ds_pattern=$1 __ds_flags=${2:-}; __ds_regex_validate_flags \"$__ds_flags\"; __ds_regex_scan \"$__ds_pattern\"; }\n"
         "__ds_regex_set_case(){ __ds_regex_old_nocasematch=$(shopt -p nocasematch || true); if [[ \"${1:-}\" == i ]]; then shopt -s nocasematch; else shopt -u nocasematch; fi; }\n"
-        "__ds_regex_restore_case(){ eval \"$__ds_regex_old_nocasematch\"; }\n\n";
-}
-
-const char *ds_bash_regex_match_helpers_source(void) {
-    return
+        "__ds_regex_restore_case(){ eval \"$__ds_regex_old_nocasematch\"; }\n"
         "__ds_regex_test(){\n"
         "  local __ds_text=$1 __ds_pattern=$2 __ds_flags=${3:-} __ds_status\n"
         "  __ds_regex_prepare \"$__ds_pattern\" \"$__ds_flags\"\n"
@@ -427,7 +423,11 @@ const char *ds_bash_regex_match_helpers_source(void) {
         "  __ds_regex_restore_case\n"
         "  if (( __ds_status == 0 )); then return 0; fi\n"
         "  return 1\n"
-        "}\n"
+        "}\n\n";
+}
+
+const char *ds_bash_regex_match_helpers_source(void) {
+    return
         "__ds_regex_match(){ __ds_error 'regex.match returns a map and must be assigned before use'; }\n"
         "__ds_regex_match_into(){\n"
         "  local __ds_target=$1 __ds_types=$2 __ds_text=$3 __ds_pattern=$4 __ds_flags=${5:-} __ds_i __ds_key __ds_value __ds_status\n"

@@ -122,7 +122,7 @@ assert_contains README.md 'keeps comment-preserving formatting deferred' 'README
 
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.31.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.32.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 write_fixture "$FIX/usage_side_effect.ds" <<'DS'
 touch SHOULD_NOT_EXIST
@@ -545,6 +545,18 @@ capture_status imported_tests_bash bash "$TMP/imported_tests.sh"
 assert_status imported_tests_bash 0
 assert_same_text '' "$TMP/imported_tests_bash.out" 'emitted Bash ignores imported test blocks'
 
+write_fixture "$FIX/runtime_regex_matches.ds" <<'DS'
+let pat = "^a$"
+if "a" matches pat { echo "yes" }
+DS
+capture_status runtime_regex_matches_vm "$DS" run "$FIX/runtime_regex_matches.ds"
+assert_status runtime_regex_matches_vm 0
+assert_same_text $'yes\n' "$TMP/runtime_regex_matches_vm.out" 'runtime regex-string matches now succeeds'
+run_ok runtime_regex_matches_emit "$DS" emit bash "$FIX/runtime_regex_matches.ds" -o "$TMP/runtime_regex_matches.sh"
+assert_bash_standalone "$TMP/runtime_regex_matches.sh" 'runtime regex matches Bash'
+capture_status runtime_regex_matches_bash bash "$TMP/runtime_regex_matches.sh"
+assert_same_run_triplet runtime_regex_matches_vm runtime_regex_matches_bash 'Bash matches VM for runtime regex-string matches'
+
 # Malformed and unsupported syntax diagnostics fail before execution/emission.
 for pair in \
   'malformed_let|let =|expected identifier' \
@@ -566,7 +578,6 @@ done
 
 unsupported_cases=(
   'unknown_string_method|let x = "a".regex_replace("a", "b")|unknown string method'
-  'regex_matches|if "a" matches "a" { echo "yes" }|right operand of `matches` must be a regex literal'
   'env_append|env.PATH += ":/tmp/bin"|environment assignment supports only `=`'
   'map_iteration|for k in { a: 1 } { echo $k }|expected iterable expression after `in`'
   'nested_collection|let xs = [[1]]|nested collections are deferred'

@@ -306,7 +306,7 @@ assert_contains README.md 'standalone Bash' 'README states Bash emission is stan
 assert_contains docs/status.md 'must not call the `ds`' 'status states Bash must not call ds'
 assert_contains docs/milestones/v0.24.0-spec.md 'must not add new production syntax' 'v0.24 spec forbids new production syntax'
 assert_contains docs/status.md 'heredocs, here-strings, process substitution' 'status keeps shell syntax rejected'
-assert_contains docs/status.md 'regex captures/replacement, runtime regex strings' 'status keeps regex captures deferred'
+assert_contains docs/status.md 'glob patterns, and `v0.32.0` adds runtime regex strings, capture maps, and' 'status records v0.32 regex helpers'
 assert_contains docs/status.md 'first-class range values' 'status keeps range values deferred'
 assert_contains docs/status.md 'map iteration' 'status keeps map iteration deferred'
 assert_contains docs/status.md 'additional shell backends or native compilation' 'status keeps alternate backends deferred'
@@ -604,12 +604,19 @@ run_ok check_does_not_execute "$DS" check "$no_exec"
 [ ! -e should_not_exist ] || fail 'check executed user command'
 pass 'check does not execute user commands'
 
+regex_runtime_ok="$FIX/regex_runtime_ok.ds"
+write_fixture "$regex_runtime_ok" <<'DS'
+let pattern = "^abc$"
+let ok = "abc" matches pattern
+echo $ok
+DS
+assert_parity regex_runtime_ok "$regex_runtime_ok" 0 $'true\n'
+
 # 9. Diagnostics for unsupported/deferred constructs.
 for item in \
   'range_value|let x = 1..3|range' \
   'range_step|for n in 1..10..2 { echo "{n}" }|range' \
   'member_map|let ok = "api" in { api: true }|right operand' \
-  'regex_runtime|let pattern = "abc"\nlet ok = "abc" matches pattern|regex literal' \
   'regex_named_capture|let ok = "abc" matches /(?<name>a)/|deferred' \
   'shell_and|cmd1 && cmd2|not supported' \
   'process_sub|cat <(printf hi)|unsupported' \

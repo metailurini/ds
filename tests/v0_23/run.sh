@@ -361,12 +361,20 @@ if "api" matches /api/ { echo ok }
 DS
 plain_regex_script="$TMP/plain_regex.sh"
 run_ok plain_regex_emit "$DS" emit bash "$plain_regex" -o "$plain_regex_script"
-assert_not_contains "$plain_regex_script" 'nocasematch' 'plain regex emission does not alter nocasematch'
+assert_contains "$plain_regex_script" 'shopt -u nocasematch' 'plain regex emission disables ambient nocasematch'
+assert_contains "$plain_regex_script" 'eval "$__ds_old_nocasematch"' 'plain regex emission restores ambient nocasematch'
+
+runtime_regex="$FIX/runtime_regex.ds"
+write_fixture "$runtime_regex" <<'DS'
+let pat = "^api$"
+let ok = "api" matches pat
+echo $ok
+DS
+assert_parity runtime_regex "$runtime_regex" 0 $'true\n'
 
 # Regex diagnostics.
 for item in \
   'regex_non_string|let ok = 123 matches /123/|string' \
-  'regex_runtime_pattern|let pat = "api"\nlet ok = "api" matches pat|regex literal' \
   'regex_bad_flag|let ok = "api" matches /api/g|flag' \
   'regex_unterminated|let ok = "api" matches /api|unterminated' \
   'regex_empty|let ok = "a" matches //|empty' \
