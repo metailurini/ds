@@ -57,6 +57,39 @@ assert_text() {
   assert_same "$exp" "$actual" "$name"
 }
 
+assert_no_duplicate_lines() {
+  local file="$1" name="$2"
+  local dupes="$TMP/${name//[^A-Za-z0-9_]/_}.dupes"
+  LC_ALL=C sort "$file" | uniq -d >"$dupes"
+  if [ -s "$dupes" ]; then
+    echo "--- duplicate lines in $file" >&2
+    cat "$dupes" >&2 || true
+    fail "$name: expected duplicate-free output"
+  fi
+  pass "$name duplicate-free output"
+}
+
+pick_non_c_locale() {
+  if ! command -v locale >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local candidate
+  for candidate in en_US.UTF-8 en_US.utf8 C.UTF-8 C.utf8; do
+    if locale -a 2>/dev/null | grep -Fix -- "$candidate" >/dev/null; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  candidate=$(locale -a 2>/dev/null | awk '
+    BEGIN { IGNORECASE = 1 }
+    $0 != "C" && $0 != "POSIX" { print; exit }
+  ')
+  [ -n "$candidate" ] || return 1
+  printf '%s' "$candidate"
+}
+
 assert_no_ds_call() {
   local script="$1" name="$2"
   assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
@@ -354,9 +387,39 @@ for file in glob("**/*.ds") {
 DS
 )
 run_parity_in_work order "$order_fixture" "$order_seed" $'A.ds\na.ds\nb.ds\nsrc/A.ds\nsrc/a.ds\nz.ds\n' 0
+assert_no_duplicate_lines "$TMP/order_vm.out" 'VM recursive glob sorted result'
+assert_no_duplicate_lines "$TMP/order_bash.out" 'Bash recursive glob sorted result'
+
+duplicate_seed="$SEED/duplicate"
+mkdir -p "$duplicate_seed/nested" "$duplicate_seed/nested/deeper"
+: >"$duplicate_seed/a.ds"
+: >"$duplicate_seed/nested/a.ds"
+: >"$duplicate_seed/nested/deeper/a.ds"
+duplicate_fixture=$(write_fixture duplicate_free <<'DS'
+for file in glob("**/*.ds") {
+  echo $file
+}
+DS
+)
+run_parity_in_work duplicate_free "$duplicate_fixture" "$duplicate_seed" $'a.ds\nnested/a.ds\nnested/deeper/a.ds\n' 0
+assert_no_duplicate_lines "$TMP/duplicate_free_vm.out" 'VM recursive glob zero-directory/nested branches'
+assert_no_duplicate_lines "$TMP/duplicate_free_bash.out" 'Bash recursive glob zero-directory/nested branches'
+
 order_script="$TMP/order_hostile.sh"
 emit_checked order_hostile "$order_fixture" "$order_script"
 copy_seed "$order_seed" "$TMP/order_locale_work"
+hostile_locale=$(pick_non_c_locale || true)
+if [ -n "$hostile_locale" ]; then
+  set +e
+  (cd "$TMP/order_locale_work" && LC_ALL="$hostile_locale" bash "$order_script") >"$TMP/order_hostile_locale.out" 2>"$TMP/order_hostile_locale.err"
+  order_hostile_locale_rc=$?
+  set -e
+  printf '%s' "$order_hostile_locale_rc" >"$TMP/order_hostile_locale.rc"
+  assert_status order_hostile_locale 0
+  assert_text order_hostile_locale_stdout $'A.ds\na.ds\nb.ds\nsrc/A.ds\nsrc/a.ds\nz.ds\n' "$TMP/order_hostile_locale.out"
+else
+  pass 'non-C locale unavailable; skipping hostile locale recursive glob assertion'
+fi
 set +e
 (cd "$TMP/order_locale_work" && LC_ALL=C bash "$order_script") >"$TMP/order_locale.out" 2>"$TMP/order_locale.err"
 order_locale_rc=$?
@@ -668,25 +731,61 @@ printf '%s' "$shell_option_rc" >"$TMP/shell_option.rc"
 assert_status shell_option 0
 assert_text shell_option_stdout $'root.ds\nsrc/main.ds\nsrc/nested/deep.ds\nsrc/nested2/test-extra.ds\ntests/unit.ds\nliteral ** remains data\n' "$TMP/shell_option.out"
 
-# 15. Runtime filesystem failures. Skip as root because unreadable directories are still traversable.
+# 15. Runtime filesystem failures. Prefer an unprivileged subprocess under root
+# so permission-denied traversal remains a hard assertion in common CI/root
+# containers. Fall back to the current user when that user cannot read the
+# directory; otherwise skip with an explicit portability note.
 perm_seed="$SEED/perm"
 mkdir -p "$perm_seed/src/private"
 : >"$perm_seed/src/main.ds"
 : >"$perm_seed/src/private/secret.ds"
 chmod 000 "$perm_seed/src/private" 2>/dev/null || true
-if [ ! -r "$perm_seed/src/private" ] && [ "$(id -u)" != "0" ]; then
-  perm_fixture=$(write_fixture perm_failure <<'DS'
+perm_fixture=$(write_fixture perm_failure <<'DS'
 for file in glob("src/**/*.ds") {
   file.write("marker.txt", file)
 }
 echo "after"
 DS
 )
+
+if [ "$(id -u)" = "0" ] && command -v runuser >/dev/null 2>&1 && getent passwd nobody >/dev/null 2>&1; then
+  perm_script="$TMP/perm_failure_nobody.sh"
+  perm_vm_work="$TMP/perm_failure_nobody_vm_work"
+  perm_bash_work="$TMP/perm_failure_nobody_bash_work"
+  run_ok perm_failure_nobody_check "$DS" check "$perm_fixture"
+  emit_checked perm_failure_nobody "$perm_fixture" "$perm_script"
+  copy_seed "$perm_seed" "$perm_vm_work"
+  copy_seed "$perm_seed" "$perm_bash_work"
+  chmod 000 "$perm_vm_work/src/private" "$perm_bash_work/src/private" 2>/dev/null || true
+
+  set +e
+  runuser -u nobody -- bash -c 'cd "$1" && "$2" run "$3"' _ "$perm_vm_work" "$DS" "$perm_fixture" >"$TMP/perm_failure_nobody_vm.out" 2>"$TMP/perm_failure_nobody_vm.err"
+  perm_vm_rc=$?
+  runuser -u nobody -- bash -c 'cd "$1" && bash "$2"' _ "$perm_bash_work" "$perm_script" >"$TMP/perm_failure_nobody_bash.out" 2>"$TMP/perm_failure_nobody_bash.err"
+  perm_bash_rc=$?
+  set -e
+  printf '%s' "$perm_vm_rc" >"$TMP/perm_failure_nobody_vm.rc"
+  printf '%s' "$perm_bash_rc" >"$TMP/perm_failure_nobody_bash.rc"
+
+  assert_status perm_failure_nobody_vm 1
+  assert_status perm_failure_nobody_bash 1
+  assert_same "$TMP/perm_failure_nobody_vm.out" "$TMP/perm_failure_nobody_bash.out" 'permission traversal failure VM/Bash stdout parity as unprivileged user'
+  assert_contains "$TMP/perm_failure_nobody_vm.err" ': error:' 'permission traversal failure VM diagnostic shape as unprivileged user'
+  assert_contains "$TMP/perm_failure_nobody_bash.err" ': error:' 'permission traversal failure Bash diagnostic shape as unprivileged user'
+  assert_contains "$TMP/perm_failure_nobody_vm.err" 'failed to traverse recursive glob directory' 'permission traversal failure VM diagnostic message as unprivileged user'
+  assert_contains "$TMP/perm_failure_nobody_bash.err" 'failed to traverse recursive glob directory' 'permission traversal failure Bash diagnostic message as unprivileged user'
+  assert_not_contains "$TMP/perm_failure_nobody_vm.out" 'after' 'VM traversal failure is fail-fast as unprivileged user'
+  assert_not_contains "$TMP/perm_failure_nobody_bash.out" 'after' 'Bash traversal failure is fail-fast as unprivileged user'
+  [ ! -e "$perm_vm_work/marker.txt" ] || fail 'VM traversal failure created marker as unprivileged user'
+  pass 'VM traversal failure did not execute loop body side effect as unprivileged user'
+  [ ! -e "$perm_bash_work/marker.txt" ] || fail 'Bash traversal failure created marker as unprivileged user'
+  pass 'Bash traversal failure did not execute loop body side effect as unprivileged user'
+elif [ ! -r "$perm_seed/src/private" ] && [ "$(id -u)" != "0" ]; then
   assert_runtime_failure_in_work perm_failure "$perm_fixture" "$perm_seed" 'failed to traverse recursive glob directory'
   assert_not_contains "$TMP/perm_failure_vm.out" 'after' 'VM traversal failure is fail-fast'
   assert_not_contains "$TMP/perm_failure_bash.out" 'after' 'Bash traversal failure is fail-fast'
 else
-  pass 'permission traversal failure skipped for root or permissive filesystem'
+  pass 'permission traversal failure skipped: no unprivileged runner and current user can traverse unreadable fixture'
 fi
 chmod 700 "$perm_seed/src/private" 2>/dev/null || true
 
