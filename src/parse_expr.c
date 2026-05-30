@@ -212,7 +212,8 @@ static DsExpr *parse_postfix(Parser *p) {
                  (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "dir", 3) == 0) ||
                  (field_expr->as.field.object->as.text.len == 4 && memcmp(field_expr->as.field.object->as.text.data, "path", 4) == 0) ||
                  (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "cmd", 3) == 0) ||
-                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "env", 3) == 0));
+                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "env", 3) == 0) ||
+                 (field_expr->as.field.object->as.text.len == 5 && memcmp(field_expr->as.field.object->as.text.data, "regex", 5) == 0));
             if (namespace_call) {
                 DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
                 DsToken right = {.text = field_expr->as.field.field, .span = field->span};

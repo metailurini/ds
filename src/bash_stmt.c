@@ -25,6 +25,29 @@ static bool can_emit_direct_signal_command(const DsCommand *command) {
     return command && !ds_command_is_pipeline(command) && command->redirect.kind == DS_REDIRECT_NONE && command->stages.items[0].words.len > 0;
 }
 
+static bool is_regex_match_call(const DsLowerExpr *value) {
+    return value && value->kind == DS_LOWER_EXPR_CALL && str_eq(value->as.call.name, "regex.match");
+}
+
+static bool emit_regex_match_map_call(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl, bool declare_target) {
+    emit_indent(&e->out, indent);
+    if (declare_target) buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+    emit_var_name(&e->out, name);
+    buf_append(&e->out, "=()\n");
+    emit_indent(&e->out, indent);
+    if (declare_target) buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+    bash_emit_map_value_type_var_name(&e->out, name);
+    buf_append(&e->out, "=()\n");
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, "__ds_regex_match_into ");
+    emit_var_name(&e->out, name);
+    buf_append(&e->out, " ");
+    bash_emit_map_value_type_var_name(&e->out, name);
+    if (!emit_call_args(e, &value->as.call.args, &e->out)) return false;
+    buf_append(&e->out, "\n");
+    return true;
+}
+
 static bool emit_direct_signal_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_run_direct_command ");
@@ -134,6 +157,12 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         emit_var_name(&e->out, name);
         if (!emit_capture_command(e, &value->as.run, &e->out, value->span)) return false;
         buf_append(&e->out, "\n");
+        bash_emit_type_assignment_for_expr(e, name, value, indent, false);
+        buf_append(&e->out, "\n");
+        return true;
+    }
+    if (is_regex_match_call(value)) {
+        if (!emit_regex_match_map_call(e, name, value, indent, false, false)) return false;
         bash_emit_type_assignment_for_expr(e, name, value, indent, false);
         buf_append(&e->out, "\n");
         return true;
@@ -530,7 +559,17 @@ static bool emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent
     } else if (kind == DS_LOWER_VALUE_ARRAY) {
         if (!bash_emit_array_return_payload(e, value, stmt->span, indent)) return false;
     } else if (kind == DS_LOWER_VALUE_MAP) {
-        if (!bash_emit_map_return_payload(e, value, stmt->span, indent)) return false;
+        if (is_regex_match_call(value)) {
+            char tmp_buf[64];
+            bash_temp_ds_name(tmp_buf, sizeof(tmp_buf), "regex_return", e->temp_counter++);
+            DsStr tmp = {tmp_buf, strlen(tmp_buf)};
+            if (!emit_regex_match_map_call(e, tmp, value, indent, e->function_depth > 0, true)) return false;
+            DsLowerExpr tmp_ident = {0};
+            tmp_ident.kind = DS_LOWER_EXPR_IDENT;
+            tmp_ident.span = value->span;
+            tmp_ident.as.text = tmp;
+            if (!bash_emit_map_return_payload(e, &tmp_ident, stmt->span, indent)) return false;
+        } else if (!bash_emit_map_return_payload(e, value, stmt->span, indent)) return false;
     } else if (kind == DS_LOWER_VALUE_COMMAND_RESULT) {
         if (!emit_command_result_return(e, value, stmt->span, indent)) return false;
     } else {
@@ -591,6 +630,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=");
                 if (!emit_array_elements(e, &stmt->as.let_stmt.value->as.array.elements, &e->out)) return false;
+            } else if (is_regex_match_call(stmt->as.let_stmt.value)) {
+                if (!emit_regex_match_map_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent, e->function_depth > 0, true)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.let_stmt.value->as.call.name)) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -a ");
                 else buf_append(&e->out, "declare -a ");

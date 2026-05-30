@@ -1,0 +1,22 @@
+# v0.32.0 regex helpers: runtime string patterns, captures, and replacement.
+
+let branch = "release/42"
+let release_pattern = "^release/[0-9]+$"
+let release = branch matches release_pattern
+
+echo "release={release}"
+
+let version = regex.match("v1.2.3", /^v([0-9]+)\.([0-9]+)\.([0-9]+)$/)
+if version.matched {
+  let major = version["1"]
+  let minor = version["2"]
+  let patch = version["3"]
+  echo "version={major}.{minor}.{patch}"
+}
+
+let normalized = regex.replace("api-123 web-456", /([a-z]+)-([0-9]+)/, "$1:$2")
+echo "normalized={normalized}"
+
+let ci = regex.match("API", "^api$", "i")
+let ci_matched = ci.matched
+echo "case_insensitive={ci_matched}"

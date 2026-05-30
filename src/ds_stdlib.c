@@ -27,6 +27,8 @@ static const DsStdlibHelper HELPERS[] = {
     {"glob", "__ds_stdlib_glob", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true},
     {"glob!", "__ds_stdlib_glob_required", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true},
     {"lines", "__ds_stdlib_lines", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false},
+    {"regex.match", "__ds_regex_match", 2, 3, DS_STDLIB_RETURN_MAP, false, true, false, false, false},
+    {"regex.replace", "__ds_regex_replace", 3, 4, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
     {"string.trim", "__ds_string_trim", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
     {"string.upper", "__ds_string_upper", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
     {"string.lower", "__ds_string_lower", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
@@ -46,7 +48,7 @@ const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
 
 bool ds_stdlib_is_namespace(DsStr name) {
     return str_eq(name, "file") || str_eq(name, "dir") || str_eq(name, "path") ||
-           str_eq(name, "cmd") || str_eq(name, "env");
+           str_eq(name, "cmd") || str_eq(name, "env") || str_eq(name, "regex");
 }
 
 bool ds_stdlib_is_name(DsStr name) {

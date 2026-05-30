@@ -51,8 +51,11 @@ what must be signed off before tagging `1.0.0`.
   rejected by `ds fmt` instead of being rewritten unsafely.
 - Signal cleanup is process-scoped and limited to `EXIT`, `INT`, and `TERM` for
   the documented foreground direct-command and simple-pipeline subset.
-- Regex support is the conservative POSIX-ERE-shaped `matches` literal subset;
-  captures and runtime patterns are deferred.
+- Regex support is the conservative POSIX-ERE-shaped subset: `matches` accepts
+  literals and runtime string patterns, while `regex.match` exposes flat capture
+  maps and `regex.replace` performs global `$0`..`$9`/`$$` replacement. Regex
+  split, named captures, lookaround, backreferences, and first-class regex
+  values are deferred.
 - Range syntax is a `for` loop source only, not a first-class value.
 - Generated Bash targets Bash, with Bash 4+ guarded when associative arrays or
   other Bash-4-only behavior is required.

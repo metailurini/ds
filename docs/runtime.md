@@ -581,9 +581,11 @@ Bash emission must implement equivalent behavior using Bash helpers and temporar
 
 ## Regex support
 
-Regex is useful, but it can easily create VM/Bash parity problems.
+Regex is useful, but it can easily create VM/Bash parity problems. The supported
+surface is deliberately conservative and is restricted to the VM/Bash portable
+subset documented below.
 
-Potential syntax:
+Supported boolean syntax:
 
 ```ds
 if text matches /error|failed/i {
@@ -591,22 +593,27 @@ if text matches /error|failed/i {
 }
 ```
 
-The runtime may eventually provide `DsRegex`, but regex support should be added only when the project can define both:
+`v0.32.0` also adds runtime string pattern matching and the `regex.match` /
+`regex.replace` helpers:
 
-- C runtime behavior;
-- Bash emission behavior.
+```ds
+let pattern = "^release/[0-9]+$"
+let ok = branch matches pattern
+
+let m = regex.match("v1.2.3", /^v([0-9]+)\.([0-9]+)\.([0-9]+)$/)
+let normalized = regex.replace("api-123 web-456", /([a-z]+)-([0-9]+)/, "$1:$2")
+```
+
+The runtime does not expose first-class compiled regex values. Regex execution
+is owned by the VM and standalone Bash helpers for accepted HIR only.
 
 Important warning:
 
 Bash `[[ string =~ regex ]]` uses Bash's regex behavior, while C libraries may use POSIX regex, PCRE, or another engine. These may not match perfectly.
 
-Therefore the first regex milestone should either:
-
-- restrict `ds` regex to a small portable subset; or
-- clearly document differences; or
-- delay regex until a parity strategy exists.
-
-Regex should not be part of the initial frontend milestones unless explicitly scoped.
+Therefore accepted regex syntax is restricted to the shared POSIX-ERE-shaped
+subset, and unsupported forms are rejected by the lexer/parser, lowerer, or
+runtime helpers before backend behavior can silently diverge.
 
 ## Paths and filesystem
 
@@ -917,18 +924,39 @@ rejected before execution or emission.
 
 `v0.23.0` implements `string matches /pattern/` and `string matches /pattern/i`
 with search semantics: patterns match anywhere unless they are anchored by `^`
-or `$`. Regex literals are accepted only as the right operand of `matches`, and
-runtime-constructed regex strings remain deferred. The supported subset is the
-portable POSIX-ERE-shaped surface shared by the VM implementation and Bash
-`[[ string =~ regex ]]`: literal characters except unescaped `/` and newline,
-escaped `/`, escaped backslash, anchors, `.`, character classes, groups,
-alternation, and `*`, `+`, `?`, `{m}`, and `{m,n}` quantifiers. The only flag in
-this milestone is trailing `/i` for case-insensitive matching.
+or `$`. `v0.32.0` accepts string-kind runtime patterns for `matches` and for
+`regex.match` / `regex.replace`; direct string literals are validated during
+lowering, while dynamic strings are validated at runtime before later side
+effects. The supported subset is the portable POSIX-ERE-shaped surface shared by
+the VM implementation and Bash `[[ string =~ regex ]]`: literal characters
+except unescaped `/` and newline in regex literals, escaped `/`, escaped
+backslash, anchors, `.`, character classes, capturing groups, alternation, and
+`*`, `+`, `?`, `{m}`, and `{m,n}` quantifiers.
 
-Unsupported regex constructs such as lookaround, backreferences, named captures,
-inline flags, lazy quantifiers, Unicode classes, runtime patterns, and multiline
-literals are rejected during checking/lowering or emission so VM execution and
-standalone Bash do not silently diverge.
+Regex literals support trailing `/i`; `regex.match` and `regex.replace` accept an
+optional flags string of either `""` or `"i"`. Runtime-string `matches` does not
+have a flags slot; use `regex.match(text, pattern, "i").matched` when dynamic
+flags are needed.
+
+`regex.match(text, pattern[, flags])` returns a flat map:
+
+- `matched`: bool;
+- `full` and `"0"`: the full matched substring, or `""` when there is no match;
+- `"1"` through `"9"`: numbered capture strings when a successful match used
+  those capture groups. Optional unmatched captures are represented as `""`.
+
+`regex.replace(text, pattern, replacement[, flags])` performs global
+left-to-right replacement over non-overlapping matches. Replacement text supports
+`$0` for the full match, `$1` through `$9` for captures, and `$$` for a literal
+`$`. A lone `$`, unknown replacement escape, capture reference that cannot
+exist, too many capture groups, invalid runtime flags, invalid runtime patterns,
+and zero-length replacement matches fail with clear diagnostics.
+
+Unsupported regex constructs such as lookaround, pattern backreferences, named
+captures, inline flags, lazy quantifiers, Unicode classes, word-boundary
+shortcuts, non-capturing groups, and multiline literals are rejected during
+checking/lowering or runtime validation so VM execution and standalone Bash do
+not silently diverge.
 
 ## v0.24.0 pre-1.0 hardening runtime notes
 

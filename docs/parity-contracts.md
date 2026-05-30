@@ -335,25 +335,31 @@ ascending bytewise/ASCII order.
 
 ### Regex
 
-Canonical representation: HIR regex operator/call metadata with conservative
-literal flags and explicit unsupported states for captures, replacement, split,
-and runtime regex strings.
+Canonical representation: HIR regex operator/helper metadata with conservative
+literal flags, accepted runtime string patterns, flat match-result maps, global
+replacement strings, and explicit unsupported states for split and richer regex
+APIs.
 
 Validation owner: parser for regex literal shape; lowerer for supported regex
-surface, flags, operand kinds, and rejected advanced forms.
+surface, literal/direct string patterns, literal flags/replacements, operand
+kinds, and rejected advanced forms. VM/Bash helpers own dynamic pattern, flag,
+capture-count, replacement, and zero-length replacement-match runtime data
+diagnostics.
 
 Execution owner: VM regex runtime and Bash regex emission/helpers. Both backends
-must agree on match truthiness, case sensitivity, unsupported pattern forms, and
-capture availability.
+must agree on match truthiness, case sensitivity, unsupported pattern forms,
+capture numbering/empty-capture behavior, replacement expansion, stdout/stderr,
+exit status, and side effects.
 
-Tests: VM regex tests, Bash parity tests over conservative patterns, diagnostics
-for unsupported flags/forms, and future capture/replacement parity tests before
-those features are accepted.
+Tests: VM regex tests, Bash parity tests over conservative patterns and runtime
+string patterns, diagnostics for unsupported flags/forms, capture-map shape,
+replacement expansion, and dynamic failure cases.
 
-Current maintenance rule: regex expansion beyond conservative literals remains
-rejected until capture/replacement/runtime-string semantics have a portable HIR
-and backend plan. See `docs/maintenance/m3-5-regex-boundary.md` for the regex
-maintenance boundary and test plan.
+Current maintenance rule: regex expansion beyond the v0.32 runtime string,
+capture, and replacement surface remains rejected until it has an explicit
+portable HIR/helper contract and backend plan. See
+`docs/maintenance/m3-5-regex-boundary.md` for the regex maintenance boundary and
+test plan.
 
 ### Globs
 

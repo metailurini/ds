@@ -173,7 +173,8 @@ static bool lower_return_value_has_portable_backend_representation(DsLowerValueK
         case DS_LOWER_VALUE_ARRAY:
             return value->kind == DS_LOWER_EXPR_ARRAY || value->kind == DS_LOWER_EXPR_IDENT;
         case DS_LOWER_VALUE_MAP:
-            return value->kind == DS_LOWER_EXPR_MAP || value->kind == DS_LOWER_EXPR_IDENT;
+            return value->kind == DS_LOWER_EXPR_MAP || value->kind == DS_LOWER_EXPR_IDENT ||
+                   (value->kind == DS_LOWER_EXPR_CALL && lower_str_eq(value->as.call.name, "regex.match"));
         case DS_LOWER_VALUE_COMMAND_RESULT:
             return lower_expr_is_portable_command_result_return(value);
         case DS_LOWER_VALUE_STRING:

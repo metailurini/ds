@@ -1,7 +1,7 @@
 #include "lower_internal.h"
 #include "ds_command_facts.h"
+#include "ds_regex.h"
 
-#include <regex.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,6 +157,11 @@ static void validate_user_function_value_call(Lower *lower, const DsLowerFn *fn,
 
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs);
+static void lower_validate_static_regex_pattern(Lower *lower, const DsExpr *arg, DsStr decoded);
+
+static bool helper_is_regex_match(DsStr name) { return lower_str_eq(name, "regex.match"); }
+static bool helper_is_regex_replace(DsStr name) { return lower_str_eq(name, "regex.replace"); }
+static bool helper_is_regex(DsStr name) { return helper_is_regex_match(name) || helper_is_regex_replace(name); }
 
 static bool ast_binary_op_is_comparison_like(const DsExpr *expr) {
     if (!expr || expr->kind != DS_EXPR_BINARY) return false;
@@ -195,8 +200,16 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         return out;
     }
     if (lower_str_eq(expr->as.binary.op, "matches")) {
-        if (left_kind != SYM_STRING && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "left operand of `matches` must be a string in v0.23.0");
-        if (expr->as.binary.right->kind != DS_EXPR_REGEX) ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `matches` must be a regex literal in v0.23.0");
+        if (left_kind != SYM_STRING && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "left operand of `matches` must be a string in v0.32.0");
+        if (right->kind == DS_LOWER_EXPR_STRING && expr->as.binary.right->kind == DS_EXPR_STRING) {
+            DsStr decoded = {0};
+            if (lower_decode_string_text(expr->as.binary.right->as.text, &decoded)) {
+                lower_validate_static_regex_pattern(lower, expr->as.binary.right, decoded);
+                free(decoded.data);
+            }
+        } else if (expr->as.binary.right->kind != DS_EXPR_REGEX && right_kind != SYM_STRING && right_kind != SYM_UNKNOWN) {
+            ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `matches` must be a regex literal or string pattern in v0.32.0");
+        }
         *kind_out = SYM_BOOL;
         return out;
     }
@@ -279,63 +292,25 @@ DsLowerExpr *lower_bool_expr(const DsExpr *expr, SymKind *kind_out) {
     return out;
 }
 
-static bool regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
-    *insensitive = false;
-    if (lit.len < 3 || lit.data[0] != '/') return false;
-    size_t end = 0;
-    for (size_t i = 1; i < lit.len; i++) {
-        if (lit.data[i] == '\\') { i++; continue; }
-        if (lit.data[i] == '/') { end = i; break; }
-    }
-    if (!end) return false;
-    pattern->data = lit.data + 1;
-    pattern->len = end - 1;
-    if (pattern->len == 0) return false;
-    if (end + 1 < lit.len) {
-        if (end + 2 == lit.len && lit.data[end + 1] == 'i') *insensitive = true;
-        else return false;
-    }
-    return true;
-}
-
 static void validate_regex_literal(Lower *lower, const DsExpr *expr) {
     DsStr pat = {0}; bool insensitive = false;
-    if (!regex_literal_parts(expr->as.regex, &pat, &insensitive)) {
-        ds_diag_error(lower->diag, expr->span, "invalid regex literal; v0.23.0 supports `/pattern/` and `/pattern/i`");
+    if (!ds_regex_literal_parts(expr->as.regex, &pat, &insensitive)) {
+        ds_diag_error(lower->diag, expr->span, "%s", ds_regex_status_message(DS_REGEX_ERR_LITERAL_SYNTAX));
         return;
     }
     (void)insensitive;
-    for (size_t i = 0; i < pat.len; i++) {
-        char c = pat.data[i];
-        if (c == '\\' && i + 1 < pat.len) {
-            char n = pat.data[i + 1];
-            if (n == 'p' || n == 'P' || n == 'b' || n == 'd' || n == 'D' || n == 's' || n == 'S' || n == 'w' || n == 'W' || (n >= '1' && n <= '9')) ds_diag_error(lower->diag, expr->span, "unsupported regex escape in v0.23.0");
-            i++;
-        } else if (c == '(' && i + 1 < pat.len && pat.data[i + 1] == '?') {
-            ds_diag_error(lower->diag, expr->span, "lookaround, inline flags, and non-POSIX regex groups are deferred in v0.23.0");
-        } else if ((c == '*' || c == '+' || c == '?' || c == '}') && i + 1 < pat.len && pat.data[i + 1] == '?') {
-            ds_diag_error(lower->diag, expr->span, "lazy regex quantifiers are deferred in v0.23.0");
-        }
-    }
-
-    /*
-     * Regex acceptance is a lowerer-owned VM/Bash parity gate. The VM and Bash
-     * emitter both consume accepted regex HIR; they should only see patterns
-     * that have already passed the conservative v0.23 surface checks here.
-     */
-    char *tmp = (char *)ds_xcalloc(pat.len + 1, 1);
-    memcpy(tmp, pat.data, pat.len);
-    regex_t re;
-    int flags = REG_EXTENDED | (insensitive ? REG_ICASE : 0);
-    int err = regcomp(&re, tmp, flags);
-    if (err != 0) ds_diag_error(lower->diag, expr->span, "invalid regex pattern in v0.23.0");
-    else regfree(&re);
-    free(tmp);
+    DsString decoded;
+    if (!ds_regex_decode_literal_pattern(pat, &decoded)) return;
+    size_t captures = 0;
+    DsRegexStatus status = ds_regex_validate_pattern((DsStr){decoded.data, decoded.len}, &captures);
+    (void)captures;
+    if (status != DS_REGEX_OK) ds_diag_error(lower->diag, expr->span, "%s", ds_regex_status_message(status));
+    ds_string_free(&decoded);
 }
 
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs) {
     validate_regex_literal(lower, expr);
-    if (!allowed_matches_rhs) ds_diag_error(lower->diag, expr->span, "regex literals are only supported as the right operand of `matches` in v0.23.0");
+    if (!allowed_matches_rhs) ds_diag_error(lower->diag, expr->span, "regex literals are only supported as the right operand of `matches` or as regex helper pattern arguments in v0.32.0");
     *kind_out = SYM_UNKNOWN;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_REGEX, expr->span);
     out->as.regex = str_clone(expr->as.regex);
@@ -451,7 +426,135 @@ static bool string_helper_arg_count_ok(DsStr name, size_t argc, size_t *expected
     return argc == 2;
 }
 
+static DsLowerExpr *lower_raw_string_expr(DsStr raw, DsSpan span) {
+    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, span);
+    DsString quoted;
+    ds_string_init(&quoted);
+    ds_string_append_char(&quoted, '"');
+    for (size_t i = 0; i < raw.len; i++) {
+        char c = raw.data[i];
+        if (c == '"' || c == '\\') {
+            ds_string_append_char(&quoted, '\\');
+            ds_string_append_char(&quoted, c);
+        } else if (c == '\n') {
+            ds_string_append_range(&quoted, "\\n", 2);
+        } else if (c == '\t') {
+            ds_string_append_range(&quoted, "\\t", 2);
+        } else {
+            ds_string_append_char(&quoted, c);
+        }
+    }
+    ds_string_append_char(&quoted, '"');
+    out->as.text = (DsStr){quoted.data, quoted.len};
+    return out;
+}
+
+static void lower_validate_static_regex_pattern(Lower *lower, const DsExpr *arg, DsStr decoded) {
+    size_t capture_count = 0;
+    DsRegexStatus status = ds_regex_validate_pattern(decoded, &capture_count);
+    (void)capture_count;
+    if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
+}
+
+static void lower_validate_static_regex_flags(Lower *lower, const DsExpr *arg, DsStr decoded) {
+    DsRegexStatus status = ds_regex_validate_flags(decoded, NULL);
+    if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
+}
+
+static void lower_validate_static_regex_replacement(Lower *lower, const DsExpr *arg, DsStr decoded, size_t capture_count, bool capture_count_known) {
+    DsRegexStatus status = ds_regex_validate_replacement(decoded, capture_count, capture_count_known);
+    if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
+}
+
+static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
+    bool is_match = helper_is_regex_match(expr->as.call.name);
+    bool is_replace = helper_is_regex_replace(expr->as.call.name);
+    size_t min_arity = is_match ? 2 : 3;
+    size_t max_arity = is_match ? 3 : 4;
+    if (expr->as.call.args.len < min_arity || expr->as.call.args.len > max_arity) {
+        if (min_arity == max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, min_arity, expr->as.call.args.len);
+        else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, min_arity, max_arity, expr->as.call.args.len);
+    }
+
+    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
+    out->as.call.name = str_clone(expr->as.call.name);
+    out->as.call.return_kind = is_match ? DS_LOWER_VALUE_MAP : DS_LOWER_VALUE_STRING;
+
+    bool literal_pattern_insensitive = false;
+    bool pattern_capture_count_known = false;
+    size_t pattern_capture_count = 0;
+
+    for (size_t i = 0; i < expr->as.call.args.len; i++) {
+        const DsExpr *arg = expr->as.call.args.items[i];
+        if (i == 1 && arg->kind == DS_EXPR_REGEX) {
+            DsStr pat = {0};
+            if (!ds_regex_literal_parts(arg->as.regex, &pat, &literal_pattern_insensitive)) {
+                ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(DS_REGEX_ERR_LITERAL_SYNTAX));
+                lower_expr_vec_push(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span));
+                continue;
+            }
+            DsString decoded;
+            if (!ds_regex_decode_literal_pattern(pat, &decoded)) {
+                lower_expr_vec_push(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span));
+                continue;
+            }
+            DsRegexStatus status = ds_regex_validate_pattern((DsStr){decoded.data, decoded.len}, &pattern_capture_count);
+            pattern_capture_count_known = status == DS_REGEX_OK;
+            if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
+            lower_expr_vec_push(&out->as.call.args, lower_raw_string_expr((DsStr){decoded.data, decoded.len}, arg->span));
+            ds_string_free(&decoded);
+            continue;
+        }
+
+        SymKind arg_kind = SYM_UNKNOWN;
+        DsLowerExpr *lowered = lower_expr(lower, arg, &arg_kind);
+        lower_expr_vec_push(&out->as.call.args, lowered);
+        if (i == 1 && arg->kind == DS_EXPR_STRING) {
+            DsStr decoded = {0};
+            if (lower_decode_string_text(arg->as.text, &decoded)) {
+                size_t captures = 0;
+                DsRegexStatus status = ds_regex_validate_pattern(decoded, &captures);
+                if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
+                else { pattern_capture_count_known = true; pattern_capture_count = captures; }
+                free(decoded.data);
+            }
+        }
+        if (i == 2 && is_replace && arg->kind == DS_EXPR_STRING) {
+            DsStr decoded = {0};
+            if (lower_decode_string_text(arg->as.text, &decoded)) {
+                lower_validate_static_regex_replacement(lower, arg, decoded, pattern_capture_count, pattern_capture_count_known);
+                free(decoded.data);
+            }
+        }
+        size_t flags_index = is_match ? 2 : 3;
+        if (i == flags_index && arg->kind == DS_EXPR_STRING) {
+            DsStr decoded = {0};
+            if (lower_decode_string_text(arg->as.text, &decoded)) {
+                lower_validate_static_regex_flags(lower, arg, decoded);
+                free(decoded.data);
+            }
+        }
+        if ((i == 0 || i == 1 || (is_replace && i == 2) || i == flags_index) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+            ds_diag_error(lower->diag, arg->span, "regex helper `%.*s` expects string arguments in v0.32.0", (int)expr->as.call.name.len, expr->as.call.name.data);
+        }
+    }
+
+    if (literal_pattern_insensitive) {
+        size_t flags_index = is_match ? 2 : 3;
+        if (expr->as.call.args.len > flags_index) {
+            ds_diag_error(lower->diag, expr->as.call.args.items[flags_index]->span, "regex flags may be specified either on the literal or as a helper argument in v0.32.0, not both");
+        } else {
+            lower_expr_vec_push(&out->as.call.args, lower_raw_string_expr((DsStr){"i", 1}, expr->as.call.args.items[1]->span));
+        }
+    }
+
+    *kind_out = is_match ? SYM_MAP : SYM_STRING;
+    return out;
+}
+
 DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
+    if (helper_is_regex(expr->as.call.name)) return lower_regex_helper_call_expr(lower, expr, kind_out);
+
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
     out->as.call.name = str_clone(expr->as.call.name);
     SymKind *arg_kinds = expr->as.call.args.len ? (SymKind *)ds_xcalloc(expr->as.call.args.len, sizeof(SymKind)) : NULL;

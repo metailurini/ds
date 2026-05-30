@@ -1,3 +1,18 @@
+# v0.32.0 - Regex Runtime Strings, Captures, and Replacement
+
+- Added runtime string regex patterns for `matches`, with static validation for
+  direct string literals and VM/Bash runtime validation for dynamic strings.
+- Added the `regex.match(text, pattern[, flags])` helper, returning a flat map
+  with `matched`, `full`, `"0"`, and numbered string captures through `"9"`.
+- Added the `regex.replace(text, pattern, replacement[, flags])` helper with
+  global replacement, `$0`..`$9` capture expansion, and `$$` literal-dollar
+  expansion.
+- Added shared regex validation so literals, static string patterns, VM runtime
+  execution, and emitted Bash helpers reject the same unsupported regex forms.
+- Kept regex split, named captures, lookaround, pattern backreferences,
+  replace-first/count APIs, callback replacements, first-class regex values, and
+  broader PCRE-style compatibility deferred.
+
 # v0.24.0 - Cleanup: Pre-1.0 Hardening
 
 - Added `docs/release-checklist.md` as the executable `1.0.0` release boundary

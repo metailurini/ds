@@ -190,6 +190,12 @@ static void emit_glob_helpers(BashEmitter *e, bool recursive) {
     buf_append(&e->out, recursive ? ds_bash_recursive_glob_helpers_source() : ds_bash_glob_helpers_source());
 }
 
+static void emit_regex_helpers(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_regex_helpers_source());
+    buf_append(&e->out, ds_bash_regex_match_helpers_source());
+    buf_append(&e->out, ds_bash_regex_replace_helpers_source());
+}
+
 static void emit_debug_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_debug_helpers_source());
 }
@@ -280,13 +286,14 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_glob_helpers = program_uses_glob_helpers(lowered);
     bool needs_recursive_glob_helpers = program_uses_recursive_glob_helpers(lowered);
+    bool needs_regex_helpers = program_uses_regex_helpers(lowered);
     bool needs_debug = program_has_command(lowered);
     bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);
     bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
     bool needs_signal_handlers = program_uses_signal_handlers(lowered);
     bool needs_control_helpers = program_uses_control_commands(lowered);
-    bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers || program_uses_run(lowered) || needs_collection_helpers || needs_stdlib;
+    bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers || program_uses_run(lowered) || needs_collection_helpers || needs_stdlib || needs_regex_helpers;
     e.has_cleanup_helpers = needs_cleanup_helpers;
     e.has_signal_handlers = needs_signal_handlers;
     if (needs_map_guard) {
@@ -323,6 +330,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_dynamic_index_helper) emit_dynamic_index_helper(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);
     if (needs_glob_helpers) emit_glob_helpers(&e, needs_recursive_glob_helpers);
+    if (needs_regex_helpers) emit_regex_helpers(&e);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {
         if (!emit_function(&e, &lowered->functions.items[i])) {

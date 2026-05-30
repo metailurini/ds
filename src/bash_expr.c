@@ -280,7 +280,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name)) {
+            if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name) || expr->as.call.return_kind == DS_LOWER_VALUE_MAP) {
                 ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: value call should be a scalar stdlib or user-function call after lowering");
                 return false;
             }
@@ -575,17 +575,13 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             }
             if (str_eq(expr->as.binary.op, "in")) return emit_membership_condition(e, expr, out);
             if (str_eq(expr->as.binary.op, "matches")) {
-                DsStr pattern = {0}; bool insensitive = false;
-                if (expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX || !regex_literal_parts(expr->as.binary.right->as.regex, &pattern, &insensitive)) {
-                    ds_diag_error(e->diag, expr->span,
-                                  "internal Bash regex invariant failed: accepted `matches` HIR must carry a validated regex literal");
-                    return false;
-                }
                 char left_temp_buf[64];
+                char right_temp_buf[64];
                 DsStr left_temp = {0};
+                DsStr right_temp = {0};
                 const DsStr *left_temp_ptr = NULL;
-                if (insensitive) buf_append(out, "{ ");
-                else buf_append(out, "{ ");
+                const DsStr *right_temp_ptr = NULL;
+                buf_append(out, "{ ");
                 if (is_user_function_call_expr(expr->as.binary.left)) {
                     temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "match_left", e->temp_counter++);
                     left_temp.data = left_temp_buf;
@@ -596,14 +592,38 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                     buf_append(out, "; ");
                     left_temp_ptr = &left_temp;
                 }
-                buf_append(out, "__ds_regex=");
-                if (!emit_bash_regex_quoted(out, pattern)) return false;
-                if (insensitive) buf_append(out, "; __ds_old_nocasematch=$(shopt -p nocasematch || true); shopt -s nocasematch; [[ ");
-                else buf_append(out, "; [[ ");
+                if (is_user_function_call_expr(expr->as.binary.right)) {
+                    temp_ds_name(right_temp_buf, sizeof(right_temp_buf), "match_pattern", e->temp_counter++);
+                    right_temp.data = right_temp_buf;
+                    right_temp.len = strlen(right_temp_buf);
+                    emit_var_name(out, right_temp);
+                    buf_append(out, "=\"\"; ");
+                    if (!emit_user_call_into_raw_var(e, expr->as.binary.right, right_temp, out)) return false;
+                    buf_append(out, "; ");
+                    right_temp_ptr = &right_temp;
+                }
+                if (expr->as.binary.right->kind == DS_LOWER_EXPR_REGEX) {
+                    DsStr pattern = {0}; bool insensitive = false;
+                    if (!regex_literal_parts(expr->as.binary.right->as.regex, &pattern, &insensitive)) {
+                        ds_diag_error(e->diag, expr->span,
+                                      "internal Bash regex invariant failed: accepted `matches` HIR must carry a validated regex literal");
+                        return false;
+                    }
+                    buf_append(out, "__ds_regex=");
+                    if (!emit_bash_regex_quoted(out, pattern)) return false;
+                    if (insensitive) buf_append(out, "; __ds_old_nocasematch=$(shopt -p nocasematch || true); shopt -s nocasematch; [[ ");
+                    else buf_append(out, "; [[ ");
+                    if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
+                    buf_append(out, " =~ $__ds_regex");
+                    if (insensitive) buf_append(out, " ]]; __ds_match_rc=$?; eval \"$__ds_old_nocasematch\"; [[ $__ds_match_rc -eq 0 ]]; }");
+                    else buf_append(out, " ]]; }");
+                    return true;
+                }
+                buf_append(out, "__ds_regex_test ");
                 if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
-                buf_append(out, " =~ $__ds_regex");
-                if (insensitive) buf_append(out, " ]]; __ds_match_rc=$?; eval \"$__ds_old_nocasematch\"; [[ $__ds_match_rc -eq 0 ]]; }");
-                else buf_append(out, " ]]; }");
+                buf_append(out, " ");
+                if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.right, right_temp_ptr, out)) return false;
+                buf_append(out, "; }");
                 return true;
             }
             ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition operator `%.*s` should be emitted or rejected by lowering", (int)expr->as.binary.op.len, expr->as.binary.op.data);

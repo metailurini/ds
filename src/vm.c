@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "ds_command_facts.h"
 
+#include "ds_regex.h"
 #include "ds_signal.h"
 #include "vm_internal.h"
 
@@ -133,32 +134,6 @@ static bool int_pow_checked(int64_t base, int64_t exp, int64_t *out) {
 static bool value_exact_equal(const DsValue *a, const DsValue *b) {
     if (a->kind != b->kind) return false;
     return ds_value_compare(a, b) == 0;
-}
-
-static bool regex_literal_to_pattern(const DsValue *lit, DsString *pattern, int *flags) {
-    ds_string_init(pattern);
-    *flags = REG_EXTENDED;
-    if (lit->kind != DS_VALUE_STRING || lit->as.string.len < 3 || lit->as.string.data[0] != '/') return false;
-    const char *s = lit->as.string.data;
-    size_t len = lit->as.string.len;
-    size_t i = 1;
-    for (; i < len; i++) {
-        char c = s[i];
-        if (c == '\\' && i + 1 < len) {
-            char n = s[++i];
-            if (n == '/') ds_string_append_char(pattern, '/');
-            else { ds_string_append_char(pattern, '\\'); ds_string_append_char(pattern, n); }
-            continue;
-        }
-        if (c == '/') break;
-        ds_string_append_char(pattern, c);
-    }
-    if (i >= len || s[i] != '/' || pattern->len == 0) return false;
-    if (i + 1 < len) {
-        if (i + 2 == len && s[i + 1] == 'i') *flags |= REG_ICASE;
-        else return false;
-    }
-    return true;
 }
 
 static bool ensure_regs(Vm *vm) {
@@ -387,16 +362,21 @@ dispatch_loop:
             }
             case OP_REGEX_MATCH: {
                 DsValue *text = &vm.regs[ins->a];
-                DsValue *lit = &vm.regs[ins->b];
+                DsValue *pattern_value = &vm.regs[ins->b];
                 if (text->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: accepted `matches` left operand must be a string"); rc = 1; goto done; }
-                DsString pattern; int flags = REG_EXTENDED;
-                if (!regex_literal_to_pattern(lit, &pattern, &flags)) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: accepted `matches` right operand must be a regex literal"); rc = 1; goto done; }
+                if (pattern_value->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "runtime right operand of `matches` must be a regex pattern string"); rc = 1; goto done; }
+                DsStr pattern = {pattern_value->as.string.data ? pattern_value->as.string.data : "", pattern_value->as.string.len};
+                DsRegexStatus status = ds_regex_validate_pattern(pattern, NULL);
+                if (status != DS_REGEX_OK) { ds_diag_error(diag, ins->span, "%s", ds_regex_status_message(status)); rc = 1; goto done; }
+                int flags = REG_EXTENDED | (ins->regex_case_insensitive ? REG_ICASE : 0);
                 regex_t re;
-                int err = regcomp(&re, pattern.data ? pattern.data : "", flags);
-                if (err != 0) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: lowerer accepted an invalid regex pattern"); ds_string_free(&pattern); rc = 1; goto done; }
+                char *tmp = ds_str_dup_range(pattern.data ? pattern.data : "", pattern.len);
+                int err = regcomp(&re, tmp, flags);
+                free(tmp);
+                if (err != 0) { ds_diag_error(diag, ins->span, "invalid regex pattern in v0.32.0"); rc = 1; goto done; }
                 int match = regexec(&re, text->as.string.data ? text->as.string.data : "", 0, NULL, 0);
                 regfree(&re);
-                ds_string_free(&pattern);
+                if (match != 0 && match != REG_NOMATCH) { ds_diag_error(diag, ins->span, "failed to evaluate regex in v0.32.0"); rc = 1; goto done; }
                 set_reg(&vm, ins->dst, ds_value_bool(match == 0));
                 ip++;
                 break;

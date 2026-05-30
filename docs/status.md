@@ -43,8 +43,9 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 ## Production language support intended for 1.0.0
 
 The production runtime supports the language slice implemented and stabilized
-through the `v0.22.6` final v0.22 documentation pass and the completed `v0.23.0`
-regex/range/membership implementation and test pass:
+through the `v0.22.6` final v0.22 documentation pass, the completed `v0.23.0`
+regex/range/membership implementation and test pass, and the scoped `v0.32.0`
+regex runtime-string/capture/replacement production implementation:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -102,7 +103,12 @@ regex/range/membership implementation and test pass:
 - exact `in` membership checks over scalar arrays, including array literals,
   named arrays, and known standard-library string-array results;
 - conservative regex `matches` expressions with `/pattern/` and `/pattern/i`
-  literals;
+  literals, plus runtime string patterns validated against the same portable
+  subset;
+- `regex.match(text, pattern[, flags])` returning a flat match-result map with
+  `matched`, `full`, `"0"`, and numbered capture strings through `"9"`;
+- `regex.replace(text, pattern, replacement[, flags])` performing global
+  replacement with `$0`..`$9` and `$$` expansion;
 - inclusive integer range loop sources, for example `for n in 1..3 { ... }`,
   with zero iterations when the start is greater than the end and with bounds
   evaluated once before the loop.
@@ -196,8 +202,8 @@ milestones:
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;
-- regex captures/replacement, runtime regex strings, and regex/glob case
-  patterns;
+- regex split, first-class regex values, named captures, lookaround, pattern
+  backreferences, replace-first/count APIs, and regex/glob case patterns;
 - first-class range values, stepped/reverse ranges, slices, nested collections,
   sparse array assignment, deletion, compound index assignment, and field-style
   map assignment;
@@ -315,10 +321,12 @@ surface. It does not add syntax. It keeps helper dependency discovery aligned
 with the accepted HIR so statement-style user function calls whose arguments
 contain formatted interpolation, integer arithmetic interpolation, or collection
 index reads emit the same standalone Bash helpers those expressions would have
-needed in `let`, assignment, return, or condition positions. Nested collections,
-recursive glob behavior, and advanced regex
-captures/replacement/runtime regex strings remain deferred to their named
-roadmap milestones. `v0.29.0` adds deterministic key/value map iteration over
+needed in `let`, assignment, return, or condition positions. At that milestone,
+nested collections, recursive glob behavior, and advanced regex
+captures/replacement/runtime regex strings remained deferred to their named
+roadmap milestones; recursive glob was later added in `v0.31.0`, and scoped
+runtime regex strings/captures/replacement were later added in `v0.32.0`.
+`v0.29.0` adds deterministic key/value map iteration over
 named maps and supported flat map-returning user-function calls, with ascending
 bytewise/ASCII key order in both VM execution and emitted Bash. `v0.30.0` adds
 named flat array/map mutation; index assignment is supported in v0.30 for named flat array/map bindings:
@@ -350,6 +358,16 @@ Multiple recursive segments, partial `**` segments, custom glob flags, hidden
 traversal flags, symlink following, brace expansion, extglob, shell variable
 expansion, and `~` expansion remain deferred.
 
+`v0.32.0` adds the practical regex API on top of the conservative `v0.23.0`
+regex subset. Runtime string patterns are accepted by `matches` and by
+`regex.match` / `regex.replace`; direct string literals are statically validated
+when lowering can see them, while dynamic strings, flags, replacements, and
+capture counts are validated by VM/Bash runtime helpers before later side
+effects. Regex helpers accept optional flags `""` or `"i"`, expose capture data
+through flat map values, and keep replacement text data-only instead of shell
+code. Unsupported PCRE-style features remain rejected so VM execution and
+standalone Bash do not diverge.
+
 `v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. `v0.22.1` stabilizes the deterministic non-signal cleanup core with VM/Bash parity tests for normal completion, explicit `exit`, explicit `fail`, direct command failure, captured command failure, `trap "EXIT"` replacement, handler failure continuation, handler `exit` status override, imports, script args, and function calls from handlers. `v0.22.2` stabilizes the `INT`/`TERM` syntax and diagnostic surface with tests for parser/token output, AST/HIR/bytecode visibility, formatter normalization, emitted-Bash helper structure, and unsupported or malformed signal diagnostics without sending real OS signals. `v0.22.3` adds the deterministic signal harness: VM and emitted-Bash scripts run in isolated process sessions, tests wait for a `ready` marker, signal the process group, capture stdout/stderr/status through files, and clean up leftovers on timeout. It proves the smallest cooperative `TERM` direct-command fixture. `v0.22.4` extends that harness to non-cooperative foreground direct commands for both `INT` and `TERM`, preserving statuses `130` and `143`, running signal-specific cleanup before `EXIT` cleanup, and avoiding generic command-failure diagnostics or Bash job-control noise. `v0.22.5` extends the same runtime contract to simple foreground pipelines and verifies the harness does not hang when pipeline children inherit stdout/stderr handles. `v0.22.6` finalizes the v0.22 documentation contract: supported behavior is process-scope cleanup for `EXIT`/`INT`/`TERM`, rejected behavior includes function-local handler captures and direct handler `return`, handler context values such as line numbers remain deferred, and broad job-control behavior remains out of scope. The final v0.22 test-plan audit fills deterministic coverage gaps for cleanup side effects, imported signal handlers and diagnostics, function-registered handlers, handler control flow, arithmetic/return interaction, test-block isolation, and malformed/dynamic/numeric/empty signal diagnostics. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers, checks for pending signals between bytecode instructions, and treats interrupted foreground commands/pipelines as signal cleanup events while forwarding observed `INT`/`TERM` to the foreground child process group when possible. Emitted Bash installs standalone traps. Background jobs, public job-control/process-group APIs, asynchronous pipelines, handler context objects/line numbers, and broad signal-forwarding semantics outside foreground commands and simple foreground pipelines remain out of scope.
 
 Because required function parameters remain untyped until the function-value wave, string methods and formatted interpolation require a statically known compatible value kind. Parameters with literal defaults use that default kind in the lowered function body, and emitted Bash assigns the matching type tag for both defaulted and explicit arguments that are validated against the default kind, so defaulted parameters can participate in kind-aware `case` matching without VM/Bash coercion drift. Required unknown-kind parameters remain unknown until typed parameters or a broader runtime type-tag design is deliberately added.
@@ -360,8 +378,9 @@ model are the safe pieces to build on. The latest feature wave adds scoped
 `v0.23.0` regex, ranges, and membership. `v0.24.0` hardens documentation,
 examples, diagnostics, sanitizer expectations, and generated-Bash helper hygiene
 without adding production syntax. `v0.29.0` adds map iteration, `v0.30.0`
-adds named flat array/map index assignment, and `v0.31.0` adds scoped recursive
-glob patterns. Nested collections, formatter trivia
+adds named flat array/map index assignment, `v0.31.0` adds scoped recursive
+glob patterns, and `v0.32.0` adds runtime regex strings, capture maps, and
+regex replacement. Nested collections, formatter trivia
 preservation, warning suppression, command-level shell logical operators, deeper
 job-control behavior, and advanced pipeline forms remain out of scope unless
 their own milestones explicitly pull them in.

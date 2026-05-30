@@ -92,6 +92,7 @@ typedef struct {
     size_t loop_index;
     int64_t loop_current;
     bool loop_active;
+    bool regex_case_insensitive;
     char *value_name;
     DsStr *loop_keys;
     size_t loop_key_count;

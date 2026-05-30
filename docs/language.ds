@@ -114,7 +114,11 @@ let power = 2 ** 8
 let known = app in ["api", "web", "worker"]
 
 # Regex match is implemented in v0.23.0 for conservative regex literals.
+# Since v0.32.0, string pattern expressions are validated as the same portable
+# subset.
 let has_error = "ERROR: failed" matches /error|failed/i
+let release_pattern = "^release/[0-9]+$"
+let is_release_branch = "release/42" matches release_pattern
 
 
 # -----------------------------------------------------------------------------
@@ -615,12 +619,14 @@ delete_forever "dangerous-path"
 
 
 # -----------------------------------------------------------------------------
-# 24. Regex, ranges, and membership [v0.23.0] [implemented]
+# 24. Regex, ranges, and membership [v0.23.0+] [implemented]
 # -----------------------------------------------------------------------------
 
 # v0.23.0 implements a conservative regex/membership/range surface with VM/Bash
-# parity. Regex literals are scoped to `matches`, ranges are scoped to `for`
-# loop sources, and membership is scoped to scalar arrays.
+# parity. v0.32.0 expands the regex surface with runtime string patterns,
+# capture maps, and global replacement while keeping the same portable regex
+# subset. Ranges remain scoped to `for` loop sources, and membership remains
+# scoped to scalar arrays.
 
 if "deploy failed" matches /failed/ {
   echo "bad"
@@ -628,6 +634,20 @@ if "deploy failed" matches /failed/ {
 
 let is_release = "release/123" matches /^release\/[0-9]+$/
 let is_api = "API" matches /api/i
+
+let branch_pattern = "^release/[0-9]+$"
+let is_runtime_release = "release/123" matches branch_pattern
+
+let version = regex.match("v1.2.3", /^v([0-9]+)\.([0-9]+)\.([0-9]+)$/)
+if version.matched {
+  let major = version["1"]
+  let minor = version["2"]
+  let patch = version["3"]
+  echo "version {major}.{minor}.{patch}"
+}
+
+let ci = regex.match("API", "^api$", "i")
+let normalized = regex.replace("api-123 web-456", /([a-z]+)-([0-9]+)/, "$1:$2")
 
 for n in 1..10 {
   echo "{n}"
@@ -644,11 +664,9 @@ if "web" in "api,web,worker".split(",") {
   echo "known from split"
 }
 
-# Capture values, regex replacement/splitting, runtime regex strings, range
-# values, reverse/stepped/half-open ranges, and membership over maps or unknown
-# iterables remain deferred.
-#
-# let match = regex.match("v1.2.3", /v([0-9]+)\.([0-9]+)\.([0-9]+)/)
+# Regex splitting, named captures, lookaround, pattern backreferences,
+# replace-first/count APIs, regex values, range values, reverse/stepped/half-open
+# ranges, and membership over maps or unknown iterables remain deferred.
 # let xs = 1..3
 
 # Regex must be carefully specified because VM regex and Bash regex can differ.

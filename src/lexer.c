@@ -142,6 +142,10 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
     int line = 1;
     int col = 1;
     bool expect_regex = false;
+    enum { REGEX_HELPER_NONE, REGEX_HELPER_SAW_REGEX, REGEX_HELPER_SAW_DOT, REGEX_HELPER_SAW_NAME } regex_helper_state = REGEX_HELPER_NONE;
+    int regex_helper_paren_depth[32];
+    size_t regex_helper_arg_index[32];
+    size_t regex_helper_stack_len = 0;
 
     while (i < source->len) {
         char c = source->data[i];
@@ -181,6 +185,13 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             DsLoc end = {i, line, col};
             DsTokenKind kind = keyword_kind(source->data + start, i - start);
             add_token(out, source, kind, source->data + start, i - start, start_loc, end);
+            bool ident_regex = kind == DS_TOK_IDENT && (i - start) == 5 && memcmp(source->data + start, "regex", 5) == 0;
+            bool ident_regex_helper = kind == DS_TOK_IDENT &&
+                                      (((i - start) == 5 && memcmp(source->data + start, "match", 5) == 0) ||
+                                       ((i - start) == 7 && memcmp(source->data + start, "replace", 7) == 0));
+            if (ident_regex) regex_helper_state = REGEX_HELPER_SAW_REGEX;
+            else if (regex_helper_state == REGEX_HELPER_SAW_DOT && ident_regex_helper) regex_helper_state = REGEX_HELPER_SAW_NAME;
+            else regex_helper_state = REGEX_HELPER_NONE;
             expect_regex = kind == DS_TOK_MATCHES;
             continue;
         }
@@ -304,7 +315,10 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             continue;
         }
 
-        if (expect_regex && c == '/') {
+        bool helper_expects_regex = regex_helper_stack_len > 0 &&
+                                    regex_helper_paren_depth[regex_helper_stack_len - 1] == 1 &&
+                                    regex_helper_arg_index[regex_helper_stack_len - 1] == 1;
+        if ((expect_regex || helper_expects_regex) && c == '/') {
             size_t start = i;
             int start_col = col;
             DsLoc start_loc = {start, line, start_col};
@@ -346,6 +360,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             if (empty) ds_diag_error(diag, (DsSpan){start_loc, end, source}, "empty regex literals are not supported in v0.23.0");
             add_token(out, source, DS_TOK_REGEX, source->data + start, i - start, start_loc, end);
             expect_regex = false;
+            regex_helper_state = REGEX_HELPER_NONE;
             continue;
         }
 
@@ -384,6 +399,29 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
 
         DsLoc end = {i + len, line, col + (int)len};
         add_token(out, source, kind, source->data + i, len, loc, end);
+        if (kind == DS_TOK_DOT && regex_helper_state == REGEX_HELPER_SAW_REGEX) {
+            regex_helper_state = REGEX_HELPER_SAW_DOT;
+        } else if (kind == DS_TOK_LPAREN) {
+            if (regex_helper_state == REGEX_HELPER_SAW_NAME && regex_helper_stack_len < sizeof(regex_helper_paren_depth) / sizeof(regex_helper_paren_depth[0])) {
+                regex_helper_paren_depth[regex_helper_stack_len] = 1;
+                regex_helper_arg_index[regex_helper_stack_len] = 0;
+                regex_helper_stack_len++;
+            } else if (regex_helper_stack_len > 0) {
+                regex_helper_paren_depth[regex_helper_stack_len - 1]++;
+            }
+            regex_helper_state = REGEX_HELPER_NONE;
+        } else if (kind == DS_TOK_RPAREN) {
+            if (regex_helper_stack_len > 0) {
+                if (regex_helper_paren_depth[regex_helper_stack_len - 1] > 1) regex_helper_paren_depth[regex_helper_stack_len - 1]--;
+                else regex_helper_stack_len--;
+            }
+            regex_helper_state = REGEX_HELPER_NONE;
+        } else if (kind == DS_TOK_COMMA) {
+            if (regex_helper_stack_len > 0 && regex_helper_paren_depth[regex_helper_stack_len - 1] == 1) regex_helper_arg_index[regex_helper_stack_len - 1]++;
+            regex_helper_state = REGEX_HELPER_NONE;
+        } else if (kind != DS_TOK_UNKNOWN) {
+            regex_helper_state = REGEX_HELPER_NONE;
+        }
         expect_regex = false;
         /*
          * Keep otherwise unknown printable characters as tokens instead of

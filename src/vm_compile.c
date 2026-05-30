@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "ds_regex.h"
 #include "vm_internal.h"
 
 #include <errno.h>
@@ -411,7 +412,27 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                 return r;
             }
             int left = compile_expr(p, expr->as.binary.left);
-            int right = compile_expr(p, expr->as.binary.right);
+            int right = -1;
+            bool regex_literal_rhs = expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0 &&
+                                     expr->as.binary.right->kind == DS_LOWER_EXPR_REGEX;
+            bool regex_insensitive = false;
+            if (regex_literal_rhs) {
+                DsStr raw_pattern = {0};
+                if (ds_regex_literal_parts(expr->as.binary.right->as.regex, &raw_pattern, &regex_insensitive)) {
+                    DsString decoded;
+                    if (ds_regex_decode_literal_pattern(raw_pattern, &decoded)) {
+                        int c = add_const(p, ds_value_string_take(&decoded));
+                        right = new_reg(p);
+                        Instr load = {0};
+                        load.op = OP_LOAD_CONST;
+                        load.span = expr->as.binary.right->span;
+                        load.dst = right;
+                        load.a = c;
+                        emit_instr(p, load);
+                    }
+                }
+            }
+            if (right < 0) right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
             Instr ins = {0};
             if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "in", 2) == 0) ins.op = OP_MEMBERSHIP;
@@ -422,6 +443,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.dst = r;
             ins.a = left;
             ins.b = right;
+            ins.regex_case_insensitive = regex_insensitive;
             ins.cmp = ds_str_dup_range(expr->as.binary.op.data, expr->as.binary.op.len);
             emit_instr(p, ins);
             return r;

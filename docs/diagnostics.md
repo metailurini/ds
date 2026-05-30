@@ -332,9 +332,10 @@ These areas still need careful source review before behavior changes:
   execution, and Bash function emission;
 - trap/defer/signal diagnostics span syntax, lowerer legality, VM runtime signal
   handling, and Bash `trap` behavior;
-- regex expansion beyond conservative literals needs lowerer-owned rejection
-  until captures/replacement/runtime regex strings have a portable HIR model;
-  see `docs/maintenance/m3-5-regex-boundary.md` for the current boundary;
+- regex expansion beyond the scoped v0.32 runtime-string/capture/replacement
+  surface needs lowerer-owned rejection until the added feature has a portable
+  HIR/helper model; see `docs/maintenance/m3-5-regex-boundary.md` for the
+  current boundary;
 - future mutable collection features need explicit HIR nodes before runtime or
   Bash helpers become canonical semantics;
 - backend files still contain runtime/data-dependent `unsupported` diagnostics

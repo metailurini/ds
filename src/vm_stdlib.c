@@ -1,10 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "ds_regex.h"
 #include "vm_internal.h"
 
 #include <dirent.h>
 #include <errno.h>
 #include <glob.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -761,6 +763,179 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
     return false;
 }
 
+static bool regex_map_set_bool(DsValue *map, const char *key, bool value) {
+    DsStr k = {(char *)key, strlen(key)};
+    return ds_map_set(&map->as.map, k, ds_value_bool(value));
+}
+
+static bool regex_map_set_string(DsValue *map, const char *key, const char *data, size_t len) {
+    DsString s;
+    ds_string_from_range(&s, data ? data : "", len);
+    DsStr k = {(char *)key, strlen(key)};
+    return ds_map_set(&map->as.map, k, ds_value_string_take(&s));
+}
+
+static bool regex_compile_runtime(Vm *vm, Instr *ins, DsStr pattern, DsStr flags_text, regex_t *re, size_t *capture_count) {
+    size_t captures = 0;
+    DsRegexStatus status = ds_regex_validate_pattern(pattern, &captures);
+    if (status != DS_REGEX_OK) {
+        ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(status));
+        return false;
+    }
+    int cflags = 0;
+    status = ds_regex_validate_flags(flags_text, &cflags);
+    if (status != DS_REGEX_OK) {
+        ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(status));
+        return false;
+    }
+    char *tmp = ds_str_dup_range(pattern.data ? pattern.data : "", pattern.len);
+    int err = regcomp(re, tmp, cflags);
+    free(tmp);
+    if (err != 0) {
+        ds_diag_error(vm->diag, ins->span, "invalid regex pattern in v0.32.0");
+        return false;
+    }
+    if (capture_count) *capture_count = captures;
+    return true;
+}
+
+static bool stdlib_regex_match(Vm *vm, Instr *ins, DsValue *out) {
+    const char *text = NULL, *pattern_data = NULL, *flags_data = "";
+    size_t text_len = 0, pattern_len = 0, flags_len = 0;
+    if (!vm_string_arg(vm, ins, 0, &text, &text_len) || !vm_string_arg(vm, ins, 1, &pattern_data, &pattern_len)) return false;
+    if (ins->arg_count > 2 && !vm_string_arg(vm, ins, 2, &flags_data, &flags_len)) return false;
+
+    regex_t re;
+    size_t capture_count = 0;
+    if (!regex_compile_runtime(vm, ins, (DsStr){(char *)pattern_data, pattern_len}, (DsStr){(char *)flags_data, flags_len}, &re, &capture_count)) return false;
+
+    regmatch_t matches[10];
+    size_t nmatch = capture_count + 1;
+    if (nmatch > 10) nmatch = 10;
+    int rc = regexec(&re, text ? text : "", nmatch, matches, 0);
+    regfree(&re);
+    if (rc != 0 && rc != REG_NOMATCH) {
+        ds_diag_error(vm->diag, ins->span, "failed to evaluate regex in v0.32.0");
+        return false;
+    }
+
+    DsValue map = ds_value_null();
+    map.kind = DS_VALUE_MAP;
+    ds_map_init(&map.as.map);
+    bool matched = rc == 0;
+    if (!regex_map_set_bool(&map, "matched", matched) ||
+        !regex_map_set_string(&map, "full", matched ? text + matches[0].rm_so : "", matched ? (size_t)(matches[0].rm_eo - matches[0].rm_so) : 0) ||
+        !regex_map_set_string(&map, "0", matched ? text + matches[0].rm_so : "", matched ? (size_t)(matches[0].rm_eo - matches[0].rm_so) : 0)) {
+        ds_value_free(&map);
+        return false;
+    }
+    if (matched) {
+        for (size_t i = 1; i <= capture_count && i < 10; i++) {
+            char key[2] = {(char)('0' + i), '\0'};
+            if (matches[i].rm_so >= 0 && matches[i].rm_eo >= matches[i].rm_so) {
+                if (!regex_map_set_string(&map, key, text + matches[i].rm_so, (size_t)(matches[i].rm_eo - matches[i].rm_so))) {
+                    ds_value_free(&map);
+                    return false;
+                }
+            } else if (!regex_map_set_string(&map, key, "", 0)) {
+                ds_value_free(&map);
+                return false;
+            }
+        }
+    }
+    *out = map;
+    return true;
+}
+
+static bool regex_expand_replacement(Vm *vm, Instr *ins, DsString *out, const char *replacement, size_t replacement_len, const char *base, const regmatch_t *matches, size_t capture_count) {
+    for (size_t i = 0; i < replacement_len; i++) {
+        if (replacement[i] != '$') {
+            if (!ds_string_append_char(out, replacement[i])) return false;
+            continue;
+        }
+        if (i + 1 >= replacement_len) {
+            ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(DS_REGEX_ERR_INVALID_REPLACEMENT));
+            return false;
+        }
+        char n = replacement[++i];
+        if (n == '$') {
+            if (!ds_string_append_char(out, '$')) return false;
+            continue;
+        }
+        if (n < '0' || n > '9') {
+            ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(DS_REGEX_ERR_INVALID_REPLACEMENT));
+            return false;
+        }
+        size_t ref = (size_t)(n - '0');
+        if (ref > capture_count || ref >= 10) {
+            ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(DS_REGEX_ERR_UNKNOWN_CAPTURE));
+            return false;
+        }
+        if (matches[ref].rm_so >= 0 && matches[ref].rm_eo >= matches[ref].rm_so) {
+            if (!ds_string_append_range(out, base + matches[ref].rm_so, (size_t)(matches[ref].rm_eo - matches[ref].rm_so))) return false;
+        }
+    }
+    return true;
+}
+
+static bool stdlib_regex_replace(Vm *vm, Instr *ins, DsValue *out) {
+    const char *text = NULL, *pattern_data = NULL, *replacement = NULL, *flags_data = "";
+    size_t text_len = 0, pattern_len = 0, replacement_len = 0, flags_len = 0;
+    if (!vm_string_arg(vm, ins, 0, &text, &text_len) ||
+        !vm_string_arg(vm, ins, 1, &pattern_data, &pattern_len) ||
+        !vm_string_arg(vm, ins, 2, &replacement, &replacement_len)) return false;
+    if (ins->arg_count > 3 && !vm_string_arg(vm, ins, 3, &flags_data, &flags_len)) return false;
+
+    regex_t re;
+    size_t capture_count = 0;
+    if (!regex_compile_runtime(vm, ins, (DsStr){(char *)pattern_data, pattern_len}, (DsStr){(char *)flags_data, flags_len}, &re, &capture_count)) return false;
+    DsRegexStatus replacement_status = ds_regex_validate_replacement((DsStr){(char *)replacement, replacement_len}, capture_count, true);
+    if (replacement_status != DS_REGEX_OK) {
+        regfree(&re);
+        ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(replacement_status));
+        return false;
+    }
+
+    DsString result;
+    ds_string_init(&result);
+    size_t offset = 0;
+    regmatch_t matches[10];
+    size_t nmatch = capture_count + 1;
+    if (nmatch > 10) nmatch = 10;
+    while (offset <= text_len) {
+        const char *base = text + offset;
+        int rc = regexec(&re, base, nmatch, matches, 0);
+        if (rc != 0) {
+            if (rc != REG_NOMATCH) {
+                regfree(&re);
+                ds_string_free(&result);
+                ds_diag_error(vm->diag, ins->span, "failed to evaluate regex in v0.32.0");
+                return false;
+            }
+            ds_string_append_range(&result, base, text_len - offset);
+            break;
+        }
+        if (matches[0].rm_so < 0 || matches[0].rm_eo <= matches[0].rm_so) {
+            regfree(&re);
+            ds_string_free(&result);
+            ds_diag_error(vm->diag, ins->span, "regex.replace patterns that match empty strings are unsupported in v0.32.0");
+            return false;
+        }
+        ds_string_append_range(&result, base, (size_t)matches[0].rm_so);
+        if (!regex_expand_replacement(vm, ins, &result, replacement, replacement_len, base, matches, capture_count)) {
+            regfree(&re);
+            ds_string_free(&result);
+            return false;
+        }
+        offset += (size_t)matches[0].rm_eo;
+        if (offset > text_len) break;
+    }
+    regfree(&re);
+    *out = ds_value_string_take(&result);
+    return true;
+}
+
+
 bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     *out = ds_value_null();
 
@@ -801,6 +976,8 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     if (helper_is(ins, "env.get")) return stdlib_env_get(vm, ins, out);
     if (helper_is(ins, "env.set")) return stdlib_env_set(vm, ins);
     if (helper_is(ins, "env.unset")) return stdlib_env_unset(vm, ins);
+    if (helper_is(ins, "regex.match")) return stdlib_regex_match(vm, ins, out);
+    if (helper_is(ins, "regex.replace")) return stdlib_regex_replace(vm, ins, out);
     if (helper_is(ins, "glob") || helper_is(ins, "glob!")) return stdlib_glob(vm, ins, out);
     if (helper_is(ins, "lines")) return stdlib_lines(vm, ins, out);
 
