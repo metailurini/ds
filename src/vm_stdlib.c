@@ -148,6 +148,22 @@ static char *path_join2(const char *a, const char *b) {
     return out;
 }
 
+static char *glob_escape_literal_path(const char *path) {
+    size_t len = path ? strlen(path) : 0;
+    size_t extra = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (path[i] == '\\' || path[i] == '*' || path[i] == '?' || path[i] == '[') extra++;
+    }
+    char *out = (char *)ds_xcalloc(len + extra + 1, 1);
+    size_t pos = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (path[i] == '\\' || path[i] == '*' || path[i] == '?' || path[i] == '[') out[pos++] = '\\';
+        out[pos++] = path[i];
+    }
+    out[pos] = '\0';
+    return out;
+}
+
 static bool has_glob_meta(const char *s) {
     for (; s && *s; s++) {
         if (*s == '*' || *s == '?' || *s == '[') return true;
@@ -240,11 +256,13 @@ static char *strip_leading_dot_slash_copy(const char *path, bool strip_root_dot)
 static bool collect_recursive_matches_for_dir(Vm *vm, Instr *ins, const char *dir, const char *suffix, bool strip_root_dot, VmStringVec *matches) {
     char *pattern = NULL;
     if (!suffix || !*suffix) {
-        pattern = vm_strdup_cstr(dir);
+        pattern = glob_escape_literal_path(dir);
     } else if (strcmp(dir, ".") == 0 && strip_root_dot) {
         pattern = vm_strdup_cstr(suffix);
     } else {
-        pattern = path_join2(dir, suffix);
+        char *escaped_dir = glob_escape_literal_path(dir);
+        pattern = path_join2(escaped_dir, suffix);
+        free(escaped_dir);
     }
 
     glob_t g;
@@ -308,7 +326,7 @@ static bool stdlib_recursive_glob(Vm *vm, Instr *ins, const char *pattern, DsVal
         return false;
     }
 
-    qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
+    if (matches.len > 0) qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
 
     DsValue array = ds_value_null();
     array.kind = DS_VALUE_ARRAY;
