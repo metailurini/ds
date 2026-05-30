@@ -413,7 +413,7 @@ const char *ds_bash_regex_helpers_source(void) {
         "__ds_regex_map_set(){ local __ds_name=$1 __ds_key=$2 __ds_value=$3 __ds_q; printf -v __ds_q '%q' \"$__ds_value\"; eval \"${__ds_name}[\\$__ds_key]=$__ds_q\"; }\n"
         "__ds_regex_map_type(){ local __ds_name=$1 __ds_key=$2 __ds_value=$3 __ds_q; printf -v __ds_q '%q' \"$__ds_value\"; eval \"${__ds_name}[\\$__ds_key]=$__ds_q\"; }\n"
         "__ds_regex_prepare(){ local __ds_pattern=$1 __ds_flags=${2:-}; __ds_regex_validate_flags \"$__ds_flags\"; __ds_regex_scan \"$__ds_pattern\"; }\n"
-        "__ds_regex_set_case(){ __ds_regex_old_nocasematch=$(shopt -p nocasematch || true); [[ \"${1:-}\" == i ]] && shopt -s nocasematch || true; }\n"
+        "__ds_regex_set_case(){ __ds_regex_old_nocasematch=$(shopt -p nocasematch || true); if [[ \"${1:-}\" == i ]]; then shopt -s nocasematch; else shopt -u nocasematch; fi; }\n"
         "__ds_regex_restore_case(){ eval \"$__ds_regex_old_nocasematch\"; }\n\n";
 }
 

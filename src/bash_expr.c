@@ -611,12 +611,11 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                     }
                     buf_append(out, "__ds_regex=");
                     if (!emit_bash_regex_quoted(out, pattern)) return false;
-                    if (insensitive) buf_append(out, "; __ds_old_nocasematch=$(shopt -p nocasematch || true); shopt -s nocasematch; [[ ");
-                    else buf_append(out, "; [[ ");
+                    buf_append(out, "; __ds_old_nocasematch=$(shopt -p nocasematch || true); ");
+                    buf_append(out, insensitive ? "shopt -s nocasematch; [[ " : "shopt -u nocasematch; [[ ");
                     if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
                     buf_append(out, " =~ $__ds_regex");
-                    if (insensitive) buf_append(out, " ]]; __ds_match_rc=$?; eval \"$__ds_old_nocasematch\"; [[ $__ds_match_rc -eq 0 ]]; }");
-                    else buf_append(out, " ]]; }");
+                    buf_append(out, " ]]; __ds_match_rc=$?; eval \"$__ds_old_nocasematch\"; [[ $__ds_match_rc -eq 0 ]]; }");
                     return true;
                 }
                 buf_append(out, "__ds_regex_test ");
