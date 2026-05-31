@@ -7,8 +7,8 @@ what must be signed off before tagging `1.0.0`.
 ## Required sign-offs
 
 - [ ] **Supported language surface:** `docs/status.md`, `docs/language.ds`, and
-  the examples agree on the production syntax supported through `v0.23.0` plus
-  the `v0.24.0` hardening fixes.
+  the examples agree on the production syntax supported through the current
+  collection, environment/interpolation, glob, and regex stabilization surface.
 - [ ] **VM/Bash parity:** every supported production feature runs through the VM
   and emits standalone Bash with matching stdout, stderr, exit status, and
   deterministic side effects.
@@ -31,10 +31,10 @@ what must be signed off before tagging `1.0.0`.
   supported surface, or any remaining sanitizer finding is documented as outside
   supported behavior with a clear rejection path.
 - [ ] **Deferred/rejected/out-of-scope features:** heredocs, here-strings,
-  process substitution, background jobs, richer signal APIs, regex captures,
-  runtime regex patterns, first-class ranges, map iteration, typed required
-  parameters, nested collections, and alternate backends remain either clearly
-  rejected or deliberately deferred.
+  process substitution, background jobs, richer signal APIs, first-class range
+  values, typed required parameters, nested collections, advanced regex/glob
+  features, and alternate backends remain either clearly rejected or
+  deliberately deferred.
 - [ ] **Packaging and release notes:** release notes summarize the stable surface,
   accepted limitations, host assumptions, build/test commands, and known
   non-goals without promising unsupported syntax.
@@ -43,19 +43,25 @@ what must be signed off before tagging `1.0.0`.
 
 - Required function parameters are still untyped unless they have literal
   defaults that give the function body a conservative static kind.
-- Expression-style value functions return scalar string/int/bool values only;
-  collection and command-result returns remain deferred.
-- Command-word interpolation does not directly evaluate function calls; bind the
-  function-call result to a scalar value first.
+- Expression-style value functions may return scalar string/int/bool values,
+  flat scalar arrays/maps, and command results through the documented structured
+  return transport.
+- Command-word interpolation supports accepted scalar value expressions,
+  including direct scalar-returning function calls and flat index lookups.
 - Formatter trivia preservation is deferred, so comment-bearing files are
   rejected by `ds fmt` instead of being rewritten unsafely.
 - Signal cleanup is process-scoped and limited to `EXIT`, `INT`, and `TERM` for
   the documented foreground direct-command and simple-pipeline subset.
 - Regex support is the conservative POSIX-ERE-shaped subset: `matches` accepts
   literals and runtime string patterns, while `regex.match` exposes flat capture
-  maps and `regex.replace` performs global `$0`..`$9`/`$$` replacement. Regex
-  split, named captures, lookaround, backreferences, and first-class regex
-  values are deferred.
+  maps with stable no-match entries and `regex.replace` performs global
+  `$0`..`$9`/`$$` replacement. Regex split, named captures, lookaround,
+  backreferences, replace-count APIs, and first-class regex values are deferred.
+- Recursive `**` glob support is limited to one complete path segment per
+  pattern, with sorted duplicate-free results, default hidden-path skipping, and
+  no directory-symlink traversal. Multiple recursive segments, partial `**`,
+  custom glob flags, shell brace/extglob expansion, and symlink-following
+  traversal are deferred.
 - Range syntax is a `for` loop source only, not a first-class value.
 - Generated Bash targets Bash, with Bash 4+ guarded when associative arrays or
   other Bash-4-only behavior is required.

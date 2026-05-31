@@ -829,18 +829,17 @@ static bool stdlib_regex_match(Vm *vm, Instr *ins, DsValue *out) {
         ds_value_free(&map);
         return false;
     }
-    if (matched) {
-        for (size_t i = 1; i <= capture_count && i < 10; i++) {
-            char key[2] = {(char)('0' + i), '\0'};
-            if (matches[i].rm_so >= 0 && matches[i].rm_eo >= matches[i].rm_so) {
-                if (!regex_map_set_string(&map, key, text + matches[i].rm_so, (size_t)(matches[i].rm_eo - matches[i].rm_so))) {
-                    ds_value_free(&map);
-                    return false;
-                }
-            } else if (!regex_map_set_string(&map, key, "", 0)) {
-                ds_value_free(&map);
-                return false;
-            }
+    for (size_t i = 1; i <= capture_count && i < 10; i++) {
+        char key[2] = {(char)('0' + i), '\0'};
+        const char *capture_data = "";
+        size_t capture_len = 0;
+        if (matched && matches[i].rm_so >= 0 && matches[i].rm_eo >= matches[i].rm_so) {
+            capture_data = text + matches[i].rm_so;
+            capture_len = (size_t)(matches[i].rm_eo - matches[i].rm_so);
+        }
+        if (!regex_map_set_string(&map, key, capture_data, capture_len)) {
+            ds_value_free(&map);
+            return false;
         }
     }
     *out = map;

@@ -413,6 +413,45 @@ clarifying long files in place, and centralizing unit-test source lists.
 - If a helper cluster grows beyond one coherent concern, split by real owner,
   not by concept-map row.
 
+## H11 — v0.33 collection/glob/regex stabilization audit
+
+**Status:** Addressed for the no-new-tests implementation pass; add dedicated
+`v0.33.0` regression coverage next
+**Kind:** parity/docs/test-gap debt
+**Files:** `src/vm_stdlib.c`, `src/bash_helpers.c`, `src/ds_checker.c`,
+`docs/runtime.md`, `docs/status.md`, `docs/release-checklist.md`,
+`docs/milestones/v0.33.0-spec.md`
+
+**Findings:**
+
+- `regex.match` no-match maps were not populated with numbered capture keys for
+  captures present in the validated pattern. VM execution and emitted Bash now
+  populate those keys as empty strings, matching the flat-map contract without
+  broadening the regex API.
+- Checker warning discovery for string/command interpolation recognized
+  `{name}` and `{name.field}` but missed flat-index interpolation such as
+  `{items[i]}` and identifiers used as direct function-call arguments such as
+  `{double(n)}`. The checker now marks the indexed collection binding, simple
+  identifier index, and simple identifiers inside interpolation call arguments as
+  used, keeping warnings aligned with the supported interpolation surface.
+- The current release checklist still listed now-supported runtime regex,
+  capture maps, map iteration, structured returns, and direct scalar
+  function-call interpolation as deferred. Current docs now describe the
+  supported surface and keep nested collections, advanced regex/glob behavior,
+  first-class range values, and job-control work clearly outside the current
+  contract.
+- `bash_deps.c`, recursive glob helpers, and regex helper inclusion were audited
+  for this pass. No source-language gate was moved into the Bash dependency
+  scanner, and no new helper module split was justified by the scoped fixes.
+
+**Remaining watch rule:**
+
+- Add the dedicated `v0.33.0` regression suite before calling the milestone fully
+  closed. It should cover the no-match capture-map contract, indexed and
+  direct-call interpolation checker warnings, helper inclusion/exclusion for glob
+  and regex, and focused examples/parity runs without adding new language
+  surface.
+
 ## Out of scope for this debt file
 
 - Adding new language features.

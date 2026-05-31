@@ -942,8 +942,9 @@ flags are needed.
 
 - `matched`: bool;
 - `full` and `"0"`: the full matched substring, or `""` when there is no match;
-- `"1"` through `"9"`: numbered capture strings when a successful match used
-  those capture groups. Optional unmatched captures are represented as `""`.
+- `"1"` through `"9"`: numbered capture strings for capture groups present in
+  the validated pattern. Optional unmatched captures and no-match captures are
+  represented as `""`.
 
 `regex.replace(text, pattern, replacement[, flags])` performs global
 left-to-right replacement over non-overlapping matches. Replacement text supports

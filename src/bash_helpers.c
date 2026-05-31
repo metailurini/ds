@@ -442,11 +442,12 @@ const char *ds_bash_regex_match_helpers_source(void) {
         "  if (( __ds_status == 0 )); then\n"
         "    __ds_regex_map_set \"$__ds_target\" matched true\n"
         "    __ds_regex_map_set \"$__ds_target\" full \"${BASH_REMATCH[0]}\"; __ds_regex_map_set \"$__ds_target\" 0 \"${BASH_REMATCH[0]}\"\n"
-        "    for (( __ds_i=1; __ds_i<=__ds_regex_captures && __ds_i<10; __ds_i++ )); do\n"
-        "      __ds_key=$__ds_i; __ds_value=\"${BASH_REMATCH[__ds_i]:-}\"\n"
-        "      __ds_regex_map_set \"$__ds_target\" \"$__ds_key\" \"$__ds_value\"; __ds_regex_map_type \"$__ds_types\" \"$__ds_key\" string\n"
-        "    done\n"
         "  fi\n"
+        "  for (( __ds_i=1; __ds_i<=__ds_regex_captures && __ds_i<10; __ds_i++ )); do\n"
+        "    __ds_key=$__ds_i; __ds_value=\"\"\n"
+        "    if (( __ds_status == 0 )); then __ds_value=\"${BASH_REMATCH[__ds_i]:-}\"; fi\n"
+        "    __ds_regex_map_set \"$__ds_target\" \"$__ds_key\" \"$__ds_value\"; __ds_regex_map_type \"$__ds_types\" \"$__ds_key\" string\n"
+        "  done\n"
         "}\n\n";
 }
 

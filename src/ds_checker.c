@@ -83,6 +83,23 @@ static void use_cstr(Checker *c, const char *data, size_t len) {
     use_name(c, s);
 }
 
+static void scan_fragment_for_ident_uses(Checker *c, const char *data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] == '"' || data[i] == '\'') {
+            char quote = data[i++];
+            while (i < len && data[i] != quote) {
+                if (data[i] == '\\' && i + 1 < len) i += 2;
+                else i++;
+            }
+        } else if (isalpha((unsigned char)data[i]) || data[i] == '_') {
+            size_t start = i;
+            while (i < len && (isalnum((unsigned char)data[i]) || data[i] == '_')) i++;
+            if (start == 0 || data[start - 1] != '.') use_cstr(c, data + start, i - start);
+            if (i > 0) i--;
+        }
+    }
+}
+
 static void scan_text_for_uses(Checker *c, DsStr text) {
     for (size_t i = 0; i < text.len; i++) {
         if (text.data[i] == '$' && i + 1 < text.len && (isalpha((unsigned char)text.data[i + 1]) || text.data[i + 1] == '_')) {
@@ -95,7 +112,54 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             size_t j = start;
             while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
             size_t name_end = j;
-            if (j < text.len && text.data[j] == '.') {
+            size_t index_start = 0;
+            size_t index_len = 0;
+            size_t call_args_start = 0;
+            size_t call_args_len = 0;
+            if (j < text.len && text.data[j] == '[') {
+                j++;
+                while (j < text.len && isspace((unsigned char)text.data[j])) j++;
+                if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
+                    index_start = j;
+                    while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+                    index_len = j - index_start;
+                    while (j < text.len && isspace((unsigned char)text.data[j])) j++;
+                } else if (j < text.len && (text.data[j] == '"' || text.data[j] == '\'')) {
+                    char quote = text.data[j++];
+                    while (j < text.len && text.data[j] != quote) {
+                        if (text.data[j] == '\\' && j + 1 < text.len) j += 2;
+                        else j++;
+                    }
+                    if (j < text.len) j++;
+                    while (j < text.len && isspace((unsigned char)text.data[j])) j++;
+                } else {
+                    while (j < text.len && text.data[j] != ']') j++;
+                }
+                if (j < text.len && text.data[j] == ']') j++;
+            } else if (j < text.len && text.data[j] == '(') {
+                int depth = 1;
+                j++;
+                call_args_start = j;
+                while (j < text.len && depth > 0) {
+                    if (text.data[j] == '"' || text.data[j] == '\'') {
+                        char quote = text.data[j++];
+                        while (j < text.len && text.data[j] != quote) {
+                            if (text.data[j] == '\\' && j + 1 < text.len) j += 2;
+                            else j++;
+                        }
+                        if (j < text.len) j++;
+                    } else if (text.data[j] == '(') {
+                        depth++;
+                        j++;
+                    } else if (text.data[j] == ')') {
+                        depth--;
+                        j++;
+                    } else {
+                        j++;
+                    }
+                }
+                if (depth == 0 && j > call_args_start) call_args_len = (j - 1) - call_args_start;
+            } else if (j < text.len && text.data[j] == '.') {
                 j++;
                 if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
                     while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
@@ -107,6 +171,8 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             }
             if (j < text.len && text.data[j] == '}') {
                 use_cstr(c, text.data + start, name_end - start);
+                if (index_len > 0) use_cstr(c, text.data + index_start, index_len);
+                if (call_args_len > 0) scan_fragment_for_ident_uses(c, text.data + call_args_start, call_args_len);
                 i = j;
             }
         }
