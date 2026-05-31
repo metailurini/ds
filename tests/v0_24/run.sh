@@ -306,9 +306,9 @@ assert_contains README.md 'standalone Bash' 'README states Bash emission is stan
 assert_contains docs/status.md 'must not call the `ds`' 'status states Bash must not call ds'
 assert_contains docs/milestones/v0.24.0-spec.md 'must not add new production syntax' 'v0.24 spec forbids new production syntax'
 assert_contains docs/status.md 'heredocs, here-strings, process substitution' 'status keeps shell syntax rejected'
-assert_contains docs/status.md 'glob patterns, and `v0.32.0` adds runtime regex strings, capture maps, and' 'status records v0.32 regex helpers'
+assert_contains docs/status.md '`v0.32.0` adds runtime regex strings, capture maps, and regex' 'status records v0.32 regex helpers'
 assert_contains docs/status.md 'first-class range values' 'status keeps range values deferred'
-assert_contains docs/status.md 'map iteration' 'status keeps map iteration deferred'
+assert_contains docs/status.md 'map iteration' 'status documents map iteration boundary'
 assert_contains docs/status.md 'additional shell backends or native compilation' 'status keeps alternate backends deferred'
 
 # 2. Examples audit.

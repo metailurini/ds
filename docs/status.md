@@ -2,8 +2,8 @@
 
 This document is the user-facing snapshot after the completed structured
 return, direct environment/interpolation, collection mutation, recursive glob,
-and runtime regex feature wave plus the no-new-tests `v0.33.0` stabilization
-implementation pass. It is a
+and runtime regex feature wave plus the `v0.33.0` stabilization implementation
+and dedicated-test pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -309,8 +309,8 @@ in both VM and emitted Bash. Command-word interpolation supports the legacy `{na
 expressions, direct scalar value-returning function calls in quoted command
 words, and v0.30 flat named collection index reads such as `{items[0]}` and
 `{map[key]}`. Interpolated function calls are pre-evaluated before the outer
-command launches; unsupported collection/map/command-result interpolation beyond
-that flat index-read surface remains deferred. Statement-style calls may still
+command launches; collection/map/command-result interpolation beyond that flat
+index-read surface remains rejected. Statement-style calls may still
 ignore returned values.
 `examples/function-values.ds` shows the supported return, arithmetic, and
 expression interpolation path.

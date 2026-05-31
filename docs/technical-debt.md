@@ -415,8 +415,8 @@ clarifying long files in place, and centralizing unit-test source lists.
 
 ## H11 — v0.33 collection/glob/regex stabilization audit
 
-**Status:** Addressed for the no-new-tests implementation pass; add dedicated
-`v0.33.0` regression coverage next
+**Status:** Addressed for the implementation and dedicated-test pass; keep the
+focused regression suite current as this surface evolves
 **Kind:** parity/docs/test-gap debt
 **Files:** `src/vm_stdlib.c`, `src/bash_helpers.c`, `src/ds_checker.c`,
 `docs/runtime.md`, `docs/status.md`, `docs/release-checklist.md`,
@@ -444,13 +444,117 @@ clarifying long files in place, and centralizing unit-test source lists.
   for this pass. No source-language gate was moved into the Bash dependency
   scanner, and no new helper module split was justified by the scoped fixes.
 
-**Remaining watch rule:**
+**v0.33 H1 — `bash_deps.c` helper scanner:**
 
-- Add the dedicated `v0.33.0` regression suite before calling the milestone fully
-  closed. It should cover the no-match capture-map contract, indexed and
-  direct-call interpolation checker warnings, helper inclusion/exclusion for glob
-  and regex, and focused examples/parity runs without adding new language
-  surface.
+- **Owner files:** `src/bash_deps.c`, `src/bash_expr.c`, `src/bash_stmt.c`,
+  `tests/v0_33/run.sh`.
+- **Severity/priority:** medium; helper omission creates generated Bash runtime
+  failures even when VM execution works.
+- **Finding:** helper scanning remains discovery-only. It does not perform
+  semantic validation and should not become a second lowerer. The dedicated
+  suite covers helper discovery in function-call arguments, interpolation,
+  command-word interpolation, loop values, `if`/`case` expressions, return-style
+  helper use, and `test` blocks.
+- **Remaining risk:** traversal logic is still hand-maintained by expression and
+  statement shape. A future fact accumulator/visitor may become worthwhile, but
+  no new visitor is justified by the v0.33 fixes.
+
+**v0.33 H2 — `vm_stdlib.c` runtime concern mix:**
+
+- **Owner files:** `src/vm_stdlib.c`, `src/ds_stdlib.c`, `src/ds_regex.c`,
+  `tests/v0_33/run.sh`.
+- **Severity/priority:** medium; runtime helpers are hot parity paths for file,
+  env, glob, and regex behavior.
+- **Finding:** runtime concern mix remains concentrated in `src/vm_stdlib.c`, but
+  shared regex/glob validation remains intentionally owned by `ds_regex.*` and
+  `ds_stdlib.*` where possible. v0.33 did not add new validation-only APIs.
+- **Remaining risk:** path/glob/regex/env helpers share one dispatcher-oriented
+  file. Extract only if a future cohesive runtime-helper cluster grows large
+  enough to justify a module boundary.
+
+**v0.33 H3 — `bash_helpers.c` generated-helper catalog:**
+
+- **Owner files:** `src/bash_helpers.c`, `src/bash_deps.c`, `tests/v0_33/run.sh`.
+- **Severity/priority:** high; helper failures must not be hidden by pipelines,
+  subshells, shell options, locale, or quoting.
+- **Finding:** generated-helper catalog remains broad, but helper inclusion is
+  still gated by dependency scanning. The v0.33 suite checks standalone emission,
+  no `ds` runtime dependency, duplicate-helper absence, hostile `shopt`/`IFS`,
+  recursive glob failure propagation, regex failure propagation, and helper
+  inclusion/exclusion for regex, glob, and structured returns.
+- **Remaining risk:** recursive glob and regex replacement helpers are large.
+  Prefer comments and focused helper functions before splitting them into tiny
+  catalog fragments.
+
+**v0.33 H4 — collection portability gates:**
+
+- **Owner files:** `src/lower_collection.c`, `src/lower_expr.c`,
+  `src/lower_stmt.c`, `src/bash_structured.c`, `src/vm.c`, `tests/v0_33/run.sh`.
+- **Severity/priority:** high; collection drift can corrupt structured returns
+  and emitted Bash sidecars.
+- **Finding:** collection portability gates remain lowerer-owned for static
+  unsupported forms. Runtime still owns dynamic index/key failures. The v0.33
+  suite covers flat array/map return parity, kind preservation, value-copy
+  behavior, index-assignment happy/failure paths, same-map iteration mutation
+  rejection, deterministic map order, empty collections, control-flow
+  composition, and interpolation/command-word scalar boundaries.
+- **Remaining risk:** nested collections, aliases/references, deletion, and
+  sparse writes remain intentionally out of scope.
+
+**v0.33 H5 — regex validation drift:**
+
+- **Owner files:** `src/ds_regex.c`, `src/vm_stdlib.c`, `src/bash_helpers.c`,
+  `tests/v0_33/run.sh`.
+- **Severity/priority:** high; VM and standalone Bash both validate runtime
+  regex data.
+- **Finding:** standalone Bash intentionally duplicates regex validation so
+  emitted scripts remain independent of `ds`. The v0.33 suite compares literal
+  and runtime `matches`, `regex.match` capture-map shape, replacement expansion,
+  zero-length replacement rejection, static diagnostics, dynamic failures, and
+  `nocasematch` isolation.
+- **Remaining risk:** every supported regex-subset change must update C
+  validation, Bash validation, docs, and tests together.
+
+**v0.33 H6 — examples and release checklist:**
+
+- **Owner files:** `README.md`, `CHANGELOG.md`, `docs/status.md`,
+  `docs/release-checklist.md`, `docs/runtime.md`, `examples/*.ds`,
+  `tests/v0_33/run.sh`.
+- **Severity/priority:** medium; stale current docs can make supported features
+  look deferred or experimental beyond their actual contract.
+- **Finding:** examples and release checklist were reconciled for the v0.33
+  surface. The dedicated suite checks the named examples with VM/Bash parity and
+  verifies `examples/bad.ds` remains intentionally invalid.
+- **Remaining risk:** historical milestone docs are intentionally not rewritten;
+  current docs must stay authoritative for the current surface.
+
+**v0.33 H7 — large dispatchers:**
+
+- **Owner files:** `src/lower_stdlib.c`, `src/vm_stdlib.c`, `src/bash_expr.c`,
+  `src/bash_stmt.c`, `src/bash_helpers.c`.
+- **Severity/priority:** low-to-medium; dispatchers are readable while cases stay
+  cohesive, but unrelated cleanup logic can make them worse.
+- **Finding:** large dispatchers were not broadened for v0.33. The production
+  fixes stayed in existing regex/checker/helper paths, and the test pass adds no
+  new runtime or emitter dispatch branches.
+- **Remaining risk:** future signal/job-control work should avoid using v0.33
+  cleanup as a reason to place process semantics in helper scanners or formatter
+  code.
+
+**v0.33 H8 — long aggregate regression runtime:**
+
+- **Owner files:** `Makefile`, `tests/v0_25` through `tests/v0_33`, CI/local
+  runner process.
+- **Severity/priority:** medium; long aggregate runs are easy to interrupt in
+  temporary/offline sandboxes.
+- **Finding:** aggregate regression runtime remains a known operational risk even
+  though the v0.33 pass completed `make test` through the wired `v0.33.0` target.
+  The release evidence should always record focused suite results from v0.25
+  through v0.33 and either a successful `make test` or the exact suite/last
+  visible evidence when the aggregate run times out.
+- **Remaining risk:** do not weaken process/signal tests to shorten runtime.
+  Prefer focused commands for local iteration and keep aggregate evidence in
+  release notes/manifests.
 
 ## Out of scope for this debt file
 

@@ -13,8 +13,12 @@
   than guaranteeing absent keys for all digits `1` through `9`.
 - Recorded technical-debt findings for helper scanning, VM stdlib ownership,
   generated Bash helper bodies, collection portability gates, and duplicated
-  regex validation. The dedicated `v0.33.0` regression suite remains deferred
-  to the requested no-new-tests follow-up pass.
+  regex validation.
+- Added the dedicated `tests/v0_33/run.sh` stabilization suite and wired it into
+  aggregate test targets after `v0.32.0`.
+- Rejected structured collection/map/command-result interpolation in quoted
+  command words unless the interpolation is a supported scalar field or flat
+  index read.
 
 # v0.32.0 - Regex Runtime Strings, Captures, and Replacement
 

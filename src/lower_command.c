@@ -242,6 +242,12 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                     return false;
                 }
             }
+            if (value_kind == SYM_ARRAY || value_kind == SYM_MAP || value_kind == SYM_COMMAND_RESULT) {
+                const char *kind_name = value_kind == SYM_ARRAY ? "array" : value_kind == SYM_MAP ? "map" : "command-result";
+                ds_diag_error(lower->diag, span, "cannot interpolate %s value in command words; bind a scalar field or indexed element first", kind_name);
+                free(decoded.data);
+                return false;
+            }
             if (j < decoded.len && decoded.data[j] == ':') {
                 if (indexed_interp) {
                     ds_diag_error(lower->diag, span, "format specifiers on index interpolation are deferred in v0.30.0; bind the indexed value first");

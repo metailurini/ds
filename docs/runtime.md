@@ -686,10 +686,14 @@ parameter kinds, so emitted Bash keeps kind-aware `case` parity for the supporte
 function-call forms.
 
 The v0.25.0 runtime value-return path transports scalar `string`, `int`, and
-`bool` results out of user functions. The v0.26.0 extension carries flat scalar
-arrays, flat scalar maps/objects, and command-result objects through the same
-private function-value boundary. VM execution stores the returned `DsValue` in
-the caller; standalone Bash uses private `__ds_return_type` metadata plus
+`bool` results out of user functions. The v0.26.0 extension adds structured
+function returns for flat scalar arrays, flat scalar maps/objects, and
+command-result objects through the same private function-value boundary.
+The structured function returns stay inside the flat scalar collection boundary. The
+flat scalar collection boundary is intentional: collection payloads may carry
+only scalar string/int/bool elements or values, not nested arrays/maps or
+command-result entries. VM execution stores the returned `DsValue` in the
+caller; standalone Bash uses private `__ds_return_type` metadata plus
 `__ds_` payload variables for scalar, array, map, and command-result shapes.
 The exact Bash encoding is intentionally private, but it must preserve empty
 strings, whitespace, shell metacharacters, text newlines, and scalar kind
@@ -924,8 +928,8 @@ rejected before execution or emission.
 
 `v0.23.0` implements `string matches /pattern/` and `string matches /pattern/i`
 with search semantics: patterns match anywhere unless they are anchored by `^`
-or `$`. `v0.32.0` accepts string-kind runtime patterns for `matches` and for
-`regex.match` / `regex.replace`; direct string literals are validated during
+or `$`. `v0.32.0` accepts string-kind runtime string patterns for `matches` and
+for `regex.match` / `regex.replace`; direct string literals are validated during
 lowering, while dynamic strings are validated at runtime before later side
 effects. The supported subset is the portable POSIX-ERE-shaped surface shared by
 the VM implementation and Bash `[[ string =~ regex ]]`: literal characters
@@ -1009,8 +1013,9 @@ runtime behavior.
 ## v0.31.0 recursive glob runtime notes
 
 `v0.31.0` extends the existing `glob` and `glob!` helpers with scoped recursive
-`**` support. The accepted recursive surface is exactly one path segment equal to
-`**`; partial segments such as `foo**bar`, multiple recursive segments, and
+`**` support. Recursive `**` support accepts exactly one path segment equal to
+`**`; the recursive `**` contract is not Bash globstar passthrough. Partial
+segments such as `foo**bar`, multiple recursive segments, and
 recursive patterns containing `..` segments are rejected by the lowerer when the
 pattern is a literal and by VM/Bash helpers when the pattern is produced
 dynamically.
