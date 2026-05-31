@@ -1,9 +1,28 @@
+# v0.33.0 - Collection, Glob, and Regex Stabilization
+
+- Bumped the CLI help banner to `ds v0.33.0` so the executable reports the
+  current cleanup milestone.
+- Stabilized `regex.match` no-match capture maps so VM execution and emitted
+  Bash both expose present capture-group keys as empty strings when a pattern
+  does not match.
+- Fixed checker warning discovery for supported indexed and direct-call
+  interpolation forms such as `{items[i]}` and `{double(n)}`.
+- Reconciled current docs around the completed collection/glob/regex feature
+  wave, including the capture-map contract: `regex.match` materializes capture
+  keys for groups present in the validated pattern, up to nine captures, rather
+  than guaranteeing absent keys for all digits `1` through `9`.
+- Recorded technical-debt findings for helper scanning, VM stdlib ownership,
+  generated Bash helper bodies, collection portability gates, and duplicated
+  regex validation. The dedicated `v0.33.0` regression suite remains deferred
+  to the requested no-new-tests follow-up pass.
+
 # v0.32.0 - Regex Runtime Strings, Captures, and Replacement
 
 - Added runtime string regex patterns for `matches`, with static validation for
   direct string literals and VM/Bash runtime validation for dynamic strings.
 - Added the `regex.match(text, pattern[, flags])` helper, returning a flat map
-  with `matched`, `full`, `"0"`, and numbered string captures through `"9"`.
+  with `matched`, `full`, `"0"`, and numbered string captures for groups
+  present in the validated pattern, up to `"9"`.
 - Added the `regex.replace(text, pattern, replacement[, flags])` helper with
   global replacement, `$0`..`$9` capture expansion, and `$$` literal-dollar
   expansion.
