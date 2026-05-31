@@ -19,6 +19,13 @@
 - Rejected structured collection/map/command-result interpolation in quoted
   command words unless the interpolation is a supported scalar field or flat
   index read.
+- Expanded the `v0.33.0` stabilization suite around the final audit gaps:
+  dynamic recursive-glob validation, directory symlink non-traversal, empty
+  dynamic glob parity, collection assignment rejection variants, imported
+  collection/regex composition, runtime regex sources, test-block execution, and
+  cleanup-handler helper discovery.
+- Fixed emitted Bash `glob("")` parity so empty non-recursive patterns produce
+  zero matches like VM execution instead of falling through to shell `compgen`.
 
 # v0.32.0 - Regex Runtime Strings, Captures, and Replacement
 

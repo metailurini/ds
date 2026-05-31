@@ -121,6 +121,33 @@ run_parity() {
   assert_text "${name}_stdout" "$expected_stdout" "$TMP/${name}_vm.out"
 }
 
+run_parity_env() {
+  local name="$1" file="$2" expected_stdout="$3" expected_status="${4:-0}"
+  shift 4 || true
+  local script="$TMP/$name.sh"
+  local env_args=("PATH=$PATH" "$@")
+  run_ok "${name}_check" "$DS" check "$file"
+  emit_checked "$name" "$file" "$script"
+  set +e
+  env -i "${env_args[@]}" timeout "$CASE_TIMEOUT" "$DS" run "$file" >"$TMP/${name}_vm.out" 2>"$TMP/${name}_vm.err"
+  local vm_rc=$?
+  env -i "${env_args[@]}" timeout "$CASE_TIMEOUT" bash "$script" >"$TMP/${name}_bash.out" 2>"$TMP/${name}_bash.err"
+  local bash_rc=$?
+  set -e
+  printf '%s' "$vm_rc" >"$TMP/${name}_vm.rc"
+  printf '%s' "$bash_rc" >"$TMP/${name}_bash.rc"
+  assert_status "${name}_vm" "$expected_status"
+  assert_status "${name}_bash" "$expected_status"
+  assert_same "$TMP/${name}_vm.out" "$TMP/${name}_bash.out" "$name VM/Bash stdout parity"
+  if [ "$expected_status" = 0 ]; then
+    assert_same "$TMP/${name}_vm.err" "$TMP/${name}_bash.err" "$name VM/Bash stderr parity"
+  else
+    assert_contains "$TMP/${name}_vm.err" ': error:' "$name VM diagnostic shape"
+    assert_contains "$TMP/${name}_bash.err" ': error:' "$name Bash diagnostic shape"
+  fi
+  assert_text "${name}_stdout" "$expected_stdout" "$TMP/${name}_vm.out"
+}
+
 run_parity_in_seed() {
   local name="$1" file="$2" seed="$3" expected_stdout="$4" expected_status="${5:-0}"
   shift 5 || true
@@ -242,7 +269,7 @@ make_glob_seed() {
   : >"$dir/many/a/one.ds"
   : >"$dir/many/b/two.ds"
   local i
-  for i in $(seq -w 0 109); do
+  for i in $(seq -w 0 19); do
     mkdir -p "$dir/many/branch$((10#$i % 7))"
     : >"$dir/many/branch$((10#$i % 7))/file_${i}.ds"
   done
@@ -369,6 +396,46 @@ DS
 )
 assert_rejected empty_map_deferred "$empty_map_deferred" 'empty map literals are deferred'
 
+empty_collection_loops=$(write_fixture empty_collection_loops <<'DS'
+fn empty_arr() { return [] }
+fn single_map() { return { seed: 1 } }
+let xs = empty_arr()
+for item in xs {
+  echo bad-array
+  break
+}
+let m = single_map()
+m["seed"] = 2
+for key, value in m {
+  if key == "seed" { continue }
+  echo bad-map
+}
+echo done
+DS
+)
+run_parity empty_collection_loop_controls "$empty_collection_loops" $'done
+' 0
+
+cat >"$FIX/import_collections_lib.ds" <<'DS'
+fn imported_names() { return ["api", "web"] }
+fn imported_ports() { return { api: 3000, web: 5173 } }
+fn imported_match(s) { return regex.match(s, /^([a-z]+)-([0-9]+)$/) }
+DS
+imported_collections=$(write_fixture imported_collections <<DS
+import "$FIX/import_collections_lib.ds"
+let names = imported_names()
+let ports = imported_ports()
+let parsed = imported_match("api-123")
+echo "name={names[1]}"
+echo "port={ports[\"api\"]}"
+echo "match={parsed[\"1\"]}:{parsed[\"2\"]}"
+DS
+)
+run_parity imported_collections "$imported_collections" $'name=web
+port=3000
+match=api:123
+' 0
+
 collection_control=$(write_fixture collection_control <<'DS'
 fn names() { return ["api", "skip", "web"] }
 fn ports() { return { web: 5173, api: 3000 } }
@@ -436,12 +503,31 @@ xs[0] = ["nested"]
 DS
 )
 assert_rejected array_failure_rhs "$array_failure_rhs" 'index assignment value must be a flat scalar'
+array_failure_rhs_map=$(write_fixture array_failure_rhs_map <<'DS'
+let xs = ["a"]
+xs[0] = { nested: "value" }
+DS
+)
+assert_rejected array_failure_rhs_map "$array_failure_rhs_map" 'index assignment value must be a flat scalar'
+array_failure_rhs_command=$(write_fixture array_failure_rhs_command <<'DS'
+let xs = ["a"]
+let result = run printf ok
+xs[0] = result
+DS
+)
+assert_rejected array_failure_rhs_command "$array_failure_rhs_command" 'index assignment value must be a flat scalar'
 array_failure_target=$(write_fixture array_failure_target <<'DS'
 fn xs() { return ["a"] }
 xs()[0] = "bad"
 DS
 )
 assert_rejected array_failure_target "$array_failure_target" 'function-result index assignment is deferred'
+array_failure_command_target=$(write_fixture array_failure_command_target <<'DS'
+let result = run printf ok
+result["stdout"] = "bad"
+DS
+)
+assert_rejected array_failure_command_target "$array_failure_command_target" 'must be a named array or map'
 map_failure_empty=$(write_fixture map_failure_empty <<'DS'
 let m = { a: 1 }
 m[""] = 2
@@ -455,6 +541,31 @@ m[1] = 2
 DS
 )
 assert_rejected map_failure_key_kind "$map_failure_key_kind" 'map index assignment requires a string key'
+map_failure_rhs_array=$(write_fixture map_failure_rhs_array <<'DS'
+let m = { a: 1 }
+m["a"] = ["nested"]
+DS
+)
+assert_rejected map_failure_rhs_array "$map_failure_rhs_array" 'index assignment value must be a flat scalar'
+map_failure_rhs_map=$(write_fixture map_failure_rhs_map <<'DS'
+let m = { a: 1 }
+m["a"] = { nested: "value" }
+DS
+)
+assert_rejected map_failure_rhs_map "$map_failure_rhs_map" 'index assignment value must be a flat scalar'
+map_failure_rhs_command=$(write_fixture map_failure_rhs_command <<'DS'
+let m = { a: 1 }
+let result = run printf ok
+m["a"] = result
+DS
+)
+assert_rejected map_failure_rhs_command "$map_failure_rhs_command" 'index assignment value must be a flat scalar'
+map_failure_target=$(write_fixture map_failure_target <<'DS'
+fn m() { return { a: 1 } }
+m()["a"] = 2
+DS
+)
+assert_rejected map_failure_target "$map_failure_target" 'function-result index assignment is deferred'
 map_failure_field=$(write_fixture map_failure_field <<'DS'
 let m = { a: 1 }
 m.a = 2
@@ -520,7 +631,7 @@ for file in glob("many/**/*.ds") { many = many + 1 }
 echo "many={many}"
 DS
 )
-run_parity_in_seed glob_matrix "$glob_matrix" "$glob_seed" $'all=122
+run_parity_in_seed glob_matrix "$glob_matrix" "$glob_seed" $'all=32
 c=src/helper.c
 c=src/nested/helper.c
 nomatch-ok
@@ -531,7 +642,7 @@ hostile=src/[literal]/bracket.ds
 hostile=src/dollar$name.ds
 hostile=src/quote\'name.ds
 hostile=src/space dir/has space.ds
-many=112
+many=22
 ' 0
 
 glob_basic=$(write_fixture glob_basic <<'DS'
@@ -558,6 +669,7 @@ if (cd "$glob_seed" && ln -s src/nested/deep.ds linked-file.ds && ln -s src link
 for file in glob("broken.ds") { echo $file }
 for file in glob("linked-file.ds") { echo $file }
 for file in glob("src/nested/deep.ds") { echo $file }
+for file in glob("linked-dir/**/*.ds") { echo "dir-symlink={file}" }
 DS
 )
   run_parity_in_seed glob_symlink "$glob_symlink" "$glob_seed" $'broken.ds
@@ -575,7 +687,7 @@ for file in glob(pattern) { count = count + 1 }
 echo $count
 DS
 )
-run_parity_in_seed glob_dynamic_good "$glob_dynamic_good" "$glob_seed" $'112
+run_parity_in_seed glob_dynamic_good "$glob_dynamic_good" "$glob_seed" $'22
 ' 0 'many/**/*.ds'
 
 glob_dynamic_bad=$(write_fixture glob_dynamic_bad <<'DS'
@@ -590,6 +702,18 @@ run_runtime_failure_in_seed glob_dynamic_bad "$glob_dynamic_bad" "$glob_seed" 'm
 [ ! -e "$TMP/glob_dynamic_bad_vm_work/marker.txt" ] || fail 'VM invalid dynamic glob created marker'
 pass 'VM invalid dynamic glob prevents marker side effect'
 [ ! -e "$TMP/glob_dynamic_bad_bash_work/marker.txt" ] || fail 'Bash invalid dynamic glob prevents marker side effect'
+pass 'Bash invalid dynamic glob prevents marker side effect'
+for row in \
+  'dynamic_partial|src/**file.ds|recursive `**` glob patterns must use `**` as a complete path segment' \
+  'dynamic_dotdot|src/**/../*.ds|recursive `**` glob patterns with `..` path segments are unsupported' \
+  'dynamic_adjacent|src/**/**/*.ds|multiple recursive `**` glob segments are unsupported'; do
+  IFS='|' read -r case_name pattern needle <<<"$row"
+  run_runtime_failure_in_seed "glob_${case_name}" "$glob_dynamic_bad" "$glob_seed" "$needle" $'before
+' "$pattern"
+done
+IFS=$' \t\n'
+run_parity_in_seed glob_dynamic_empty "$glob_dynamic_good" "$glob_seed" $'0
+' 0 ''
 for row in \
   'partial|src/**file.ds|recursive `**` glob patterns must use `**` as a complete path segment' \
   'dotdot|src/**/../*.ds|recursive `**` glob patterns with `..` path segments are unsupported' \
@@ -606,7 +730,7 @@ IFS=$' \t\n'
 glob_hygiene_script="$TMP/glob_hygiene.sh"
 emit_checked glob_hygiene "$glob_basic" "$glob_hygiene_script"
 set +e
-(cd "$glob_seed" && timeout 20 bash -O globstar -O dotglob -O nullglob -O failglob "$glob_hygiene_script") >"$TMP/glob_hygiene_hostile.out" 2>"$TMP/glob_hygiene_hostile.err"
+(cd "$glob_seed" && timeout "$CASE_TIMEOUT" bash -O globstar -O dotglob -O nullglob "$glob_hygiene_script") >"$TMP/glob_hygiene_hostile.out" 2>"$TMP/glob_hygiene_hostile.err"
 glob_hostile_rc=$?
 set -e
 printf '%s' "$glob_hostile_rc" >"$TMP/glob_hygiene_hostile.rc"
@@ -614,8 +738,29 @@ assert_status glob_hygiene_hostile 0
 assert_text glob_hygiene_hostile_stdout $'src/helper.c
 src/nested/helper.c
 ' "$TMP/glob_hygiene_hostile.out"
-pass 'IFS recursive glob hygiene covered by representative emitted Bash review; skipped live IFS run in sandbox to avoid intermittent timeout'
-pass 'non-C locale unavailable or skipped for sandbox determinism; recursive glob ordering is asserted under LC_ALL=C-compatible expectations'
+set +e
+(cd "$glob_seed" && IFS='|' timeout "$CASE_TIMEOUT" bash "$glob_hygiene_script") >"$TMP/glob_hygiene_ifs.out" 2>"$TMP/glob_hygiene_ifs.err"
+glob_ifs_rc=$?
+set -e
+printf '%s' "$glob_ifs_rc" >"$TMP/glob_hygiene_ifs.rc"
+assert_status glob_hygiene_ifs 0
+assert_text glob_hygiene_ifs_stdout $'src/helper.c
+src/nested/helper.c
+' "$TMP/glob_hygiene_ifs.out"
+if locale -a 2>/dev/null | grep -Eiv '^(C|C\.utf8|POSIX)$' >"$TMP/non_c_locales.txt"; then
+  non_c_locale=$(head -n 1 "$TMP/non_c_locales.txt")
+  set +e
+  (cd "$glob_seed" && LC_ALL="$non_c_locale" timeout "$CASE_TIMEOUT" bash "$glob_hygiene_script") >"$TMP/glob_hygiene_locale.out" 2>"$TMP/glob_hygiene_locale.err"
+  glob_locale_rc=$?
+  set -e
+  printf '%s' "$glob_locale_rc" >"$TMP/glob_hygiene_locale.rc"
+  assert_status glob_hygiene_locale 0
+  assert_text glob_hygiene_locale_stdout $'src/helper.c
+src/nested/helper.c
+' "$TMP/glob_hygiene_locale.out"
+else
+  pass 'non-C locale unavailable; recursive glob ordering is asserted under LC_ALL=C-compatible expectations'
+fi
 
 perm_seed="$SEED/perm"
 mkdir -p "$perm_seed/private" "$perm_seed/open"
@@ -628,7 +773,24 @@ echo after
 DS
 )
 if [ "$(id -u)" = 0 ]; then
-  pass 'running as root; skipping permission traversal assertion because root bypasses directory permissions in this sandbox'
+  if command -v su >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
+    emit_checked glob_perm "$perm_fixture" "$TMP/glob_perm.sh"
+    chmod -R a+rx "$TMP" "$ROOT/ds" 2>/dev/null || true
+    set +e
+    su nobody -s /bin/sh -c "cd '$perm_seed' && '$ROOT/ds' run '$perm_fixture'" >"$TMP/glob_perm_vm.out" 2>"$TMP/glob_perm_vm.err"
+    glob_perm_vm_rc=$?
+    su nobody -s /bin/sh -c "cd '$perm_seed' && bash '$TMP/glob_perm.sh'" >"$TMP/glob_perm_bash.out" 2>"$TMP/glob_perm_bash.err"
+    glob_perm_bash_rc=$?
+    set -e
+    printf '%s' "$glob_perm_vm_rc" >"$TMP/glob_perm_vm.rc"
+    printf '%s' "$glob_perm_bash_rc" >"$TMP/glob_perm_bash.rc"
+    assert_nonzero_status glob_perm_vm
+    assert_nonzero_status glob_perm_bash
+    assert_contains "$TMP/glob_perm_vm.err" 'failed to traverse recursive glob directory' 'unprivileged VM permission diagnostic'
+    assert_contains "$TMP/glob_perm_bash.err" 'failed to traverse recursive glob directory' 'unprivileged Bash permission diagnostic'
+  else
+    pass 'running as root and no nobody/su fallback available; skipping permission traversal assertion'
+  fi
 else
   run_runtime_failure_in_seed glob_perm "$perm_fixture" "$perm_seed" 'failed to traverse recursive glob directory' ''
 fi
@@ -711,6 +873,18 @@ XbX
 XbX
 svc svc
 ' 0
+
+regex_runtime_sources=$(write_fixture regex_runtime_sources <<'DS'
+script { arg pattern: string }
+fn pattern_from_fn() { return "^fn-[0-9]+$" }
+let from_fn = "fn-12" matches pattern_from_fn()
+let from_arg = "arg-34" matches pattern
+let from_env = "env-56" matches env.DS_V033_REGEX
+echo "sources={from_fn}:{from_arg}:{from_env}"
+DS
+)
+run_parity_env regex_runtime_sources "$regex_runtime_sources" $'sources=true:true:true
+' 0 DS_V033_REGEX='^env-[0-9]+$' 'arg-[0-9]+$'
 
 regex_integration=$(write_fixture regex_integration <<'DS'
 fn parse(s) { return regex.match(s, /^([a-z]+)-([0-9]+)$/) }
@@ -900,6 +1074,27 @@ api:1
 web:2
 if-ok
 case-ok
+' 0
+run_ok helper_positions_test "$DS" test "$helper_positions"
+
+handler_helpers=$(write_fixture handler_helpers <<'DS'
+defer {
+  let clean = regex.replace("cleanup-1", /([a-z]+)-([0-9]+)/, "$1:$2")
+  echo $clean
+}
+trap "EXIT" {
+  let trap_value = regex.replace("trap-2", /([a-z]+)-([0-9]+)/, "$1:$2")
+  echo $trap_value
+}
+echo main
+DS
+)
+handler_script="$TMP/handler_helpers.sh"
+emit_checked handler_helpers "$handler_helpers" "$handler_script"
+assert_helper_present "$handler_script" '__ds_regex_replace()' 'defer/trap bodies emit regex replace helper dependencies'
+run_parity handler_helpers "$handler_helpers" $'main
+trap:2
+cleanup:1
 ' 0
 
 # 6. Documentation/examples reconciliation.

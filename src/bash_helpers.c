@@ -303,7 +303,7 @@ const char *ds_bash_stdlib_helpers_source(void) {
 
 const char *ds_bash_glob_helpers_source(void) {
     return
-        "__ds_stdlib_glob() { { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; }\n"
+        "__ds_stdlib_glob() { if [[ -z \"$1\" ]]; then return 0; fi; { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; }\n"
         "__ds_stdlib_glob_required() { local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n\n";
 }
 
@@ -362,7 +362,7 @@ const char *ds_bash_recursive_glob_helpers_source(void) {
         "  LC_ALL=C sort -u \"$mt\"\n"
         "  rm -f \"$bt\" \"$dt\" \"$de\" \"$mt\"\n"
         "}\n"
-        "__ds_stdlib_glob(){ if __ds_glob_has_recursive \"$1\"; then __ds_glob_recursive \"$1\"; else { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; fi; }\n"
+        "__ds_stdlib_glob(){ if [[ -z \"$1\" ]]; then return 0; fi; if __ds_glob_has_recursive \"$1\"; then __ds_glob_recursive \"$1\"; else { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; fi; }\n"
         "__ds_stdlib_glob_required(){ local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"
         "\n";
 }
