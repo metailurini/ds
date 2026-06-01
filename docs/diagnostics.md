@@ -94,6 +94,9 @@ Owns:
   restrictions, handler legality, loop source eligibility, and value-kind checks;
 - stdlib helper existence, arity, statement-only/expression-capable status,
   return kind, argument restrictions, and env-name validation;
+- string-method receiver and argument kind validation, including the v0.35.0
+  rule that `char_at` and `slice` require int indexes while search helpers take
+  string needles;
 - command-result field validity, command-word interpolation eligibility, and
   literal/interpolation brace acceptance such as rejecting lone `}` while
   accepting doubled literal braces;
@@ -138,6 +141,9 @@ Owns:
   subprocess spawn errors, redirection/file open failures, filesystem/env/glob
   runtime failures, invalid runtime script arguments, signal/process failures,
   and defensive runtime checks for corrupted or inconsistent HIR/bytecode state;
+- runtime string-helper data failures on already accepted programs, such as a
+  dynamic `char_at` or `slice` index that is negative or outside the string's
+  byte length;
 - VM-specific execution diagnostics for features explicitly documented as
   VM-only, if such features ever exist.
 

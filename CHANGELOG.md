@@ -1,3 +1,19 @@
+# v0.35.0 - Core String Parsing Helpers
+
+- Added byte-oriented string helpers `.len()`, `.index_of(needle)`,
+  `.last_index_of(needle)`, `.count(needle)`, `.char_at(index)`, and
+  `.slice(start, end)` with VM and standalone Bash parity.
+- Preserved explicit empty-needle behavior for search/count helpers:
+  `index_of("") == 0`, `last_index_of("") == len()`, and
+  `count("") == len() + 1`.
+- Kept `char_at` and `slice` strict: negative, out-of-range, and reversed slice
+  ranges are rejected instead of clamped or wrapped.
+- Accepted read-only `string.split(...)[index]` chains so parsing expressions
+  like `sig.split("(")[0].trim()` work without temporary variables.
+- Updated language/status/runtime/diagnostics/DX docs for the implemented
+  v0.35.0 surface. Dedicated regression tests remain for the follow-up test
+  implementation pass.
+
 # v0.34.0 - Text Literal and Broken-Pipe DX
 
 - Bumped the CLI help banner to `ds v0.34.0` for the new DX-priority

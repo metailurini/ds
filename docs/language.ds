@@ -253,7 +253,9 @@ if branch.failed {
 echo "Current branch: {branch.stdout}"
 
 # v0.19.0 adds scoped string methods such as `.trim()` and `.split()` with
-# matching VM and standalone Bash behavior.
+# matching VM and standalone Bash behavior. v0.35.0 extends that surface with
+# byte-oriented parsing helpers such as `.index_of()`, `.slice()`, and
+# `.char_at()`.
 
 
 # -----------------------------------------------------------------------------
@@ -743,6 +745,21 @@ let has_world = s.contains("World")
 let parts = s.split(", ")
 let starts = s.starts_with("  Hello")
 let ends   = s.ends_with("!  ")
+
+# v0.35.0 adds byte-oriented string parsing helpers. Indexes are zero-based byte
+# offsets. Search helpers return `-1` when no match is found. Empty-needle rules
+# are explicit: `index_of("") == 0`, `last_index_of("") == len()`, and
+# `count("") == len() + 1`.
+let byte_len = s.len()
+let first_world = s.index_of("World")
+let last_l = s.last_index_of("l")
+let comma_count = s.count(",")
+let first_char = s.char_at(0)
+let hello = s.trim().slice(0, 5)
+
+# Direct read-only indexing after `split()` is supported for common parsing
+# chains. Mutation still requires a named flat collection target.
+let before_paren = "  int main(void)  ".split("(")[0].trim()
 
 
 # -----------------------------------------------------------------------------

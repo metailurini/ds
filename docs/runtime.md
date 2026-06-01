@@ -883,6 +883,16 @@ implements ASCII `trim`, `upper`, `lower`, literal `replace`, literal
 `DsString`/`DsArray` values. `split` returns an array of owned string values that
 works with existing array indexing and `for` loops.
 
+`v0.35.0` keeps the same parity boundary and adds byte-oriented parsing helpers:
+`len`, `index_of`, `last_index_of`, `count`, `char_at`, and `slice`. VM helpers
+operate on explicit byte lengths and emitted Bash helpers force `LC_ALL=C` for
+substring/length arithmetic. `char_at` and `slice` reject negative or
+out-of-range indexes at runtime for dynamic values, while static argument-kind
+validation remains lowerer-owned. Bash emission also supports the narrow
+read-only temporary array case needed for `string.split(...)[index]` chains by
+materializing the split result inside a command-substitution-local array before
+calling the existing array lookup helper.
+
 Triple-quoted literals use the simple byte rule: every byte between the opening
 `"""` and closing `"""` is literal content. They do not strip indentation.
 Formatted interpolation is rendered during the existing interpolation step. The

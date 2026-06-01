@@ -154,11 +154,24 @@ static DsExpr *parse_primary(Parser *p) {
     return parser_new_expr(DS_EXPR_ERROR, tok->span);
 }
 
+static bool parser_ident_text_eq(DsExpr *expr, const char *text) {
+    if (!expr || expr->kind != DS_EXPR_IDENT) return false;
+    size_t len = strlen(text);
+    return expr->as.text.len == len && memcmp(expr->as.text.data, text, len) == 0;
+}
+
+static bool parser_expr_is_stdlib_namespace(DsExpr *expr) {
+    return parser_ident_text_eq(expr, "file") || parser_ident_text_eq(expr, "dir") ||
+           parser_ident_text_eq(expr, "path") || parser_ident_text_eq(expr, "cmd") ||
+           parser_ident_text_eq(expr, "env") || parser_ident_text_eq(expr, "regex");
+}
+
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
-    if (expr && expr->kind == DS_EXPR_IDENT && strncmp(expr->as.text.data, "glob", expr->as.text.len) == 0 && expr->as.text.len == 4 && parser_advance_if(p, DS_TOK_BANG)) {
-        DsToken *bang = parser_previous(p);
-        if (parser_expect(p, DS_TOK_LPAREN, "expected `(` after `glob!`")) {
+    while (expr) {
+        if (expr->kind == DS_EXPR_IDENT && parser_ident_text_eq(expr, "glob") && parser_advance_if(p, DS_TOK_BANG)) {
+            DsToken *bang = parser_previous(p);
+            if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after `glob!`")) break;
             DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, bang->span.end, expr->span.source});
             DsToken tmp = {.text = expr->as.text, .span = expr->span};
             call->as.call.name = parser_copy_bang_name(&tmp);
@@ -167,85 +180,71 @@ static DsExpr *parse_postfix(Parser *p) {
             parse_call_args(p, &call->as.call.args);
             if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
             expr = call;
+            continue;
         }
-    }
-    while (expr && expr->kind == DS_EXPR_IDENT && parser_advance_if(p, DS_TOK_LPAREN)) {
-        DsToken *open = parser_previous(p);
-        DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, open->span.end, expr->span.source});
-        call->as.call.name = parser_copy_token_text(&(DsToken){.text = expr->as.text, .span = expr->span});
-        free(expr->as.text.data);
-        free(expr);
-        parse_call_args(p, &call->as.call.args);
-        expr = call;
-        if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) break;
-        call->span.end = parser_previous(p)->span.end;
-    }
-    while (parser_advance_if(p, DS_TOK_LBRACKET)) {
-        DsToken *open = parser_previous(p);
-        DsExpr *idx = NULL;
-        if (parser_at(p, DS_TOK_RBRACKET)) {
-            ds_diag_error(p->diag, open->span, "expected index expression after `[` ");
-        } else {
-            idx = parse_expr(p);
-        }
-        if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
-        DsExpr *index_expr = parser_new_expr(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, parser_previous(p)->span.end, open->span.source});
-        index_expr->as.index.object = expr;
-        index_expr->as.index.index = idx;
-        expr = index_expr;
-    }
-    while (parser_advance_if(p, DS_TOK_DOT)) {
-        DsToken *dot = parser_previous(p);
-        if (!parser_expect_identifier_like(p, "expected field name after `.`")) {
-            break;
-        }
-        DsToken *field = parser_previous(p);
-        DsExpr *field_expr = parser_new_expr(DS_EXPR_FIELD, (DsSpan){expr ? expr->span.start : dot->span.start, field->span.end, dot->span.source});
-        field_expr->as.field.object = expr;
-        field_expr->as.field.field = parser_copy_token_text(field);
-        expr = field_expr;
-        if (parser_advance_if(p, DS_TOK_LPAREN)) {
+
+        if (expr->kind == DS_EXPR_IDENT && parser_advance_if(p, DS_TOK_LPAREN)) {
             DsToken *open = parser_previous(p);
-            DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, open->span.end, dot->span.source});
-            bool namespace_call = field_expr->as.field.object && field_expr->as.field.object->kind == DS_EXPR_IDENT &&
-                ((field_expr->as.field.object->as.text.len == 4 && memcmp(field_expr->as.field.object->as.text.data, "file", 4) == 0) ||
-                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "dir", 3) == 0) ||
-                 (field_expr->as.field.object->as.text.len == 4 && memcmp(field_expr->as.field.object->as.text.data, "path", 4) == 0) ||
-                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "cmd", 3) == 0) ||
-                 (field_expr->as.field.object->as.text.len == 3 && memcmp(field_expr->as.field.object->as.text.data, "env", 3) == 0) ||
-                 (field_expr->as.field.object->as.text.len == 5 && memcmp(field_expr->as.field.object->as.text.data, "regex", 5) == 0));
-            if (namespace_call) {
-                DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
-                DsToken right = {.text = field_expr->as.field.field, .span = field->span};
-                call->as.call.name = parser_copy_dotted_name(&left, &right);
-                free(field_expr->as.field.object->as.text.data);
-                free(field_expr->as.field.object);
-            } else {
-                DsToken left = {.text = (DsStr){"string", 6}, .span = field->span};
-                DsToken right = {.text = field_expr->as.field.field, .span = field->span};
-                call->as.call.name = parser_copy_dotted_name(&left, &right);
-                parser_expr_vec_push(&call->as.call.args, field_expr->as.field.object);
-            }
-            free(field_expr->as.field.field.data);
-            free(field_expr);
+            DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, open->span.end, expr->span.source});
+            call->as.call.name = parser_copy_token_text(&(DsToken){.text = expr->as.text, .span = expr->span});
+            free(expr->as.text.data);
+            free(expr);
             parse_call_args(p, &call->as.call.args);
-            if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after method call arguments")) call->span.end = parser_previous(p)->span.end;
             expr = call;
+            if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) break;
+            call->span.end = parser_previous(p)->span.end;
+            continue;
         }
-    }
-    while (parser_advance_if(p, DS_TOK_LBRACKET)) {
-        DsToken *open = parser_previous(p);
-        DsExpr *idx = NULL;
-        if (parser_at(p, DS_TOK_RBRACKET)) {
-            ds_diag_error(p->diag, open->span, "expected index expression after `[` ");
-        } else {
-            idx = parse_expr(p);
+
+        if (parser_advance_if(p, DS_TOK_LBRACKET)) {
+            DsToken *open = parser_previous(p);
+            DsExpr *idx = NULL;
+            if (parser_at(p, DS_TOK_RBRACKET)) {
+                ds_diag_error(p->diag, open->span, "expected index expression after `[` ");
+            } else {
+                idx = parse_expr(p);
+            }
+            if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
+            DsExpr *index_expr = parser_new_expr(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, parser_previous(p)->span.end, open->span.source});
+            index_expr->as.index.object = expr;
+            index_expr->as.index.index = idx;
+            expr = index_expr;
+            continue;
         }
-        if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
-        DsExpr *index_expr = parser_new_expr(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, parser_previous(p)->span.end, open->span.source});
-        index_expr->as.index.object = expr;
-        index_expr->as.index.index = idx;
-        expr = index_expr;
+
+        if (parser_advance_if(p, DS_TOK_DOT)) {
+            DsToken *dot = parser_previous(p);
+            if (!parser_expect_identifier_like(p, "expected field name after `.`")) break;
+            DsToken *field = parser_previous(p);
+            DsExpr *field_expr = parser_new_expr(DS_EXPR_FIELD, (DsSpan){expr ? expr->span.start : dot->span.start, field->span.end, dot->span.source});
+            field_expr->as.field.object = expr;
+            field_expr->as.field.field = parser_copy_token_text(field);
+            expr = field_expr;
+            if (parser_advance_if(p, DS_TOK_LPAREN)) {
+                DsToken *open = parser_previous(p);
+                DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, open->span.end, dot->span.source});
+                if (parser_expr_is_stdlib_namespace(field_expr->as.field.object)) {
+                    DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
+                    DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+                    call->as.call.name = parser_copy_dotted_name(&left, &right);
+                    free(field_expr->as.field.object->as.text.data);
+                    free(field_expr->as.field.object);
+                } else {
+                    DsToken left = {.text = (DsStr){"string", 6}, .span = field->span};
+                    DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+                    call->as.call.name = parser_copy_dotted_name(&left, &right);
+                    parser_expr_vec_push(&call->as.call.args, field_expr->as.field.object);
+                }
+                free(field_expr->as.field.field.data);
+                free(field_expr);
+                parse_call_args(p, &call->as.call.args);
+                if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after method call arguments")) call->span.end = parser_previous(p)->span.end;
+                expr = call;
+            }
+            continue;
+        }
+
+        break;
     }
     return expr;
 }

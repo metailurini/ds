@@ -6,6 +6,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <glob.h>
+#include <stdint.h>
 #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,32 @@ static bool vm_string_arg(Vm *vm, Instr *ins, size_t index, const char **out, si
         ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` does not support embedded NUL bytes", ins->name ? ins->name : "<helper>");
         return false;
     }
+    return true;
+}
+
+static bool vm_int_arg(Vm *vm, Instr *ins, size_t index, int64_t *out) {
+    if (index >= ins->arg_count) return false;
+
+    /*
+     * Static helper arity and literal argument-kind checks are lowerer-owned.
+     * These VM diagnostics cover dynamic values produced by accepted HIR.
+     */
+    DsValue *v = &vm->regs[ins->args[index]];
+    if (v->kind != DS_VALUE_INT) {
+        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects int arguments", ins->name ? ins->name : "<helper>");
+        return false;
+    }
+
+    *out = v->as.integer;
+    return true;
+}
+
+static bool size_to_vm_int(Vm *vm, Instr *ins, size_t value, int64_t *out) {
+    if (value > (size_t)INT64_MAX) {
+        ds_diag_error(vm->diag, ins->span, "string helper result is too large to fit in an int");
+        return false;
+    }
+    *out = (int64_t)value;
     return true;
 }
 
@@ -703,6 +730,38 @@ static bool contains_bytes(const char *s, size_t len, const char *sub, size_t su
     return false;
 }
 
+static bool find_first_bytes(const char *s, size_t len, const char *sub, size_t sub_len, size_t *pos) {
+    if (sub_len == 0) { *pos = 0; return true; }
+    if (sub_len > len) return false;
+    for (size_t i = 0; i + sub_len <= len; i++) {
+        if (memcmp(s + i, sub, sub_len) == 0) { *pos = i; return true; }
+    }
+    return false;
+}
+
+static bool find_last_bytes(const char *s, size_t len, const char *sub, size_t sub_len, size_t *pos) {
+    if (sub_len == 0) { *pos = len; return true; }
+    if (sub_len > len) return false;
+    size_t i = len - sub_len;
+    for (;;) {
+        if (memcmp(s + i, sub, sub_len) == 0) { *pos = i; return true; }
+        if (i == 0) break;
+        i--;
+    }
+    return false;
+}
+
+static size_t count_non_overlapping_bytes(const char *s, size_t len, const char *sub, size_t sub_len) {
+    if (sub_len == 0) return len + 1;
+    size_t count = 0;
+    size_t i = 0;
+    while (i + sub_len <= len) {
+        if (memcmp(s + i, sub, sub_len) == 0) { count++; i += sub_len; }
+        else i++;
+    }
+    return count;
+}
+
 static bool ascii_trim_bounds(const char *s, size_t len, size_t *start, size_t *end) {
     size_t a = 0, b = len;
     while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\n' || s[a] == '\r' || s[a] == '\v' || s[a] == '\f')) a++;
@@ -713,6 +772,11 @@ static bool ascii_trim_bounds(const char *s, size_t len, size_t *start, size_t *
 static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
     const char *s = NULL; size_t len = 0;
     if (!vm_string_arg(vm, ins, 0, &s, &len)) return false;
+    if (helper_is(ins, "string.len")) {
+        int64_t n = 0;
+        if (!size_to_vm_int(vm, ins, len, &n)) return false;
+        *out = ds_value_int(n); return true;
+    }
     if (helper_is(ins, "string.trim")) {
         size_t a = 0, b = 0; ascii_trim_bounds(s, len, &a, &b);
         DsString r; ds_string_from_range(&r, s + a, b - a); *out = ds_value_string_take(&r); return true;
@@ -733,6 +797,43 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         else if (helper_is(ins, "string.starts_with")) ok = sub_len <= len && memcmp(s, sub, sub_len) == 0;
         else ok = sub_len <= len && memcmp(s + len - sub_len, sub, sub_len) == 0;
         *out = ds_value_bool(ok); return true;
+    }
+    if (helper_is(ins, "string.index_of") || helper_is(ins, "string.last_index_of") || helper_is(ins, "string.count")) {
+        const char *sub = NULL; size_t sub_len = 0;
+        if (!vm_string_arg(vm, ins, 1, &sub, &sub_len)) return false;
+        int64_t n = -1;
+        if (helper_is(ins, "string.count")) {
+            if (!size_to_vm_int(vm, ins, count_non_overlapping_bytes(s, len, sub, sub_len), &n)) return false;
+        } else {
+            size_t pos = 0;
+            bool found = helper_is(ins, "string.index_of")
+                ? find_first_bytes(s, len, sub, sub_len, &pos)
+                : find_last_bytes(s, len, sub, sub_len, &pos);
+            if (found && !size_to_vm_int(vm, ins, pos, &n)) return false;
+        }
+        *out = ds_value_int(n); return true;
+    }
+    if (helper_is(ins, "string.char_at")) {
+        int64_t idx = 0;
+        if (!vm_int_arg(vm, ins, 1, &idx)) return false;
+        if (idx < 0 || (uint64_t)idx >= (uint64_t)len) {
+            ds_diag_error(vm->diag, ins->span, "string.char_at index %lld out of range", (long long)idx);
+            return false;
+        }
+        DsString r; ds_string_from_range(&r, s + idx, 1); *out = ds_value_string_take(&r); return true;
+    }
+    if (helper_is(ins, "string.slice")) {
+        int64_t start = 0, end = 0;
+        if (!vm_int_arg(vm, ins, 1, &start) || !vm_int_arg(vm, ins, 2, &end)) return false;
+        if (start < 0 || end < 0 || (uint64_t)start > (uint64_t)len || (uint64_t)end > (uint64_t)len) {
+            ds_diag_error(vm->diag, ins->span, "string.slice range %lld..%lld out of range", (long long)start, (long long)end);
+            return false;
+        }
+        if (end < start) {
+            ds_diag_error(vm->diag, ins->span, "string.slice start must be less than or equal to end");
+            return false;
+        }
+        DsString r; ds_string_from_range(&r, s + start, (size_t)(end - start)); *out = ds_value_string_take(&r); return true;
     }
     if (helper_is(ins, "string.replace")) {
         const char *from = NULL, *to = NULL; size_t from_len = 0, to_len = 0;

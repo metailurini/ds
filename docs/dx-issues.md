@@ -48,7 +48,7 @@ This workaround is no longer needed for the supported string/interpolation
 surface, and the dedicated v0.34 regression suite covers the strict
 doubled-brace contract across VM execution and standalone emitted Bash.
 
-## No indexing directly after method calls
+## No indexing directly after method calls — addressed in v0.35.0 implementation
 
 This did not work:
 
@@ -64,6 +64,11 @@ let before_paren = paren_parts[0].trim()
 ```
 
 That is more verbose than expected for common string/array processing.
+
+`v0.35.0` accepts the read-only `string.split(...)[index]` chaining form needed
+for common parsing pipelines, so `sig.split("(")[0].trim()` works with VM and
+standalone Bash parity. This does not add temporary collection mutation or
+nested collection indexing.
 
 ## Function parameters need defaults for string method inference
 
@@ -141,7 +146,7 @@ redirected commands are not quieted by the inherited script stdout heuristic.
 The dedicated v0.34 regression suite covers the common quiet case, captured
 statuses, redirected status-141 failures, and cleanup-aware early completion.
 
-## String parsing APIs are limited
+## String parsing APIs are limited — addressed in v0.35.0 implementation
 
 The analyzer needed common string scanning operations, including:
 
@@ -152,6 +157,12 @@ The analyzer needed common string scanning operations, including:
 - count occurrences of a substring/character
 
 Without these, even an approximate parser required awkward workarounds.
+
+`v0.35.0` adds the core byte-oriented helpers: `.len()`, `.index_of(needle)`,
+`.last_index_of(needle)`, `.count(needle)`, `.char_at(index)`, and
+`.slice(start, end)`. The implementation deliberately keeps byte offsets,
+explicit empty-needle behavior, and strict bounds errors rather than adding
+Unicode, regex splitting, negative indexes, or clamped slices.
 
 ## Regex support does not expose captures
 

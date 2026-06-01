@@ -43,6 +43,37 @@ static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, Emi
     return true;
 }
 
+static bool expr_is_stdlib_array_call(const DsLowerExpr *expr) {
+    return expr && expr->kind == DS_LOWER_EXPR_CALL && str_eq(expr->as.call.name, "string.split") && ds_stdlib_is_name(expr->as.call.name) && stdlib_returns_array(expr->as.call.name);
+}
+
+static bool emit_index_argument(BashEmitter *e, const DsLowerExpr *index, bool map_index, bool allow_computed, EmitBuf *out) {
+    if (index->kind == DS_LOWER_EXPR_INT) {
+        buf_append_len(out, index->as.text.data, index->as.text.len);
+        return true;
+    }
+    if (index->kind == DS_LOWER_EXPR_STRING) {
+        if (!map_index) {
+            ds_diag_error(e->diag, index->span, "internal Bash invariant failed: array index should not be a string after lowering");
+            return false;
+        }
+        char *decoded = NULL; size_t len = 0;
+        if (!decode_string_literal(e->diag, index, &decoded, &len)) return false;
+        bash_single_quote(out, decoded, len);
+        free(decoded);
+        return true;
+    }
+    if (index->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, "\"$");
+        emit_var_name(out, index->as.text);
+        buf_append(out, "\"");
+        return true;
+    }
+    if (allow_computed) return emit_value_expr(e, index, out);
+    ds_diag_error(e->diag, index->span, "internal Bash invariant failed: collection index expression should be literal or named after lowering");
+    return false;
+}
+
 static bool regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
     *insensitive = false;
     if (lit.len < 3 || lit.data[0] != '/') return false;
@@ -248,38 +279,41 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             }
             return true;
         case DS_LOWER_EXPR_INDEX:
-            if (expr->as.index.object->kind != DS_LOWER_EXPR_IDENT) {
-                /* Lowering rejects temporary collection receivers for VM/Bash parity. */
-                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index receiver should be a named binding after lowering");
-                return false;
-            }
             if (!expr->as.index.object_is_array && !expr->as.index.object_is_map) {
                 /* Lowering annotates accepted collection indexes with a known collection kind. */
                 ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index should have a known collection kind after lowering");
                 return false;
             }
-            buf_append(out, "\"$(");
-            buf_append(out, expr->as.index.object_is_map ? "__ds_map_get " : "__ds_array_get ");
-            emit_var_name(out, expr->as.index.object->as.text);
-            buf_append(out, " ");
-            if (expr->as.index.index->kind == DS_LOWER_EXPR_INT) {
-                buf_append_len(out, expr->as.index.index->as.text.data, expr->as.index.index->as.text.len);
-            } else if (expr->as.index.index->kind == DS_LOWER_EXPR_STRING) {
-                char *decoded = NULL; size_t len = 0;
-                if (!decode_string_literal(e->diag, expr->as.index.index, &decoded, &len)) return false;
-                bash_single_quote(out, decoded, len);
-                free(decoded);
-            } else if (expr->as.index.index->kind == DS_LOWER_EXPR_IDENT) {
-                buf_append(out, "\"$");
-                emit_var_name(out, expr->as.index.index->as.text);
-                buf_append(out, "\"");
-            } else {
-                /* Lowering rejects computed indexes that Bash cannot render portably. */
-                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index expression should be literal or named after lowering");
-                return false;
+            if (expr->as.index.object->kind == DS_LOWER_EXPR_IDENT) {
+                buf_append(out, "\"$(");
+                buf_append(out, expr->as.index.object_is_map ? "__ds_map_get " : "__ds_array_get ");
+                emit_var_name(out, expr->as.index.object->as.text);
+                buf_append(out, " ");
+                if (!emit_index_argument(e, expr->as.index.index, expr->as.index.object_is_map, false, out)) return false;
+                buf_append(out, ")\"");
+                return true;
             }
-            buf_append(out, ")\"");
-            return true;
+            if (expr->as.index.object_is_array && expr_is_stdlib_array_call(expr->as.index.object)) {
+                char temp_buf[64];
+                temp_ds_name(temp_buf, sizeof(temp_buf), "index_array", e->temp_counter++);
+                DsStr temp = {temp_buf, strlen(temp_buf)};
+                buf_append(out, "\"$({ ");
+                emit_var_name(out, temp);
+                buf_append(out, "=(); __ds_index_tmp=$(mktemp) || __ds_error 'failed to create collection index temp file'; ");
+                emit_stdlib_helper_name(out, expr->as.index.object->as.call.name);
+                if (!emit_call_args(e, &expr->as.index.object->as.call.args, out)) return false;
+                buf_append(out, " >\"$__ds_index_tmp\"; while IFS= read -r __ds_index_line || [[ -n \"$__ds_index_line\" ]]; do ");
+                emit_var_name(out, temp);
+                buf_append(out, "+=(\"$__ds_index_line\"); done <\"$__ds_index_tmp\"; rm -f \"$__ds_index_tmp\"; __ds_array_get ");
+                emit_var_name(out, temp);
+                buf_append(out, " ");
+                if (!emit_index_argument(e, expr->as.index.index, false, true, out)) return false;
+                buf_append(out, "; })\"");
+                return true;
+            }
+            /* Lowering rejects other temporary collection receivers for VM/Bash parity. */
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index receiver should be a named binding or accepted standard-library array result after lowering");
+            return false;
         case DS_LOWER_EXPR_CALL:
             if (expr->as.call.is_user_function) {
                 buf_append(out, "\"$(__ds_call_value ");

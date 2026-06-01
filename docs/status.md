@@ -92,10 +92,11 @@ no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, and the
   complete `**` path segment per pattern, zero-or-more directory semantics,
   sorted duplicate-free string results, default hidden-path skipping, and no
   directory-symlink traversal;
-- ASCII string methods: `.trim()`, `.upper()`, `.lower()`, `.replace()`,
-  `.contains()`, `.split()`, `.starts_with()`, and `.ends_with()`, including
-  known string-array elements from `split`, `lines`, `glob`, and `glob!` when
-  those values are indexed or iterated;
+- ASCII/byte-oriented string methods: `.trim()`, `.upper()`, `.lower()`,
+  `.replace()`, `.contains()`, `.split()`, `.starts_with()`, `.ends_with()`,
+  `.len()`, `.index_of()`, `.last_index_of()`, `.count()`, `.char_at()`, and
+  `.slice()`, including known string-array elements from `split`, `lines`,
+  `glob`, and `glob!` when those values are indexed or iterated;
 - kind-aware Bash `case` parity for known indexed array values and array `for`
   loop variables with known string/int/bool element kinds;
 - stackable `defer { ... }` and `defer on: "EXIT"|"INT"|"TERM" { ... }` cleanup handlers, plus replacement-style `trap "EXIT"|"INT"|"TERM" { ... }`;
@@ -298,6 +299,14 @@ the lowerer and by making Bash helper dependency scanning recurse through call
 arguments. This means values indexed out of known string arrays, such as
 `"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
 parity and emitted helper coverage.
+
+`v0.35.0` extends string methods with byte-oriented parsing helpers:
+`.len()`, `.index_of(needle)`, `.last_index_of(needle)`, `.count(needle)`,
+`.char_at(index)`, and `.slice(start, end)`. The methods use zero-based byte
+offsets in both VM execution and emitted Bash. `char_at` and `slice` reject
+negative and out-of-range indexes instead of clamping, and direct read-only
+indexing after `split()` can now participate in follow-up scalar string method
+chains such as `sig.split("(")[0].trim()`.
 
 `v0.21.0` adds the implementation path for scalar function `return` values and
 integer arithmetic: `return expr` inside functions, function calls as supported

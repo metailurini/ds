@@ -416,14 +416,30 @@ static bool is_string_helper_name(DsStr name) {
     return lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") ||
            lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.replace") ||
            lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.split") ||
-           lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with");
+           lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with") ||
+           lower_str_eq(name, "string.len") || lower_str_eq(name, "string.index_of") ||
+           lower_str_eq(name, "string.last_index_of") || lower_str_eq(name, "string.count") ||
+           lower_str_eq(name, "string.char_at") || lower_str_eq(name, "string.slice");
 }
 
 static bool string_helper_arg_count_ok(DsStr name, size_t argc, size_t *expected) {
-    if (lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") || lower_str_eq(name, "string.lower")) { *expected = 1; return argc == 1; }
+    if (lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") || lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.len")) { *expected = 1; return argc == 1; }
     if (lower_str_eq(name, "string.replace")) { *expected = 3; return argc == 3; }
+    if (lower_str_eq(name, "string.slice")) { *expected = 3; return argc == 3; }
     *expected = 2;
     return argc == 2;
+}
+
+static bool string_helper_arg_expects_int(DsStr name, size_t arg_index) {
+    if (lower_str_eq(name, "string.char_at")) return arg_index == 1;
+    if (lower_str_eq(name, "string.slice")) return arg_index == 1 || arg_index == 2;
+    return false;
+}
+
+static bool string_helper_arg_expects_string(DsStr name, size_t arg_index) {
+    if (arg_index == 0) return true;
+    if (string_helper_arg_expects_int(name, arg_index)) return false;
+    return true;
 }
 
 static DsLowerExpr *lower_raw_string_expr(DsStr raw, DsSpan span) {
@@ -565,7 +581,9 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         if (is_string_helper_name(expr->as.call.name)) {
             if (i == 0 && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` requires a string receiver", (int)expr->as.call.name.len, expr->as.call.name.data);
-            } else if (i > 0 && arg_kind != SYM_STRING) {
+            } else if (i > 0 && string_helper_arg_expects_int(expr->as.call.name, i) && arg_kind != SYM_INT) {
+                ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects int index arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
+            } else if (i > 0 && string_helper_arg_expects_string(expr->as.call.name, i) && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects string arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
             }
         } else if (ds_stdlib_is_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
@@ -620,7 +638,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         return out;
     }
     if (split_member_name(expr->as.call.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
-        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with", (int)member.len, member.data);
+        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
         free(arg_kinds);
         return out;
     }
@@ -685,6 +703,12 @@ DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
     return out;
 }
 
+static bool lower_expr_is_portable_stdlib_array_result(const DsLowerExpr *expr) {
+    if (!expr || expr->kind != DS_LOWER_EXPR_CALL || !ds_stdlib_is_name(expr->as.call.name)) return false;
+    const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
+    return helper && helper->return_kind == DS_STDLIB_RETURN_ARRAY && lower_str_eq(expr->as.call.name, "string.split");
+}
+
 DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind obj_kind = SYM_UNKNOWN;
     SymKind idx_kind = SYM_UNKNOWN;
@@ -695,8 +719,11 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     out->as.index.index = index;
     if (obj_kind == SYM_ARRAY) {
         out->as.index.object_is_array = true;
-        lower_validate_portable_collection_receiver(lower, object, expr->span);
-        lower_validate_portable_collection_index(lower, index, false, expr->as.index.index->span);
+        bool portable_stdlib_array = lower_expr_is_portable_stdlib_array_result(object);
+        if (!portable_stdlib_array) {
+            lower_validate_portable_collection_receiver(lower, object, expr->span);
+            lower_validate_portable_collection_index(lower, index, false, expr->as.index.index->span);
+        }
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.index.index->as.unary.op, "-") &&
             expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {

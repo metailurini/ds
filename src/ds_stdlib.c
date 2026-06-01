@@ -37,6 +37,12 @@ static const DsStdlibHelper HELPERS[] = {
     {"string.split", "__ds_string_split", 2, 2, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false},
     {"string.starts_with", "__ds_string_starts_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
     {"string.ends_with", "__ds_string_ends_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
+    {"string.len", "__ds_string_len", 1, 1, DS_STDLIB_RETURN_INT, false, true, false, false, false},
+    {"string.index_of", "__ds_string_index_of", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false},
+    {"string.last_index_of", "__ds_string_last_index_of", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false},
+    {"string.count", "__ds_string_count", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false},
+    {"string.char_at", "__ds_string_char_at", 2, 2, DS_STDLIB_RETURN_STRING, false, false, false, false, false},
+    {"string.slice", "__ds_string_slice", 3, 3, DS_STDLIB_RETURN_STRING, false, false, false, false, false},
 };
 
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
