@@ -834,6 +834,17 @@ for row in \
   script="$TMP/helper_$name.sh"
   emit_checked "helper_$name" "$file" "$script"
   assert_helper_present_once "$script" "$helper" "helper $name emits $helper exactly once"
+  for other in \
+    __ds_string_len \
+    __ds_string_index_of \
+    __ds_string_last_index_of \
+    __ds_string_count \
+    __ds_string_char_at \
+    __ds_string_slice; do
+    if [ "$other" != "$helper" ]; then
+      assert_helper_absent "$script" "$other" "helper $name excludes unrelated $other"
+    fi
+  done
 done
 
 trim_split_only=$(write_fixture trim_split_only <<'DS'
