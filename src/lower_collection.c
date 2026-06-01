@@ -47,6 +47,22 @@ bool lower_collection_element_is_portable(const DsLowerExpr *expr) {
     }
 }
 
+bool lower_collection_row_field_is_portable(const DsLowerExpr *expr) {
+    if (lower_collection_element_is_portable(expr)) return true;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_INTERP:
+        case DS_LOWER_EXPR_BINARY:
+        case DS_LOWER_EXPR_UNARY:
+            return true;
+        case DS_LOWER_EXPR_CALL:
+            return expr->as.call.return_kind == DS_LOWER_VALUE_STRING ||
+                   expr->as.call.return_kind == DS_LOWER_VALUE_INT ||
+                   expr->as.call.return_kind == DS_LOWER_VALUE_BOOL;
+        default:
+            return false;
+    }
+}
+
 bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable) {
     if (!iterable) return false;
     if (iterable->kind == DS_LOWER_EXPR_IDENT) return true;

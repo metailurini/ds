@@ -619,10 +619,12 @@ let values = ["a" == "a", !false]
 DS
 assert_diag array_expression_element "$FIX/bad_array_expression_element.ds" 'collection element expressions must be scalar Bash-emittable values in v0.10.0'
 
-write_fixture "$FIX/bad_map_expression_value.ds" <<'DS'
+write_fixture "$FIX/map_expression_value.ds" <<'DS'
 let values = { ok: "a" == "a" }
 DS
-assert_diag map_expression_value "$FIX/bad_map_expression_value.ds" 'collection element expressions must be scalar Bash-emittable values in v0.10.0'
+run_ok map_expression_value_check "$DS" check "$FIX/map_expression_value.ds"
+run_ok map_expression_value_emit "$DS" emit bash "$FIX/map_expression_value.ds" -o "$TMP/map_expression_value.sh"
+run_ok map_expression_value_bash_syntax bash -n "$TMP/map_expression_value.sh"
 
 write_fixture "$FIX/bad_push_expression_value.ds" <<'DS'
 let values = []

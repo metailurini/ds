@@ -360,10 +360,14 @@ static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, S
         row_schema_clone(schema, &out->as.let_stmt.row_schema);
         scope_define_row(lower, lower->scope, name, out->as.let_stmt.row_schema, span);
     } else {
-        scope_define_array(lower, lower->scope, name, kind,
-                           kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
-                           (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
-                           span);
+        SymKind element_kind = kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
+                               (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN);
+        scope_define_array(lower, lower->scope, name, kind, element_kind, span);
+        Symbol *sym = scope_find_current(lower->scope, name);
+        if (sym && kind == SYM_ARRAY && out->as.let_stmt.value && out->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY &&
+            out->as.let_stmt.value->as.array.elements.len > 0 && !out->as.let_stmt.value->as.array.is_row_array) {
+            sym->saw_scalar_array_value = true;
+        }
     }
 }
 
@@ -631,6 +635,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_IF, stmt->span);
             SymKind cond_kind = SYM_UNKNOWN;
             out->as.if_stmt.condition = lower_expr(lower, stmt->as.if_stmt.condition, &cond_kind);
+            if (cond_kind != SYM_BOOL && cond_kind != SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, stmt->as.if_stmt.condition->span, "condition expression must be bool");
+            }
             out->as.if_stmt.then_branch = lower_block(lower, stmt->as.if_stmt.then_branch, true);
             if (stmt->as.if_stmt.else_branch) out->as.if_stmt.else_branch = lower_block(lower, stmt->as.if_stmt.else_branch, true);
             return out;
@@ -820,7 +827,9 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 const DsLowerRowSchema *schema = NULL;
                 lower_expr_row_schema(out->as.push_stmt.value, &schema);
                 if (sym) {
-                    if (sym->element_kind == SYM_UNKNOWN && !sym->is_row_array) {
+                    if (sym->saw_scalar_array_value && !sym->is_row_array) {
+                        ds_diag_error(lower->diag, stmt->span, "cannot push a row into a scalar array in v0.37.0");
+                    } else if (sym->element_kind == SYM_UNKNOWN && !sym->is_row_array) {
                         symbol_set_row_array(sym, schema);
                     } else if (!sym->is_row_array) {
                         ds_diag_error(lower->diag, stmt->span, "cannot push a row into a scalar array in v0.37.0");
@@ -839,6 +848,18 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "cannot push a scalar value into a row array in v0.37.0");
             } else if (!lower_collection_element_is_portable(out->as.push_stmt.value)) {
                 ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
+            } else if (sym && value_kind != SYM_UNKNOWN) {
+                /*
+                 * Empty-array literals learn whether they are scalar arrays or
+                 * row arrays from the first push.  Without recording the first
+                 * scalar push here, a later row push into the same array still
+                 * looked like an untyped empty array and silently converted the
+                 * variable into a row array during lowering.  Keep this as a
+                 * separate row-vs-scalar marker instead of merging the public
+                 * element kind; older scalar arrays intentionally preserve
+                 * dynamic mixed-element behavior for VM/Bash parity.
+                 */
+                sym->saw_scalar_array_value = true;
             }
             return out;
         }

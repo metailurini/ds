@@ -27,6 +27,7 @@ typedef struct {
     SymKind element_kind;
     bool is_row;
     bool is_row_array;
+    bool saw_scalar_array_value;
     DsLowerRowSchema row_schema;
     bool dynamic_scalar;
     int function_depth;
@@ -125,6 +126,7 @@ void lower_validate_portable_collection_receiver(Lower *lower, const DsLowerExpr
 bool lower_collection_index_is_portable(const DsLowerExpr *expr, bool map_index);
 void lower_validate_portable_collection_index(Lower *lower, const DsLowerExpr *expr, bool map_index, DsSpan span);
 bool lower_collection_element_is_portable(const DsLowerExpr *expr);
+bool lower_collection_row_field_is_portable(const DsLowerExpr *expr);
 bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable);
 bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable);
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span);

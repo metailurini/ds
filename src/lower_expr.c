@@ -825,7 +825,7 @@ DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
         lowered.value = lower_expr(lower, entry->value, &value_kind);
         if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
             ds_diag_error(lower->diag, entry->span, "nested collections are deferred in v0.10.0");
-        } else if (!lower_collection_element_is_portable(lowered.value)) {
+        } else if (!lower_collection_row_field_is_portable(lowered.value)) {
             ds_diag_error(lower->diag, entry->value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
         }
         lower_map_entry_vec_push(&out->as.map.entries, lowered);
@@ -880,7 +880,8 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         *kind_out = element_kind;
     } else if (obj_kind == SYM_MAP) {
         out->as.index.object_is_map = true;
-        lower_validate_portable_collection_receiver(lower, object, expr->span);
+        bool portable_row_index = object && object->kind == DS_LOWER_EXPR_INDEX && object->as.index.returns_row;
+        if (!portable_row_index) lower_validate_portable_collection_receiver(lower, object, expr->span);
         lower_validate_portable_collection_index(lower, index, true, expr->as.index.index->span);
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;

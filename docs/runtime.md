@@ -1051,6 +1051,35 @@ compound index assignment, deletion, aliases/references, and same-map mutation
 during map iteration remain unsupported language forms rather than backend
 runtime behavior.
 
+## v0.37.0 row-array runtime notes
+
+`v0.37.0` keeps lightweight rows inside the existing flat map/array value
+model. A row is a flat map whose fields are scalar `string`, `int`, or `bool`
+values, and a row-array is an array whose elements share one lowered row schema.
+The schema is lowerer-owned metadata: it records field names and scalar kinds so
+field access, row-array `push`, loop variables, indexed rows, returned rows, and
+`sort_by(field[, direction])` have the same checks before VM execution and Bash
+emission.
+
+The VM stores rows as copied `DsValue` maps inside copied `DsValue` arrays. Row
+and row-array assignment follows the existing collection copy-by-value rule, so
+later `push` operations on a copied row array do not mutate the original. The VM
+sorts row arrays by the requested string/int/bool field using deterministic,
+stable ordering and returns a sorted copy rather than mutating the receiver.
+
+Generated Bash remains standalone. It represents row arrays with reserved
+`__ds_` sidecar arrays: one array tracks row positions and element kind, and one
+field-specific sidecar array stores each scalar field's bytes. Function returns
+and assignments copy those sidecars so row-array payloads preserve spaces, tabs,
+newlines, shell metacharacters, braces, and scalar kind metadata without calling
+back into `ds`. Runtime row-array index failures are fail-fast in both VM and
+emitted Bash, including row field reads inside command arguments.
+
+Rows are intentionally not public schema/type declarations. Row and row-array
+parameters, nested row fields, row-field assignment, row-array element
+replacement/deletion, custom comparators, serialization helpers, and public Bash
+payload compatibility remain deferred.
+
 ## v0.31.0 recursive glob runtime notes
 
 `v0.31.0` extends the existing `glob` and `glob!` helpers with scoped recursive

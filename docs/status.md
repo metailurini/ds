@@ -7,7 +7,7 @@ dedicated-test pass, the `v0.34.0` text-literal/broken-pipe DX pass, the
 `v0.35.0` core string parsing helper implementation and dedicated-test pass,
 the `v0.36.0` scalar function-parameter kind-inference implementation and
 dedicated-test pass, and the `v0.37.0` lightweight row/row-array implementation
-pass. It is a
+and dedicated-test pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.

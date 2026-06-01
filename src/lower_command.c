@@ -482,9 +482,63 @@ static bool command_quoted_word_needs_value_call_materialization(Lower *lower, D
     DsStr decoded = {0};
     if (!lower_decode_string_text(word, &decoded)) return false;
     bool found = ds_command_word_contains_direct_call_interpolation(decoded);
+    if (!found) {
+        for (size_t i = 0; i < decoded.len; i++) {
+            if (decoded.data[i] != '{') continue;
+            if (i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
+            size_t j = i + 1;
+            while (j < decoded.len && decoded.data[j] != '}') {
+                if (decoded.data[j] == '[') { found = true; break; }
+                j++;
+            }
+            if (found) break;
+            i = j;
+        }
+    }
     free(decoded.data);
     (void)lower;
     return found;
+}
+
+static bool command_word_is_index_field_access(DsStr word) {
+    if (word.len == 0 || word.data[0] == '$' || word.data[0] == '"') return false;
+    size_t i = 0;
+    if (!((word.data[i] >= 'A' && word.data[i] <= 'Z') ||
+          (word.data[i] >= 'a' && word.data[i] <= 'z') ||
+          word.data[i] == '_')) {
+        return false;
+    }
+    i++;
+    while (i < word.len && ds_command_name_char(word.data[i])) i++;
+    if (i >= word.len || word.data[i] != '[') return false;
+    int depth = 1;
+    i++;
+    while (i < word.len && depth > 0) {
+        if (word.data[i] == '[') depth++;
+        else if (word.data[i] == ']') depth--;
+        i++;
+    }
+    if (depth != 0 || i >= word.len || word.data[i] != '.') return false;
+    i++;
+    if (i >= word.len || !((word.data[i] >= 'A' && word.data[i] <= 'Z') ||
+                           (word.data[i] >= 'a' && word.data[i] <= 'z') ||
+                           word.data[i] == '_')) {
+        return false;
+    }
+    i++;
+    while (i < word.len && ds_command_name_char(word.data[i])) i++;
+    return i == word.len;
+}
+
+static DsStr lower_command_index_field_temp_text(DsStr word) {
+    DsString s;
+    ds_string_init(&s);
+    ds_string_append_char(&s, '"');
+    ds_string_append_char(&s, '{');
+    ds_string_append_range(&s, word.data, word.len);
+    ds_string_append_char(&s, '}');
+    ds_string_append_char(&s, '"');
+    return (DsStr){s.data, s.len};
 }
 
 static DsStr lower_make_temp_name(Lower *lower, const char *prefix) {
@@ -548,9 +602,12 @@ bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand 
     for (size_t s = 0; s < command->stages.len; s++) {
         for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
             DsWord *word = &command->stages.items[s].words.items[i];
-            if (!command_quoted_word_needs_value_call_materialization(lower, word->text)) continue;
+            bool materialize_index_field = command_word_is_index_field_access(word->text);
+            if (!materialize_index_field && !command_quoted_word_needs_value_call_materialization(lower, word->text)) continue;
             DsStr tmp = lower_make_temp_name(lower, "cmd_interp");
-            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, word->text, word->span));
+            DsStr temp_text = materialize_index_field ? lower_command_index_field_temp_text(word->text) : word->text;
+            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, temp_text, word->span));
+            if (materialize_index_field) free(temp_text.data);
             free(word->text.data);
             word->text = lower_command_temp_word(tmp);
             free(tmp.data);

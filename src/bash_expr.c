@@ -392,7 +392,10 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            if (str_eq(expr->as.binary.op, "in") || str_eq(expr->as.binary.op, "matches") ||
+            if (str_eq(expr->as.binary.op, "==") || str_eq(expr->as.binary.op, "!=") ||
+                str_eq(expr->as.binary.op, ">") || str_eq(expr->as.binary.op, ">=") ||
+                str_eq(expr->as.binary.op, "<") || str_eq(expr->as.binary.op, "<=") ||
+                str_eq(expr->as.binary.op, "in") || str_eq(expr->as.binary.op, "matches") ||
                 str_eq(expr->as.binary.op, "&&") || str_eq(expr->as.binary.op, "||")) {
                 buf_append(out, "$(if ");
                 if (!emit_condition(e, expr, out)) return false;
@@ -402,6 +405,12 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: binary value expression should be supported or rejected by lowering");
             return false;
         case DS_LOWER_EXPR_UNARY:
+            if (str_eq(expr->as.unary.op, "!")) {
+                buf_append(out, "$(if ");
+                if (!emit_condition(e, expr, out)) return false;
+                buf_append(out, "; then printf true; else printf false; fi)");
+                return true;
+            }
             if (str_eq(expr->as.unary.op, "-")) {
                 buf_append(out, "\"$(__ds_int_neg ");
                 if (!emit_value_expr(e, expr->as.unary.right, out)) return false;

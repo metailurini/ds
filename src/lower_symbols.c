@@ -107,6 +107,7 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
         current->element_kind = element_kind;
         current->is_row = false;
         current->is_row_array = false;
+        current->saw_scalar_array_value = kind == SYM_ARRAY && element_kind != SYM_UNKNOWN && element_kind != SYM_MAP;
         row_schema_free(&current->row_schema);
         current->dynamic_scalar = false;
         current->function_depth = lower->function_depth;
@@ -125,6 +126,7 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     scope->items[scope->len].element_kind = element_kind;
     scope->items[scope->len].is_row = false;
     scope->items[scope->len].is_row_array = false;
+    scope->items[scope->len].saw_scalar_array_value = kind == SYM_ARRAY && element_kind != SYM_UNKNOWN && element_kind != SYM_MAP;
     row_schema_init(&scope->items[scope->len].row_schema);
     scope->items[scope->len].dynamic_scalar = false;
     scope->items[scope->len].function_depth = lower->function_depth;
@@ -145,6 +147,7 @@ void symbol_set_row(Symbol *sym, const DsLowerRowSchema *schema) {
     }
     sym->is_row = true;
     sym->is_row_array = false;
+    sym->saw_scalar_array_value = false;
 }
 
 void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema) {
@@ -156,6 +159,7 @@ void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema) {
     sym->element_kind = SYM_MAP;
     sym->is_row = false;
     sym->is_row_array = true;
+    sym->saw_scalar_array_value = false;
 }
 
 void scope_define_row(Lower *lower, Scope *scope, DsStr name, DsLowerRowSchema schema, DsSpan span) {
