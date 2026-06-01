@@ -772,7 +772,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             if (is_multi) buf_append(&e->out, "if [[ -t 0 ]]; then exec </dev/null; fi; ");
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
             if (is_multi) {
-                buf_append(&e->out, " ) || { __ds_code=$?; if (( __ds_code == 141 )) && [[ ! -t 1 ]]; then ");
+                buf_append(&e->out, " ) || { __ds_code=$?; if __ds_is_quiet_broken_pipe \"$__ds_code\"; then ");
                 if (e->handler_depth > 0) buf_append(&e->out, "return 0; ");
                 else buf_append(&e->out, "exit 0; ");
                 buf_append(&e->out, "fi; printf '%s: error: pipeline failed with exit %s\\n' ");

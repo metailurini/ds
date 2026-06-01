@@ -719,6 +719,8 @@ typedef struct {
     DsString stdout_text;
     DsString stderr_text;
     int code;
+    bool terminated_by_sigpipe;
+    bool has_non_sigpipe_failure;
 } VmProcessResult;
 
 typedef struct {
@@ -766,16 +768,24 @@ static int process_status_code(int status) {
     return 1;
 }
 
+static bool process_status_is_signal(int status, int sig) {
+    return WIFSIGNALED(status) && WTERMSIG(status) == sig;
+}
+
 static void process_result_init(VmProcessResult *result) {
     ds_string_init(&result->stdout_text);
     ds_string_init(&result->stderr_text);
     result->code = 0;
+    result->terminated_by_sigpipe = false;
+    result->has_non_sigpipe_failure = false;
 }
 
 static void process_result_free(VmProcessResult *result) {
     ds_string_free(&result->stdout_text);
     ds_string_free(&result->stderr_text);
     result->code = 0;
+    result->terminated_by_sigpipe = false;
+    result->has_non_sigpipe_failure = false;
 }
 
 static bool read_file_into_string(FILE *fp, DsString *out) {
@@ -979,21 +989,30 @@ static bool vm_command_was_interrupted(const Vm *vm, int code) {
            code == ds_posix_signal_default_status(vm->interrupted_signal);
 }
 
-static bool vm_command_is_quiet_broken_pipe(const VmProcessSpec *spec, int code) {
+static bool vm_stdout_is_pipe_like(void) {
+    struct stat st;
+    if (fstat(STDOUT_FILENO, &st) != 0) return false;
+    return S_ISFIFO(st.st_mode) || S_ISSOCK(st.st_mode);
+}
+
+static bool vm_command_is_quiet_broken_pipe(const VmProcessSpec *spec, const VmProcessResult *result) {
     /*
      * v0.34.0 closed-stdout DX: when the script itself is piped into a consumer
      * such as `head`, ordinary output commands may conventionally surface as
-     * SIGPIPE/141. Suppress the ds command-failure diagnostic and treat the
-     * top-level statement as successful only for uncaptured, unredirected writes
-     * while stdout is not a terminal. Captured command results still expose 141.
+     * SIGPIPE/141. The VM has the raw wait status, so keep this classification
+     * narrow: only an actual SIGPIPE termination on an uncaptured, unredirected
+     * command with a pipe-like stdout is quiet. Captured command results still
+     * expose the observed 141 status as data.
      */
     return spec && !spec->capture && spec->redirect.kind == DS_REDIRECT_NONE &&
-           code == 128 + SIGPIPE && !isatty(STDOUT_FILENO);
+           result && result->code == 128 + SIGPIPE && result->terminated_by_sigpipe &&
+           !result->has_non_sigpipe_failure && vm_stdout_is_pipe_like();
 }
 
-static bool vm_pipeline_is_quiet_broken_pipe(const Instr *ins, int code) {
+static bool vm_pipeline_is_quiet_broken_pipe(const Instr *ins, const VmProcessResult *result) {
     return ins && ins->redirect.kind == DS_REDIRECT_NONE &&
-           code == 128 + SIGPIPE && !isatty(STDOUT_FILENO);
+           result && result->code == 128 + SIGPIPE && result->terminated_by_sigpipe &&
+           !result->has_non_sigpipe_failure && vm_stdout_is_pipe_like();
 }
 
 static void vm_forward_signal_to_child_group(Vm *vm, pid_t pgid, int sig) {
@@ -1174,6 +1193,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
         return false;
     }
     result->code = process_status_code(status);
+    result->terminated_by_sigpipe = process_status_is_signal(status, SIGPIPE);
 
     if (!spec->capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
         ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(exec_errno));
@@ -1343,6 +1363,11 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
         }
         vm_note_wait_status_signal(vm, status);
         codes[i] = process_status_code(status);
+        if (codes[i] != 0) {
+            bool stage_sigpipe = process_status_is_signal(status, SIGPIPE);
+            if (!stage_sigpipe) result->has_non_sigpipe_failure = true;
+            if (i + 1 == n && stage_sigpipe) result->terminated_by_sigpipe = true;
+        }
     }
     vm_restore_terminal_pgrp(tty_fd, shell_pgid);
     result->code = ds_command_pipeline_status(codes, n);
@@ -1378,7 +1403,7 @@ int run_command(Vm *vm, Instr *ins) {
         VmProcessResult result;
         bool ok = process_execute_pipeline(vm, ins, false, &result);
         int code = ok ? result.code : 1;
-        if (ok && vm_pipeline_is_quiet_broken_pipe(ins, code)) {
+        if (ok && vm_pipeline_is_quiet_broken_pipe(ins, &result)) {
             vm->control_exit_requested = true;
             code = 0;
         }
@@ -1396,7 +1421,7 @@ int run_command(Vm *vm, Instr *ins) {
     VmProcessResult result;
     bool ok = process_execute(vm, &spec, &result);
     int code = ok ? result.code : 1;
-    if (ok && vm_command_is_quiet_broken_pipe(&spec, code)) {
+    if (ok && vm_command_is_quiet_broken_pipe(&spec, &result)) {
         vm->control_exit_requested = true;
         code = 0;
     }

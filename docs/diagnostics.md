@@ -265,9 +265,12 @@ execution:
   runtime glob strings, or runtime string-helper separators.
 - VM/runtime and emitted Bash helpers also own the scoped `v0.34.0` broken-pipe
   quieting classification for accepted uncaptured, unredirected command or
-  pipeline executions that return status `141` while stdout is not a terminal.
-  That classification is runtime data, not a lowering rule; captured command
-  results must keep their observed status fields.
+  pipeline executions. VM execution uses raw wait status and quiets only actual
+  direct-command or final-pipeline-stage `SIGPIPE` with pipe-like stdout and no
+  non-SIGPIPE pipeline failures; emitted Bash uses the documented standalone
+  heuristic of status `141` with pipe-like stdout. That classification is
+  runtime data, not a lowering rule; captured command results must keep their
+  observed status fields.
 - VM/Bash internal invariant diagnostics are for shapes that should be impossible
   after lowering, such as unknown helper/function targets, unsupported accepted
   interpolation shapes, or corrupted Bash function-return payloads.

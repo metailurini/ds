@@ -282,11 +282,14 @@ parity and clear interaction with existing block and loop scopes.
 captured `run` expressions. Pipeline status uses Bash `pipefail` semantics: if
 any stage fails, the pipeline status is the rightmost failing stage.
 Since `v0.34.0`, the common closed-stdout case for uncaptured, unredirected
-top-level command statements and pipelines is quieted: a status-141 broken pipe
-while stdout is not a terminal is treated as successful early script completion
-after supported cleanup runs. Captured `run` results still preserve observed
-subprocess status fields, and unrelated command/pipeline failures remain
-visible.
+top-level command statements and pipelines is quieted. VM execution quiets only actual direct-command or final-pipeline-stage
+`SIGPIPE` terminations with pipe-like stdout and no non-SIGPIPE pipeline
+failures; emitted Bash uses the standalone-Bash heuristic of status `141` with
+pipe-like stdout. Quiet cases are
+treated as successful early script completion after supported cleanup runs.
+Captured `run` results still preserve observed subprocess status fields, and
+unrelated command/pipeline failures remain visible except for Bash's documented
+explicit-`141`-under-pipe ambiguity.
 
 `v0.19.0` added ASCII string methods, formatted interpolation, and
 triple-quoted strings. Format widths and precisions are bounded to `1..1024`.

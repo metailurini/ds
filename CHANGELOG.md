@@ -15,6 +15,10 @@
   unredirected top-level command statements and pipelines, so commands such as
   `ds run script.ds | head` and generated Bash equivalents exit successfully
   without noisy status-141 diagnostics after supported cleanup runs.
+- Tightened the follow-up broken-pipe contract: VM execution now quiets only raw direct-command/final-pipeline-stage
+  `SIGPIPE` terminations with pipe-like stdout; generated Bash uses a pipe-like
+  stdout check for its documented standalone status-141 heuristic and exits after
+  cleanup for quiet pipeline cases instead of continuing to later statements.
 - Preserved command-result capture semantics for broken-pipe-like subprocess
   statuses: captured `run` commands still expose `code`, `ok`, and `failed`
   instead of being converted into top-level success.

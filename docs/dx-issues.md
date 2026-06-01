@@ -131,10 +131,12 @@ command `echo` failed with exit 141
 ```
 
 For CLI-style scripts, this was too noisy. `v0.34.0` quiets the common
-uncaptured, unredirected closed-stdout status-141 case for VM execution and
-emitted Bash, while preserving captured command-result statuses and unrelated
-command failures. The dedicated regression suite is still pending in the next
-test pass.
+uncaptured, unredirected closed-stdout case: VM execution uses exact raw direct-command/final-pipeline-stage
+`SIGPIPE` status with pipe-like stdout, while emitted Bash uses the documented
+standalone status-141/pipe-stdout heuristic. Captured command-result statuses
+are preserved. Unrelated failures remain visible except for Bash's unavoidable
+explicit-`141`-under-pipe ambiguity. The dedicated regression suite is still
+pending in the next test pass.
 
 ## String parsing APIs are limited
 
