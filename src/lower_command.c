@@ -202,6 +202,16 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 free(decoded.data);
                 return false;
             }
+            if (j >= decoded.len) {
+                ds_diag_error(lower->diag, span, "unclosed interpolation in string; expected `}`");
+                free(decoded.data);
+                return false;
+            }
+            if (!memchr(decoded.data + j, '}', decoded.len - j)) {
+                ds_diag_error(lower->diag, span, "unclosed interpolation in string; expected `}`");
+                free(decoded.data);
+                return false;
+            }
             if (name.len == 3 && memcmp(name.data, "env", 3) == 0 && j < decoded.len && decoded.data[j] == '.') {
                 size_t field_start = ++j;
                 if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
@@ -278,6 +288,11 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
         while (k < decoded.len && decoded.data[k] != '}') {
             char ac = decoded.data[k++];
             if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') maybe_arith = true;
+        }
+        if (k >= decoded.len) {
+            ds_diag_error(lower->diag, span, "unclosed interpolation in string; expected `}`");
+            free(decoded.data);
+            return false;
         }
         if (maybe_arith && k < decoded.len && decoded.data[k] == '}') {
             DsStr body = {decoded.data + start, k - start};

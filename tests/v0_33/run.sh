@@ -125,13 +125,20 @@ run_parity_env() {
   local name="$1" file="$2" expected_stdout="$3" expected_status="${4:-0}"
   shift 4 || true
   local script="$TMP/$name.sh"
-  local env_args=("PATH=$PATH" "$@")
+  local env_args=("PATH=$PATH") script_args=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*) env_args+=("$1") ;;
+      *) script_args+=("$1") ;;
+    esac
+    shift
+  done
   run_ok "${name}_check" "$DS" check "$file"
   emit_checked "$name" "$file" "$script"
   set +e
-  env -i "${env_args[@]}" timeout "$CASE_TIMEOUT" "$DS" run "$file" >"$TMP/${name}_vm.out" 2>"$TMP/${name}_vm.err"
+  env -i "${env_args[@]}" timeout "$CASE_TIMEOUT" "$DS" run "$file" "${script_args[@]}" >"$TMP/${name}_vm.out" 2>"$TMP/${name}_vm.err"
   local vm_rc=$?
-  env -i "${env_args[@]}" timeout "$CASE_TIMEOUT" bash "$script" >"$TMP/${name}_bash.out" 2>"$TMP/${name}_bash.err"
+  env -i "${env_args[@]}" timeout "$CASE_TIMEOUT" bash "$script" "${script_args[@]}" >"$TMP/${name}_bash.out" 2>"$TMP/${name}_bash.err"
   local bash_rc=$?
   set -e
   printf '%s' "$vm_rc" >"$TMP/${name}_vm.rc"
@@ -298,7 +305,7 @@ assert_doc_contains docs/roadmap.md 'v0.33.0' 'roadmap lists v0.33.0'
 assert_doc_contains docs/roadmap.md 'Collection, Glob, and Regex Stabilization' 'roadmap keeps v0.33 stabilization milestone'
 assert_doc_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap keeps deliberate v0.34 after v0.33'
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" 'ds v0.33.0' 'CLI help reports v0.33.0'
+assert_contains "$TMP/cli_help.out" 'ds v0.34.0' 'CLI help reports current version'
 assert_contains "$TMP/cli_help.out" 'emit bash' 'CLI help keeps known command surface'
 assert_doc_contains docs/status.md 'v0.33.0' 'status mentions v0.33.0'
 assert_doc_contains docs/language.ds 'recursive `**`' 'language docs mention recursive glob support'
@@ -776,6 +783,7 @@ if [ "$(id -u)" = 0 ]; then
   if command -v su >/dev/null 2>&1 && id nobody >/dev/null 2>&1; then
     emit_checked glob_perm "$perm_fixture" "$TMP/glob_perm.sh"
     chmod -R a+rx "$TMP" "$ROOT/ds" 2>/dev/null || true
+    chmod 000 "$perm_seed/private" 2>/dev/null || true
     set +e
     su nobody -s /bin/sh -c "cd '$perm_seed' && '$ROOT/ds' run '$perm_fixture'" >"$TMP/glob_perm_vm.out" 2>"$TMP/glob_perm_vm.err"
     glob_perm_vm_rc=$?

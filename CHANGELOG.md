@@ -22,10 +22,17 @@
 - Preserved command-result capture semantics for broken-pipe-like subprocess
   statuses: captured `run` commands still expose `code`, `ok`, and `failed`
   instead of being converted into top-level success.
+- Added the dedicated `tests/v0_34/run.sh` suite and wired it into aggregate
+  version tests after `v0.33.0`, covering the scoped literal-brace and
+  broken-pipe contracts across VM execution and standalone emitted Bash.
+- Fixed an exposed diagnostic bug where unclosed interpolation in command-word
+  strings could fall through to an unknown-variable diagnostic instead of the
+  dedicated unclosed-interpolation error.
+- Refreshed historical test guards that intentionally track the current CLI
+  banner, and fixed the v0.33 root-runner permission fallback so its restricted
+  directory stays unreadable after making the harness runnable by `nobody`.
 - Updated current docs and DX notes for the implemented brace-literal and
-  broken-pipe contracts. The dedicated v0.34 regression suite remains deferred
-  to the next test pass because this implementation pass intentionally did not
-  add tests.
+  broken-pipe contracts plus the now-completed focused v0.34 regression pass.
 
 # v0.33.0 - Collection, Glob, and Regex Stabilization
 

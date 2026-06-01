@@ -122,7 +122,7 @@ assert_contains README.md 'keeps comment-preserving formatting deferred' 'README
 
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.33.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.34.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 write_fixture "$FIX/usage_side_effect.ds" <<'DS'
 touch SHOULD_NOT_EXIST
