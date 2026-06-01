@@ -188,7 +188,7 @@ cat >"$TMP/literal_brace.ds" <<'EOF_DS'
 echo "literal { brace"
 EOF_DS
 run_fail literal_brace "$DS" emit bash "$TMP/literal_brace.ds" -o "$TMP/literal_brace.sh"
-assert_contains "$TMP/literal_brace.err" 'unsupported string interpolation; expected `{name}`' "literal brace rejected clearly"
+assert_contains "$TMP/literal_brace.err" 'unclosed interpolation in string; expected `}`' "literal brace rejected clearly"
 
 # Command statement behavior.
 cat >"$TMP/commands.ds" <<'EOF_DS'

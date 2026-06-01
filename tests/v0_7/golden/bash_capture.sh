@@ -23,8 +23,11 @@ __ds_trace_cmd() {
   done
   printf '\n' >&2
 }
+__ds_stdout_is_pipe_like() { [[ -p /dev/stdout || -S /dev/stdout ]]; }
+__ds_is_quiet_broken_pipe() { local __ds_code=$1 __ds_allow=${2:-0}; (( __ds_allow == 1 && __ds_code == 141 )) && __ds_stdout_is_pipe_like; }
 __ds_fail() {
-  local __ds_loc=$1 __ds_code=$2
+  local __ds_loc=$1 __ds_code=$2 __ds_allow=${3:-0}
+  if __ds_is_quiet_broken_pipe "$__ds_code" "$__ds_allow"; then exit 0; fi
   echo "$__ds_loc: error: command failed with exit $__ds_code" >&2
   exit "$__ds_code"
 }
@@ -68,5 +71,5 @@ __ds_capture __ds_r 'tests/v0_7/fixtures/helpers/bash_capture.ds':2:9 printf "$_
 
 # ds: tests/v0_7/fixtures/helpers/bash_capture.ds:3
 __ds_trace_cmd 'tests/v0_7/fixtures/helpers/bash_capture.ds':3:1 echo "$__ds_r_stdout"
-echo "$__ds_r_stdout" || __ds_fail 'tests/v0_7/fixtures/helpers/bash_capture.ds':3:1 "$?"
+( echo "$__ds_r_stdout" ) || __ds_fail 'tests/v0_7/fixtures/helpers/bash_capture.ds':3:1 "$?" 1
 

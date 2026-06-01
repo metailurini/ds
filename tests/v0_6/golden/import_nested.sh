@@ -21,8 +21,11 @@ __ds_trace_cmd() {
   done
   printf '\n' >&2
 }
+__ds_stdout_is_pipe_like() { [[ -p /dev/stdout || -S /dev/stdout ]]; }
+__ds_is_quiet_broken_pipe() { local __ds_code=$1 __ds_allow=${2:-0}; (( __ds_allow == 1 && __ds_code == 141 )) && __ds_stdout_is_pipe_like; }
 __ds_fail() {
-  local __ds_loc=$1 __ds_code=$2
+  local __ds_loc=$1 __ds_code=$2 __ds_allow=${3:-0}
+  if __ds_is_quiet_broken_pipe "$__ds_code" "$__ds_allow"; then exit 0; fi
   echo "$__ds_loc: error: command failed with exit $__ds_code" >&2
   exit "$__ds_code"
 }
@@ -35,16 +38,16 @@ __ds_b="B"
 
 # ds: tests/v0_6/fixtures/imports_nested/shared/b.ds:3
 __ds_trace_cmd 'tests/v0_6/fixtures/imports_nested/shared/b.ds':3:1 echo "b sees ${__ds_common}"
-echo "b sees ${__ds_common}" || __ds_fail 'tests/v0_6/fixtures/imports_nested/shared/b.ds':3:1 "$?"
+( echo "b sees ${__ds_common}" ) || __ds_fail 'tests/v0_6/fixtures/imports_nested/shared/b.ds':3:1 "$?" 1
 
 # ds: tests/v0_6/fixtures/imports_nested/shared/a.ds:2
 __ds_a="A"
 
 # ds: tests/v0_6/fixtures/imports_nested/shared/a.ds:3
 __ds_trace_cmd 'tests/v0_6/fixtures/imports_nested/shared/a.ds':3:1 echo "a sees ${__ds_b} and ${__ds_common}"
-echo "a sees ${__ds_b} and ${__ds_common}" || __ds_fail 'tests/v0_6/fixtures/imports_nested/shared/a.ds':3:1 "$?"
+( echo "a sees ${__ds_b} and ${__ds_common}" ) || __ds_fail 'tests/v0_6/fixtures/imports_nested/shared/a.ds':3:1 "$?" 1
 
 # ds: tests/v0_6/fixtures/imports_nested/main.ds:2
 __ds_trace_cmd 'tests/v0_6/fixtures/imports_nested/main.ds':2:1 echo "root sees ${__ds_a} ${__ds_b} ${__ds_common}"
-echo "root sees ${__ds_a} ${__ds_b} ${__ds_common}" || __ds_fail 'tests/v0_6/fixtures/imports_nested/main.ds':2:1 "$?"
+( echo "root sees ${__ds_a} ${__ds_b} ${__ds_common}" ) || __ds_fail 'tests/v0_6/fixtures/imports_nested/main.ds':2:1 "$?" 1
 

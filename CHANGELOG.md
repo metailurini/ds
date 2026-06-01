@@ -1,5 +1,6 @@
 # v0.35.0 - Core String Parsing Helpers
 
+- Bumped the CLI help banner to `ds v0.35.0` for the string-helper milestone.
 - Added byte-oriented string helpers `.len()`, `.index_of(needle)`,
   `.last_index_of(needle)`, `.count(needle)`, `.char_at(index)`, and
   `.slice(start, end)` with VM and standalone Bash parity.
@@ -10,12 +11,23 @@
   ranges are rejected instead of clamped or wrapped.
 - Accepted read-only `string.split(...)[index]` chains so parsing expressions
   like `sig.split("(")[0].trim()` work without temporary variables.
+- Fixed expression-backed interpolation and quoted command-word interpolation so
+  scalar string method chains such as `{s.len()}`, `{s.slice(0, 3)}`, and
+  `{result.stdout.index_of(":")}` lower through the same checked expression path
+  as ordinary expressions instead of being misread as unknown dotted functions.
 - Tightened emitted-Bash helper selection so string-only programs emit only the
   specific string helper bodies they use, plus scalar stdlib capture when a
   direct assignment needs it, instead of emitting the full string-helper block.
-- Updated language/status/runtime/diagnostics/DX docs for the implemented
-  v0.35.0 surface. Dedicated regression tests remain for the follow-up test
-  implementation pass.
+- Kept scalar stdlib capture emission for indexed collection assignment values,
+  so existing forms like `out[i] = item.upper()` continue to emit standalone
+  Bash after the helper-selection tightening.
+- Added the dedicated `tests/v0_35/run.sh` suite and wired it into aggregate
+  version tests after `v0.34.0`, covering helper semantics, byte-oriented
+  locale pressure, diagnostics, fail-fast behavior, direct split-index method
+  chains, interpolation method chains, imports, helper hygiene, and realistic
+  parsing smoke fixtures.
+- Updated language/status/runtime/diagnostics/DX and milestone docs for the
+  implemented and tested `v0.35.0` surface.
 
 # v0.34.0 - Text Literal and Broken-Pipe DX
 

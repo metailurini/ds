@@ -3,8 +3,8 @@
 This document is the user-facing snapshot after the completed structured
 return, direct environment/interpolation, collection mutation, recursive glob,
 runtime regex feature wave, the `v0.33.0` stabilization implementation and
-dedicated-test pass, and the `v0.34.0` text-literal/broken-pipe DX
-implementation pass. It is a
+dedicated-test pass, the `v0.34.0` text-literal/broken-pipe DX pass, and the
+`v0.35.0` core string parsing helper implementation and dedicated-test pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -320,17 +320,19 @@ with the return transport through arbitrary stdout; statement-style calls may
 still stream stdout and ignore returned scalar values. Use captured `run`
 expressions inside value functions when command output should participate in the
 returned value. Expression-backed string interpolation can include
-scalar value-returning calls. v0.27.0 also adds direct `env.NAME` reads,
+scalar value-returning calls and checked scalar string method chains such as
+`{s.len()}` and `{s.slice(0, 3)}`. v0.27.0 also adds direct `env.NAME` reads,
 `env.NAME = scalar` assignment, and `unset env.NAME`; missing environment
 variables read as an empty string, assignments are exported to later child
 commands, and unsets remove the variable from later child-command environments
 in both VM and emitted Bash. Command-word interpolation supports the legacy `{name}` / `{name.field}` forms,
 `{env.NAME}`, direct `env.NAME` command arguments, integer arithmetic
 expressions, direct scalar value-returning function calls in quoted command
-words, and v0.30 flat named collection index reads such as `{items[0]}` and
-`{map[key]}`. Interpolated function calls are pre-evaluated before the outer
-command launches; collection/map/command-result interpolation beyond that flat
-index-read surface remains rejected. Statement-style calls may still
+words, scalar string method chains, and v0.30 flat named collection index reads
+such as `{items[0]}` and `{map[key]}`. Interpolated calls and method chains are
+pre-evaluated before the outer command launches; collection/map/command-result
+interpolation beyond that flat index-read and scalar-method surface remains
+rejected. Statement-style calls may still
 ignore returned values.
 `examples/function-values.ds` shows the supported return, arithmetic, and
 expression interpolation path.

@@ -617,7 +617,8 @@ static bool stmt_uses_stdlib_capture(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: return scalar_stdlib_call_needs_capture(stmt->as.let_stmt.value);
         case DS_LOWER_STMT_ASSIGN: return scalar_stdlib_call_needs_capture(stmt->as.assign_stmt.value);
-        case DS_LOWER_STMT_INDEX_ASSIGN: return false;
+        case DS_LOWER_STMT_INDEX_ASSIGN:
+            return scalar_stdlib_call_needs_capture(stmt->as.index_assign_stmt.value);
         case DS_LOWER_STMT_IF:
             return stmt_uses_stdlib_capture(stmt->as.if_stmt.then_branch) ||
                    (stmt->as.if_stmt.else_branch && stmt_uses_stdlib_capture(stmt->as.if_stmt.else_branch));

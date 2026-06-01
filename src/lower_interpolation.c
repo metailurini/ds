@@ -110,9 +110,33 @@ static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) 
     size_t start = *i;
     if (start >= len || !interp_is_ident_start(s[start])) return false;
     (*i)++;
-    while (*i < len && (interp_is_ident_char(s[*i]) || s[*i] == '.')) (*i)++;
+    while (*i < len && interp_is_ident_char(s[*i])) (*i)++;
     *out = (DsStr){(char *)s + start, *i - start};
     return true;
+}
+
+static bool interp_name_eq(DsStr name, const char *text) {
+    size_t len = strlen(text);
+    return name.len == len && memcmp(name.data, text, len) == 0;
+}
+
+static bool interp_expr_is_ident_text(DsExpr *expr, const char *text) {
+    return expr && expr->kind == DS_EXPR_IDENT && interp_name_eq(expr->as.text, text);
+}
+
+static bool interp_expr_is_stdlib_namespace(DsExpr *expr) {
+    return interp_expr_is_ident_text(expr, "file") || interp_expr_is_ident_text(expr, "dir") ||
+           interp_expr_is_ident_text(expr, "path") || interp_expr_is_ident_text(expr, "cmd") ||
+           interp_expr_is_ident_text(expr, "env") || interp_expr_is_ident_text(expr, "regex");
+}
+
+static DsStr interp_dup_dotted_name(DsStr left, DsStr right) {
+    size_t len = left.len + 1 + right.len;
+    char *data = (char *)ds_xcalloc(len + 1, 1);
+    memcpy(data, left.data, left.len);
+    data[left.len] = '.';
+    memcpy(data + left.len + 1, right.data, right.len);
+    return (DsStr){data, len};
 }
 
 static DsExpr *temp_ident_from_str(DsStr name, DsSpan span) {
@@ -128,6 +152,32 @@ static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i
     (*i)++;
     DsExpr *call = temp_expr_new(DS_EXPR_CALL, span);
     call->as.call.name = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
+    interp_skip_ws(s, len, i);
+    if (*i < len && s[*i] == ')') { (*i)++; return call; }
+    while (*i < len) {
+        interp_skip_ws(s, len, i);
+        DsExpr *arg = parse_interp_expr_bp(s, len, i, span, 0);
+        if (!arg) return call;
+        temp_expr_vec_push(&call->as.call.args, arg);
+        interp_skip_ws(s, len, i);
+        if (*i < len && s[*i] == ',') { (*i)++; continue; }
+        if (*i < len && s[*i] == ')') { (*i)++; return call; }
+        return call;
+    }
+    return call;
+}
+
+static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i, DsExpr *receiver, DsStr field, DsSpan span) {
+    if (*i >= len || s[*i] != '(') return NULL;
+    (*i)++;
+    DsExpr *call = temp_expr_new(DS_EXPR_CALL, span);
+    if (interp_expr_is_stdlib_namespace(receiver)) {
+        call->as.call.name = interp_dup_dotted_name(receiver->as.text, field);
+        temp_expr_free(receiver);
+    } else {
+        call->as.call.name = interp_dup_dotted_name((DsStr){"string", 6}, field);
+        temp_expr_vec_push(&call->as.call.args, receiver);
+    }
     interp_skip_ws(s, len, i);
     if (*i < len && s[*i] == ')') { (*i)++; return call; }
     while (*i < len) {
@@ -212,6 +262,42 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
     return expr;
 }
 
+static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan span) {
+    DsExpr *left = parse_interp_primary(s, len, i, span);
+    if (!left) return NULL;
+    for (;;) {
+        interp_skip_ws(s, len, i);
+        if (*i < len && s[*i] == '[') {
+            (*i)++;
+            DsExpr *idx = parse_interp_expr_bp(s, len, i, span, 0);
+            interp_skip_ws(s, len, i);
+            if (*i < len && s[*i] == ']') (*i)++;
+            DsExpr *index_expr = temp_expr_new(DS_EXPR_INDEX, span);
+            index_expr->as.index.object = left;
+            index_expr->as.index.index = idx;
+            left = index_expr;
+            continue;
+        }
+        if (*i < len && s[*i] == '.') {
+            (*i)++;
+            DsStr field = {0};
+            if (!parse_interp_name(s, len, i, &field)) return left;
+            interp_skip_ws(s, len, i);
+            if (*i < len && s[*i] == '(') {
+                left = parse_interp_call_after_dot(s, len, i, left, field, span);
+                continue;
+            }
+            DsExpr *field_expr = temp_expr_new(DS_EXPR_FIELD, span);
+            field_expr->as.field.object = left;
+            field_expr->as.field.field = (DsStr){ds_str_dup_range(field.data, field.len), field.len};
+            left = field_expr;
+            continue;
+        }
+        break;
+    }
+    return left;
+}
+
 static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *left_bp, int *right_bp) {
     interp_skip_ws(s, len, &i);
     if (i >= len) return false;
@@ -246,21 +332,9 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
         left->as.unary.op = (DsStr){ds_str_dup_range("-", 1), 1};
         left->as.unary.right = right;
     } else {
-        left = parse_interp_primary(s, len, i, span);
+        left = parse_interp_postfix(s, len, i, span);
     }
     if (!left) return NULL;
-    for (;;) {
-        interp_skip_ws(s, len, i);
-        if (*i >= len || s[*i] != '[') break;
-        (*i)++;
-        DsExpr *idx = parse_interp_expr_bp(s, len, i, span, 0);
-        interp_skip_ws(s, len, i);
-        if (*i < len && s[*i] == ']') (*i)++;
-        DsExpr *index_expr = temp_expr_new(DS_EXPR_INDEX, span);
-        index_expr->as.index.object = left;
-        index_expr->as.index.index = idx;
-        left = index_expr;
-    }
     while (*i < len) {
         size_t op_i = *i;
         DsStr op = {0};
@@ -290,6 +364,7 @@ static bool decoded_needs_expr_interpolation(DsStr decoded) {
         DsStr name = {0};
         if (!parse_interp_name(decoded.data, decoded.len, &j, &name)) continue;
         interp_skip_ws(decoded.data, decoded.len, &j);
+        if (j < decoded.len && decoded.data[j] == '.') return true;
         if (j < decoded.len && decoded.data[j] == '(') return true;
         if (j < decoded.len && decoded.data[j] == '[') return true;
         while (j < decoded.len && decoded.data[j] != '}') {
@@ -338,7 +413,7 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
             continue;
         }
         temp_expr_free(inner);
-        ds_diag_error(lower->diag, expr->span, "unsupported string interpolation; expected `{name}`, `{name.field}`, or `{name(args...)}`");
+        ds_diag_error(lower->diag, expr->span, "unsupported string interpolation; expected a scalar expression such as `{name}`, `{name.field}`, `{name(args...)}`, or `{name.method(...)}`");
         break;
     }
     interp_push_literal(out, decoded.data + literal_start, decoded.len - literal_start, expr->span);

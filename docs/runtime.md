@@ -744,14 +744,16 @@ parent shell already supplies it again.
 Integer arithmetic uses the same signed 64-bit contract in both backends: `*`,
 `/`, `%`, `**`, unary `-`, and compound integer updates diagnose division by
 zero, negative exponents, out-of-range integer literals, and overflow instead of
-silently wrapping. Expression-backed interpolation supports scalar function calls. Quoted command
-words use the same scalar interpolation surface for direct value-returning
-function calls by pre-materializing each interpolated call into a private string
-variable before the command launches, preserving quoting and avoiding generated
-Bash calls back into `ds`. Those compiler-generated variables are visible only
-to the lowered command/run operation: they are not added to the source symbol
-scope, they do not collide with user variables, and later source code cannot
-read them as normal variables.
+silently wrapping. Expression-backed interpolation supports scalar function
+calls and checked scalar string method chains such as `{s.len()}` or
+`{s.slice(0, 3)}`. Quoted command words use the same scalar interpolation
+surface for direct value-returning function calls and string method chains by
+pre-materializing each interpolated call or scalar method-chain expression that
+needs runtime work into a private string variable before the command launches,
+preserving quoting and avoiding generated Bash calls back into `ds`. Those compiler-generated variables
+are visible only to the lowered command/run operation: they are not added to the
+source symbol scope, they do not collide with user variables, and later source
+code cannot read them as normal variables.
 
 `v0.34.0` keeps that interpolation surface but adds one literal-brace spelling
 inside ordinary and triple-quoted strings: `{{` renders `{`, `}}` renders `}`,
@@ -896,7 +898,10 @@ out-of-range indexes at runtime for dynamic values, while static argument-kind
 validation remains lowerer-owned. Bash emission also supports the narrow
 read-only temporary array case needed for `string.split(...)[index]` chains by
 materializing the split result inside a command-substitution-local array before
-calling the existing array lookup helper.
+calling the existing array lookup helper. The same expression path is available
+inside interpolation and quoted command words for scalar method chains, so
+`"len={s.len()}"` and command arguments such as `"{s.slice(0, 3)}"` have the
+same VM/Bash behavior as ordinary `let` expressions.
 
 Triple-quoted literals use the simple byte rule: every byte between the opening
 `"""` and closing `"""` is literal content. They do not strip indentation.
@@ -1022,7 +1027,8 @@ key value is only known at runtime. Emitted Bash updates the value-kind sidecar
 for every accepted assignment so later map reads, interpolation, conditions,
 `case`, returns, and map iteration preserve VM/Bash scalar-kind parity. Quoted
 command-word interpolation accepts flat named collection index reads such as
-`{items[0]}` and `{map[key]}`; formatting those indexed segments directly remains
+`{items[0]}` and `{map[key]}` plus checked scalar method chains that build on
+accepted scalar values; formatting those indexed segments directly remains
 deferred, so bind the indexed value first when a format specifier is needed.
 
 Collection bindings copy by value, not by reference. `let b = a` where `a` is a

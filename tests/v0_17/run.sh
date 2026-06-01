@@ -141,7 +141,7 @@ assert_contains docs/milestones/v0.17.0-test-plan.md 'Implemented' 'test plan st
 
 # Public command help.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.34.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.35.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 
 # Token, AST, HIR, and bytecode coverage.

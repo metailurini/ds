@@ -82,7 +82,7 @@ if [ "$(grep -c 'side once' "$TMP/bytecode_duplicate_import.out")" != 1 ]; then
 fi
 pass "duplicate import bytecode load-once"
 run_ok emit_duplicate_import "$DS" emit bash "$FIX/imports_basic/duplicate_main.ds" -o "$TMP/duplicate.sh"
-if [ "$(grep -c '^echo "side once"' "$TMP/duplicate.sh")" != 1 ]; then
+if [ "$(grep -c '( echo "side once" )' "$TMP/duplicate.sh")" != 1 ]; then
   cat "$TMP/duplicate.sh" >&2
   fail "duplicate import Bash should include side effect once"
 fi
