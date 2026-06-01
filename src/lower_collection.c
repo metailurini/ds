@@ -1,5 +1,7 @@
 #include "lower_internal.h"
 
+#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 
 /*
@@ -65,4 +67,127 @@ bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable) 
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span) {
     ds_diag_error(lower->diag, span,
                   "for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first");
+}
+
+void row_schema_init(DsLowerRowSchema *schema) {
+    if (!schema) return;
+    schema->items = NULL;
+    schema->len = 0;
+    schema->cap = 0;
+}
+
+void row_schema_free(DsLowerRowSchema *schema) {
+    if (!schema) return;
+    for (size_t i = 0; i < schema->len; i++) free(schema->items[i].name.data);
+    free(schema->items);
+    schema->items = NULL;
+    schema->len = 0;
+    schema->cap = 0;
+}
+
+bool row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {
+    if (!schema) return false;
+    if (schema->len == schema->cap) {
+        schema->cap = schema->cap ? schema->cap * 2 : 4;
+        schema->items = (DsLowerRowField *)ds_xrealloc(schema->items, schema->cap * sizeof(DsLowerRowField));
+    }
+    schema->items[schema->len].name = str_clone(name);
+    schema->items[schema->len].kind = kind;
+    schema->len++;
+    return true;
+}
+
+bool row_schema_clone(const DsLowerRowSchema *src, DsLowerRowSchema *dst) {
+    if (!dst) return false;
+    row_schema_init(dst);
+    if (!src) return true;
+    for (size_t i = 0; i < src->len; i++) {
+        if (!row_schema_push(dst, src->items[i].name, src->items[i].kind)) {
+            row_schema_free(dst);
+            return false;
+        }
+    }
+    return true;
+}
+
+const DsLowerRowField *row_schema_find(const DsLowerRowSchema *schema, DsStr name) {
+    if (!schema) return NULL;
+    for (size_t i = 0; i < schema->len; i++) {
+        if (schema->items[i].name.len == name.len && memcmp(schema->items[i].name.data, name.data, name.len) == 0) return &schema->items[i];
+    }
+    return NULL;
+}
+
+bool row_schema_equal(const DsLowerRowSchema *a, const DsLowerRowSchema *b) {
+    if (!a || !b) return false;
+    if (a->len != b->len) return false;
+    for (size_t i = 0; i < a->len; i++) {
+        const DsLowerRowField *field = row_schema_find(b, a->items[i].name);
+        if (!field || field->kind != a->items[i].kind) return false;
+    }
+    return true;
+}
+
+static bool row_scalar_kind(DsLowerValueKind kind) {
+    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
+}
+
+bool lower_map_expr_schema(Lower *lower, const DsLowerExpr *expr, DsLowerRowSchema *schema_out) {
+    if (!expr || expr->kind != DS_LOWER_EXPR_MAP) return false;
+    row_schema_init(schema_out);
+    for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+        const DsLowerMapEntry *entry = &expr->as.map.entries.items[i];
+        SymKind sym = infer_lower_expr_kind(lower, entry->value);
+        DsLowerValueKind kind = lower_value_kind_from_sym(sym);
+        if (!row_scalar_kind(kind)) {
+            ds_diag_error(lower->diag, entry->span,
+                          "row field `%.*s` must be a scalar string, int, or bool value in v0.37.0",
+                          (int)entry->key.len, entry->key.data);
+            row_schema_free(schema_out);
+            return false;
+        }
+        if (row_schema_find(schema_out, entry->key)) {
+            ds_diag_error(lower->diag, entry->span,
+                          "duplicate row field `%.*s`", (int)entry->key.len, entry->key.data);
+            row_schema_free(schema_out);
+            return false;
+        }
+        row_schema_push(schema_out, entry->key, kind);
+    }
+    return true;
+}
+
+bool lower_expr_row_schema(const DsLowerExpr *expr, const DsLowerRowSchema **schema_out) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_MAP && expr->as.map.is_row) {
+        if (schema_out) *schema_out = &expr->as.map.row_schema;
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.returns_row) {
+        if (schema_out) *schema_out = &expr->as.index.row_schema;
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_IDENT) return false;
+    return false;
+}
+
+bool lower_expr_row_array_schema(const DsLowerExpr *expr, const DsLowerRowSchema **schema_out) {
+    if (!expr) return false;
+    if (expr->kind == DS_LOWER_EXPR_ARRAY && expr->as.array.is_row_array) {
+        if (schema_out) *schema_out = &expr->as.array.row_schema;
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.returns_row_array) {
+        if (schema_out) *schema_out = &expr->as.call.row_schema;
+        return true;
+    }
+    return false;
+}
+
+bool lower_expr_is_row(const DsLowerExpr *expr) {
+    return lower_expr_row_schema(expr, NULL);
+}
+
+bool lower_expr_is_row_array(const DsLowerExpr *expr) {
+    return lower_expr_row_array_schema(expr, NULL);
 }

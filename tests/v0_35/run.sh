@@ -1043,6 +1043,6 @@ middle=web
 '
 
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" 'ds v0.36.0' 'CLI help reports v0.36.0'
+assert_contains "$TMP/cli_help.out" 'ds v0.37.0' 'CLI help reports v0.37.0'
 
 printf 'v0.35 tests passed: %s assertions\n' "$pass_count"

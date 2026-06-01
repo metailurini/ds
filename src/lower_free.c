@@ -33,6 +33,7 @@ void lower_expr_free(DsLowerExpr *expr) {
             free(expr->as.call.name.data);
             for (size_t i = 0; i < expr->as.call.args.len; i++) lower_expr_free(expr->as.call.args.items[i]);
             free(expr->as.call.args.items);
+            row_schema_free(&expr->as.call.row_schema);
             break;
         case DS_LOWER_EXPR_INTERP:
             for (size_t i = 0; i < expr->as.interp.parts.len; i++) lower_expr_free(expr->as.interp.parts.items[i]);
@@ -41,6 +42,7 @@ void lower_expr_free(DsLowerExpr *expr) {
         case DS_LOWER_EXPR_ARRAY:
             for (size_t i = 0; i < expr->as.array.elements.len; i++) lower_expr_free(expr->as.array.elements.items[i]);
             free(expr->as.array.elements.items);
+            row_schema_free(&expr->as.array.row_schema);
             break;
         case DS_LOWER_EXPR_MAP:
             for (size_t i = 0; i < expr->as.map.entries.len; i++) {
@@ -48,11 +50,13 @@ void lower_expr_free(DsLowerExpr *expr) {
                 lower_expr_free(expr->as.map.entries.items[i].value);
             }
             free(expr->as.map.entries.items);
+            row_schema_free(&expr->as.map.row_schema);
             break;
         case DS_LOWER_EXPR_INDEX:
             lower_expr_free(expr->as.index.object);
             lower_expr_free(expr->as.index.index);
             free(expr->as.index.map_key.data);
+            row_schema_free(&expr->as.index.row_schema);
             break;
         case DS_LOWER_EXPR_RANGE:
             lower_expr_free(expr->as.range.start);
@@ -71,6 +75,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
         case DS_LOWER_STMT_LET:
             free(stmt->as.let_stmt.name.data);
             lower_expr_free(stmt->as.let_stmt.value);
+            row_schema_free(&stmt->as.let_stmt.row_schema);
             break;
         case DS_LOWER_STMT_ASSIGN:
             free(stmt->as.assign_stmt.name.data);
@@ -105,6 +110,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             free(stmt->as.for_stmt.value_name.data);
             lower_expr_free(stmt->as.for_stmt.iterable);
             lower_stmt_free(stmt->as.for_stmt.body);
+            row_schema_free(&stmt->as.for_stmt.row_schema);
             break;
         case DS_LOWER_STMT_WHILE:
             lower_expr_free(stmt->as.while_stmt.condition);
@@ -126,12 +132,14 @@ void lower_stmt_free(DsLowerStmt *stmt) {
         case DS_LOWER_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);
             lower_expr_free(stmt->as.push_stmt.value);
+            row_schema_free(&stmt->as.push_stmt.row_schema);
             break;
         case DS_LOWER_STMT_ASSERT:
             lower_expr_free(stmt->as.assert_stmt.condition);
             break;
         case DS_LOWER_STMT_RETURN:
             lower_expr_free(stmt->as.return_stmt.value);
+            row_schema_free(&stmt->as.return_stmt.row_schema);
             break;
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP:
@@ -156,6 +164,7 @@ void ds_lower_program_free(DsLowerProgram *program) {
         }
         free(program->functions.items[i].params.items);
         lower_stmt_free(program->functions.items[i].body);
+        row_schema_free(&program->functions.items[i].row_schema);
     }
     free(program->functions.items);
     for (size_t i = 0; i < program->tests.len; i++) {

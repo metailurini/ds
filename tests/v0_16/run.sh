@@ -122,7 +122,7 @@ assert_contains README.md 'keeps comment-preserving formatting deferred' 'README
 
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.35.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.37.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 write_fixture "$FIX/usage_side_effect.ds" <<'DS'
 touch SHOULD_NOT_EXIST
@@ -435,7 +435,7 @@ echo "{web_port}"
 DS
 capture_status missing_key "$DS" run "$FIX/missing_key.ds"
 assert_nonzero_status missing_key
-assert_contains "$TMP/missing_key.err" 'missing map key `web`' 'missing map key diagnostic'
+assert_contains "$TMP/missing_key.err" 'unknown row field `web`' 'missing row field diagnostic'
 write_fixture "$FIX/redir_space.ds" <<'DS'
 sh -c "printf out; printf err >&2" &> "path with spaces.log"
 DS

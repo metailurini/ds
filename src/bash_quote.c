@@ -237,6 +237,82 @@ static bool interp_ident_char(char c) {
     return interp_ident_start(c) || (c >= '0' && c <= '9');
 }
 
+static void emit_row_field_array_name_interp(EmitBuf *out, DsStr array_name, DsStr field) {
+    buf_append(out, "__ds_row_");
+    buf_append_len(out, array_name.data, array_name.len);
+    buf_append(out, "_");
+    static const char hex[] = "0123456789abcdef";
+    for (size_t i = 0; i < field.len; i++) {
+        unsigned char c = (unsigned char)field.data[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+            buf_append_len(out, (const char *)&field.data[i], 1);
+        } else {
+            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
+            buf_append(out, esc);
+        }
+    }
+}
+
+static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsSpan span, EmitBuf *arg) {
+    (*j)++;
+    interp_skip_ws(decoded, len, j);
+    if (*j < len && ((decoded[*j] == '-' && *j + 1 < len && decoded[*j + 1] >= '0' && decoded[*j + 1] <= '9') ||
+                     (decoded[*j] >= '0' && decoded[*j] <= '9'))) {
+        size_t index_start = *j;
+        if (decoded[*j] == '-') (*j)++;
+        while (*j < len && decoded[*j] >= '0' && decoded[*j] <= '9') (*j)++;
+        buf_append_len(arg, decoded + index_start, *j - index_start);
+    } else if (*j < len && interp_ident_start(decoded[*j])) {
+        size_t index_start = *j;
+        (*j)++;
+        while (*j < len && interp_ident_char(decoded[*j])) (*j)++;
+        DsStr index_name = {(char *)decoded + index_start, *j - index_start};
+        if (!symbol_exists(&e->symbols, index_name)) {
+            ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unknown interpolation index variable `%.*s`", (int)index_name.len, index_name.data);
+            return false;
+        }
+        buf_append(arg, "\"$");
+        emit_var_name(arg, index_name);
+        buf_append(arg, "\"");
+    } else {
+        return false;
+    }
+    interp_skip_ws(decoded, len, j);
+    if (*j >= len || decoded[*j] != ']') return false;
+    (*j)++;
+    return true;
+}
+
+static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsStr name, DsSpan span, EmitBuf *out, bool *handled) {
+    *handled = false;
+    size_t pos = *j;
+    EmitBuf index_arg = {0};
+    if (!parse_interpolation_array_index_arg(e, decoded, len, &pos, span, &index_arg)) {
+        free(index_arg.data);
+        return true;
+    }
+    if (pos >= len || decoded[pos] != '.') {
+        free(index_arg.data);
+        return true;
+    }
+    pos++;
+    size_t field_start = pos;
+    if (pos < len && interp_ident_start(decoded[pos])) {
+        pos++;
+        while (pos < len && interp_ident_char(decoded[pos])) pos++;
+    }
+    DsStr field = {(char *)decoded + field_start, pos - field_start};
+    buf_append(out, "$( __ds_array_get ");
+    emit_row_field_array_name_interp(out, name, field);
+    buf_append(out, " ");
+    buf_append(out, index_arg.data ? index_arg.data : "");
+    buf_append(out, " )");
+    free(index_arg.data);
+    *j = pos;
+    *handled = true;
+    return true;
+}
+
 static bool emit_interpolation_index(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsStr name, DsSpan span, EmitBuf *out) {
     (*j)++;
     interp_skip_ws(decoded, len, j);
@@ -351,6 +427,16 @@ static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
         }
         buf_append(out, "\"$");
         emit_var_name(out, name);
+        if (p->pos < p->len && p->data[p->pos] == '.') {
+            p->pos++;
+            size_t field_start = p->pos;
+            if (p->pos < p->len && interp_ident_start(p->data[p->pos])) {
+                p->pos++;
+                while (p->pos < p->len && interp_ident_char(p->data[p->pos])) p->pos++;
+            }
+            buf_append(out, "_");
+            buf_append_len(out, p->data + field_start, p->pos - field_start);
+        }
         buf_append(out, "\"");
         return true;
     }
@@ -465,7 +551,13 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
             }
             size_t start = i + 1;
             size_t j = start;
-            if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
+            size_t arith_end = start;
+            bool maybe_arith = false;
+            while (arith_end < len && decoded[arith_end] != '}') {
+                char ac = decoded[arith_end++];
+                if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') maybe_arith = true;
+            }
+            if (!maybe_arith && j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
                 j++;
                 while (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || (decoded[j] >= '0' && decoded[j] <= '9') || decoded[j] == '_')) j++;
                 if (j < len && (decoded[j] == '}' || decoded[j] == '.' || decoded[j] == ':' || decoded[j] == '[')) {
@@ -496,8 +588,14 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                     const char *field = NULL; size_t field_len = 0;
                     bool indexed_interp = false;
                     if (decoded[j] == '[') {
-                        if (!emit_interpolation_index(e, decoded, len, &j, name, expr->span, out)) { free(decoded); return false; }
-                        indexed_interp = true;
+                        bool handled_row_field = false;
+                        if (!emit_row_array_field_interpolation_if_present(e, decoded, len, &j, name, expr->span, out, &handled_row_field)) { free(decoded); return false; }
+                        if (!handled_row_field) {
+                            if (!emit_interpolation_index(e, decoded, len, &j, name, expr->span, out)) { free(decoded); return false; }
+                            indexed_interp = true;
+                        } else {
+                            indexed_interp = true;
+                        }
                     } else if (decoded[j] == '.') {
                         size_t field_start = ++j;
                         if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
@@ -527,8 +625,6 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                     continue;
                 }
             }
-            size_t arith_end = start;
-            while (arith_end < len && decoded[arith_end] != '}') arith_end++;
             if (arith_end < len && emit_arithmetic_interpolation(e, decoded + start, arith_end - start, expr->span, out)) {
                 i = arith_end;
                 continue;

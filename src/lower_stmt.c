@@ -218,7 +218,21 @@ static void lower_validate_function_return_contract(Lower *lower, const DsStmt *
     } else if (!lower->current_function->has_return) {
         lower->current_function->has_return = true;
         lower->current_function->return_kind = ret;
-        if (ret == DS_LOWER_VALUE_ARRAY) lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.return_stmt.value));
+        if (ret == DS_LOWER_VALUE_ARRAY) {
+            lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.return_stmt.value));
+            const DsLowerRowSchema *schema = NULL;
+            if (out->as.return_stmt.value && out->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+                Symbol *sym = scope_find(lower->scope, out->as.return_stmt.value->as.text);
+                if (sym && sym->is_row_array) schema = &sym->row_schema;
+            }
+            if (!schema) lower_expr_row_array_schema(out->as.return_stmt.value, &schema);
+            if (schema) {
+                out->as.return_stmt.returns_row_array = true;
+                row_schema_clone(schema, &out->as.return_stmt.row_schema);
+                lower->current_function->returns_row_array = true;
+                row_schema_clone(schema, &lower->current_function->row_schema);
+            }
+        }
         else if (ret == DS_LOWER_VALUE_MAP) lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
     } else if (lower->current_function->return_kind != ret) {
         ds_diag_error(lower->diag, src->span, "all return statements in a function must have the same value kind in v0.21.0");
@@ -226,6 +240,23 @@ static void lower_validate_function_return_contract(Lower *lower, const DsStmt *
         DsLowerValueKind element = lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.return_stmt.value));
         if (lower->current_function->return_element_kind == DS_LOWER_VALUE_UNKNOWN) lower->current_function->return_element_kind = element;
         else if (element != DS_LOWER_VALUE_UNKNOWN && lower->current_function->return_element_kind != element) lower->current_function->return_element_kind = DS_LOWER_VALUE_UNKNOWN;
+        const DsLowerRowSchema *schema = NULL;
+        if (out->as.return_stmt.value && out->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+            Symbol *sym = scope_find(lower->scope, out->as.return_stmt.value->as.text);
+            if (sym && sym->is_row_array) schema = &sym->row_schema;
+        }
+        if (!schema) lower_expr_row_array_schema(out->as.return_stmt.value, &schema);
+        if (!lower->current_function->returns_row_array && schema) {
+            out->as.return_stmt.returns_row_array = true;
+            row_schema_clone(schema, &out->as.return_stmt.row_schema);
+            lower->current_function->returns_row_array = true;
+            row_schema_clone(schema, &lower->current_function->row_schema);
+        } else if (lower->current_function->returns_row_array && schema && !row_schema_equal(&lower->current_function->row_schema, schema)) {
+            ds_diag_error(lower->diag, src->span, "all row-array returns in a function must have the same field names and scalar kinds in v0.37.0");
+        } else if (schema) {
+            out->as.return_stmt.returns_row_array = true;
+            row_schema_clone(schema, &out->as.return_stmt.row_schema);
+        }
     } else if (ret == DS_LOWER_VALUE_MAP) {
         DsLowerValueKind element = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
         if (lower->current_function->return_element_kind == DS_LOWER_VALUE_UNKNOWN) lower->current_function->return_element_kind = element;
@@ -287,6 +318,30 @@ static void lower_update_collection_element_kind(Symbol *sym, SymKind value_kind
     if (!sym || value_kind == SYM_UNKNOWN) return;
     if (sym->element_kind == SYM_UNKNOWN) sym->element_kind = value_kind;
     else if (sym->element_kind != value_kind) sym->element_kind = SYM_UNKNOWN;
+}
+
+static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span) {
+    const DsLowerRowSchema *schema = NULL;
+    if (out->as.let_stmt.value && out->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+        Symbol *src = scope_find(lower->scope, out->as.let_stmt.value->as.text);
+        if (src && ((kind == SYM_ARRAY && src->is_row_array) || (kind == SYM_MAP && src->is_row))) schema = &src->row_schema;
+    }
+    if (!schema && kind == SYM_ARRAY) lower_expr_row_array_schema(out->as.let_stmt.value, &schema);
+    if (!schema && kind == SYM_MAP) lower_expr_row_schema(out->as.let_stmt.value, &schema);
+    if (kind == SYM_ARRAY && schema) {
+        out->as.let_stmt.is_row_array = true;
+        row_schema_clone(schema, &out->as.let_stmt.row_schema);
+        scope_define_row_array(lower, lower->scope, name, out->as.let_stmt.row_schema, span);
+    } else if (kind == SYM_MAP && schema) {
+        out->as.let_stmt.is_row = true;
+        row_schema_clone(schema, &out->as.let_stmt.row_schema);
+        scope_define_row(lower, lower->scope, name, out->as.let_stmt.row_schema, span);
+    } else {
+        scope_define_array(lower, lower->scope, name, kind,
+                           kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
+                           (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
+                           span);
+    }
 }
 
 static bool expr_is_negative_int_literal(const DsExpr *expr) {
@@ -413,6 +468,11 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
     if (sym && (out->as.index_assign_stmt.target_is_array || out->as.index_assign_stmt.target_is_map)) {
         if (dynamic_scalar_rhs) sym->element_kind = SYM_UNKNOWN;
         else lower_update_collection_element_kind(sym, value_kind);
+        if (out->as.index_assign_stmt.target_is_map && sym->is_row) {
+            sym->is_row = false;
+            row_schema_free(&sym->row_schema);
+            row_schema_init(&sym->row_schema);
+        }
     }
     return out;
 }
@@ -443,10 +503,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     out->as.let_stmt.element_kind = kind == SYM_ARRAY ? lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.let_stmt.value)) :
                                                     (kind == SYM_MAP ? lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.let_stmt.value)) : DS_LOWER_VALUE_UNKNOWN);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
-                    scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
-                                       kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
-                                       (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
-                                       stmt->span);
+                    lower_apply_let_schema(lower, out, stmt->as.let_stmt.name, kind, stmt->span);
                     lower_stmt_vec_push(&block->as.block_stmt.statements, out);
                     ds_command_free(&command_copy);
                     return block;
@@ -462,10 +519,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
             out->as.let_stmt.element_kind = kind == SYM_ARRAY ? lower_value_kind_from_sym(infer_array_element_kind(lower, out->as.let_stmt.value)) :
                                             (kind == SYM_MAP ? lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.let_stmt.value)) : DS_LOWER_VALUE_UNKNOWN);
-            scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, kind,
-                               kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
-                               (kind == SYM_MAP ? infer_map_value_kind(lower, out->as.let_stmt.value) : SYM_UNKNOWN),
-                               stmt->span);
+            lower_apply_let_schema(lower, out, stmt->as.let_stmt.name, kind, stmt->span);
             return out;
         }
         case DS_STMT_ASSIGN: {
@@ -623,6 +677,21 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 element_kind = infer_array_element_kind(lower, out->as.for_stmt.iterable);
             }
             out->as.for_stmt.element_kind = lower_value_kind_from_sym(element_kind);
+            if (out->kind == DS_LOWER_STMT_FOR_ARRAY && element_kind == SYM_MAP) {
+                const DsLowerRowSchema *schema = NULL;
+                if (out->as.for_stmt.iterable && out->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) {
+                    Symbol *iter_sym = scope_find(lower->scope, out->as.for_stmt.iterable->as.text);
+                    if (iter_sym && iter_sym->is_row_array) schema = &iter_sym->row_schema;
+                }
+                if (!schema) lower_expr_row_array_schema(out->as.for_stmt.iterable, &schema);
+                if (schema) {
+                    out->as.for_stmt.iterates_row_array = true;
+                    row_schema_clone(schema, &out->as.for_stmt.row_schema);
+                } else {
+                    ds_diag_error(lower->diag, stmt->as.for_stmt.iterable->span,
+                                  "row-array iteration requires a named row array or known row-array result in v0.37.0");
+                }
+            }
             Symbol *map_loop_symbol = NULL;
             if (out->kind == DS_LOWER_STMT_FOR_MAP && stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_IDENT) {
                 map_loop_symbol = scope_find(lower->scope, stmt->as.for_stmt.iterable->as.text);
@@ -642,6 +711,10 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 }
             } else {
                 scope_define(lower, &local, stmt->as.for_stmt.key_name, element_kind, stmt->span);
+                if (out->as.for_stmt.iterates_row_array) {
+                    Symbol *row_sym = scope_find_current(&local, stmt->as.for_stmt.key_name);
+                    if (row_sym) symbol_set_row(row_sym, &out->as.for_stmt.row_schema);
+                }
             }
             bool pushed_map_loop_symbol = false;
             if (out->kind == DS_LOWER_STMT_FOR_MAP && map_loop_symbol && map_loop_symbol->kind == SYM_MAP) {
@@ -720,8 +793,27 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             SymKind value_kind = SYM_UNKNOWN;
             out->as.push_stmt.value = lower_expr(lower, stmt->as.push_stmt.value, &value_kind);
-            if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
+            if (value_kind == SYM_MAP && lower_expr_is_row(out->as.push_stmt.value)) {
+                const DsLowerRowSchema *schema = NULL;
+                lower_expr_row_schema(out->as.push_stmt.value, &schema);
+                if (sym) {
+                    if (sym->element_kind == SYM_UNKNOWN && !sym->is_row_array) {
+                        symbol_set_row_array(sym, schema);
+                    } else if (!sym->is_row_array) {
+                        ds_diag_error(lower->diag, stmt->span, "cannot push a row into a scalar array in v0.37.0");
+                    } else if (!row_schema_equal(&sym->row_schema, schema)) {
+                        ds_diag_error(lower->diag, stmt->as.push_stmt.value->span,
+                                      "pushed row must match the row-array field names and scalar kinds in v0.37.0");
+                    }
+                    if (sym->is_row_array) {
+                        out->as.push_stmt.target_is_row_array = true;
+                        row_schema_clone(&sym->row_schema, &out->as.push_stmt.row_schema);
+                    }
+                }
+            } else if (value_kind == SYM_ARRAY || value_kind == SYM_MAP) {
                 ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "pushing collection values is deferred in v0.10.0");
+            } else if (sym && sym->is_row_array) {
+                ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "cannot push a scalar value into a row array in v0.37.0");
             } else if (!lower_collection_element_is_portable(out->as.push_stmt.value)) {
                 ds_diag_error(lower->diag, stmt->as.push_stmt.value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
             }

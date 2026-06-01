@@ -241,6 +241,30 @@ static bool arithmetic_parse_variable(VmArithmeticParser *parser, int64_t *out) 
     }
     free(name);
 
+    if (parser->pos < parser->len && parser->data[parser->pos] == '.') {
+        parser->pos++;
+        size_t field_start = parser->pos;
+        if (parser->pos < parser->len && ascii_is_ident_start(parser->data[parser->pos])) {
+            parser->pos++;
+            while (parser->pos < parser->len && ascii_is_ident_continue(parser->data[parser->pos])) parser->pos++;
+        }
+        DsStr field = {(char *)parser->data + field_start, parser->pos - field_start};
+        if (value.kind != DS_VALUE_MAP) {
+            ds_value_free(&value);
+            ds_diag_error(parser->vm->diag, parser->span, "arithmetic interpolation field reads require a row value in v0.37.0");
+            return false;
+        }
+        DsValue *found = ds_map_get(&value.as.map, field);
+        if (!found) {
+            ds_diag_error(parser->vm->diag, parser->span, "missing map key `%.*s`", (int)field.len, field.data);
+            ds_value_free(&value);
+            return false;
+        }
+        DsValue field_value = ds_value_copy(found);
+        ds_value_free(&value);
+        value = field_value;
+    }
+
     if (value.kind != DS_VALUE_INT) {
         ds_value_free(&value);
         ds_diag_error(parser->vm->diag, parser->span, "arithmetic interpolation operands must be integers in v0.21.0");
@@ -534,6 +558,29 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
     return true;
 }
 
+static bool interp_parse_map_field_value(Vm *vm, DsValue *value, const char *data, size_t len, size_t *j, DsSpan span) {
+    (*j)++;
+    size_t field_start = *j;
+    if (*j < len && ascii_is_ident_start(data[*j])) {
+        (*j)++;
+        while (*j < len && ascii_is_ident_continue(data[*j])) (*j)++;
+    }
+    DsStr field = {(char *)data + field_start, *j - field_start};
+    if (value->kind != DS_VALUE_MAP) {
+        ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: field receiver should be a row/map after lowering");
+        return false;
+    }
+    DsValue *found = ds_map_get(&value->as.map, field);
+    if (!found) {
+        ds_diag_error(vm->diag, span, "missing map key `%.*s`", (int)field.len, field.data);
+        return false;
+    }
+    DsValue field_value = ds_value_copy(found);
+    ds_value_free(value);
+    *value = field_value;
+    return true;
+}
+
 /* -------------------------------------------------------------------------
  * Command-word and redirect materialization
  * ------------------------------------------------------------------------- */
@@ -555,7 +602,13 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
             }
             size_t start = i + 1;
             size_t j = start;
-            if (j < input->len && ascii_is_ident_start(input->data[j])) {
+            size_t arith_end = start;
+            bool maybe_arith = false;
+            while (arith_end < input->len && input->data[arith_end] != '}') {
+                char ac = input->data[arith_end++];
+                if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') maybe_arith = true;
+            }
+            if (!maybe_arith && j < input->len && ascii_is_ident_start(input->data[j])) {
                 j++;
                 while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
                 if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':' || input->data[j] == '[')) {
@@ -580,6 +633,9 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                     if (!lookup_var(vm, name, &value, span)) { free(name); ds_string_free(out); return false; }
                     if (input->data[j] == '[') {
                         if (!interp_parse_indexed_value(vm, &value, input->data, input->len, &j, span)) { free(name); ds_string_free(out); return false; }
+                        if (j < input->len && input->data[j] == '.') {
+                            if (!interp_parse_map_field_value(vm, &value, input->data, input->len, &j, span)) { free(name); ds_string_free(out); return false; }
+                        }
                     } else if (input->data[j] == '.') {
                         size_t field_start = ++j;
                         if (j < input->len && ascii_is_ident_start(input->data[j])) {
@@ -609,8 +665,6 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                     i = j; continue;
                 }
             }
-            size_t arith_end = start;
-            while (arith_end < input->len && input->data[arith_end] != '}') arith_end++;
             if (arith_end < input->len && append_arithmetic_interpolation(vm, input->data + start, arith_end - start, out, span)) {
                 i = arith_end;
                 continue;

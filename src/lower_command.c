@@ -21,6 +21,16 @@ static bool is_supported_format_spec(DsStr spec, SymKind kind) {
     return ds_interp_parse_format_spec_for_kind(spec, interp_kind_from_sym(kind), NULL);
 }
 
+static bool row_schema_field_sym_kind(Lower *lower, const DsLowerRowSchema *schema, DsStr field, DsSpan span, SymKind *kind_out) {
+    const DsLowerRowField *row_field = row_schema_find(schema, field);
+    if (!row_field) {
+        ds_diag_error(lower->diag, span, "unknown row field `%.*s`", (int)field.len, field.data);
+        return false;
+    }
+    *kind_out = sym_kind_from_lower_value_kind(row_field->kind);
+    return true;
+}
+
 static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr body, DsSpan span) {
     /*
      * Keep arithmetic interpolation acceptance in lowering. The VM/Bash
@@ -51,7 +61,21 @@ static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr bod
                 return false;
             }
             lower_validate_handler_capture(lower, sym, name, span);
-            if (sym->kind != SYM_INT) {
+            SymKind value_kind = sym->kind;
+            if (i < body.len && body.data[i] == '.') {
+                size_t field_start = ++i;
+                if (i < body.len && ((body.data[i] >= 'A' && body.data[i] <= 'Z') || (body.data[i] >= 'a' && body.data[i] <= 'z') || body.data[i] == '_')) {
+                    i++;
+                    while (i < body.len && ds_command_name_char(body.data[i])) i++;
+                }
+                DsStr field = {body.data + field_start, i - field_start};
+                if (!sym->is_row) {
+                    ds_diag_error(lower->diag, span, "arithmetic interpolation field reads require a row value in v0.37.0");
+                    return false;
+                }
+                if (!row_schema_field_sym_kind(lower, &sym->row_schema, field, span, &value_kind)) return false;
+            }
+            if (value_kind != SYM_INT) {
                 ds_diag_error(lower->diag, span, "arithmetic interpolation operands must be integers in v0.21.0");
                 return false;
             }
@@ -241,6 +265,23 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                     return false;
                 }
                 indexed_interp = true;
+                if (j < decoded.len && decoded.data[j] == '.') {
+                    size_t field_start = ++j;
+                    if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
+                        j++;
+                        while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
+                    }
+                    DsStr field = {decoded.data + field_start, j - field_start};
+                    if (!sym->is_row_array) {
+                        ds_diag_error(lower->diag, span, "indexed field interpolation requires a row-array value in v0.37.0");
+                        free(decoded.data);
+                        return false;
+                    }
+                    if (!row_schema_field_sym_kind(lower, &sym->row_schema, field, span, &value_kind)) {
+                        free(decoded.data);
+                        return false;
+                    }
+                }
             } else if (j < decoded.len && decoded.data[j] == '.') {
                 size_t field_start = ++j;
                 if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
@@ -248,12 +289,16 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                     while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
                 }
                 DsStr field = {decoded.data + field_start, j - field_start};
-                if (sym->kind != SYM_COMMAND_RESULT) {
-                    ds_diag_error(lower->diag, span, "field interpolation is only supported on command results in v0.7.0");
+                if (sym->is_row) {
+                    if (!row_schema_field_sym_kind(lower, &sym->row_schema, field, span, &value_kind)) {
+                        free(decoded.data);
+                        return false;
+                    }
+                } else if (sym->kind != SYM_COMMAND_RESULT) {
+                    ds_diag_error(lower->diag, span, "field interpolation is only supported on command results and rows in v0.37.0");
                     free(decoded.data);
                     return false;
-                }
-                if (!command_result_field_kind(field, &value_kind)) {
+                } else if (!command_result_field_kind(field, &value_kind)) {
                     ds_diag_error(lower->diag, span, "unknown command result field `%.*s`", (int)field.len, field.data);
                     free(decoded.data);
                     return false;

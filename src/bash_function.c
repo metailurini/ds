@@ -18,6 +18,28 @@ void bash_temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id) {
     snprintf(buf, cap, "__%s_%zu", prefix, id);
 }
 
+static void emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
+    buf_append(out, "__ds_row_");
+    buf_append_len(out, array_name.data, array_name.len);
+    buf_append(out, "_");
+    static const char hex[] = "0123456789abcdef";
+    for (size_t i = 0; i < field.len; i++) {
+        unsigned char c = (unsigned char)field.data[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') buf_append_len(out, (const char *)&field.data[i], 1);
+        else { char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0}; buf_append(out, esc); }
+    }
+}
+
+static void emit_return_row_field_array_name(EmitBuf *out, DsStr field) {
+    buf_append(out, "__ds_return_row_");
+    static const char hex[] = "0123456789abcdef";
+    for (size_t i = 0; i < field.len; i++) {
+        unsigned char c = (unsigned char)field.data[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') buf_append_len(out, (const char *)&field.data[i], 1);
+        else { char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0}; buf_append(out, esc); }
+    }
+}
+
 bool bash_emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, int indent) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_call_value_into ");
@@ -87,6 +109,15 @@ bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const D
     free(mats);
     if (!ok) return false;
     buf_append(&e->out, "\n");
+    if (call->as.call.returns_row_array) {
+        for (size_t i = 0; i < call->as.call.row_schema.len; i++) {
+            emit_indent(&e->out, indent);
+            emit_row_field_array_name(&e->out, name, call->as.call.row_schema.items[i].name);
+            buf_append(&e->out, "=(\"${");
+            emit_return_row_field_array_name(&e->out, call->as.call.row_schema.items[i].name);
+            buf_append(&e->out, "[@]}\")\n");
+        }
+    }
     return true;
 }
 

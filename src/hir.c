@@ -16,6 +16,19 @@ static void print_str(FILE *out, DsStr s) {
     fprintf(out, "%.*s", (int)s.len, s.data ? s.data : "");
 }
 
+const char *ds_lower_value_kind_name(DsLowerValueKind kind);
+
+static void print_row_schema(FILE *out, const DsLowerRowSchema *schema) {
+    fputs(" row_schema={", out);
+    for (size_t i = 0; schema && i < schema->len; i++) {
+        if (i) fputs(", ", out);
+        print_str(out, schema->items[i].name);
+        fputc(':', out);
+        fputs(ds_lower_value_kind_name(schema->items[i].kind), out);
+    }
+    fputc('}', out);
+}
+
 const char *ds_lower_value_kind_name(DsLowerValueKind kind) {
     switch (kind) {
         case DS_LOWER_VALUE_BOOL: return "bool";
@@ -166,20 +179,20 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
             dump_expr(out, expr->as.binary.right, level + 1);
             break;
         case DS_LOWER_EXPR_CALL:
-            fputs("Call ", out); print_str(out, expr->as.call.name); print_span(out, expr->span); dump_expr_vec(out, &expr->as.call.args, level); if (expr->as.call.args.len == 0) fputc('\n', out); break;
+            fputs("Call ", out); print_str(out, expr->as.call.name); if (expr->as.call.returns_row_array) print_row_schema(out, &expr->as.call.row_schema); print_span(out, expr->span); dump_expr_vec(out, &expr->as.call.args, level); if (expr->as.call.args.len == 0) fputc('\n', out); break;
         case DS_LOWER_EXPR_INTERP:
             fputs("InterpolatedString", out); print_span(out, expr->span); dump_expr_vec(out, &expr->as.interp.parts, level); if (expr->as.interp.parts.len == 0) fputc('\n', out); break;
         case DS_LOWER_EXPR_ARRAY:
-            fputs("Array", out); print_span(out, expr->span); dump_expr_vec(out, &expr->as.array.elements, level); if (expr->as.array.elements.len == 0) fputc('\n', out); break;
+            fputs("Array", out); if (expr->as.array.is_row_array) print_row_schema(out, &expr->as.array.row_schema); print_span(out, expr->span); dump_expr_vec(out, &expr->as.array.elements, level); if (expr->as.array.elements.len == 0) fputc('\n', out); break;
         case DS_LOWER_EXPR_MAP:
-            fputs("Map", out); print_span(out, expr->span); fputc('\n', out);
+            fputs("Map", out); if (expr->as.map.is_row) print_row_schema(out, &expr->as.map.row_schema); print_span(out, expr->span); fputc('\n', out);
             for (size_t i = 0; i < expr->as.map.entries.len; i++) {
                 indent(out, level + 1); fputs("Entry ", out); print_str(out, expr->as.map.entries.items[i].key); print_span(out, expr->as.map.entries.items[i].span); fputc('\n', out);
                 dump_expr(out, expr->as.map.entries.items[i].value, level + 2);
             }
             break;
         case DS_LOWER_EXPR_INDEX:
-            fputs("Index", out); if (expr->as.index.object_is_array) fputs(" array", out); if (expr->as.index.object_is_map) fputs(" map", out); print_span(out, expr->span); fputc('\n', out);
+            fputs("Index", out); if (expr->as.index.object_is_array) fputs(" array", out); if (expr->as.index.object_is_map) fputs(" map", out); if (expr->as.index.returns_row) print_row_schema(out, &expr->as.index.row_schema); print_span(out, expr->span); fputc('\n', out);
             dump_expr(out, expr->as.index.object, level + 1);
             dump_expr(out, expr->as.index.index, level + 1);
             break;
@@ -203,7 +216,7 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
     indent(out, level);
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET:
-            fputs("Let ", out); print_str(out, stmt->as.let_stmt.name); print_span(out, stmt->span); fputc('\n', out);
+            fputs("Let ", out); print_str(out, stmt->as.let_stmt.name); if (stmt->as.let_stmt.is_row || stmt->as.let_stmt.is_row_array) print_row_schema(out, &stmt->as.let_stmt.row_schema); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.let_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_ASSIGN: {
@@ -235,11 +248,11 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
         case DS_LOWER_STMT_CALL:
             fputs("CallStmt ", out); print_str(out, stmt->as.call_stmt.name); print_span(out, stmt->span); dump_expr_vec(out, &stmt->as.call_stmt.args, level); if (stmt->as.call_stmt.args.len == 0) fputc('\n', out); break;
         case DS_LOWER_STMT_PUSH:
-            fputs("Push ", out); print_str(out, stmt->as.push_stmt.name); print_span(out, stmt->span); fputc('\n', out);
+            fputs("Push ", out); print_str(out, stmt->as.push_stmt.name); if (stmt->as.push_stmt.target_is_row_array) print_row_schema(out, &stmt->as.push_stmt.row_schema); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.push_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_FOR_ARRAY:
-            fputs("For ", out); print_str(out, stmt->as.for_stmt.name); fputs(" in", out); print_span(out, stmt->span); fputc('\n', out);
+            fputs("For ", out); print_str(out, stmt->as.for_stmt.name); fputs(" in", out); if (stmt->as.for_stmt.iterates_row_array) print_row_schema(out, &stmt->as.for_stmt.row_schema); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.for_stmt.iterable, level + 1);
             indent(out, level + 1); fputs("Body\n", out);
             dump_block(out, stmt->as.for_stmt.body, level + 2);
@@ -307,7 +320,7 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.assert_stmt.condition, level + 1);
             break;
         case DS_LOWER_STMT_RETURN:
-            fputs("Return", out); print_span(out, stmt->span); fputc('\n', out);
+            fputs("Return", out); if (stmt->as.return_stmt.returns_row_array) print_row_schema(out, &stmt->as.return_stmt.row_schema); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.return_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_DEFER:

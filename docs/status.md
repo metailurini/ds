@@ -5,8 +5,9 @@ return, direct environment/interpolation, collection mutation, recursive glob,
 runtime regex feature wave, the `v0.33.0` stabilization implementation and
 dedicated-test pass, the `v0.34.0` text-literal/broken-pipe DX pass, the
 `v0.35.0` core string parsing helper implementation and dedicated-test pass,
-and the `v0.36.0` scalar function-parameter kind-inference implementation and
-dedicated-test pass. It is a
+the `v0.36.0` scalar function-parameter kind-inference implementation and
+dedicated-test pass, and the `v0.37.0` lightweight row/row-array implementation
+pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -77,6 +78,12 @@ no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, and the
 - array literals, map literals with string-like keys, array/map access, array
   `push`, array `for` loops, and key/value map `for` loops over named maps or
   supported flat map-returning user-function calls;
+- lightweight rows and row arrays: flat row/object literals with scalar
+  string/int/bool fields, same-schema row-array literals, empty-array
+  first-row-push inference, row-array iteration, row-array indexing,
+  copy-by-value assignment, function row-array returns, and
+  `sort_by(field[, "asc"|"desc"])` with deterministic stable ordering in the
+  VM and emitted Bash;
 - scalar reassignment with `name = expr` plus integer `+=`, `-=`, `*=`, `/=`, and
   `%=` updates;
 - integer arithmetic `+`, `-`, `*`, `/`, `%`, `**`, and unary `-` in supported
@@ -205,6 +212,9 @@ milestones:
 - recursive-call semantics;
 - nested collection function returns, collection-valued parameters, and typed
   return annotations;
+- public row/schema/type declarations, typed row or row-array parameters,
+  row-field assignment, nested row mutation, row-array replacement/deletion, and
+  row fields containing arrays/maps/rows or command-result objects;
 - `until`, loop `else`, and labeled/depth-based `break`/`continue`;
 - regex/glob/destructuring/fallthrough `case` behavior;
 - string binary `+` concatenation; use interpolation instead;

@@ -305,7 +305,7 @@ assert_doc_contains docs/roadmap.md 'v0.33.0' 'roadmap lists v0.33.0'
 assert_doc_contains docs/roadmap.md 'Collection, Glob, and Regex Stabilization' 'roadmap keeps v0.33 stabilization milestone'
 assert_doc_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap keeps deliberate v0.34 after v0.33'
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" 'ds v0.36.0' 'CLI help reports current version'
+assert_contains "$TMP/cli_help.out" 'ds v0.37.0' 'CLI help reports current version'
 assert_contains "$TMP/cli_help.out" 'emit bash' 'CLI help keeps known command surface'
 assert_doc_contains docs/status.md 'v0.33.0' 'status mentions v0.33.0'
 assert_doc_contains docs/language.ds 'recursive `**`' 'language docs mention recursive glob support'

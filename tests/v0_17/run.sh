@@ -141,7 +141,7 @@ assert_contains docs/milestones/v0.17.0-test-plan.md 'Implemented' 'test plan st
 
 # Public command help.
 run_ok help_top "$DS" --help
-assert_contains "$TMP/help_top.out" 'ds v0.35.0' 'help reports current version'
+assert_contains "$TMP/help_top.out" 'ds v0.37.0' 'help reports current version'
 assert_contains "$TMP/help_top.out" 'ds emit bash <file.ds> -o <file.sh>' 'help lists emit bash'
 
 # Token, AST, HIR, and bytecode coverage.
@@ -484,13 +484,11 @@ DS
 assert_vm_bash_with_args case_scope "$FIX/case_scope.ds" 0 $'say=b\nout=b\ninside=0\ninside=1\n'
 
 write_fixture "$FIX/case_unknown_kind.ds" <<'DS'
-fn choose(x) {
-  case x {
-    "a" { echo "a" }
-    _ { echo "other" }
-  }
+let row = { label: "a" }
+case row {
+  "a" { echo "a" }
+  _ { echo "other" }
 }
-choose("a")
 DS
 capture_status case_unknown_kind "$DS" check "$FIX/case_unknown_kind.ds"
 assert_nonzero_status case_unknown_kind

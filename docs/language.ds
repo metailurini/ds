@@ -439,6 +439,54 @@ for name, port in ports {
 # emitted Bash.
 
 
+# 16.1 Lightweight rows / row arrays [v0.37.0] [implemented]
+# -----------------------------------------------------------------------------
+
+# v0.37.0 treats the scalar subset of object literals as lightweight rows.
+# A row has non-empty string field names and string/int/bool field values. A row
+# array is an ordered list whose rows share the same field names and field kinds.
+
+let report_rows = [
+  { file: "src/main.c", line: 10, name: "parse", loc: 42, public: true },
+  { file: "src/runtime.c", line: 5, name: "run", loc: 7, public: false }
+]
+
+let first_report_file = report_rows[0].file
+let sorted_reports = report_rows.sort_by("loc", "desc")
+
+for row in sorted_reports {
+  echo "{row.loc}\t{row.file}:{row.line}\t{row.name}"
+}
+
+# Empty arrays specialize to row arrays when the first push is a row. Later
+# pushes must use the same field names with the same scalar kinds.
+let gathered_reports = []
+gathered_reports.push({ file: "src/app.c", line: 1, name: "app", loc: 12 })
+gathered_reports.push({ file: "src/lib.c", line: 3, name: "lib", loc: 4 })
+
+# `sort_by(field)` defaults to ascending order. `sort_by(field, "desc")` sorts a
+# copy in descending order; the receiver is not mutated. String sorting is
+# bytewise/ASCII, integer sorting is numeric, and boolean sorting is false < true.
+let by_name = gathered_reports.sort_by("name")
+
+# Row-array returns are allowed. Collection-valued parameters are still out of
+# scope, so rows are created inside the function or returned from imported
+# functions rather than passed as arguments.
+fn load_reports() {
+  let rows = []
+  rows.push({ file: "src/main.c", line: 10, name: "parse", loc: 42 })
+  return rows
+}
+
+let loaded_reports = load_reports()
+echo "first loaded report: {loaded_reports[0].file}"
+
+# Deferred: public row/schema/type declarations, typed row or row-array
+# parameters, nested arrays/maps/rows inside row fields, command-result fields,
+# row-field assignment, nested row mutation, row-array replacement/deletion,
+# multi-key/custom sort helpers, and JSON/CSV/dataframe-style APIs.
+
+
 # -----------------------------------------------------------------------------
 # 17. Loops and case [v0.10.0 / v0.17.0] [implemented]
 # -----------------------------------------------------------------------------

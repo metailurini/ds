@@ -54,6 +54,17 @@ typedef enum {
 const char *ds_lower_value_kind_name(DsLowerValueKind kind);
 
 typedef struct {
+    DsStr name;
+    DsLowerValueKind kind;
+} DsLowerRowField;
+
+typedef struct {
+    DsLowerRowField *items;
+    size_t len;
+    size_t cap;
+} DsLowerRowSchema;
+
+typedef struct {
     DsLowerExpr **items;
     size_t len;
     size_t cap;
@@ -79,14 +90,14 @@ struct DsLowerExpr {
         bool boolean;
         DsStr regex;
         DsCommand run;
-        struct { DsLowerExpr *object; DsStr field; } field;
+        struct { DsLowerExpr *object; DsStr field; DsLowerValueKind field_kind; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_kind; DsLowerValueKind right_element_kind; } binary;
-        struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; } call;
+        struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; bool returns_row_array; DsLowerRowSchema row_schema; } call;
         struct { DsLowerExprVec parts; } interp;
-        struct { DsLowerExprVec elements; } array;
-        struct { DsLowerMapEntryVec entries; } map;
-        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; } index;
+        struct { DsLowerExprVec elements; bool is_row_array; DsLowerRowSchema row_schema; } array;
+        struct { DsLowerMapEntryVec entries; bool is_row; DsLowerRowSchema row_schema; } map;
+        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; bool returns_row; DsLowerRowSchema row_schema; } index;
         struct { DsLowerExpr *start; DsLowerExpr *end; } range;
     } as;
 };
@@ -184,6 +195,8 @@ typedef struct {
     size_t required_count;
     DsLowerValueKind return_kind;
     DsLowerValueKind return_element_kind;
+    bool returns_row_array;
+    DsLowerRowSchema row_schema;
     bool has_return;
     bool all_paths_return;
     bool contains_plain_command;
@@ -212,7 +225,7 @@ struct DsLowerStmt {
     DsLowerStmtKind kind;
     DsSpan span;
     union {
-        struct { DsStr name; DsLowerExpr *value; DsLowerValueKind value_kind; DsLowerValueKind element_kind; } let_stmt;
+        struct { DsStr name; DsLowerExpr *value; DsLowerValueKind value_kind; DsLowerValueKind element_kind; bool is_row; bool is_row_array; DsLowerRowSchema row_schema; } let_stmt;
         struct { DsStr name; DsLowerAssignOp op; DsLowerExpr *value; } assign_stmt;
         struct {
             DsStr name;
@@ -225,12 +238,12 @@ struct DsLowerStmt {
         struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
         struct { DsLowerStmtVec statements; bool scoped; } block_stmt;
         struct { DsStr name; DsLowerExprVec args; } call_stmt;
-        struct { DsStr name; DsStr value_name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; } for_stmt;
+        struct { DsStr name; DsStr value_name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; bool iterates_row_array; DsLowerRowSchema row_schema; } for_stmt;
         struct { DsLowerExpr *condition; DsLowerStmt *body; } while_stmt;
         struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
-        struct { DsStr name; DsLowerExpr *value; } push_stmt;
+        struct { DsStr name; DsLowerExpr *value; bool target_is_row_array; DsLowerRowSchema row_schema; } push_stmt;
         struct { DsLowerExpr *condition; } assert_stmt;
-        struct { DsLowerExpr *value; DsLowerValueKind return_kind; } return_stmt;
+        struct { DsLowerExpr *value; DsLowerValueKind return_kind; bool returns_row_array; DsLowerRowSchema row_schema; } return_stmt;
         struct { DsHandlerSignal signal; DsLowerStmt *body; } handler_stmt;
         DsCommand cmd_stmt;
     } as;

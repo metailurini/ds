@@ -25,6 +25,9 @@ typedef struct {
     char *name;
     SymKind kind;
     SymKind element_kind;
+    bool is_row;
+    bool is_row_array;
+    DsLowerRowSchema row_schema;
     bool dynamic_scalar;
     int function_depth;
 } Symbol;
@@ -67,6 +70,10 @@ Symbol *scope_find(Scope *scope, DsStr name);
 bool lower_validate_handler_capture(Lower *lower, const Symbol *sym, DsStr name, DsSpan span);
 void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span);
 void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span);
+void scope_define_row(Lower *lower, Scope *scope, DsStr name, DsLowerRowSchema schema, DsSpan span);
+void scope_define_row_array(Lower *lower, Scope *scope, DsStr name, DsLowerRowSchema schema, DsSpan span);
+void symbol_set_row(Symbol *sym, const DsLowerRowSchema *schema);
+void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema);
 
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name);
 int find_function_index(DsLowerProgram *program, DsStr name);
@@ -92,6 +99,17 @@ DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
 SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr);
 SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr);
 SymKind infer_map_value_kind(Lower *lower, const DsLowerExpr *expr);
+void row_schema_init(DsLowerRowSchema *schema);
+void row_schema_free(DsLowerRowSchema *schema);
+bool row_schema_clone(const DsLowerRowSchema *src, DsLowerRowSchema *dst);
+bool row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind);
+const DsLowerRowField *row_schema_find(const DsLowerRowSchema *schema, DsStr name);
+bool row_schema_equal(const DsLowerRowSchema *a, const DsLowerRowSchema *b);
+bool lower_expr_row_schema(const DsLowerExpr *expr, const DsLowerRowSchema **schema_out);
+bool lower_expr_row_array_schema(const DsLowerExpr *expr, const DsLowerRowSchema **schema_out);
+bool lower_expr_is_row(const DsLowerExpr *expr);
+bool lower_expr_is_row_array(const DsLowerExpr *expr);
+bool lower_map_expr_schema(Lower *lower, const DsLowerExpr *expr, DsLowerRowSchema *schema_out);
 /*
  * M3.4 command-word ownership boundary:
  * parser preserves command words as syntax text; lowering owns command-word and

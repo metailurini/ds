@@ -70,7 +70,10 @@ void scope_init(Scope *scope, Scope *parent) {
 }
 
 void scope_free(Scope *scope) {
-    for (size_t i = 0; i < scope->len; i++) free(scope->items[i].name);
+    for (size_t i = 0; i < scope->len; i++) {
+        free(scope->items[i].name);
+        row_schema_free(&scope->items[i].row_schema);
+    }
     free(scope->items);
 }
 
@@ -102,6 +105,9 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     if (current && current->kind == SYM_TOPLEVEL_PREDECLARED) {
         current->kind = kind;
         current->element_kind = element_kind;
+        current->is_row = false;
+        current->is_row_array = false;
+        row_schema_free(&current->row_schema);
         current->dynamic_scalar = false;
         current->function_depth = lower->function_depth;
         return;
@@ -117,9 +123,51 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
     scope->items[scope->len].name = ds_str_dup_range(name.data, name.len);
     scope->items[scope->len].kind = kind;
     scope->items[scope->len].element_kind = element_kind;
+    scope->items[scope->len].is_row = false;
+    scope->items[scope->len].is_row_array = false;
+    row_schema_init(&scope->items[scope->len].row_schema);
     scope->items[scope->len].dynamic_scalar = false;
     scope->items[scope->len].function_depth = lower->function_depth;
     scope->len++;
+}
+
+void symbol_set_row(Symbol *sym, const DsLowerRowSchema *schema) {
+    if (!sym) return;
+    row_schema_free(&sym->row_schema);
+    row_schema_init(&sym->row_schema);
+    if (schema) row_schema_clone(schema, &sym->row_schema);
+    sym->kind = SYM_MAP;
+    sym->element_kind = SYM_UNKNOWN;
+    for (size_t i = 0; schema && i < schema->len; i++) {
+        SymKind field_kind = sym_kind_from_lower_value_kind(schema->items[i].kind);
+        if (sym->element_kind == SYM_UNKNOWN) sym->element_kind = field_kind;
+        else if (sym->element_kind != field_kind) { sym->element_kind = SYM_UNKNOWN; break; }
+    }
+    sym->is_row = true;
+    sym->is_row_array = false;
+}
+
+void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema) {
+    if (!sym) return;
+    row_schema_free(&sym->row_schema);
+    row_schema_init(&sym->row_schema);
+    if (schema) row_schema_clone(schema, &sym->row_schema);
+    sym->kind = SYM_ARRAY;
+    sym->element_kind = SYM_MAP;
+    sym->is_row = false;
+    sym->is_row_array = true;
+}
+
+void scope_define_row(Lower *lower, Scope *scope, DsStr name, DsLowerRowSchema schema, DsSpan span) {
+    scope_define_array(lower, scope, name, SYM_MAP, SYM_UNKNOWN, span);
+    Symbol *sym = scope_find_current(scope, name);
+    if (sym) symbol_set_row(sym, &schema);
+}
+
+void scope_define_row_array(Lower *lower, Scope *scope, DsStr name, DsLowerRowSchema schema, DsSpan span) {
+    scope_define_array(lower, scope, name, SYM_ARRAY, SYM_MAP, span);
+    Symbol *sym = scope_find_current(scope, name);
+    if (sym) symbol_set_row_array(sym, &schema);
 }
 
 bool lower_validate_handler_capture(Lower *lower, const Symbol *sym, DsStr name, DsSpan span) {

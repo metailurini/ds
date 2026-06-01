@@ -60,6 +60,26 @@ bool map_has_duplicate_key(const DsLowerMapEntryVec *entries, DsStr key) {
     return false;
 }
 
+static const DsLowerRowSchema *ident_row_schema(Lower *lower, const DsLowerExpr *expr, bool want_array) {
+    if (!expr || expr->kind != DS_LOWER_EXPR_IDENT) return NULL;
+    Symbol *sym = scope_find(lower->scope, expr->as.text);
+    if (!sym) return NULL;
+    if (want_array) return sym->is_row_array ? &sym->row_schema : NULL;
+    return sym->is_row ? &sym->row_schema : NULL;
+}
+
+static const DsLowerRowSchema *expr_row_schema_full(Lower *lower, const DsLowerExpr *expr) {
+    const DsLowerRowSchema *schema = NULL;
+    if (lower_expr_row_schema(expr, &schema)) return schema;
+    return ident_row_schema(lower, expr, false);
+}
+
+static const DsLowerRowSchema *expr_row_array_schema_full(Lower *lower, const DsLowerExpr *expr) {
+    const DsLowerRowSchema *schema = NULL;
+    if (lower_expr_row_array_schema(expr, &schema)) return schema;
+    return ident_row_schema(lower, expr, true);
+}
+
 DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
     DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(DsLowerExpr));
     expr->kind = kind;
@@ -350,7 +370,7 @@ DsLowerExpr *lower_run_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
     return out;
 }
 
-DsLowerExpr *lower_map_field_expr(const DsExpr *expr, DsLowerExpr *object, SymKind *kind_out) {
+DsLowerExpr *lower_map_field_expr(Lower *lower, const DsExpr *expr, DsLowerExpr *object, SymKind *kind_out) {
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INDEX, expr->span);
     out->as.index.object = object;
     out->as.index.object_is_map = true;
@@ -364,7 +384,19 @@ DsLowerExpr *lower_map_field_expr(const DsExpr *expr, DsLowerExpr *object, SymKi
     out->as.index.index->as.text.len = quoted.len;
     out->as.index.map_key_literal = true;
     out->as.index.map_key = str_clone(expr->as.field.field);
-    *kind_out = SYM_UNKNOWN;
+    const DsLowerRowSchema *schema = expr_row_schema_full(lower, object);
+    if (schema) {
+        const DsLowerRowField *field = row_schema_find(schema, expr->as.field.field);
+        if (!field) {
+            ds_diag_error(lower->diag, expr->span, "unknown row field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
+            *kind_out = SYM_UNKNOWN;
+        } else {
+            out->as.index.element_kind = field->kind;
+            *kind_out = sym_kind_from_lower_value_kind(field->kind);
+        }
+    } else {
+        *kind_out = SYM_UNKNOWN;
+    }
     return out;
 }
 
@@ -397,8 +429,9 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
             ds_diag_error(lower->diag, expr->span, "unknown command result field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);
         }
     } else if (object_kind == SYM_MAP) {
-        lower_validate_portable_collection_receiver(lower, object, expr->span);
-        return lower_map_field_expr(expr, object, kind_out);
+        bool portable_row_index = object && object->kind == DS_LOWER_EXPR_INDEX && object->as.index.returns_row;
+        if (!portable_row_index) lower_validate_portable_collection_receiver(lower, object, expr->span);
+        return lower_map_field_expr(lower, expr, object, kind_out);
     } else {
         ds_diag_error(lower->diag, expr->span, "field access is only supported on command results and maps in v0.10.0");
     }
@@ -406,6 +439,7 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_FIELD, expr->span);
     out->as.field.object = object;
     out->as.field.field = str_clone(expr->as.field.field);
+    out->as.field.field_kind = lower_value_kind_from_sym(field_kind);
     return out;
 }
 
@@ -588,6 +622,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
 
 DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     if (helper_is_regex(expr->as.call.name)) return lower_regex_helper_call_expr(lower, expr, kind_out);
+    bool is_row_sort_method = lower_str_eq(expr->as.call.name, "string.sort_by");
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
     out->as.call.name = str_clone(expr->as.call.name);
@@ -596,7 +631,11 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         SymKind arg_kind = SYM_UNKNOWN;
         lower_expr_vec_push(&out->as.call.args, lower_expr(lower, expr->as.call.args.items[i], &arg_kind));
         arg_kinds[i] = arg_kind;
-        if (is_string_helper_name(expr->as.call.name)) {
+        if (is_row_sort_method) {
+            if (i > 0 && expr->as.call.args.len > 0 && arg_kinds[0] == SYM_ARRAY && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
+                ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "row-array method `sort_by` expects string literal arguments in v0.37.0");
+            }
+        } else if (is_string_helper_name(expr->as.call.name)) {
             if (i == 0 && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` requires a string receiver", (int)expr->as.call.name.len, expr->as.call.name.data);
             } else if (i > 0 && string_helper_arg_expects_int(expr->as.call.name, i) && arg_kind != SYM_INT) {
@@ -609,6 +648,48 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         } else if (arg_kind != SYM_STRING && arg_kind != SYM_INT && arg_kind != SYM_BOOL && arg_kind != SYM_UNKNOWN) {
             ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library arguments must be scalar values in v0.11.0");
         }
+    }
+    if (is_row_sort_method && expr->as.call.args.len > 0 && arg_kinds[0] == SYM_ARRAY) {
+        if (expr->as.call.args.len < 2 || expr->as.call.args.len > 3) {
+            ds_diag_error(lower->diag, expr->span, "row-array method `sort_by` expects a field and optional direction in v0.37.0");
+        }
+        const DsLowerRowSchema *schema = NULL;
+        if (out->as.call.args.len > 0) schema = expr_row_array_schema_full(lower, out->as.call.args.items[0]);
+        if (!schema) {
+            ds_diag_error(lower->diag, expr->span, "row-array method `sort_by` requires a row-array with known schema in v0.37.0");
+        }
+        DsStr field = {0};
+        if (expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
+            lower_decode_string_text(expr->as.call.args.items[1]->as.text, &field);
+            if (field.len == 0) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "sort_by field must be non-empty in v0.37.0");
+            else if (schema && !row_schema_find(schema, field)) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "unknown row field `%.*s`", (int)field.len, field.data);
+        } else if (expr->as.call.args.len > 1) {
+            ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "sort_by field must be a string literal in v0.37.0");
+        }
+        DsStr direction = {0};
+        if (expr->as.call.args.len > 2 && expr->as.call.args.items[2]->kind == DS_EXPR_STRING) {
+            lower_decode_string_text(expr->as.call.args.items[2]->as.text, &direction);
+            if (!(direction.len == 3 && memcmp(direction.data, "asc", 3) == 0) &&
+                !(direction.len == 4 && memcmp(direction.data, "desc", 4) == 0)) {
+                ds_diag_error(lower->diag, expr->as.call.args.items[2]->span, "sort_by direction must be \"asc\" or \"desc\" in v0.37.0");
+            }
+        } else if (expr->as.call.args.len == 2) {
+            DsLowerExpr *dir = expr_new(DS_LOWER_EXPR_STRING, expr->span);
+            dir->as.text = (DsStr){ds_str_dup_range("\"asc\"", 5), 5};
+            lower_expr_vec_push(&out->as.call.args, dir);
+        } else if (expr->as.call.args.len > 2) {
+            ds_diag_error(lower->diag, expr->as.call.args.items[2]->span, "sort_by direction must be a string literal in v0.37.0");
+        }
+        free(field.data);
+        free(direction.data);
+        free(out->as.call.name.data);
+        out->as.call.name = (DsStr){ds_str_dup_range("rowarray.sort_by", 16), 16};
+        out->as.call.return_kind = DS_LOWER_VALUE_ARRAY;
+        out->as.call.returns_row_array = true;
+        if (schema) row_schema_clone(schema, &out->as.call.row_schema);
+        *kind_out = SYM_ARRAY;
+        free(arg_kinds);
+        return out;
     }
     const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(expr->as.call.name);
     if (stdlib_helper) {
@@ -670,6 +751,10 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         *kind_out = sym_kind_from_lower_value_kind(fn->return_kind);
         out->as.call.is_user_function = true;
         out->as.call.return_kind = fn->return_kind;
+        if (fn->returns_row_array) {
+            out->as.call.returns_row_array = true;
+            row_schema_clone(&fn->row_schema, &out->as.call.row_schema);
+        }
         free(arg_kinds);
         return out;
     }
@@ -680,16 +765,39 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
 
 DsLowerExpr *lower_array_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_ARRAY, expr->span);
+    bool saw_row = false;
+    bool saw_non_row = false;
+    DsLowerRowSchema common_schema;
+    row_schema_init(&common_schema);
     for (size_t i = 0; i < expr->as.array.elements.len; i++) {
         SymKind elem_kind = SYM_UNKNOWN;
         DsLowerExpr *element = lower_expr(lower, expr->as.array.elements.items[i], &elem_kind);
         lower_expr_vec_push(&out->as.array.elements, element);
-        if (elem_kind == SYM_ARRAY || elem_kind == SYM_MAP) {
+        if (elem_kind == SYM_MAP && lower_expr_is_row(element)) {
+            const DsLowerRowSchema *schema = NULL;
+            lower_expr_row_schema(element, &schema);
+            if (!saw_row) row_schema_clone(schema, &common_schema);
+            else if (!row_schema_equal(&common_schema, schema)) {
+                ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span,
+                              "row-array elements must have the same field names and scalar kinds in v0.37.0");
+            }
+            saw_row = true;
+        } else if (elem_kind == SYM_ARRAY || elem_kind == SYM_MAP) {
             ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "nested collections are deferred in v0.10.0");
         } else if (!lower_collection_element_is_portable(element)) {
             ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
+        } else {
+            saw_non_row = true;
         }
     }
+    if (saw_row && saw_non_row) {
+        ds_diag_error(lower->diag, expr->span, "row-array literals cannot mix rows with scalar values in v0.37.0");
+    }
+    if (saw_row) {
+        out->as.array.is_row_array = true;
+        row_schema_clone(&common_schema, &out->as.array.row_schema);
+    }
+    row_schema_free(&common_schema);
     *kind_out = SYM_ARRAY;
     return out;
 }
@@ -716,6 +824,12 @@ DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
             ds_diag_error(lower->diag, entry->value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
         }
         lower_map_entry_vec_push(&out->as.map.entries, lowered);
+    }
+    DsLowerRowSchema schema;
+    if (lower_map_expr_schema(lower, out, &schema)) {
+        out->as.map.is_row = true;
+        row_schema_clone(&schema, &out->as.map.row_schema);
+        row_schema_free(&schema);
     }
     *kind_out = SYM_MAP;
     return out;
@@ -749,6 +863,15 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         }
         SymKind element_kind = infer_array_element_kind(lower, object);
         out->as.index.element_kind = lower_value_kind_from_sym(element_kind);
+        if (element_kind == SYM_MAP) {
+            const DsLowerRowSchema *schema = expr_row_array_schema_full(lower, object);
+            if (schema) {
+                out->as.index.returns_row = true;
+                row_schema_clone(schema, &out->as.index.row_schema);
+            } else {
+                ds_diag_error(lower->diag, expr->span, "array indexing only supports scalar arrays or row arrays with known schema in v0.37.0");
+            }
+        }
         *kind_out = element_kind;
     } else if (obj_kind == SYM_MAP) {
         out->as.index.object_is_map = true;
@@ -757,6 +880,17 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;
             lower_decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);
+            const DsLowerRowSchema *schema = expr_row_schema_full(lower, object);
+            if (schema) {
+                const DsLowerRowField *field = row_schema_find(schema, out->as.index.map_key);
+                if (!field) {
+                    ds_diag_error(lower->diag, expr->span, "unknown row field `%.*s`", (int)out->as.index.map_key.len, out->as.index.map_key.data);
+                } else {
+                    out->as.index.element_kind = field->kind;
+                    *kind_out = sym_kind_from_lower_value_kind(field->kind);
+                    return out;
+                }
+            }
         } else if (idx_kind != SYM_STRING && idx_kind != SYM_UNKNOWN) {
             ds_diag_error(lower->diag, expr->as.index.index->span, "map index must be a string in v0.10.0");
         }
@@ -806,6 +940,10 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_ARRAY: return SYM_ARRAY;
         case DS_LOWER_EXPR_MAP: return SYM_MAP;
         case DS_LOWER_EXPR_INDEX:
+            if (expr->as.index.returns_row) return SYM_MAP;
+            if (expr->as.index.element_kind != DS_LOWER_VALUE_UNKNOWN) {
+                return sym_kind_from_lower_value_kind(expr->as.index.element_kind);
+            }
             if (expr->as.index.object_is_array) return infer_array_element_kind(lower, expr->as.index.object);
             return SYM_UNKNOWN;
         case DS_LOWER_EXPR_FIELD:
@@ -826,9 +964,11 @@ SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr) {
         Symbol *sym = scope_find(lower->scope, expr->as.text);
         return sym ? sym->element_kind : SYM_UNKNOWN;
     }
+    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.returns_row_array) return SYM_MAP;
     if (expr->kind == DS_LOWER_EXPR_CALL && helper_returns_string_array(expr->as.call.name)) return SYM_STRING;
     if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function) return SYM_UNKNOWN;
     if (expr->kind != DS_LOWER_EXPR_ARRAY) return SYM_UNKNOWN;
+    if (expr->as.array.is_row_array) return SYM_MAP;
 
     SymKind common = SYM_UNKNOWN;
     for (size_t i = 0; i < expr->as.array.elements.len; i++) {

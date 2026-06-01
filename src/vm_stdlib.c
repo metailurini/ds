@@ -721,6 +721,64 @@ static bool stdlib_lines(Vm *vm, Instr *ins, DsValue *out) {
     return true;
 }
 
+static DsValue *row_field_value(DsValue *row, DsStr field) {
+    if (!row || row->kind != DS_VALUE_MAP) return NULL;
+    return ds_map_get(&row->as.map, field);
+}
+
+static int row_field_compare(DsValue *left, DsValue *right, DsStr field) {
+    DsValue *lv = row_field_value(left, field);
+    DsValue *rv = row_field_value(right, field);
+    if (!lv && !rv) return 0;
+    if (!lv) return -1;
+    if (!rv) return 1;
+    return ds_value_compare(lv, rv);
+}
+
+static bool stdlib_rowarray_sort_by(Vm *vm, Instr *ins, DsValue *out) {
+    if (ins->arg_count < 3) {
+        ds_diag_error(vm->diag, ins->span, "runtime row-array sort_by expects receiver, field, and direction");
+        return false;
+    }
+    DsValue *array = &vm->regs[ins->args[0]];
+    if (array->kind != DS_VALUE_ARRAY) {
+        ds_diag_error(vm->diag, ins->span, "runtime row-array sort_by requires an array receiver");
+        return false;
+    }
+    const char *field_data = NULL;
+    const char *dir_data = NULL;
+    size_t field_len = 0, dir_len = 0;
+    if (!vm_string_arg(vm, ins, 1, &field_data, &field_len) || !vm_string_arg(vm, ins, 2, &dir_data, &dir_len)) return false;
+    bool desc = dir_len == 4 && memcmp(dir_data, "desc", 4) == 0;
+    DsStr field = {(char *)field_data, field_len};
+
+    DsValue result = ds_value_null();
+    result.kind = DS_VALUE_ARRAY;
+    ds_array_init(&result.as.array);
+    for (size_t i = 0; i < array->as.array.len; i++) {
+        DsValue *item = (DsValue *)array->as.array.items[i];
+        DsValue *copy = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
+        *copy = ds_value_copy(item);
+        ds_array_push(&result.as.array, copy);
+    }
+
+    for (size_t i = 1; i < result.as.array.len; i++) {
+        DsValue *key = (DsValue *)result.as.array.items[i];
+        size_t j = i;
+        while (j > 0) {
+            DsValue *prev = (DsValue *)result.as.array.items[j - 1];
+            int cmp = row_field_compare(prev, key, field);
+            bool swap = desc ? (cmp < 0) : (cmp > 0);
+            if (!swap) break;
+            result.as.array.items[j] = result.as.array.items[j - 1];
+            j--;
+        }
+        result.as.array.items[j] = key;
+    }
+    *out = result;
+    return true;
+}
+
 
 
 static bool contains_bytes(const char *s, size_t len, const char *sub, size_t sub_len) {
@@ -1040,6 +1098,7 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     *out = ds_value_null();
 
     const char *name = ins->name ? ins->name : "";
+    if (helper_is(ins, "rowarray.sort_by")) return stdlib_rowarray_sort_by(vm, ins, out);
     DsStr helper_name = {(char *)name, strlen(name)};
     const DsStdlibHelper *helper = ds_stdlib_lookup(helper_name);
     if (!helper) {

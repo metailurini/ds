@@ -657,15 +657,17 @@ DS
 assert_check_fails nested_map_rejected "$FIX/nested_map_rejected.ds" 'nested collections are deferred'
 assert_emit_fails nested_map_rejected "$FIX/nested_map_rejected.ds" 'nested collections are deferred'
 
-write_fixture "$FIX/array_of_maps_rejected.ds" <<'DS'
+write_fixture "$FIX/row_array_return_now_supported.ds" <<'DS'
 fn services() {
   return [{ name: "api" }, { name: "web" }]
 }
 
 let value = services()
+for row in value {
+  echo "{row.name}"
+}
 DS
-assert_check_fails array_of_maps_rejected "$FIX/array_of_maps_rejected.ds" 'nested collections are deferred'
-assert_emit_fails array_of_maps_rejected "$FIX/array_of_maps_rejected.ds" 'nested collections are deferred'
+assert_parity row_array_return_now_supported "$FIX/row_array_return_now_supported.ds" 0 $'api\nweb\n'
 
 write_fixture "$FIX/map_containing_array_rejected.ds" <<'DS'
 fn data() {

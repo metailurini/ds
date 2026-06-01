@@ -17,6 +17,22 @@ static void temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id) {
     snprintf(buf, cap, "__%s_%zu", prefix, id);
 }
 
+static void emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
+    buf_append(out, "__ds_row_");
+    buf_append_len(out, array_name.data, array_name.len);
+    buf_append(out, "_");
+    static const char hex[] = "0123456789abcdef";
+    for (size_t i = 0; i < field.len; i++) {
+        unsigned char c = (unsigned char)field.data[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+            buf_append_len(out, (const char *)&field.data[i], 1);
+        } else {
+            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
+            buf_append(out, esc);
+        }
+    }
+}
+
 static bool emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, EmitBuf *out) {
     buf_append(out, "__ds_call_value_into ");
     emit_var_name(out, raw_name);
@@ -303,6 +319,18 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 /* Lowering annotates accepted collection indexes with a known collection kind. */
                 ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index should have a known collection kind after lowering");
                 return false;
+            }
+            if (expr->as.index.object_is_map && expr->as.index.map_key_literal &&
+                expr->as.index.object && expr->as.index.object->kind == DS_LOWER_EXPR_INDEX &&
+                expr->as.index.object->as.index.returns_row &&
+                expr->as.index.object->as.index.object && expr->as.index.object->as.index.object->kind == DS_LOWER_EXPR_IDENT) {
+                buf_append(out, "\"$(");
+                buf_append(out, "__ds_array_get ");
+                emit_row_field_array_name(out, expr->as.index.object->as.index.object->as.text, expr->as.index.map_key);
+                buf_append(out, " ");
+                if (!emit_index_argument(e, expr->as.index.object->as.index.index, false, false, out)) return false;
+                buf_append(out, ")\"");
+                return true;
             }
             if (expr->as.index.object->kind == DS_LOWER_EXPR_IDENT) {
                 buf_append(out, "\"$(");
