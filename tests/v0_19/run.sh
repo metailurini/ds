@@ -385,9 +385,9 @@ fn show(name) {
 }
 show(" api ")
 DS
-capture_status function_param_check "$DS" check "$FIX/function_param_rejected.ds"
-assert_nonzero_status function_param_check
-assert_diag "$TMP/function_param_check.err" 'requires a string receiver' 'unknown-kind function parameter rejected'
+run_ok function_param_check "$DS" check "$FIX/function_param_rejected.ds"
+assert_vm_bash_env_parity function_param_rejected "$FIX/function_param_rejected.ds" 0 ""
+assert_contains "$TMP/function_param_rejected_vm.out" 'api' 'function parameter string method accepted after v0.36 inference'
 
 # Formatter behavior.
 write_fixture "$FIX/unformatted.ds" <<'DS'

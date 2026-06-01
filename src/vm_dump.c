@@ -157,7 +157,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             fprintf(out, "  fn%zu %s(required=%zu, params=%zu)\n", i, fn->name, fn->required_count, fn->param_count);
             for (size_t j = 0; j < fn->param_count; j++) {
                 FnParamMeta *param = &fn->params[j];
-                fprintf(out, "    param %zu %s", j, param->name);
+                fprintf(out, "    param %zu %s: %s", j, param->name, ds_lower_value_kind_name(param->expected_kind));
                 if (param->has_default) {
                     fputs(" = ", out);
                     print_value_literal(out, &param->default_value);

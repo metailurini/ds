@@ -166,6 +166,7 @@ typedef struct {
     DsStr name;
     bool has_default;
     DsLowerValueKind default_kind;
+    DsLowerValueKind inferred_kind;
     DsLowerExpr *default_value;
     DsSpan span;
 } DsLowerFnParam;

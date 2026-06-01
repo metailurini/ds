@@ -650,7 +650,7 @@ let text = "x"
 let result = "{mul(text)}"
 echo "{result}"
 DS
-assert_check_fails wrong_arg_kind "$FIX/wrong_arg_kind.ds" 'argument kind must match parameter default kind'
+assert_check_fails wrong_arg_kind "$FIX/wrong_arg_kind.ds" 'expects argument 1 `n` to be int, got string'
 
 write_fixture "$FIX/explicit_arg_type_tags.ds" <<'DS'
 fn classify(n = 0) {
@@ -678,7 +678,7 @@ let str = "2"
 let b = "{classify(str)}"
 echo "{b}"
 DS
-assert_check_fails explicit_arg_kind_rejected "$FIX/explicit_arg_kind_rejected.ds" 'argument kind must match parameter default kind'
+assert_check_fails explicit_arg_kind_rejected "$FIX/explicit_arg_kind_rejected.ds" 'expects argument 1 `n` to be int, got string'
 
 # Interpolation and formatting tests in expression-backed strings.
 write_fixture "$FIX/interpolation_expr.ds" <<'DS'

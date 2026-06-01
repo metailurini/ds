@@ -62,6 +62,7 @@ typedef struct {
     char *name;
     DsValue default_value;
     bool has_default;
+    DsLowerValueKind expected_kind;
 } FnParamMeta;
 
 typedef struct {

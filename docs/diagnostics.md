@@ -97,6 +97,10 @@ Owns:
 - string-method receiver and argument kind validation, including the v0.35.0
   rule that `char_at` and `slice` require int indexes while search helpers take
   string needles;
+- `v0.36.0` function-parameter inference diagnostics, including incompatible
+  local scalar uses such as one required parameter being used as both `string`
+  and `int`, and wrong-kind call arguments to inferred/defaulted scalar
+  parameters before function body side effects;
 - command-result field validity, command-word interpolation eligibility, and
   literal/interpolation brace acceptance such as rejecting lone `}` while
   accepting doubled literal braces;

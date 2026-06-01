@@ -1,8 +1,8 @@
 # 1.0.0 Release Checklist
 
 This checklist is the executable release boundary created by the `v0.24.0`
-pre-1.0 hardening pass and refreshed through the `v0.35.0` text parsing and
-interpolation DX pass. It does not mark the project stable by itself; it lists
+pre-1.0 hardening pass and refreshed through the `v0.36.0` parameter-inference
+DX pass. It does not mark the project stable by itself; it lists
 what must be signed off before tagging `1.0.0`.
 
 ## Required sign-offs

@@ -1441,3 +1441,16 @@ bool program_uses_membership(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_membership(program->statements.items[i])) return true;
     return false;
 }
+
+bool program_uses_function_param_types(const DsLowerProgram *program) {
+    if (!program) return false;
+    for (size_t i = 0; i < program->functions.len; i++) {
+        const DsLowerFn *fn = &program->functions.items[i];
+        for (size_t j = 0; j < fn->params.len; j++) {
+            const DsLowerFnParam *param = &fn->params.items[j];
+            DsLowerValueKind kind = param->has_default ? param->default_kind : param->inferred_kind;
+            if (kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL) return true;
+        }
+    }
+    return false;
+}

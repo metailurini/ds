@@ -50,6 +50,25 @@ static void vm_push_return(Vm *vm, size_t ip, VmScope *caller_scope) {
     vm->return_len++;
 }
 
+static DsLowerValueKind vm_value_lower_kind(const DsValue *value) {
+    if (!value) return DS_LOWER_VALUE_UNKNOWN;
+    switch (value->kind) {
+        case DS_VALUE_BOOL: return DS_LOWER_VALUE_BOOL;
+        case DS_VALUE_INT: return DS_LOWER_VALUE_INT;
+        case DS_VALUE_STRING: return DS_LOWER_VALUE_STRING;
+        case DS_VALUE_ARRAY: return DS_LOWER_VALUE_ARRAY;
+        case DS_VALUE_MAP: return DS_LOWER_VALUE_MAP;
+        case DS_VALUE_COMMAND_RESULT: return DS_LOWER_VALUE_COMMAND_RESULT;
+        case DS_VALUE_NULL: return DS_LOWER_VALUE_UNKNOWN;
+    }
+    return DS_LOWER_VALUE_UNKNOWN;
+}
+
+static bool vm_param_kind_matches(DsLowerValueKind expected, const DsValue *value) {
+    if (expected == DS_LOWER_VALUE_UNKNOWN) return true;
+    return vm_value_lower_kind(value) == expected;
+}
+
 void vm_pop_to_scope(Vm *vm, VmScope *target) {
     while (vm->scope && vm->scope != target) vm_pop_scope(vm);
 }
@@ -75,6 +94,17 @@ bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
         else {
             scope_free_one(scope);
             ds_diag_error(vm->diag, ins->span, "function `%s` missing argument `%s`", fn->name, fn->params[i].name);
+            return false;
+        }
+        if (!vm_param_kind_matches(fn->params[i].expected_kind, &value)) {
+            DsLowerValueKind actual = vm_value_lower_kind(&value);
+            ds_value_free(&value);
+            scope_free_one(scope);
+            ds_diag_error(vm->diag, ins->span,
+                          "function `%s` expects argument %zu `%s` to be %s, got %s",
+                          fn->name, i + 1, fn->params[i].name,
+                          ds_lower_value_kind_name(fn->params[i].expected_kind),
+                          ds_lower_value_kind_name(actual));
             return false;
         }
         DsStr key = {fn->params[i].name, strlen(fn->params[i].name)};

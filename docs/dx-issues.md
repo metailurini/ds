@@ -6,17 +6,15 @@ The goal is not to decide syntax yet. These are notes for future language/runtim
 
 ## Current priority order
 
-The roadmap now prioritizes the open DX issues in this order:
+The roadmap now prioritizes the remaining open DX issues in this order:
 
 1. `v0.34.0` — make literal `{` / `}` usable in strings and quiet the common
    broken-pipe case from pipelines such as `script | head`.
 2. `v0.35.0` — add core string parsing helpers such as `index_of`,
    `last_index_of`, `slice`, `char_at`, and substring/character counts.
-3. `v0.36.0` — improve function parameter kind inference so helper functions do
-   not need dummy defaults just to call string methods.
-4. `v0.37.0` — design the lightweight structured-row / in-memory buffering /
+3. `v0.37.0` — design the lightweight structured-row / in-memory buffering /
    sort-by-field story for data-processing scripts.
-5. `v0.38.0` — polish recursive file walking beyond the current safe
+4. `v0.38.0` — polish recursive file walking beyond the current safe
    `glob("**")` contract and reconcile solved DX notes.
 
 The previously planned signal/job-control wave is postponed to a later roadmap
@@ -70,7 +68,7 @@ for common parsing pipelines, so `sig.split("(")[0].trim()` works with VM and
 standalone Bash parity. This does not add temporary collection mutation or
 nested collection indexing.
 
-## Function parameters need defaults for string method inference
+## Function parameters need defaults for string method inference — addressed in v0.36.0 implementation
 
 A helper like this could not call string methods on the parameter:
 
@@ -89,6 +87,14 @@ fn clean_line(line = "") {
 ```
 
 This works, but it makes ordinary helper functions feel surprising.
+
+`v0.36.0` removes that dummy-default requirement for required scalar
+parameters whose local usage clearly implies `string`, `int`, or `bool`. A
+helper such as `fn clean_line(line) { return line.trim() }` now infers `line` as
+`string`; `fn span(line, start, end) { return line.slice(start, end) }` infers
+`line` as `string` and `start`/`end` as `int`. Wrong-kind calls are rejected at
+the call boundary. Public typed-parameter syntax, implicit coercions, and
+collection/row parameters remain deferred rather than solved by this DX pass.
 
 ## No native recursive directory walking
 

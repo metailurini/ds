@@ -283,7 +283,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     memset(&e, 0, sizeof(e));
     e.source = source;
     e.diag = diag;
-    e.needs_case_types = program_uses_case(lowered) || program_uses_membership(lowered);
+    e.needs_case_types = program_uses_case(lowered) || program_uses_membership(lowered) || program_uses_function_param_types(lowered);
 
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");

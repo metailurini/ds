@@ -118,6 +118,7 @@ bool program_uses_map_assignment(const DsLowerProgram *program);
 bool program_uses_map_literal(const DsLowerProgram *program);
 bool program_uses_case(const DsLowerProgram *program);
 bool program_uses_membership(const DsLowerProgram *program);
+bool program_uses_function_param_types(const DsLowerProgram *program);
 bool program_uses_int_helpers(const DsLowerProgram *program);
 bool program_uses_function_value_helpers(const DsLowerProgram *program);
 bool program_uses_handlers(const DsLowerProgram *program);

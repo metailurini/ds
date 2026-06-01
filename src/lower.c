@@ -36,6 +36,12 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     }
     for (size_t i = 0; i < ast->statements.len; i++) collect_function_signature(&lower, ast->statements.items[i], program);
     for (size_t i = 0; i < ast->statements.len; i++) collect_top_level_let_signature(&lower, ast->statements.items[i]);
+    infer_function_parameter_kinds(&lower, ast);
+    if (diag->has_error) {
+        scope_free(&root);
+        ds_lower_program_free(program);
+        return NULL;
+    }
     predeclare_function_return_contracts(&lower, ast);
     for (size_t i = 0; i < ast->statements.len; i++) {
         if (ast->statements.items[i]->kind == DS_STMT_FN) {

@@ -138,6 +138,7 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
 
     for (size_t i = 0; i < fn->params.len; i++) {
         const DsLowerFnParam *param = &fn->params.items[i];
+        DsLowerValueKind expected_kind = param->has_default ? param->default_kind : param->inferred_kind;
         DsStr copy = {ds_str_dup_range(param->name.data, param->name.len), param->name.len};
         symbol_vec_push(&e->symbols, copy);
 
@@ -162,7 +163,7 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
             bash_emit_type_var_name(&e->out, param->name);
             buf_append(&e->out, "=");
             buf_appendf(&e->out, "\"${%zu:-", i * 2 + 2);
-            const char *type = param->has_default ? ds_lower_value_kind_name(param->default_kind) : ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
+            const char *type = ds_lower_value_kind_name(expected_kind);
             buf_append(&e->out, type);
             buf_append(&e->out, "}\"");
         }
@@ -181,10 +182,30 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
             buf_append(&e->out, "; ");
             bash_emit_type_var_name(&e->out, param->name);
             buf_append(&e->out, "=");
-            const char *type = param->has_default ? ds_lower_value_kind_name(param->default_kind) : ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
+            const char *type = ds_lower_value_kind_name(expected_kind);
             bash_single_quote(&e->out, type, strlen(type));
         }
         buf_append(&e->out, "; fi\n");
+
+        if (e->needs_case_types && expected_kind != DS_LOWER_VALUE_UNKNOWN) {
+            emit_indent(&e->out, 1);
+            buf_append(&e->out, "if [[ \"${");
+            bash_emit_type_var_name(&e->out, param->name);
+            buf_append(&e->out, ":-unknown}\" != ");
+            const char *type = ds_lower_value_kind_name(expected_kind);
+            bash_single_quote(&e->out, type, strlen(type));
+            buf_append(&e->out, " ]]; then printf ");
+            bash_single_quote(&e->out, "function parameter kind mismatch: ", 34);
+            buf_append(&e->out, " >&2; printf ");
+            bash_single_quote(&e->out, param->name.data, param->name.len);
+            buf_append(&e->out, " >&2; printf ");
+            bash_single_quote(&e->out, " expects ", 9);
+            buf_append(&e->out, " >&2; printf ");
+            bash_single_quote(&e->out, type, strlen(type));
+            buf_append(&e->out, " >&2; printf ");
+            bash_single_quote(&e->out, "\\n", 2);
+            buf_append(&e->out, " >&2; return 1; fi\n");
+        }
     }
 
     int saved_depth = e->function_depth;

@@ -259,7 +259,7 @@ assert_contains docs/diagnostics.md 'rejecting lone `}`' 'diagnostics docs menti
 assert_contains docs/status.md 'v0.34.0' 'status docs mention v0.34.0'
 assert_contains docs/dx-issues.md 'addressed in v0.34.0 implementation' 'DX issues mark v0.34 addressed items'
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" 'ds v0.35.0' 'CLI help reports current v0.35.0 identity'
+assert_contains "$TMP/cli_help.out" 'ds v0.36.0' 'CLI help reports current v0.36.0 identity'
 
 # 2. Literal braces in ordinary strings.
 ordinary=$(write_fixture ordinary_braces <<'DS'

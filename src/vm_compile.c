@@ -126,6 +126,7 @@ static int add_function_meta(Program *p, const DsLowerFn *fn) {
     for (size_t i = 0; i < fn->params.len; i++) {
         meta->params[i].name = ds_str_dup_range(fn->params.items[i].name.data, fn->params.items[i].name.len);
         meta->params[i].has_default = fn->params.items[i].has_default;
+        meta->params[i].expected_kind = fn->params.items[i].has_default ? fn->params.items[i].default_kind : fn->params.items[i].inferred_kind;
         meta->params[i].default_value = fn->params.items[i].has_default ? literal_default_value(fn->params.items[i].default_value) : ds_value_null();
     }
     return (int)p->function_len++;

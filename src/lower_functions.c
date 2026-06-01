@@ -161,6 +161,674 @@ static void ast_kind_env_free(AstKindEnv *env) {
     env->cap = 0;
 }
 
+static DsLowerValueKind fn_param_expected_kind(const DsLowerFnParam *param) {
+    if (!param) return DS_LOWER_VALUE_UNKNOWN;
+    return param->has_default ? param->default_kind : param->inferred_kind;
+}
+
+typedef enum {
+    INFER_BIND_NONE,
+    INFER_BIND_PARAM,
+    INFER_BIND_KIND
+} InferBindingKind;
+
+typedef struct {
+    InferBindingKind kind;
+    size_t param_index;
+    DsLowerValueKind value_kind;
+} InferBinding;
+
+typedef struct {
+    DsStr name;
+    InferBinding binding;
+} InferEnvItem;
+
+typedef struct {
+    InferEnvItem *items;
+    size_t len;
+    size_t cap;
+} InferEnv;
+
+typedef struct {
+    Lower *lower;
+    DsLowerFn *fn;
+    bool changed;
+} InferCtx;
+
+static InferBinding infer_none(void) {
+    InferBinding out = {0};
+    out.kind = INFER_BIND_NONE;
+    out.value_kind = DS_LOWER_VALUE_UNKNOWN;
+    return out;
+}
+
+static InferBinding infer_kind(DsLowerValueKind kind) {
+    InferBinding out = {0};
+    out.kind = INFER_BIND_KIND;
+    out.value_kind = kind;
+    return out;
+}
+
+static InferBinding infer_param(size_t index) {
+    InferBinding out = {0};
+    out.kind = INFER_BIND_PARAM;
+    out.param_index = index;
+    out.value_kind = DS_LOWER_VALUE_UNKNOWN;
+    return out;
+}
+
+static bool infer_is_scalar(DsLowerValueKind kind) {
+    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
+}
+
+static bool infer_binding_known_kind(InferCtx *ctx, InferBinding binding, DsLowerValueKind *kind_out) {
+    if (binding.kind == INFER_BIND_KIND) {
+        *kind_out = binding.value_kind;
+        return binding.value_kind != DS_LOWER_VALUE_UNKNOWN;
+    }
+    if (binding.kind == INFER_BIND_PARAM && binding.param_index < ctx->fn->params.len) {
+        *kind_out = fn_param_expected_kind(&ctx->fn->params.items[binding.param_index]);
+        return *kind_out != DS_LOWER_VALUE_UNKNOWN;
+    }
+    return false;
+}
+
+static bool infer_env_name_eq(DsStr a, DsStr b) {
+    return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
+}
+
+static void infer_env_push(InferEnv *env, DsStr name, InferBinding binding) {
+    for (size_t i = env->len; i > 0; i--) {
+        if (infer_env_name_eq(env->items[i - 1].name, name)) {
+            env->items[i - 1].binding = binding;
+            return;
+        }
+    }
+    if (env->len == env->cap) {
+        env->cap = env->cap ? env->cap * 2 : 8;
+        env->items = (InferEnvItem *)ds_xrealloc(env->items, env->cap * sizeof(InferEnvItem));
+    }
+    env->items[env->len++] = (InferEnvItem){name, binding};
+}
+
+static bool infer_env_find(const InferEnv *env, DsStr name, InferBinding *binding_out) {
+    for (size_t i = env->len; i > 0; i--) {
+        if (infer_env_name_eq(env->items[i - 1].name, name)) {
+            *binding_out = env->items[i - 1].binding;
+            return true;
+        }
+    }
+    return false;
+}
+
+static InferEnv infer_env_clone(const InferEnv *env) {
+    InferEnv copy = {0};
+    if (env->len > 0) {
+        copy.items = (InferEnvItem *)ds_xcalloc(env->len, sizeof(InferEnvItem));
+        memcpy(copy.items, env->items, env->len * sizeof(InferEnvItem));
+        copy.len = env->len;
+        copy.cap = env->len;
+    }
+    return copy;
+}
+
+static void infer_env_free(InferEnv *env) {
+    free(env->items);
+    env->items = NULL;
+    env->len = 0;
+    env->cap = 0;
+}
+
+static const char *infer_kind_name(DsLowerValueKind kind) {
+    return ds_lower_value_kind_name(kind);
+}
+
+static void infer_constrain_param(InferCtx *ctx, size_t param_index, DsLowerValueKind expected, DsSpan span, const char *reason) {
+    if (!infer_is_scalar(expected) || param_index >= ctx->fn->params.len) return;
+    DsLowerFnParam *param = &ctx->fn->params.items[param_index];
+    DsLowerValueKind current = fn_param_expected_kind(param);
+    if (current == DS_LOWER_VALUE_UNKNOWN) {
+        param->inferred_kind = expected;
+        ctx->changed = true;
+        return;
+    }
+    if (current != expected) {
+        ds_diag_error(ctx->lower->diag, span,
+                      "parameter `%.*s` inferred as %s but later used as %s%s%s",
+                      (int)param->name.len, param->name.data,
+                      infer_kind_name(current), infer_kind_name(expected),
+                      reason && reason[0] ? " from " : "",
+                      reason && reason[0] ? reason : "");
+    }
+}
+
+static void infer_constrain_binding(InferCtx *ctx, InferBinding binding, DsLowerValueKind expected, DsSpan span, const char *reason) {
+    if (!infer_is_scalar(expected)) return;
+    if (binding.kind == INFER_BIND_PARAM) {
+        infer_constrain_param(ctx, binding.param_index, expected, span, reason);
+        return;
+    }
+    if (binding.kind == INFER_BIND_KIND && binding.value_kind != DS_LOWER_VALUE_UNKNOWN && binding.value_kind != expected) {
+        ds_diag_error(ctx->lower->diag, span, "expected %s value but found %s", infer_kind_name(expected), infer_kind_name(binding.value_kind));
+    }
+}
+
+static bool infer_string_helper_name(DsStr name) {
+    return lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") ||
+           lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.replace") ||
+           lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.split") ||
+           lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with") ||
+           lower_str_eq(name, "string.len") || lower_str_eq(name, "string.index_of") ||
+           lower_str_eq(name, "string.last_index_of") || lower_str_eq(name, "string.count") ||
+           lower_str_eq(name, "string.char_at") || lower_str_eq(name, "string.slice");
+}
+
+static bool infer_string_helper_arg_expects_int(DsStr name, size_t arg_index) {
+    if (lower_str_eq(name, "string.char_at")) return arg_index == 1;
+    if (lower_str_eq(name, "string.slice")) return arg_index == 1 || arg_index == 2;
+    return false;
+}
+
+static DsLowerValueKind infer_string_helper_return_kind(DsStr name) {
+    if (lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with")) return DS_LOWER_VALUE_BOOL;
+    if (lower_str_eq(name, "string.len") || lower_str_eq(name, "string.index_of") || lower_str_eq(name, "string.last_index_of") || lower_str_eq(name, "string.count")) return DS_LOWER_VALUE_INT;
+    if (lower_str_eq(name, "string.split")) return DS_LOWER_VALUE_ARRAY;
+    return DS_LOWER_VALUE_STRING;
+}
+
+static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExpr *expr);
+static bool infer_extract_ident_arg(const char *data, size_t start, size_t end, DsStr *name_out);
+static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr word, size_t arg_start, DsStr method, DsSpan span);
+
+static void infer_constrain_expr(InferCtx *ctx, InferEnv *env, const DsExpr *expr, DsLowerValueKind expected, const char *reason) {
+    InferBinding binding = infer_expr_binding(ctx, env, expr);
+    infer_constrain_binding(ctx, binding, expected, expr ? expr->span : ctx->fn->span, reason);
+}
+
+static bool infer_parse_ident_span(const char *data, size_t start, size_t end, size_t *cursor, DsStr *name_out) {
+    size_t i = *cursor;
+    while (i < end && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r')) i++;
+    if (i >= end) return false;
+    char c = data[i];
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
+    size_t name_start = i++;
+    while (i < end) {
+        c = data[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) break;
+        i++;
+    }
+    *cursor = i;
+    *name_out = (DsStr){(char *)data + name_start, i - name_start};
+    (void)start;
+    return true;
+}
+
+static size_t infer_find_matching_paren(const char *data, size_t start, size_t end) {
+    int depth = 1;
+    for (size_t i = start; i < end; i++) {
+        if (data[i] == '"' || data[i] == '\'') {
+            char quote = data[i++];
+            while (i < end && data[i] != quote) {
+                if (data[i] == '\\' && i + 1 < end) i += 2;
+                else i++;
+            }
+            continue;
+        }
+        if (data[i] == '(') depth++;
+        else if (data[i] == ')') {
+            depth--;
+            if (depth == 0) return i;
+        }
+    }
+    return end;
+}
+
+static void infer_interpolation_call_args(InferCtx *ctx, InferEnv *env, const DsLowerFn *callee, const char *data, size_t start, size_t end, DsSpan span) {
+    size_t part_start = start;
+    size_t arg_index = 0;
+    int depth = 0;
+    for (size_t i = start; i <= end; i++) {
+        bool split = i == end;
+        if (i < end) {
+            if (data[i] == '"' || data[i] == '\'') {
+                char quote = data[i++];
+                while (i < end && data[i] != quote) {
+                    if (data[i] == '\\' && i + 1 < end) i += 2;
+                    else i++;
+                }
+            } else if (data[i] == '(') depth++;
+            else if (data[i] == ')') depth--;
+            else if (data[i] == ',' && depth == 0) split = true;
+        }
+        if (!split) continue;
+        if (callee && arg_index < callee->params.len) {
+            DsLowerValueKind expected = fn_param_expected_kind(&callee->params.items[arg_index]);
+            if (infer_is_scalar(expected)) {
+                DsStr arg_name = {0};
+                if (infer_extract_ident_arg(data, part_start, i, &arg_name)) {
+                    InferBinding binding = infer_none();
+                    if (infer_env_find(env, arg_name, &binding)) infer_constrain_binding(ctx, binding, expected, span, "interpolation function call");
+                }
+            }
+        }
+        part_start = i + 1;
+        arg_index++;
+    }
+}
+
+static bool infer_interpolation_method(InferCtx *ctx, InferEnv *env, DsStr text, size_t start, size_t end, DsSpan span) {
+    size_t cursor = start;
+    DsStr receiver = {0};
+    if (!infer_parse_ident_span(text.data, start, end, &cursor, &receiver)) return false;
+    while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t')) cursor++;
+    if (cursor >= end || text.data[cursor++] != '.') return false;
+    DsStr method = {0};
+    if (!infer_parse_ident_span(text.data, start, end, &cursor, &method)) return false;
+    while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t')) cursor++;
+    if (cursor >= end || text.data[cursor] != '(') return false;
+    DsString full;
+    ds_string_init(&full);
+    ds_string_append_cstr(&full, "string.");
+    ds_string_append_range(&full, method.data, method.len);
+    DsStr helper = {full.data, full.len};
+    bool is_helper = infer_string_helper_name(helper);
+    if (is_helper) {
+        InferBinding binding = infer_none();
+        if (infer_env_find(env, receiver, &binding)) infer_constrain_binding(ctx, binding, DS_LOWER_VALUE_STRING, span, "interpolation string helper");
+        size_t close = infer_find_matching_paren(text.data, cursor + 1, end);
+        infer_command_word_method_args(ctx, env, text, cursor + 1, helper, span);
+        (void)close;
+    }
+    ds_string_free(&full);
+    return is_helper;
+}
+
+static void infer_interpolation_expr_text(InferCtx *ctx, InferEnv *env, DsStr text, size_t start, size_t end, DsSpan span) {
+    if (infer_interpolation_method(ctx, env, text, start, end, span)) return;
+    size_t cursor = start;
+    DsStr callee_name = {0};
+    if (!infer_parse_ident_span(text.data, start, end, &cursor, &callee_name)) return;
+    while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t' || text.data[cursor] == '\n' || text.data[cursor] == '\r')) cursor++;
+    if (cursor >= end || text.data[cursor] != '(') return;
+    DsLowerFn *callee = find_function(ctx->lower->program, callee_name);
+    size_t close = infer_find_matching_paren(text.data, cursor + 1, end);
+    if (close > end) return;
+    infer_interpolation_call_args(ctx, env, callee, text.data, cursor + 1, close, span);
+}
+
+static void infer_interpolated_text(InferCtx *ctx, InferEnv *env, DsStr text, DsSpan span) {
+    for (size_t i = 0; i < text.len; i++) {
+        if (text.data[i] != '{') continue;
+        if (i + 1 < text.len && text.data[i + 1] == '{') { i++; continue; }
+        size_t end = i + 1;
+        while (end < text.len && text.data[end] != '}') end++;
+        if (end >= text.len) return;
+        infer_interpolation_expr_text(ctx, env, text, i + 1, end, span);
+        i = end;
+    }
+}
+
+static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExpr *expr) {
+    if (!expr) return infer_none();
+    switch (expr->kind) {
+        case DS_EXPR_STRING:
+            infer_interpolated_text(ctx, env, expr->as.text, expr->span);
+            return infer_kind(DS_LOWER_VALUE_STRING);
+        case DS_EXPR_INT: return infer_kind(DS_LOWER_VALUE_INT);
+        case DS_EXPR_BOOL: return infer_kind(DS_LOWER_VALUE_BOOL);
+        case DS_EXPR_IDENT: {
+            InferBinding binding = infer_none();
+            if (infer_env_find(env, expr->as.text, &binding)) return binding;
+            return infer_none();
+        }
+        case DS_EXPR_FIELD: {
+            InferBinding object = infer_expr_binding(ctx, env, expr->as.field.object);
+            DsLowerValueKind object_kind = DS_LOWER_VALUE_UNKNOWN;
+            if (infer_binding_known_kind(ctx, object, &object_kind) && object_kind == DS_LOWER_VALUE_COMMAND_RESULT) {
+                SymKind field_kind = SYM_UNKNOWN;
+                if (command_result_field_kind(expr->as.field.field, &field_kind)) return infer_kind(lower_value_kind_from_sym(field_kind));
+            }
+            return infer_none();
+        }
+        case DS_EXPR_UNARY:
+            if (lower_str_eq(expr->as.unary.op, "-")) {
+                infer_constrain_expr(ctx, env, expr->as.unary.right, DS_LOWER_VALUE_INT, "unary `-`");
+                return infer_kind(DS_LOWER_VALUE_INT);
+            }
+            if (lower_str_eq(expr->as.unary.op, "!")) {
+                infer_constrain_expr(ctx, env, expr->as.unary.right, DS_LOWER_VALUE_BOOL, "`!`");
+                return infer_kind(DS_LOWER_VALUE_BOOL);
+            }
+            return infer_none();
+        case DS_EXPR_BINARY: {
+            if (lower_str_eq(expr->as.binary.op, "+") || lower_str_eq(expr->as.binary.op, "-") ||
+                lower_str_eq(expr->as.binary.op, "*") || lower_str_eq(expr->as.binary.op, "/") ||
+                lower_str_eq(expr->as.binary.op, "%") || lower_str_eq(expr->as.binary.op, "**")) {
+                infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_INT, "integer arithmetic");
+                infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_INT, "integer arithmetic");
+                return infer_kind(DS_LOWER_VALUE_INT);
+            }
+            if (lower_str_eq(expr->as.binary.op, "&&") || lower_str_eq(expr->as.binary.op, "||")) {
+                infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_BOOL, "logical operator");
+                infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_BOOL, "logical operator");
+                return infer_kind(DS_LOWER_VALUE_BOOL);
+            }
+            if (lower_str_eq(expr->as.binary.op, "matches")) {
+                infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_STRING, "`matches`");
+                if (expr->as.binary.right && expr->as.binary.right->kind != DS_EXPR_REGEX) {
+                    infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_STRING, "`matches`");
+                }
+                return infer_kind(DS_LOWER_VALUE_BOOL);
+            }
+            InferBinding left = infer_expr_binding(ctx, env, expr->as.binary.left);
+            InferBinding right = infer_expr_binding(ctx, env, expr->as.binary.right);
+            DsLowerValueKind left_kind = DS_LOWER_VALUE_UNKNOWN;
+            DsLowerValueKind right_kind = DS_LOWER_VALUE_UNKNOWN;
+            bool left_known = infer_binding_known_kind(ctx, left, &left_kind);
+            bool right_known = infer_binding_known_kind(ctx, right, &right_kind);
+            if (left_known && infer_is_scalar(left_kind)) infer_constrain_binding(ctx, right, left_kind, expr->as.binary.right->span, "comparison");
+            if (right_known && infer_is_scalar(right_kind)) infer_constrain_binding(ctx, left, right_kind, expr->as.binary.left->span, "comparison");
+            return infer_kind(DS_LOWER_VALUE_BOOL);
+        }
+        case DS_EXPR_CALL: {
+            if (infer_string_helper_name(expr->as.call.name)) {
+                for (size_t i = 0; i < expr->as.call.args.len; i++) {
+                    DsLowerValueKind expected = infer_string_helper_arg_expects_int(expr->as.call.name, i) ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
+                    infer_constrain_expr(ctx, env, expr->as.call.args.items[i], expected, "string helper");
+                }
+                return infer_kind(infer_string_helper_return_kind(expr->as.call.name));
+            }
+            if (ds_stdlib_is_name(expr->as.call.name)) {
+                const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
+                for (size_t i = 0; i < expr->as.call.args.len; i++) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], DS_LOWER_VALUE_STRING, "standard-library helper");
+                return infer_kind(lower_stdlib_return_value_kind(helper));
+            }
+            DsLowerFn *callee = find_function(ctx->lower->program, expr->as.call.name);
+            if (callee) {
+                size_t count = expr->as.call.args.len < callee->params.len ? expr->as.call.args.len : callee->params.len;
+                for (size_t i = 0; i < count; i++) {
+                    DsLowerValueKind expected = fn_param_expected_kind(&callee->params.items[i]);
+                    if (infer_is_scalar(expected)) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], expected, "function call");
+                    else (void)infer_expr_binding(ctx, env, expr->as.call.args.items[i]);
+                }
+                return infer_kind(callee->has_return && callee->all_paths_return ? callee->return_kind : DS_LOWER_VALUE_UNKNOWN);
+            }
+            for (size_t i = 0; i < expr->as.call.args.len; i++) (void)infer_expr_binding(ctx, env, expr->as.call.args.items[i]);
+            return infer_none();
+        }
+        case DS_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) (void)infer_expr_binding(ctx, env, expr->as.array.elements.items[i]);
+            return infer_kind(DS_LOWER_VALUE_ARRAY);
+        case DS_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) (void)infer_expr_binding(ctx, env, expr->as.map.entries.items[i].value);
+            return infer_kind(DS_LOWER_VALUE_MAP);
+        case DS_EXPR_INDEX: {
+            InferBinding object = infer_expr_binding(ctx, env, expr->as.index.object);
+            infer_constrain_expr(ctx, env, expr->as.index.index, DS_LOWER_VALUE_INT, "index expression");
+            if (expr->as.index.object && expr->as.index.object->kind == DS_EXPR_CALL &&
+                infer_string_helper_name(expr->as.index.object->as.call.name) &&
+                infer_string_helper_return_kind(expr->as.index.object->as.call.name) == DS_LOWER_VALUE_ARRAY) return infer_kind(DS_LOWER_VALUE_STRING);
+            DsLowerValueKind object_kind = DS_LOWER_VALUE_UNKNOWN;
+            if (infer_binding_known_kind(ctx, object, &object_kind) && object_kind == DS_LOWER_VALUE_ARRAY) return infer_none();
+            return infer_none();
+        }
+        case DS_EXPR_RUN: return infer_kind(DS_LOWER_VALUE_COMMAND_RESULT);
+        case DS_EXPR_RANGE:
+            infer_constrain_expr(ctx, env, expr->as.range.start, DS_LOWER_VALUE_INT, "range start");
+            infer_constrain_expr(ctx, env, expr->as.range.end, DS_LOWER_VALUE_INT, "range end");
+            return infer_none();
+        case DS_EXPR_REGEX:
+        case DS_EXPR_ERROR:
+            return infer_none();
+    }
+    return infer_none();
+}
+
+static void infer_command(InferCtx *ctx, InferEnv *env, const DsCommand *command);
+
+static void infer_stmt(InferCtx *ctx, InferEnv *env, const DsStmt *stmt) {
+    if (!stmt) return;
+    switch (stmt->kind) {
+        case DS_STMT_LET: {
+            InferBinding binding = infer_expr_binding(ctx, env, stmt->as.let_stmt.value);
+            infer_env_push(env, stmt->as.let_stmt.name, binding);
+            return;
+        }
+        case DS_STMT_ASSIGN: {
+            InferBinding binding = infer_expr_binding(ctx, env, stmt->as.assign_stmt.value);
+            if (stmt->as.assign_stmt.op != DS_ASSIGN_SET) infer_constrain_binding(ctx, binding, DS_LOWER_VALUE_INT, stmt->as.assign_stmt.value ? stmt->as.assign_stmt.value->span : stmt->span, "compound arithmetic assignment");
+            infer_env_push(env, stmt->as.assign_stmt.name, stmt->as.assign_stmt.op == DS_ASSIGN_SET ? binding : infer_kind(DS_LOWER_VALUE_INT));
+            return;
+        }
+        case DS_STMT_INDEX_ASSIGN:
+            if (stmt->as.index_assign_stmt.target && stmt->as.index_assign_stmt.target->kind == DS_EXPR_INDEX) {
+                infer_constrain_expr(ctx, env, stmt->as.index_assign_stmt.target->as.index.index, DS_LOWER_VALUE_INT, "index assignment");
+            }
+            (void)infer_expr_binding(ctx, env, stmt->as.index_assign_stmt.value);
+            return;
+        case DS_STMT_IF: {
+            infer_constrain_expr(ctx, env, stmt->as.if_stmt.condition, DS_LOWER_VALUE_BOOL, "if condition");
+            InferEnv then_env = infer_env_clone(env);
+            InferEnv else_env = infer_env_clone(env);
+            infer_stmt(ctx, &then_env, stmt->as.if_stmt.then_branch);
+            infer_stmt(ctx, &else_env, stmt->as.if_stmt.else_branch);
+            infer_env_free(&then_env);
+            infer_env_free(&else_env);
+            return;
+        }
+        case DS_STMT_BLOCK: {
+            InferEnv block_env = infer_env_clone(env);
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) infer_stmt(ctx, &block_env, stmt->as.block_stmt.statements.items[i]);
+            infer_env_free(&block_env);
+            return;
+        }
+        case DS_STMT_CALL: {
+            DsLowerFn *callee = find_function(ctx->lower->program, stmt->as.call_stmt.name);
+            if (callee) {
+                size_t count = stmt->as.call_stmt.args.len < callee->params.len ? stmt->as.call_stmt.args.len : callee->params.len;
+                for (size_t i = 0; i < count; i++) {
+                    DsLowerValueKind expected = fn_param_expected_kind(&callee->params.items[i]);
+                    if (infer_is_scalar(expected)) infer_constrain_expr(ctx, env, stmt->as.call_stmt.args.items[i], expected, "function call");
+                    else (void)infer_expr_binding(ctx, env, stmt->as.call_stmt.args.items[i]);
+                }
+            } else {
+                for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) (void)infer_expr_binding(ctx, env, stmt->as.call_stmt.args.items[i]);
+            }
+            return;
+        }
+        case DS_STMT_FOR: {
+            if (stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_RANGE) {
+                (void)infer_expr_binding(ctx, env, stmt->as.for_stmt.iterable);
+            } else {
+                (void)infer_expr_binding(ctx, env, stmt->as.for_stmt.iterable);
+            }
+            InferEnv loop_env = infer_env_clone(env);
+            infer_env_push(&loop_env, stmt->as.for_stmt.key_name, stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_RANGE ? infer_kind(DS_LOWER_VALUE_INT) : infer_none());
+            if (stmt->as.for_stmt.has_value_name) infer_env_push(&loop_env, stmt->as.for_stmt.value_name, infer_none());
+            infer_stmt(ctx, &loop_env, stmt->as.for_stmt.body);
+            infer_env_free(&loop_env);
+            return;
+        }
+        case DS_STMT_WHILE: {
+            infer_constrain_expr(ctx, env, stmt->as.while_stmt.condition, DS_LOWER_VALUE_BOOL, "while condition");
+            InferEnv body_env = infer_env_clone(env);
+            infer_stmt(ctx, &body_env, stmt->as.while_stmt.body);
+            infer_env_free(&body_env);
+            return;
+        }
+        case DS_STMT_CASE: {
+            DsLowerValueKind pattern_kind = DS_LOWER_VALUE_UNKNOWN;
+            bool mixed = false;
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                const DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
+                for (size_t j = 0; j < arm->patterns.len; j++) {
+                    DsLowerValueKind current = DS_LOWER_VALUE_UNKNOWN;
+                    switch (arm->patterns.items[j].kind) {
+                        case DS_CASE_PATTERN_STRING: current = DS_LOWER_VALUE_STRING; break;
+                        case DS_CASE_PATTERN_INT: current = DS_LOWER_VALUE_INT; break;
+                        case DS_CASE_PATTERN_BOOL: current = DS_LOWER_VALUE_BOOL; break;
+                        case DS_CASE_PATTERN_DEFAULT: current = DS_LOWER_VALUE_UNKNOWN; break;
+                    }
+                    if (current == DS_LOWER_VALUE_UNKNOWN) continue;
+                    if (pattern_kind == DS_LOWER_VALUE_UNKNOWN) pattern_kind = current;
+                    else if (pattern_kind != current) mixed = true;
+                }
+            }
+            if (!mixed && infer_is_scalar(pattern_kind)) infer_constrain_expr(ctx, env, stmt->as.case_stmt.selector, pattern_kind, "case pattern");
+            else (void)infer_expr_binding(ctx, env, stmt->as.case_stmt.selector);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                InferEnv arm_env = infer_env_clone(env);
+                infer_stmt(ctx, &arm_env, stmt->as.case_stmt.arms.items[i].body);
+                infer_env_free(&arm_env);
+            }
+            return;
+        }
+        case DS_STMT_PUSH:
+            (void)infer_expr_binding(ctx, env, stmt->as.push_stmt.value);
+            return;
+        case DS_STMT_ASSERT:
+            infer_constrain_expr(ctx, env, stmt->as.assert_stmt.condition, DS_LOWER_VALUE_BOOL, "assert condition");
+            return;
+        case DS_STMT_RETURN:
+            (void)infer_expr_binding(ctx, env, stmt->as.return_stmt.value);
+            return;
+        case DS_STMT_DEFER:
+        case DS_STMT_TRAP: {
+            InferEnv handler_env = infer_env_clone(env);
+            infer_stmt(ctx, &handler_env, stmt->as.handler_stmt.body);
+            infer_env_free(&handler_env);
+            return;
+        }
+        case DS_STMT_CMD:
+            infer_command(ctx, env, &stmt->as.cmd_stmt);
+            return;
+        case DS_STMT_IMPORT:
+        case DS_STMT_FN:
+        case DS_STMT_TEST:
+        case DS_STMT_BREAK:
+        case DS_STMT_CONTINUE:
+            return;
+    }
+}
+
+static bool infer_name_boundary(const char *data, size_t len, size_t pos, size_t name_len) {
+    if (pos > 0) {
+        char c = data[pos - 1];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') return false;
+    }
+    size_t end = pos + name_len;
+    if (end < len) {
+        char c = data[end];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') return false;
+    }
+    return true;
+}
+
+static bool infer_extract_ident_arg(const char *data, size_t start, size_t end, DsStr *name_out) {
+    while (start < end && (data[start] == ' ' || data[start] == '\t')) start++;
+    while (end > start && (data[end - 1] == ' ' || data[end - 1] == '\t')) end--;
+    if (start >= end) return false;
+    char c = data[start];
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
+    for (size_t i = start + 1; i < end; i++) {
+        c = data[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
+    }
+    *name_out = (DsStr){(char *)data + start, end - start};
+    return true;
+}
+
+static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr word, size_t arg_start, DsStr method, DsSpan span) {
+    size_t end = arg_start;
+    int depth = 1;
+    while (end < word.len && depth > 0) {
+        if (word.data[end] == '(') depth++;
+        else if (word.data[end] == ')') depth--;
+        if (depth > 0) end++;
+    }
+    if (end > word.len) return;
+    size_t part_start = arg_start;
+    size_t arg_index = 1;
+    for (size_t i = arg_start; i <= end; i++) {
+        if (i == end || word.data[i] == ',') {
+            DsStr arg_name = {0};
+            if (infer_extract_ident_arg(word.data, part_start, i, &arg_name)) {
+                InferBinding binding = infer_none();
+                if (infer_env_find(env, arg_name, &binding)) {
+                    DsLowerValueKind expected = infer_string_helper_arg_expects_int(method, arg_index) ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
+                    infer_constrain_binding(ctx, binding, expected, span, "command interpolation string helper");
+                }
+            }
+            part_start = i + 1;
+            arg_index++;
+        }
+    }
+}
+
+static void infer_command_word(InferCtx *ctx, InferEnv *env, DsWord word) {
+    if (!memchr(word.text.data, '{', word.text.len)) return;
+    static const char *methods[] = {
+        "trim", "upper", "lower", "replace", "contains", "split", "starts_with", "ends_with",
+        "len", "index_of", "last_index_of", "count", "char_at", "slice"
+    };
+    for (size_t n = 0; n < env->len; n++) {
+        InferBinding binding = env->items[n].binding;
+        if (binding.kind == INFER_BIND_NONE) continue;
+        DsStr name = env->items[n].name;
+        for (size_t pos = 0; pos + name.len + 2 < word.text.len; pos++) {
+            if (memcmp(word.text.data + pos, name.data, name.len) != 0 || !infer_name_boundary(word.text.data, word.text.len, pos, name.len)) continue;
+            size_t dot = pos + name.len;
+            if (dot >= word.text.len || word.text.data[dot] != '.') continue;
+            for (size_t m = 0; m < sizeof(methods) / sizeof(methods[0]); m++) {
+                size_t method_pos = dot + 1;
+                size_t method_len = strlen(methods[m]);
+                if (method_pos + method_len + 1 > word.text.len) continue;
+                if (memcmp(word.text.data + method_pos, methods[m], method_len) != 0 || word.text.data[method_pos + method_len] != '(') continue;
+                DsString full;
+                ds_string_init(&full);
+                ds_string_append_cstr(&full, "string.");
+                ds_string_append_range(&full, methods[m], method_len);
+                infer_constrain_binding(ctx, binding, DS_LOWER_VALUE_STRING, word.span, "command interpolation string helper");
+                infer_command_word_method_args(ctx, env, word.text, method_pos + method_len + 1, (DsStr){full.data, full.len}, word.span);
+                ds_string_free(&full);
+            }
+        }
+    }
+}
+
+static void infer_command(InferCtx *ctx, InferEnv *env, const DsCommand *command) {
+    if (!command) return;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        const DsCommandStage *stage = &command->stages.items[s];
+        for (size_t i = 0; i < stage->words.len; i++) infer_command_word(ctx, env, stage->words.items[i]);
+    }
+    if (command->redirect.kind != DS_REDIRECT_NONE && command->redirect.target.len > 0) {
+        DsWord redirect = {command->redirect.target, command->redirect.target_span};
+        infer_command_word(ctx, env, redirect);
+    }
+}
+
+void infer_function_parameter_kinds(Lower *lower, const DsAst *ast) {
+    if (!ast || !lower || !lower->program || lower->program->functions.len == 0) return;
+    for (size_t pass = 0; pass < lower->program->functions.len + 1; pass++) {
+        bool any_changed = false;
+        for (size_t i = 0; i < ast->statements.len; i++) {
+            const DsStmt *stmt = ast->statements.items[i];
+            if (!stmt || stmt->kind != DS_STMT_FN) continue;
+            DsLowerFn *fn = find_function(lower->program, stmt->as.fn_stmt.name);
+            if (!fn) continue;
+            InferEnv env = {0};
+            for (size_t j = 0; j < fn->params.len; j++) infer_env_push(&env, fn->params.items[j].name, infer_param(j));
+            InferCtx ctx = {lower, fn, false};
+            infer_stmt(&ctx, &env, stmt->as.fn_stmt.body);
+            any_changed = any_changed || ctx.changed;
+            infer_env_free(&env);
+            if (lower->diag->has_error) return;
+        }
+        if (!any_changed) break;
+    }
+}
+
 static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerValueKind *kind_out) {
     if (!expr) return false;
     switch (expr->kind) {
@@ -367,9 +1035,11 @@ void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
             DsLowerValueKind kind = DS_LOWER_VALUE_UNKNOWN;
             bool saw_return = false;
             AstKindEnv env = {0};
-            for (size_t j = 0; j < stmt->as.fn_stmt.params.len; j++) {
+            for (size_t j = 0; j < stmt->as.fn_stmt.params.len && j < fn->params.len; j++) {
                 const DsFnParam *param = &stmt->as.fn_stmt.params.items[j];
-                ast_kind_env_push(&env, param->name, ast_literal_default_kind(param->default_value));
+                DsLowerValueKind kind = fn_param_expected_kind(&fn->params.items[j]);
+                if (kind == DS_LOWER_VALUE_UNKNOWN) kind = ast_literal_default_kind(param->default_value);
+                ast_kind_env_push(&env, param->name, kind);
             }
             bool ok = ast_collect_return_kind(lower, stmt->as.fn_stmt.body, &env, &kind, &saw_return);
             ast_kind_env_free(&env);
@@ -600,7 +1270,7 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     lower->function_depth++;
     lower->current_function = fn;
     for (size_t i = 0; i < fn->params.len; i++) {
-        SymKind kind = sym_kind_from_lower_value_kind(fn->params.items[i].default_kind);
+        SymKind kind = sym_kind_from_lower_value_kind(fn_param_expected_kind(&fn->params.items[i]));
         scope_define(lower, &local, fn->params.items[i].name, kind, fn->params.items[i].span);
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);

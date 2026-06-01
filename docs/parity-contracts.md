@@ -190,6 +190,12 @@ Execution owner: VM scope/function-call execution and Bash function emission.
 Both backends must agree on call form, default arguments, return value encoding,
 stdout behavior, and invalid return diagnostics.
 
+`v0.36.0` extends function metadata with inferred/defaulted scalar parameter
+kinds. The lowerer owns inference and call-site validation; VM execution and
+emitted Bash consume the same metadata and keep defensive runtime checks for
+inferred/defaulted string/int/bool parameters. Do not accept a new parameter
+kind or public typed-parameter syntax by changing only one backend.
+
 Tests: VM function tests, emitted-Bash parity tests, and diagnostics for invalid
 return positions, unsupported return kinds, and expression/statement call misuse.
 

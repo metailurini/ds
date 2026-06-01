@@ -307,13 +307,22 @@ fn deploy_default(target = "staging") {
   echo "Deploying {target}"
 }
 
-# Typed parameters remain planned syntax. v0.9.0 deliberately rejects typed
-# function parameters until call-boundary validation exists in both the VM and
-# emitted standalone Bash.
+# Public typed parameters remain planned syntax. v0.36.0 adds internal scalar
+# kind inference and call-boundary validation for required untyped parameters,
+# so helper functions no longer need dummy defaults just to call string helpers.
+# It does not accept public annotations such as `service: string`.
 #
 # fn restart(service: string) {
 #   docker compose restart $service
 # }
+
+fn normalize_line(line) {
+  return line.trim().lower()
+}
+
+fn span(line, start, end) {
+  return line.slice(start, end)
+}
 
 # Scalar `return expr` values are part of the v0.25.0 implementation surface.
 # v0.26.0 extends value returns to flat scalar arrays, flat scalar maps/objects,
@@ -328,7 +337,8 @@ fn deploy_default(target = "staging") {
 # collection-valued parameters remain deferred. Scalar
 # function-call interpolation is supported in expression-backed strings and
 # quoted command words; command words pre-evaluate those calls before launching
-# the outer command.
+# the outer command. Recursive calls, public typed parameters, and
+# collection-valued parameters remain deferred.
 
 fn to_upper(s = "hello") {
   return s.upper()

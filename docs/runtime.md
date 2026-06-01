@@ -919,7 +919,17 @@ compose with indexed split/line/glob values without relying on runtime coercion
 or Bash-only string behavior. The same lowered element-kind metadata is carried
 into standalone Bash `case` emission, so known indexed array selectors and array
 `for` loop variables are matched as strings, ints, or bools instead of being
-collapsed to strings. Unknown element kinds remain unknown. Function parameters with literal defaults carry that default's static kind through the single lowered function body, and emitted Bash assigns the matching parameter type tag when the default branch is used, so defaulted string parameters can use string methods and defaulted string/int/bool parameters can be used as kind-aware `case` selectors. Required untyped parameters and explicit runtime argument kind propagation remain unknown until typed parameters or a runtime type-tag design is deliberately added.
+collapsed to strings. Unknown element kinds remain unknown. Function parameters
+with literal defaults carry that default's static kind through the single
+lowered function body, and `v0.36.0` extends the same lowered metadata path to
+required parameters whose local usage infers `string`, `int`, or `bool`.
+Inferred/defaulted parameter kinds feed return-kind predeclaration, HIR/debug
+output, VM function metadata, and emitted Bash private type sidecars. Supported
+call sites are validated before function body execution/emission; standalone
+Bash also emits defensive pre-body checks for inferred/defaulted scalar
+signatures. Required parameters used only in neutral contexts remain `unknown`
+until public typed parameters or a broader collection/type design is
+deliberately added.
 
 ## v0.23.0 regex, range, and membership runtime
 

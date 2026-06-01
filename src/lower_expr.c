@@ -125,16 +125,33 @@ static bool is_scalar_sym_kind(SymKind kind) {
     return kind == SYM_STRING || kind == SYM_INT || kind == SYM_BOOL;
 }
 
+static DsLowerValueKind lower_param_expected_kind(const DsLowerFnParam *param) {
+    if (!param) return DS_LOWER_VALUE_UNKNOWN;
+    return param->has_default ? param->default_kind : param->inferred_kind;
+}
+
 void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExprVec *args, const SymKind *arg_kinds) {
     if (!fn || !args || !arg_kinds) return;
     size_t count = args->len < fn->params.len ? args->len : fn->params.len;
     for (size_t i = 0; i < count; i++) {
-        if (!fn->params.items[i].has_default) continue;
-        SymKind expected = sym_kind_from_lower_value_kind(fn->params.items[i].default_kind);
+        SymKind expected = sym_kind_from_lower_value_kind(lower_param_expected_kind(&fn->params.items[i]));
         SymKind actual = arg_kinds[i];
-        if (!is_scalar_sym_kind(expected) || !is_scalar_sym_kind(actual) || expected == actual) continue;
+        if (!is_scalar_sym_kind(expected)) continue;
+        if (actual == SYM_UNKNOWN) {
+            ds_diag_error(lower->diag, args->items[i]->span,
+                          "cannot prove argument kind for inferred %s parameter `%.*s`",
+                          ds_lower_value_kind_name(lower_value_kind_from_sym(expected)),
+                          (int)fn->params.items[i].name.len, fn->params.items[i].name.data);
+            continue;
+        }
+        if (!is_scalar_sym_kind(actual) || expected == actual) continue;
         ds_diag_error(lower->diag, args->items[i]->span,
-                      "function argument kind must match parameter default kind in v0.21.0; bind or convert the value to a statically compatible kind first");
+                      "function `%.*s` expects argument %zu `%.*s` to be %s, got %s",
+                      (int)fn->name.len, fn->name.data,
+                      i + 1,
+                      (int)fn->params.items[i].name.len, fn->params.items[i].name.data,
+                      ds_lower_value_kind_name(lower_value_kind_from_sym(expected)),
+                      ds_lower_value_kind_name(lower_value_kind_from_sym(actual)));
     }
 }
 

@@ -305,7 +305,7 @@ assert_doc_contains docs/roadmap.md 'v0.33.0' 'roadmap lists v0.33.0'
 assert_doc_contains docs/roadmap.md 'Collection, Glob, and Regex Stabilization' 'roadmap keeps v0.33 stabilization milestone'
 assert_doc_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap keeps deliberate v0.34 after v0.33'
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" 'ds v0.35.0' 'CLI help reports current version'
+assert_contains "$TMP/cli_help.out" 'ds v0.36.0' 'CLI help reports current version'
 assert_contains "$TMP/cli_help.out" 'emit bash' 'CLI help keeps known command surface'
 assert_doc_contains docs/status.md 'v0.33.0' 'status mentions v0.33.0'
 assert_doc_contains docs/language.ds 'recursive `**`' 'language docs mention recursive glob support'
@@ -1120,7 +1120,7 @@ assert_doc_contains docs/runtime.md 'structured function returns' 'runtime docs 
 assert_doc_contains docs/runtime.md 'command-result' 'runtime docs describe command-result fields'
 assert_doc_contains docs/runtime.md 'recursive `**`' 'runtime docs describe recursive glob contract'
 assert_doc_contains docs/runtime.md 'runtime string patterns' 'runtime docs describe runtime regex strings'
-assert_doc_contains docs/release-checklist.md 'v0.35.0' 'release checklist records current DX pass'
+assert_doc_contains docs/release-checklist.md 'v0.36.0' 'release checklist records current DX pass'
 
 run_example_parity() {
   local name="$1" file="$2"

@@ -164,9 +164,37 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
                 }
                 if (depth == 0 && j > call_args_start) call_args_len = (j - 1) - call_args_start;
             } else if (j < text.len && text.data[j] == '.') {
-                j++;
-                if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
-                    while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+                while (j < text.len && text.data[j] == '.') {
+                    j++;
+                    if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
+                        while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+                    } else {
+                        break;
+                    }
+                    if (j < text.len && text.data[j] == '(') {
+                        int depth = 1;
+                        j++;
+                        call_args_start = j;
+                        while (j < text.len && depth > 0) {
+                            if (text.data[j] == '"' || text.data[j] == '\'') {
+                                char quote = text.data[j++];
+                                while (j < text.len && text.data[j] != quote) {
+                                    if (text.data[j] == '\\' && j + 1 < text.len) j += 2;
+                                    else j++;
+                                }
+                                if (j < text.len) j++;
+                            } else if (text.data[j] == '(') {
+                                depth++;
+                                j++;
+                            } else if (text.data[j] == ')') {
+                                depth--;
+                                j++;
+                            } else {
+                                j++;
+                            }
+                        }
+                        if (depth == 0 && j > call_args_start) call_args_len = (j - 1) - call_args_start;
+                    }
                 }
             }
             if (j < text.len && text.data[j] == ':') {

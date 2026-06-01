@@ -384,7 +384,8 @@ let out = f("abc")
 echo "{out}"
 DS
 )
-assert_rejected required_param_boundary "$required_param" 'requires a string receiver'
+run_parity required_param_boundary "$required_param" $'-1
+'
 
 default_param=$(write_fixture default_param_workaround <<'DS'
 fn f(line = "") {
@@ -1042,6 +1043,6 @@ middle=web
 '
 
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" 'ds v0.35.0' 'CLI help reports v0.35.0'
+assert_contains "$TMP/cli_help.out" 'ds v0.36.0' 'CLI help reports v0.36.0'
 
 printf 'v0.35 tests passed: %s assertions\n' "$pass_count"

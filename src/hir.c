@@ -346,7 +346,13 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
         for (size_t j = 0; j < fn->params.len; j++) {
             if (j) fputs(", ", out);
             print_str(out, fn->params.items[j].name);
+            if (!fn->params.items[j].has_default && fn->params.items[j].inferred_kind != DS_LOWER_VALUE_UNKNOWN) {
+                fprintf(out, ": inferred %s", ds_lower_value_kind_name(fn->params.items[j].inferred_kind));
+            } else if (!fn->params.items[j].has_default) {
+                fputs(": unknown", out);
+            }
             if (fn->params.items[j].has_default) {
+                fprintf(out, ": default %s", ds_lower_value_kind_name(fn->params.items[j].default_kind));
                 fputs(" = ", out);
                 print_literal_expr(out, fn->params.items[j].default_value);
             }

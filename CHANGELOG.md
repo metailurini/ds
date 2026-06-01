@@ -1,3 +1,24 @@
+# v0.36.0 - Function Parameter Kind Inference
+
+- Bumped the CLI help banner to `ds v0.36.0` for the parameter-inference
+  implementation pass.
+- Added local usage-based scalar kind inference for required untyped function
+  parameters. Receivers/arguments of string helpers infer `string`, arithmetic
+  and indexing positions infer `int`, and boolean conditions/logical operators
+  infer `bool` without requiring dummy defaults.
+- Propagated inferred scalar parameter kinds through HIR/debug output,
+  return-kind predeclaration, same-file/forward/imported calls, nested user
+  function calls, VM function metadata, and emitted Bash parameter metadata.
+- Added call-site validation for inferred/defaulted scalar parameters so
+  wrong-kind arguments fail before partial function body side effects or Bash
+  emission, while neutral required parameters may remain `unknown`.
+- Added defensive VM and standalone Bash parameter-kind checks for inferred
+  scalar signatures without adding public typed-parameter syntax or implicit
+  coercion.
+- Updated language/status/runtime/diagnostics/parity/DX and milestone docs for
+  the implemented `v0.36.0` production surface. Dedicated `v0.36.0` regression
+  tests remain deferred because this pass intentionally avoided adding tests.
+
 # v0.35.0 - Core String Parsing Helpers
 
 - Bumped the CLI help banner to `ds v0.35.0` for the string-helper milestone.
