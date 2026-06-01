@@ -10,6 +10,9 @@
   ranges are rejected instead of clamped or wrapped.
 - Accepted read-only `string.split(...)[index]` chains so parsing expressions
   like `sig.split("(")[0].trim()` work without temporary variables.
+- Tightened emitted-Bash helper selection so string-only programs emit only the
+  specific string helper bodies they use, plus scalar stdlib capture when a
+  direct assignment needs it, instead of emitting the full string-helper block.
 - Updated language/status/runtime/diagnostics/DX docs for the implemented
   v0.35.0 surface. Dedicated regression tests remain for the follow-up test
   implementation pass.

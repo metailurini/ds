@@ -181,9 +181,16 @@ static void emit_dynamic_index_helper(BashEmitter *e) {
     buf_append(&e->out, ds_bash_dynamic_index_helper_source());
 }
 
+static void emit_stdlib_capture_helper(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_stdlib_capture_helper_source());
+}
+
 static void emit_stdlib_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_stdlib_helpers_source());
-    buf_append(&e->out, ds_bash_string_helpers_source());
+}
+
+static void emit_string_helpers(BashEmitter *e, unsigned helper_mask) {
+    buf_append(&e->out, ds_bash_string_helpers_source(helper_mask));
 }
 
 static void emit_glob_helpers(BashEmitter *e, bool recursive) {
@@ -289,6 +296,8 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_map_helpers = program_uses_map_helpers(lowered) || needs_map_iteration;
     bool needs_dynamic_index_helper = needs_array_helpers && needs_map_helpers && needs_collection_helpers;
     bool needs_stdlib = program_uses_stdlib(lowered);
+    bool needs_stdlib_capture = program_uses_stdlib_capture(lowered);
+    unsigned string_helper_mask = program_string_helper_mask(lowered);
     bool needs_glob_helpers = program_uses_glob_helpers(lowered);
     bool needs_recursive_glob_helpers = program_uses_recursive_glob_helpers(lowered);
     bool needs_regex_helpers = program_uses_regex_base_helpers(lowered);
@@ -300,7 +309,14 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
     bool needs_signal_handlers = program_uses_signal_handlers(lowered);
     bool needs_control_helpers = program_uses_control_commands(lowered);
-    bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers || program_uses_run(lowered) || needs_collection_helpers || needs_stdlib || needs_regex_helpers;
+    unsigned string_helpers_needing_error = DS_BASH_STRING_HELPER_REPLACE |
+                                            DS_BASH_STRING_HELPER_SPLIT |
+                                            DS_BASH_STRING_HELPER_CHAR_AT |
+                                            DS_BASH_STRING_HELPER_SLICE;
+    bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers ||
+                              program_uses_run(lowered) || needs_collection_helpers || needs_stdlib ||
+                              needs_glob_helpers || needs_regex_helpers ||
+                              ((string_helper_mask & string_helpers_needing_error) != 0);
     e.has_cleanup_helpers = needs_cleanup_helpers;
     e.has_signal_handlers = needs_signal_handlers;
     if (needs_map_guard) {
@@ -336,6 +352,8 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_map_helpers) emit_map_helpers(&e);
     if (needs_dynamic_index_helper) emit_dynamic_index_helper(&e);
     if (needs_stdlib) emit_stdlib_helpers(&e);
+    else if (needs_stdlib_capture) emit_stdlib_capture_helper(&e);
+    if (string_helper_mask) emit_string_helpers(&e, string_helper_mask);
     if (needs_glob_helpers) emit_glob_helpers(&e, needs_recursive_glob_helpers);
     if (needs_regex_helpers) emit_regex_helpers(&e, needs_regex_match_helpers, needs_regex_replace_helpers);
 

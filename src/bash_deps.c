@@ -1,4 +1,5 @@
 #include "bash_internal.h"
+#include "bash_helpers.h"
 #include "ds_signal.h"
 #include "ds_command_facts.h"
 
@@ -55,16 +56,49 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
     }
 }
 
-static bool string_literal_needs_stdlib(DsStr text) {
-    if (text.len < 2 || text.data[0] != '"') return false;
+static bool str_has_prefix(DsStr text, const char *prefix) {
+    size_t len = strlen(prefix);
+    return text.len >= len && memcmp(text.data, prefix, len) == 0;
+}
+
+static unsigned string_call_helper_mask(DsStr name) {
+    if (str_eq(name, "string.trim")) return DS_BASH_STRING_HELPER_TRIM;
+    if (str_eq(name, "string.upper")) return DS_BASH_STRING_HELPER_UPPER;
+    if (str_eq(name, "string.lower")) return DS_BASH_STRING_HELPER_LOWER;
+    if (str_eq(name, "string.replace")) return DS_BASH_STRING_HELPER_REPLACE;
+    if (str_eq(name, "string.contains")) return DS_BASH_STRING_HELPER_CONTAINS;
+    if (str_eq(name, "string.split")) return DS_BASH_STRING_HELPER_SPLIT;
+    if (str_eq(name, "string.starts_with")) return DS_BASH_STRING_HELPER_STARTS_WITH;
+    if (str_eq(name, "string.ends_with")) return DS_BASH_STRING_HELPER_ENDS_WITH;
+    if (str_eq(name, "string.len")) return DS_BASH_STRING_HELPER_LEN;
+    if (str_eq(name, "string.index_of")) return DS_BASH_STRING_HELPER_INDEX_OF;
+    if (str_eq(name, "string.last_index_of")) return DS_BASH_STRING_HELPER_LAST_INDEX_OF;
+    if (str_eq(name, "string.count")) return DS_BASH_STRING_HELPER_COUNT;
+    if (str_eq(name, "string.char_at")) return DS_BASH_STRING_HELPER_CHAR_AT;
+    if (str_eq(name, "string.slice")) return DS_BASH_STRING_HELPER_SLICE;
+    return 0;
+}
+
+static bool stdlib_call_uses_base_helpers(DsStr name) {
+    return ds_stdlib_is_name(name) &&
+           !str_has_prefix(name, "string.") &&
+           !str_eq(name, "regex.match") &&
+           !str_eq(name, "regex.replace") &&
+           !str_eq(name, "glob") &&
+           !str_eq(name, "glob!");
+}
+
+static unsigned string_literal_helper_mask(DsStr text) {
+    unsigned mask = 0;
+    if (text.len < 2 || text.data[0] != '"') return 0;
     for (size_t i = 0; i < text.len; i++) {
         if (text.data[i] != ':') continue;
-        if (i + 1 < text.len && text.data[i + 1] == '^') return true;
-        if (i + 5 < text.len && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') return true;
-        if (i + 6 < text.len && memcmp(text.data + i + 1, "upper", 5) == 0 && text.data[i + 6] == '}') return true;
-        if (i + 6 < text.len && memcmp(text.data + i + 1, "lower", 5) == 0 && text.data[i + 6] == '}') return true;
+        if (i + 1 < text.len && text.data[i + 1] == '^') mask |= DS_BASH_STRING_HELPER_FORMAT_CENTER;
+        if (i + 5 < text.len && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') mask |= DS_BASH_STRING_HELPER_TRIM;
+        if (i + 6 < text.len && memcmp(text.data + i + 1, "upper", 5) == 0 && text.data[i + 6] == '}') mask |= DS_BASH_STRING_HELPER_UPPER;
+        if (i + 6 < text.len && memcmp(text.data + i + 1, "lower", 5) == 0 && text.data[i + 6] == '}') mask |= DS_BASH_STRING_HELPER_LOWER;
     }
-    return false;
+    return mask;
 }
 
 static bool string_literal_contains_index_interpolation(DsStr text) {
@@ -83,9 +117,9 @@ static bool string_literal_contains_index_interpolation(DsStr text) {
 static bool expr_uses_stdlib(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING: return string_literal_needs_stdlib(expr->as.text);
+        case DS_LOWER_EXPR_STRING: return false;
         case DS_LOWER_EXPR_CALL:
-            if (ds_stdlib_is_name(expr->as.call.name)) return true;
+            if (stdlib_call_uses_base_helpers(expr->as.call.name)) return true;
             for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_stdlib(expr->as.call.args.items[i])) return true;
             return false;
         case DS_LOWER_EXPR_FIELD: return expr_uses_stdlib(expr->as.field.object);
@@ -190,14 +224,53 @@ static bool stmt_uses_glob_helper(const DsLowerStmt *stmt, bool recursive_only) 
 }
 
 static bool command_uses_stdlib(const DsCommand *command) {
-    if (!command) return false;
+    (void)command;
+    return false;
+}
+
+static unsigned expr_string_helper_mask(const DsLowerExpr *expr) {
+    unsigned mask = 0;
+    if (!expr) return 0;
+    switch (expr->kind) {
+        case DS_LOWER_EXPR_STRING:
+            return string_literal_helper_mask(expr->as.text);
+        case DS_LOWER_EXPR_CALL:
+            mask |= string_call_helper_mask(expr->as.call.name);
+            for (size_t i = 0; i < expr->as.call.args.len; i++) mask |= expr_string_helper_mask(expr->as.call.args.items[i]);
+            return mask;
+        case DS_LOWER_EXPR_FIELD:
+            return expr_string_helper_mask(expr->as.field.object);
+        case DS_LOWER_EXPR_INDEX:
+            return expr_string_helper_mask(expr->as.index.object) | expr_string_helper_mask(expr->as.index.index);
+        case DS_LOWER_EXPR_ARRAY:
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) mask |= expr_string_helper_mask(expr->as.array.elements.items[i]);
+            return mask;
+        case DS_LOWER_EXPR_MAP:
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) mask |= expr_string_helper_mask(expr->as.map.entries.items[i].value);
+            return mask;
+        case DS_LOWER_EXPR_UNARY:
+            return expr_string_helper_mask(expr->as.unary.right);
+        case DS_LOWER_EXPR_BINARY:
+            return expr_string_helper_mask(expr->as.binary.left) | expr_string_helper_mask(expr->as.binary.right);
+        case DS_LOWER_EXPR_RANGE:
+            return expr_string_helper_mask(expr->as.range.start) | expr_string_helper_mask(expr->as.range.end);
+        case DS_LOWER_EXPR_INTERP:
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) mask |= expr_string_helper_mask(expr->as.interp.parts.items[i]);
+            return mask;
+        default:
+            return 0;
+    }
+}
+
+static unsigned command_string_helper_mask(const DsCommand *command) {
+    unsigned mask = 0;
+    if (!command) return 0;
     for (size_t s = 0; s < command->stages.len; s++) {
         const DsCommandStage *stage = &command->stages.items[s];
-        for (size_t i = 0; i < stage->words.len; i++) {
-            if (string_literal_needs_stdlib(stage->words.items[i].text)) return true;
-        }
+        for (size_t i = 0; i < stage->words.len; i++) mask |= string_literal_helper_mask(stage->words.items[i].text);
     }
-    return false;
+    mask |= string_literal_helper_mask(command->redirect.target);
+    return mask;
 }
 
 static bool expr_uses_collection_index(const DsLowerExpr *expr) {
@@ -461,7 +534,7 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_stdlib(stmt->as.block_stmt.statements.items[i])) return true;
             return false;
         case DS_LOWER_STMT_CALL:
-            if (ds_stdlib_is_name(stmt->as.call_stmt.name)) return true;
+            if (stdlib_call_uses_base_helpers(stmt->as.call_stmt.name)) return true;
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
                 if (expr_uses_stdlib(stmt->as.call_stmt.args.items[i])) return true;
             }
@@ -482,6 +555,92 @@ static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP: return stmt_uses_stdlib(stmt->as.handler_stmt.body);
         case DS_LOWER_STMT_CMD: return command_uses_stdlib(&stmt->as.cmd_stmt);
+    }
+    return false;
+}
+
+static unsigned stmt_string_helper_mask(const DsLowerStmt *stmt) {
+    unsigned mask = 0;
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET:
+            return expr_string_helper_mask(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN:
+            return expr_string_helper_mask(stmt->as.assign_stmt.value);
+        case DS_LOWER_STMT_INDEX_ASSIGN:
+            return expr_string_helper_mask(stmt->as.index_assign_stmt.index) | expr_string_helper_mask(stmt->as.index_assign_stmt.value);
+        case DS_LOWER_STMT_IF:
+            mask |= expr_string_helper_mask(stmt->as.if_stmt.condition);
+            mask |= stmt_string_helper_mask(stmt->as.if_stmt.then_branch);
+            if (stmt->as.if_stmt.else_branch) mask |= stmt_string_helper_mask(stmt->as.if_stmt.else_branch);
+            return mask;
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) mask |= stmt_string_helper_mask(stmt->as.block_stmt.statements.items[i]);
+            return mask;
+        case DS_LOWER_STMT_CALL:
+            mask |= string_call_helper_mask(stmt->as.call_stmt.name);
+            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) mask |= expr_string_helper_mask(stmt->as.call_stmt.args.items[i]);
+            return mask;
+        case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_MAP:
+        case DS_LOWER_STMT_FOR_RANGE:
+            return expr_string_helper_mask(stmt->as.for_stmt.iterable) | stmt_string_helper_mask(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE:
+            return expr_string_helper_mask(stmt->as.while_stmt.condition) | stmt_string_helper_mask(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            mask |= expr_string_helper_mask(stmt->as.case_stmt.selector);
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) mask |= stmt_string_helper_mask(stmt->as.case_stmt.arms.items[i].body);
+            return mask;
+        case DS_LOWER_STMT_PUSH:
+            return expr_string_helper_mask(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT:
+            return expr_string_helper_mask(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN:
+            return expr_string_helper_mask(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP:
+            return stmt_string_helper_mask(stmt->as.handler_stmt.body);
+        case DS_LOWER_STMT_CMD:
+            return command_string_helper_mask(&stmt->as.cmd_stmt);
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+            return 0;
+    }
+    return 0;
+}
+
+static bool scalar_stdlib_call_needs_capture(const DsLowerExpr *expr) {
+    return expr && expr->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(expr->as.call.name) &&
+           !stdlib_returns_array(expr->as.call.name) && expr->as.call.return_kind != DS_LOWER_VALUE_MAP;
+}
+
+static bool stmt_uses_stdlib_capture(const DsLowerStmt *stmt) {
+    switch (stmt->kind) {
+        case DS_LOWER_STMT_LET: return scalar_stdlib_call_needs_capture(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return scalar_stdlib_call_needs_capture(stmt->as.assign_stmt.value);
+        case DS_LOWER_STMT_INDEX_ASSIGN: return false;
+        case DS_LOWER_STMT_IF:
+            return stmt_uses_stdlib_capture(stmt->as.if_stmt.then_branch) ||
+                   (stmt->as.if_stmt.else_branch && stmt_uses_stdlib_capture(stmt->as.if_stmt.else_branch));
+        case DS_LOWER_STMT_BLOCK:
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_stdlib_capture(stmt->as.block_stmt.statements.items[i])) return true;
+            return false;
+        case DS_LOWER_STMT_FOR_ARRAY:
+        case DS_LOWER_STMT_FOR_MAP:
+        case DS_LOWER_STMT_FOR_RANGE: return stmt_uses_stdlib_capture(stmt->as.for_stmt.body);
+        case DS_LOWER_STMT_WHILE: return stmt_uses_stdlib_capture(stmt->as.while_stmt.body);
+        case DS_LOWER_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_stdlib_capture(stmt->as.case_stmt.arms.items[i].body)) return true;
+            return false;
+        case DS_LOWER_STMT_DEFER:
+        case DS_LOWER_STMT_TRAP: return stmt_uses_stdlib_capture(stmt->as.handler_stmt.body);
+        case DS_LOWER_STMT_CALL:
+        case DS_LOWER_STMT_CMD:
+        case DS_LOWER_STMT_PUSH:
+        case DS_LOWER_STMT_ASSERT:
+        case DS_LOWER_STMT_RETURN:
+        case DS_LOWER_STMT_BREAK:
+        case DS_LOWER_STMT_CONTINUE:
+            return false;
     }
     return false;
 }
@@ -701,6 +860,21 @@ bool program_uses_pipeline_run(const DsLowerProgram *program) {
 bool program_uses_stdlib(const DsLowerProgram *program) {
     for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_stdlib(program->functions.items[i].body)) return true;
     for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_stdlib(program->statements.items[i])) return true;
+    return false;
+}
+
+unsigned program_string_helper_mask(const DsLowerProgram *program) {
+    unsigned mask = 0;
+    for (size_t i = 0; i < program->functions.len; i++) {
+        if (program->functions.items[i].body) mask |= stmt_string_helper_mask(program->functions.items[i].body);
+    }
+    for (size_t i = 0; i < program->statements.len; i++) mask |= stmt_string_helper_mask(program->statements.items[i]);
+    return mask;
+}
+
+bool program_uses_stdlib_capture(const DsLowerProgram *program) {
+    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_stdlib_capture(program->functions.items[i].body)) return true;
+    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_stdlib_capture(program->statements.items[i])) return true;
     return false;
 }
 

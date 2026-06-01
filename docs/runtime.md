@@ -155,6 +155,11 @@ statement-style user function call arguments; `src/bash_expr.c`,
 body review separate from rendering logic while preserving the reserved `__ds_`
 helper prefix and standalone-script requirement.
 
+String helpers are dependency-scanned by helper name. A script that only uses
+`.len()` emits the scalar capture helper when assignment needs it and
+`__ds_string_len`, but does not emit unrelated string helpers such as
+`__ds_string_slice`, `__ds_string_char_at`, or `__ds_string_split`.
+
 `v0.13.0` adds debugging/tracing runtime surfaces without adding source-language
 syntax. The VM can trace command execution and instruction execution to stderr
 through `DsVmOptions`; traces are intentionally observational and must not change

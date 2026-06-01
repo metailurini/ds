@@ -103,6 +103,8 @@ bool program_has_command(const DsLowerProgram *program);
 bool program_uses_run(const DsLowerProgram *program);
 bool program_uses_pipeline_run(const DsLowerProgram *program);
 bool program_uses_stdlib(const DsLowerProgram *program);
+bool program_uses_stdlib_capture(const DsLowerProgram *program);
+unsigned program_string_helper_mask(const DsLowerProgram *program);
 bool program_uses_glob_helpers(const DsLowerProgram *program);
 bool program_uses_recursive_glob_helpers(const DsLowerProgram *program);
 bool program_uses_regex_base_helpers(const DsLowerProgram *program);
