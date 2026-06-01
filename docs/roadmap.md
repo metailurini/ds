@@ -1480,8 +1480,10 @@ out while keeping the regex subset compatible with emitted Bash.
 
 ### v0.33.0 — Cleanup: Collection, Glob, and Regex Stabilization
 
-**Purpose:** stabilize the data and pattern features before expanding signal and
-job-control behavior, which is intentionally higher risk.
+**Purpose:** stabilize the data and pattern features before the roadmap expands
+into the next DX-priority wave. The previously planned signal/job-control wave
+is intentionally postponed because real script-writing exposed more immediate
+usability gaps.
 
 **Scope:**
 
@@ -1506,91 +1508,172 @@ job-control behavior, which is intentionally higher risk.
 
 ---
 
-### v0.34.0 — Richer Cleanup and Signal Handler Context
+### v0.34.0 — Text Literal and Broken-Pipe DX
 
-**Purpose:** restart signal/job-control work from the stable v0.22 base by adding
-small, testable handler improvements before introducing background jobs or
-process ownership APIs.
+**Purpose:** address the two highest-impact scripting annoyances found while
+writing real `ds` scripts: literal braces inside interpolation strings and noisy
+closed-pipe diagnostics when output is piped into tools such as `head`.
 
 **Scope:**
 
-- Add a structured signal/handler context only where VM and emitted Bash can
-  expose the same fields.
-- Improve cleanup hooks with any missing status/signal context needed by real
-  scripts.
-- Preserve the existing v0.22 ordering model for traps, defers, and exit
-  cleanup.
-- Keep tests deterministic and process-session isolated.
+- Define and implement one small, documented way to write literal `{` and `}` in
+  interpolated strings without shelling out to `printf`.
+- Keep existing interpolation behavior compatible for valid current scripts.
+- Standardize VM and emitted-Bash behavior when a script writes to a closed
+  stdout pipe, especially the common `script | head` case.
+- Decide which broken-pipe cases should be quiet, which should preserve the
+  command status, and how explicit user error handling can still observe a
+  failure when needed.
+- Update diagnostics, examples, and runtime docs for both contracts.
 
 **Out of scope:**
 
-- No background jobs yet.
-- No arbitrary process-tree supervision.
-- No shell-grade job table.
-- No platform-specific signal metadata that cannot be emitted to Bash
-  consistently.
+- No broad raw-string redesign unless the milestone spec proves it is the
+  smallest safe brace solution.
+- No general process-supervision or job-control behavior.
+- No new interpolation expression language beyond the brace-literal fix.
 
 **Expected outputs:**
 
-- VM/Bash parity tests for supported handler context fields.
-- Docs that separate supported context from intentionally unavailable metadata.
+- VM/Bash parity tests for literal braces in strings, command words, function
+  returns, and emitted Bash quoting.
+- VM/Bash parity tests for `ds run script.ds | head` and emitted Bash piped into
+  `head`.
+- Updated `docs/runtime.md`, `docs/diagnostics.md`, examples, and DX notes.
 
 ---
 
-### v0.35.0 — Background Jobs and Wait Primitives
+### v0.35.0 — Core String Parsing Helpers
 
-**Purpose:** add the smallest useful job abstraction after cleanup and signal
-handlers are stable.
+**Purpose:** make common text-processing scripts practical without repeatedly
+falling back to external shell tools or temporary split variables.
 
 **Scope:**
 
-- Add a scoped background job/spawn primitive if the milestone spec confirms the
-  final syntax.
-- Add `wait` behavior for a spawned job and define the returned status/result.
-- Ensure cleanup behavior for outstanding jobs is deterministic.
-- Keep emitted Bash and VM behavior aligned for supported direct-command jobs.
+- Add a scoped set of string scanning/slicing helpers, with exact names and edge
+  cases finalized by the milestone spec. The motivating helpers are
+  `index_of`, `last_index_of`, `slice`, `char_at`, and substring/character
+  counting.
+- Define zero-based indexing, missing-match behavior, empty-needle behavior, and
+  out-of-range diagnostics consistently across VM and emitted Bash.
+- Revisit direct indexing after method calls and either document the current
+  supported form or add the smallest parser/lowering support needed for common
+  chains such as `value.split(",")[0].trim()`.
+- Keep the supported behavior byte/string-oriented unless the milestone spec
+  deliberately chooses a Unicode model.
 
 **Out of scope:**
 
-- No interactive job control such as `fg`/`bg`.
-- No background pipelines unless explicitly scoped.
-- No daemon supervisor or restart policy.
-- No cross-platform process abstraction beyond the shell-native target.
+- No regex split unless it is explicitly scoped as a separate regex API.
+- No full parser-combinator/string-processing library.
+- No locale-dependent character semantics.
 
 **Expected outputs:**
 
-- VM/Bash parity tests for spawn, wait, failure status, cleanup, and signal
-  interruption.
-- Docs explaining what DS jobs are and are not compared with Bash job control.
+- VM/Bash parity tests for each helper and boundary case.
+- Updated string-method documentation and examples.
+- A refreshed pure-`ds` analyzer script, if practical, showing fewer shell
+  workarounds.
 
 ---
 
-### v0.36.0 — Foreground Job-Control and Signal Integration Cleanup
+### v0.36.0 — Function Parameter Kind Inference
 
-**Purpose:** finish the richer signal/job-control pre-1.0 work by stabilizing the
-interaction between foreground commands, background jobs, pipelines, traps,
-defers, and emitted Bash helpers.
+**Purpose:** remove the surprising requirement that helper functions give string
+parameters dummy defaults only so methods like `.trim()` type-check.
 
 **Scope:**
 
-- Audit signal forwarding and cleanup behavior for supported foreground commands
-  and jobs.
-- Audit simple pipeline behavior against the v0.22 guarantees.
-- Ensure generated Bash does not leave stray children or temp files for the
-  supported job-control subset.
-- Finalize docs and examples for the supported signal/job-control API.
+- Improve checker/lowering inference so common required parameters can be used
+  with string methods or other supported scalar operations without needing a
+  trailing default value such as `line = ""`.
+- Decide whether this is best handled by local usage inference, by a small typed
+  required-parameter syntax, or by another minimal contract that preserves Bash
+  emission.
+- Keep diagnostics clear when the same parameter is used in incompatible ways.
+- Preserve current default-parameter behavior and imported-function parity.
 
 **Out of scope:**
 
-- No full interactive shell job-control replacement.
-- No arbitrary process-tree management beyond the documented DS subset.
-- No platform-specific behavior that cannot be tested reliably.
+- No broad static type system.
+- No generics, overloads, union types, or typed return annotations unless a tiny
+  annotation becomes the chosen parameter-kind mechanism.
+- No collection-valued parameters except where a later row/record milestone
+  explicitly scopes them.
 
 **Expected outputs:**
 
-- Full signal/job-control regression pass in VM and emitted Bash modes.
-- Updated `docs/status.md`, `docs/runtime.md`, and release checklist entries for
-  the final supported pre-1.0 behavior.
+- VM/Bash parity tests for required string-like parameters, imported helpers,
+  defaults, and conflicting usages.
+- Docs explaining the supported parameter-kind model and remaining deferred
+  type-system behavior.
+
+---
+
+### v0.37.0 — Lightweight Rows and In-Memory Data Processing
+
+**Purpose:** let scripts collect, transform, and sort row-like data without
+encoding records into colon-separated strings and temporary files.
+
+**Scope:**
+
+- Design the smallest coherent structured-row story for shell-native scripts.
+  The motivating shape is rows with scalar fields such as `{ file, line, name,
+  loc }` collected into an in-memory list.
+- Add only the collection semantics needed for flat row values, field access,
+  in-memory buffering, and deterministic transformation/sorting.
+- Add a simple sort-by-field or sort-with-key helper if it fits the row model
+  better than exposing a larger collection API.
+- Define VM/Bash representation, copy semantics, mutation limits, and error
+  diagnostics before implementation.
+
+**Out of scope:**
+
+- No arbitrary deeply nested collection model unless the milestone spec replaces
+  the lightweight-row goal with that larger design.
+- No user-defined classes, methods, inheritance, or schemas.
+- No database/dataframe subsystem.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for row creation, row arrays, field access, iteration,
+  sorting, and unsupported nested/mutation forms.
+- Docs that clearly distinguish lightweight rows from full nested collections.
+- A pure-`ds` data-processing example that avoids temporary files for buffering.
+
+---
+
+### v0.38.0 — Recursive Walk Helpers and DX Integration Cleanup
+
+**Purpose:** build on the existing recursive `glob("**")` contract with a more
+ergonomic file-walking story and then reconcile the DX wave into docs/examples.
+
+**Scope:**
+
+- Add a small recursive walk/filter helper or glob convenience layer for common
+  cases such as walking source files by extension.
+- Decide whether hidden files, directory symlinks, max depth, and multi-extension
+  filtering belong in this helper, and keep defaults aligned with the existing
+  safe recursive-glob contract.
+- Audit the previous DX fixes together in realistic scripts and remove obsolete
+  workarounds from docs/examples where possible.
+- Re-rank `docs/dx-issues.md` after the wave and move solved items into a
+  resolved section.
+
+**Out of scope:**
+
+- No shell-style brace expansion, extglob, `~` expansion, or raw Bash globstar
+  passthrough.
+- No symlink-following traversal unless explicitly scoped with deterministic
+  cycle handling.
+- No OS-specific filesystem watcher or indexing service.
+
+**Expected outputs:**
+
+- VM/Bash parity tests for walk/filter behavior and safety defaults.
+- Updated examples and DX notes showing the preferred recursive-file workflow.
+- A short cleanup report for any DX issues still left after `v0.34.0` through
+  `v0.38.0`.
 
 ---
 
@@ -1598,8 +1681,11 @@ defers, and emitted Bash helpers.
 
 Possible future areas:
 
-- nested collections and collection values beyond the flat v0.26 surface;
-- typed required function parameters;
+- richer signal/job-control work postponed from the previous `v0.34.0` through
+  `v0.36.0` plan: handler context, scoped background jobs/wait primitives, and
+  foreground job-control integration cleanup;
+- nested collections and collection values beyond the lightweight row subset;
+- typed required function parameters if `v0.36.0` does not choose that mechanism;
 - collection and command-result values in more expression positions;
 - better module system;
 - shell completion generation;
@@ -1647,8 +1733,17 @@ Before `1.0.0`, `ds` should have:
 - deterministic map iteration;
 - controlled array/map index assignment;
 - recursive `**` glob behavior with documented dotfile/symlink/no-match rules;
+- a practical recursive file-walking/filtering helper for common source-tree
+  scripts;
 - regex captures, replacement, and runtime regex validation within the supported
   VM/Bash-compatible regex subset;
+- literal-brace string behavior that does not require shelling out;
+- quiet, documented behavior for common closed-stdout pipe cases;
+- core string parsing helpers for index/slice/character-style text work;
+- function parameter kind behavior that avoids dummy defaults for ordinary
+  string helpers;
+- a lightweight structured-row/data-processing story for collecting and sorting
+  script results without temporary text files;
 - direct `env.NAME` access and assignment;
 - the documented signal/job-control subset, including cleanup context and any
   supported job/wait primitives;

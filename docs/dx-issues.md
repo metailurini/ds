@@ -4,6 +4,24 @@ This document records developer-experience issues observed while writing a pure 
 
 The goal is not to decide syntax yet. These are notes for future language/runtime design.
 
+## Current priority order
+
+The roadmap now prioritizes the open DX issues in this order:
+
+1. `v0.34.0` — make literal `{` / `}` usable in strings and quiet the common
+   broken-pipe case from pipelines such as `script | head`.
+2. `v0.35.0` — add core string parsing helpers such as `index_of`,
+   `last_index_of`, `slice`, `char_at`, and substring/character counts.
+3. `v0.36.0` — improve function parameter kind inference so helper functions do
+   not need dummy defaults just to call string methods.
+4. `v0.37.0` — design the lightweight structured-row / in-memory buffering /
+   sort-by-field story for data-processing scripts.
+5. `v0.38.0` — polish recursive file walking beyond the current safe
+   `glob("**")` contract and reconcile solved DX notes.
+
+The previously planned signal/job-control wave is postponed to a later roadmap
+slot so these script-writing DX gaps can be addressed first.
+
 ## Literal braces in strings are awkward
 
 Writing a literal `{` or `}` in a string currently conflicts with interpolation parsing.

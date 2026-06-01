@@ -295,8 +295,8 @@ done
 assert_doc_contains docs/milestones/v0.33.0-spec.md 'cleanup/stabilization release' 'spec identifies cleanup/stabilization scope'
 assert_doc_contains docs/milestones/v0.33.0-spec.md 'no new syntax' 'spec forbids new syntax surface'
 assert_doc_contains docs/roadmap.md 'v0.33.0' 'roadmap lists v0.33.0'
-assert_doc_contains docs/roadmap.md 'Collection, Glob, and Regex Stabilization' 'roadmap aligns v0.33 before signal work'
-assert_doc_contains docs/roadmap.md 'v0.34.0' 'roadmap keeps v0.34 after v0.33'
+assert_doc_contains docs/roadmap.md 'Collection, Glob, and Regex Stabilization' 'roadmap keeps v0.33 stabilization milestone'
+assert_doc_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap keeps deliberate v0.34 after v0.33'
 run_ok cli_help "$DS" --help
 assert_contains "$TMP/cli_help.out" 'ds v0.33.0' 'CLI help reports v0.33.0'
 assert_contains "$TMP/cli_help.out" 'emit bash' 'CLI help keeps known command surface'
