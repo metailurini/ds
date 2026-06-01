@@ -200,6 +200,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     out->as.binary.op = str_clone(expr->as.binary.op);
     out->as.binary.right = right;
     out->as.binary.left_kind = lower_value_kind_from_sym(left_kind);
+    out->as.binary.right_kind = lower_value_kind_from_sym(right_kind);
     if (ast_binary_op_is_comparison_like(expr) &&
         (ast_binary_op_is_comparison_like(expr->as.binary.left) || ast_binary_op_is_comparison_like(expr->as.binary.right))) {
         ds_diag_error(lower->diag, expr->span, "ambiguous comparison chain in v0.23.0; add parentheses around `in`, `matches`, or comparison operands");

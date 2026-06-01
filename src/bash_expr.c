@@ -37,6 +37,26 @@ static bool emit_condition_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr
     return emit_condition_operand(e, expr, out);
 }
 
+static bool emit_arithmetic_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr *expr, const DsStr *raw_temp, EmitBuf *out) {
+    if (raw_temp) {
+        buf_append(out, "$");
+        emit_var_name(out, *raw_temp);
+        return true;
+    }
+    return emit_value_expr(e, expr, out);
+}
+
+static bool emit_int_comparison(BashEmitter *e, const DsLowerExpr *left, const DsLowerExpr *right,
+                                const DsStr *left_temp, const DsStr *right_temp,
+                                const char *op, EmitBuf *out) {
+    buf_append(out, "(( ");
+    if (!emit_arithmetic_operand_or_raw_temp(e, left, left_temp, out)) return false;
+    buf_appendf(out, " %s ", op);
+    if (!emit_arithmetic_operand_or_raw_temp(e, right, right_temp, out)) return false;
+    buf_append(out, " ))");
+    return true;
+}
+
 static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     buf_append(out, " ");
     bash_emit_expr_type_value(e, expr, out);
@@ -595,9 +615,18 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         return emit_condition(e, expr->as.unary.right, out);
     }
     if (expr->kind == DS_LOWER_EXPR_BINARY) {
+        const char *source_op = NULL;
         const char *op = NULL;
         bool negate = false;
-        if (str_eq(expr->as.binary.op, "==")) op = "==";
+        if (str_eq(expr->as.binary.op, "==")) source_op = "==";
+        else if (str_eq(expr->as.binary.op, "!=")) source_op = "!=";
+        else if (str_eq(expr->as.binary.op, ">")) source_op = ">";
+        else if (str_eq(expr->as.binary.op, ">=")) source_op = ">=";
+        else if (str_eq(expr->as.binary.op, "<")) source_op = "<";
+        else if (str_eq(expr->as.binary.op, "<=")) source_op = "<=";
+        bool int_compare = source_op && expr->as.binary.left_kind == DS_LOWER_VALUE_INT && expr->as.binary.right_kind == DS_LOWER_VALUE_INT;
+        if (int_compare) op = source_op;
+        else if (str_eq(expr->as.binary.op, "==")) op = "==";
         else if (str_eq(expr->as.binary.op, "!=")) op = "!=";
         else if (str_eq(expr->as.binary.op, ">")) op = ">";
         else if (str_eq(expr->as.binary.op, ">=")) {
@@ -701,13 +730,19 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, "; ");
                 right_temp_ptr = &right_temp;
             }
-            buf_append(out, "[[ ");
-            if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
-            buf_appendf(out, " %s ", op);
-            if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.right, right_temp_ptr, out)) return false;
-            buf_append(out, " ]]; }");
+            if (int_compare) {
+                if (!emit_int_comparison(e, expr->as.binary.left, expr->as.binary.right, left_temp_ptr, right_temp_ptr, op, out)) return false;
+            } else {
+                buf_append(out, "[[ ");
+                if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
+                buf_appendf(out, " %s ", op);
+                if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.right, right_temp_ptr, out)) return false;
+                buf_append(out, " ]]");
+            }
+            buf_append(out, "; }");
             return true;
         }
+        if (int_compare) return emit_int_comparison(e, expr->as.binary.left, expr->as.binary.right, NULL, NULL, op, out);
         buf_append(out, "[[ ");
         if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
         buf_appendf(out, " %s ", op);

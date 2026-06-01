@@ -307,8 +307,8 @@ fn deploy_default(target = "staging") {
   echo "Deploying {target}"
 }
 
-# Public typed parameters remain planned syntax. v0.36.0 adds internal scalar
-# kind inference and call-boundary validation for required untyped parameters,
+# Public typed parameters remain planned syntax. v0.36.0 adds required parameter scalar inference
+# and call-boundary validation for untyped parameters,
 # so helper functions no longer need dummy defaults just to call string helpers.
 # It does not accept public annotations such as `service: string`.
 #

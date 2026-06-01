@@ -218,6 +218,11 @@ bool ds_value_to_string(const DsValue *value, DsString *out) {
 }
 
 int ds_value_compare(const DsValue *left, const DsValue *right) {
+    if (left && right && left->kind == DS_VALUE_INT && right->kind == DS_VALUE_INT) {
+        if (left->as.integer < right->as.integer) return -1;
+        if (left->as.integer > right->as.integer) return 1;
+        return 0;
+    }
     DsString a, b;
     ds_value_to_string(left, &a);
     ds_value_to_string(right, &b);

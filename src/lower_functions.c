@@ -1,4 +1,5 @@
 #include "lower_internal.h"
+#include "ds_interpolation.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -449,6 +450,31 @@ static void infer_interpolation_expr_text(InferCtx *ctx, InferEnv *env, DsStr te
     DsStr callee_name = {0};
     if (!infer_parse_ident_span(text.data, start, end, &cursor, &callee_name)) return;
     while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t' || text.data[cursor] == '\n' || text.data[cursor] == '\r')) cursor++;
+    if (cursor < end && text.data[cursor] == ':') {
+        DsStr spec = {text.data + cursor + 1, end - cursor - 1};
+        DsInterpFormatSpec parsed;
+        if (!ds_interp_parse_format_spec(spec, &parsed)) return;
+        DsLowerValueKind expected = DS_LOWER_VALUE_UNKNOWN;
+        switch (parsed.kind) {
+            case DS_INTERP_FORMAT_UPPER:
+            case DS_INTERP_FORMAT_LOWER:
+            case DS_INTERP_FORMAT_TRIM:
+            case DS_INTERP_FORMAT_ALIGN_LEFT:
+            case DS_INTERP_FORMAT_ALIGN_RIGHT:
+            case DS_INTERP_FORMAT_ALIGN_CENTER:
+                expected = DS_LOWER_VALUE_STRING;
+                break;
+            case DS_INTERP_FORMAT_INT_DECIMAL:
+            case DS_INTERP_FORMAT_INT_FIXED:
+                expected = DS_LOWER_VALUE_INT;
+                break;
+        }
+        InferBinding binding = infer_none();
+        if (infer_is_scalar(expected) && infer_env_find(env, callee_name, &binding)) {
+            infer_constrain_binding(ctx, binding, expected, span, "interpolation format specifier");
+        }
+        return;
+    }
     if (cursor >= end || text.data[cursor] != '(') return;
     DsLowerFn *callee = find_function(ctx->lower->program, callee_name);
     size_t close = infer_find_matching_paren(text.data, cursor + 1, end);
@@ -767,6 +793,7 @@ static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr w
 
 static void infer_command_word(InferCtx *ctx, InferEnv *env, DsWord word) {
     if (!memchr(word.text.data, '{', word.text.len)) return;
+    infer_interpolated_text(ctx, env, word.text, word.span);
     static const char *methods[] = {
         "trim", "upper", "lower", "replace", "contains", "split", "starts_with", "ends_with",
         "len", "index_of", "last_index_of", "count", "char_at", "slice"

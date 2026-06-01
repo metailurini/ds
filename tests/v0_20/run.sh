@@ -499,13 +499,16 @@ let y = s.contains("x").trim()
 DS
 run_fail string_bool_receiver_bad_check "$DS" check "$FIX/string_bool_receiver_bad.ds"
 assert_diag "$TMP/string_bool_receiver_bad_check.err" 'string.trim' 'string method on bool receiver rejected'
-write_fixture "$FIX/fn_param_bad.ds" <<'DS'
-fn bad(name) {
-  let x = name.trim()
+write_fixture "$FIX/fn_param_receiver.ds" <<'DS'
+fn show(name) {
+  echo "{name.trim()}"
 }
+
+show("  api  ")
 DS
-run_fail fn_param_bad_check "$DS" check "$FIX/fn_param_bad.ds"
-assert_diag "$TMP/fn_param_bad_check.err" 'string.trim' 'unknown function parameter receiver rejected'
+run_ok fn_param_receiver_check "$DS" check "$FIX/fn_param_receiver.ds"
+assert_vm_bash_parity_args fn_param_receiver "$FIX/fn_param_receiver.ds" 0 ""
+assert_file_equals "$TMP/fn_param_receiver_vm.out" $'api\n' 'function parameter receiver now infers string'
 
 write_fixture "$FIX/fn_default_string_case.ds" <<'DS'
 fn show(name = "api") {

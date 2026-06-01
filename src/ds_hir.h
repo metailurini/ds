@@ -81,7 +81,7 @@ struct DsLowerExpr {
         DsCommand run;
         struct { DsLowerExpr *object; DsStr field; } field;
         struct { DsStr op; DsLowerExpr *right; } unary;
-        struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_element_kind; } binary;
+        struct { DsLowerExpr *left; DsStr op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_kind; DsLowerValueKind right_element_kind; } binary;
         struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; } call;
         struct { DsLowerExprVec parts; } interp;
         struct { DsLowerExprVec elements; } array;
