@@ -283,6 +283,7 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
 static bool decoded_needs_expr_interpolation(DsStr decoded) {
     for (size_t i = 0; i < decoded.len; i++) {
         if (decoded.data[i] != '{') continue;
+        if (i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
         size_t j = i + 1;
         interp_skip_ws(decoded.data, decoded.len, &j);
         if (j < decoded.len && (decoded.data[j] == '(' || decoded.data[j] == '-' || (decoded.data[j] >= '0' && decoded.data[j] <= '9'))) return true;
@@ -312,6 +313,12 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INTERP, expr->span);
     size_t literal_start = 0;
     for (size_t i = 0; i < decoded.len; i++) {
+        if (decoded.data[i] == '{' && i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
+        if (decoded.data[i] == '}' && i + 1 < decoded.len && decoded.data[i + 1] == '}') { i++; continue; }
+        if (decoded.data[i] == '}') {
+            ds_diag_error(lower->diag, expr->span, "unmatched `}` in string interpolation; use `}}` for a literal `}`");
+            break;
+        }
         if (decoded.data[i] != '{') continue;
         size_t j = i + 1;
         interp_skip_ws(decoded.data, decoded.len, &j);

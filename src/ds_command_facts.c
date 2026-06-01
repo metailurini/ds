@@ -37,6 +37,7 @@ DsCommandWordForm ds_command_word_analyze(DsStr word) {
 bool ds_command_word_contains_direct_call_interpolation(DsStr decoded) {
     for (size_t i = 0; i < decoded.len; i++) {
         if (decoded.data[i] != '{') continue;
+        if (i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
         size_t j = i + 1;
         while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
         if (j >= decoded.len || !((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||

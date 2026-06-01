@@ -768,17 +768,21 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             emit_indent(&e->out, indent);
             bool is_multi = ds_command_is_pipeline(&stmt->as.cmd_stmt);
-            if (is_multi) buf_append(&e->out, "( if [[ -t 0 ]]; then exec </dev/null; fi; ");
+            buf_append(&e->out, "( ");
+            if (is_multi) buf_append(&e->out, "if [[ -t 0 ]]; then exec </dev/null; fi; ");
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
             if (is_multi) {
-                buf_append(&e->out, " ) || { __ds_code=$?; printf '%s: error: pipeline failed with exit %s\\n' ");
+                buf_append(&e->out, " ) || { __ds_code=$?; if (( __ds_code == 141 )) && [[ ! -t 1 ]]; then ");
+                if (e->handler_depth > 0) buf_append(&e->out, "return 0; ");
+                else buf_append(&e->out, "exit 0; ");
+                buf_append(&e->out, "fi; printf '%s: error: pipeline failed with exit %s\\n' ");
                 emit_source_loc(&e->out, e->source, stmt->span);
                 buf_append(&e->out, " \"$__ds_code\" >&2; ");
                 if (e->handler_depth > 0) buf_append(&e->out, "return \"$__ds_code\"; }");
                 else buf_append(&e->out, "exit \"$__ds_code\"; }");
                 buf_append(&e->out, "\n\n");
             } else {
-                buf_append(&e->out, " || __ds_fail ");
+                buf_append(&e->out, " ) || __ds_fail ");
                 emit_source_loc(&e->out, e->source, stmt->span);
                 buf_append(&e->out, " \"$?\"");
                 if (e->handler_depth > 0) buf_append(&e->out, " || return $?\n\n");

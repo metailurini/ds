@@ -94,7 +94,9 @@ Owns:
   restrictions, handler legality, loop source eligibility, and value-kind checks;
 - stdlib helper existence, arity, statement-only/expression-capable status,
   return kind, argument restrictions, and env-name validation;
-- command-result field validity and command-word interpolation eligibility;
+- command-result field validity, command-word interpolation eligibility, and
+  literal/interpolation brace acceptance such as rejecting lone `}` while
+  accepting doubled literal braces;
 - portable collection, regex, glob, command, pipeline, trap/defer/signal, and
   environment restrictions;
 - unsupported forms that parse but are not accepted by the current language;
@@ -261,6 +263,11 @@ execution:
   value is produced dynamically by an accepted program, such as script arguments,
   function returns, variables with unknown value kind, runtime environment names,
   runtime glob strings, or runtime string-helper separators.
+- VM/runtime and emitted Bash helpers also own the scoped `v0.34.0` broken-pipe
+  quieting classification for accepted uncaptured, unredirected command or
+  pipeline executions that return status `141` while stdout is not a terminal.
+  That classification is runtime data, not a lowering rule; captured command
+  results must keep their observed status fields.
 - VM/Bash internal invariant diagnostics are for shapes that should be impossible
   after lowering, such as unknown helper/function targets, unsupported accepted
   interpolation shapes, or corrupted Bash function-return payloads.

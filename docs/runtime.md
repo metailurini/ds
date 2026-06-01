@@ -748,6 +748,16 @@ to the lowered command/run operation: they are not added to the source symbol
 scope, they do not collide with user variables, and later source code cannot
 read them as normal variables.
 
+`v0.34.0` keeps that interpolation surface but adds one literal-brace spelling
+inside ordinary and triple-quoted strings: `{{` renders `{`, `}}` renders `}`,
+and `{expr}` continues to mean interpolation. Lowering rejects a lone `}` with a
+source diagnostic that tells users to write `}}` for a literal close brace.
+Consequently `"{{name}}"` renders literal `{name}`, while `"{name}}}"` renders
+the interpolated `name` followed by a literal `}`. The VM string interpolator,
+generated Bash string quoting, command-word interpolation validation, and Bash
+expression fragments all share this contract so accepted source has VM/Bash
+parity.
+
 
 ## Cleanup and signal runtime
 
@@ -780,7 +790,7 @@ adding new handler-context syntax.
 
 On normal completion, explicit `exit`, `fail`, or direct-command failure, the runtime runs the `EXIT` trap first when present, then `EXIT` defers in last-in, first-out order. On `INT` or `TERM`, the runtime runs the matching trap first, then matching defers in last-in, first-out order, then the `EXIT` cleanup sequence. The original status is preserved when cleanup succeeds; handler failures can replace the final status, and explicit `exit N` in emitted Bash follows Bash's process exit behavior while the cleanup guard prevents recursive handler execution.
 
-The VM implements cleanup without relying on Bash by lowering handler registration to bytecode and executing registered handler bytecode during shutdown. It installs lightweight `INT` and `TERM` signal handlers, observes pending signals between bytecode instructions, and now also classifies interrupted foreground direct commands and simple foreground pipelines while waiting for child processes. During VM command execution, child commands and pipelines are placed in a foreground process group when possible; an `INT` or `TERM` observed by the parent is forwarded to that group, and a child terminated by `INT` or `TERM` runs the matching ds cleanup path instead of degrading into a generic command-failure diagnostic. Generated Bash emits standalone trap dispatchers and handler functions under the reserved `__ds_` namespace. For foreground direct commands and simple foreground pipeline statements, generated Bash runs the command through cleanup-aware helpers so `INT` and `TERM` exits become ds signal cleanup events instead of generic command/pipeline failures or shell job-control messages. Background child management, arbitrary job-control APIs, asynchronous pipelines, and broad signal-forwarding semantics outside the supported foreground subset remain deferred.
+The VM implements cleanup without relying on Bash by lowering handler registration to bytecode and executing registered handler bytecode during shutdown. It installs lightweight `INT` and `TERM` signal handlers, observes pending signals between bytecode instructions, and now also classifies interrupted foreground direct commands and simple foreground pipelines while waiting for child processes. During VM command execution, child commands and pipelines are placed in a foreground process group when possible; an `INT` or `TERM` observed by the parent is forwarded to that group, and a child terminated by `INT` or `TERM` runs the matching ds cleanup path instead of degrading into a generic command-failure diagnostic. Generated Bash emits standalone trap dispatchers and handler functions under the reserved `__ds_` namespace. For foreground direct commands and simple foreground pipeline statements, generated Bash runs the command through cleanup-aware helpers so `INT` and `TERM` exits become ds signal cleanup events instead of generic command/pipeline failures or shell job-control messages. Since `v0.34.0`, the common non-interactive closed-stdout case is also quieted for uncaptured, unredirected top-level command statements and pipelines: status `141` while stdout is not a terminal is treated as successful early script completion after supported cleanup runs, avoiding noisy `script | head` diagnostics. Captured `run` commands and captured pipelines still preserve the observed command-result fields, including broken-pipe-like statuses, and unrelated command/pipeline failures remain fail-fast. Background child management, arbitrary job-control APIs, asynchronous pipelines, and broad signal-forwarding semantics outside the supported foreground subset remain deferred.
 
 ## Testing strategy
 

@@ -186,6 +186,16 @@ static bool emit_double_quoted_literal(BashEmitter *e, const DsLowerExpr *expr, 
     buf_append(out, "\"");
     for (size_t i = 0; i < len; i++) {
         char c = decoded[i];
+        if (c == '{' && i + 1 < len && decoded[i + 1] == '{') {
+            buf_append(out, "{");
+            i++;
+            continue;
+        }
+        if (c == '}' && i + 1 < len && decoded[i + 1] == '}') {
+            buf_append(out, "}");
+            i++;
+            continue;
+        }
         if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
         buf_append_len(out, &c, 1);
     }

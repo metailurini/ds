@@ -107,6 +107,10 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             while (i < text.len && (isalnum((unsigned char)text.data[i]) || text.data[i] == '_')) i++;
             use_cstr(c, text.data + start, i - start);
             if (i > 0) i--;
+        } else if (text.data[i] == '{' && i + 1 < text.len && text.data[i + 1] == '{') {
+            i++;
+        } else if (text.data[i] == '}' && i + 1 < text.len && text.data[i + 1] == '}') {
+            i++;
         } else if (text.data[i] == '{' && i + 1 < text.len && (isalpha((unsigned char)text.data[i + 1]) || text.data[i + 1] == '_')) {
             size_t start = i + 1;
             size_t j = start;

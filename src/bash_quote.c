@@ -458,6 +458,11 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
     for (size_t i = 0; i < len; i++) {
         char c = decoded[i];
         if (c == '{') {
+            if (i + 1 < len && decoded[i + 1] == '{') {
+                buf_append(out, "{");
+                i++;
+                continue;
+            }
             size_t start = i + 1;
             size_t j = start;
             if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {
@@ -529,6 +534,16 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                 continue;
             }
             ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: unsupported string interpolation shape");
+            free(decoded);
+            return false;
+        }
+        if (c == '}') {
+            if (i + 1 < len && decoded[i + 1] == '}') {
+                buf_append(out, "}");
+                i++;
+                continue;
+            }
+            ds_diag_error(e->diag, expr->span, "internal Bash interpolation invariant failed: unmatched literal close brace after lowering");
             free(decoded);
             return false;
         }

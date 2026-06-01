@@ -22,9 +22,12 @@ The roadmap now prioritizes the open DX issues in this order:
 The previously planned signal/job-control wave is postponed to a later roadmap
 slot so these script-writing DX gaps can be addressed first.
 
-## Literal braces in strings are awkward
+## Literal braces in strings are awkward — addressed in v0.34.0 implementation
 
-Writing a literal `{` or `}` in a string currently conflicts with interpolation parsing.
+Writing a literal `{` or `}` in a string used to conflict with interpolation parsing.
+`v0.34.0` implements strict doubled literal braces: `{{` renders `{`, `}}`
+renders `}`, and `{expr}` remains interpolation. A lone `}` is rejected with a
+clear diagnostic.
 
 Example that was awkward:
 
@@ -41,7 +44,8 @@ let lbrace = lbrace_result.stdout
 let rbrace = rbrace_result.stdout
 ```
 
-This is not good DX for text-processing scripts.
+This workaround should no longer be needed once the v0.34 dedicated regression
+suite is added and the milestone is fully closed.
 
 ## No indexing directly after method calls
 
@@ -112,7 +116,7 @@ Instead, the script writes colon-separated text lines to a temporary file and so
 
 This is workable, but limits clean data transformations inside `ds`.
 
-## Broken pipe diagnostics are noisy
+## Broken pipe diagnostics are noisy — addressed in v0.34.0 implementation
 
 Testing with `head` caused a broken-pipe style failure:
 
@@ -126,7 +130,11 @@ Observed diagnostic:
 command `echo` failed with exit 141
 ```
 
-For CLI-style scripts, this may be too noisy. Writing to a closed pipe is common when users pipe output to tools like `head`.
+For CLI-style scripts, this was too noisy. `v0.34.0` quiets the common
+uncaptured, unredirected closed-stdout status-141 case for VM execution and
+emitted Bash, while preserving captured command-result statuses and unrelated
+command failures. The dedicated regression suite is still pending in the next
+test pass.
 
 ## String parsing APIs are limited
 

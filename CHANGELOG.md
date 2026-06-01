@@ -1,3 +1,28 @@
+# v0.34.0 - Text Literal and Broken-Pipe DX
+
+- Bumped the CLI help banner to `ds v0.34.0` for the new DX-priority
+  implementation pass.
+- Added doubled-brace literal spelling in ordinary and triple-quoted strings:
+  `{{` renders a literal `{`, `}}` renders a literal `}`, and `{expr}` remains
+  the existing interpolation form.
+- Applied the same literal-brace rendering to VM execution, emitted standalone
+  Bash, quoted command words, arrays/maps/function returns, and interpolation
+  fragments lowered around supported scalar function calls.
+- Rejected lone `}` in interpolated strings with a clear lowerer diagnostic
+  that points users to `}}` for a literal close brace, while preserving existing
+  malformed interpolation diagnostics for unmatched `{` and bad expressions.
+- Quieted the common closed-stdout broken-pipe case for uncaptured,
+  unredirected top-level command statements and pipelines, so commands such as
+  `ds run script.ds | head` and generated Bash equivalents exit successfully
+  without noisy status-141 diagnostics after supported cleanup runs.
+- Preserved command-result capture semantics for broken-pipe-like subprocess
+  statuses: captured `run` commands still expose `code`, `ok`, and `failed`
+  instead of being converted into top-level success.
+- Updated current docs and DX notes for the implemented brace-literal and
+  broken-pipe contracts. The dedicated v0.34 regression suite remains deferred
+  to the next test pass because this implementation pass intentionally did not
+  add tests.
+
 # v0.33.0 - Collection, Glob, and Regex Stabilization
 
 - Bumped the CLI help banner to `ds v0.33.0` so the executable reports the

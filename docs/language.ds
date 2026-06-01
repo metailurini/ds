@@ -85,6 +85,12 @@ echo "Deploying {app} to {target}"
 # v0.19.0 also supports small portable specifiers such as {app:upper},
 # {app:<10}, and {port:05d}. In command mode, $name passes a variable as a
 # command argument.
+# v0.34.0 adds strict doubled literal braces in ordinary and triple-quoted
+# strings: {{ renders a literal {, }} renders a literal }, and {expr} remains
+# interpolation. A lone } is invalid; write }} for a literal close brace.
+echo "{{ \"service\": \"{app}\" }}"
+echo "{{app}}"
+echo "{app}}}"
 
 
 # -----------------------------------------------------------------------------

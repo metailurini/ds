@@ -2,8 +2,9 @@
 
 This document is the user-facing snapshot after the completed structured
 return, direct environment/interpolation, collection mutation, recursive glob,
-and runtime regex feature wave plus the `v0.33.0` stabilization implementation
-and dedicated-test pass. It is a
+runtime regex feature wave, the `v0.33.0` stabilization implementation and
+dedicated-test pass, and the `v0.34.0` text-literal/broken-pipe DX
+implementation pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -25,7 +26,7 @@ ds bytecode <file.ds>
 ds emit bash <file.ds> -o <file.sh>
 ```
 
-There are no hidden production commands in the current `v0.33.0` surface; the
+There are no hidden production commands in the current `v0.34.0` surface; the
 cleanup milestones harden the existing CLI instead of adding new commands.
 
 `tokens` and `ast` are root-file frontend/debug views. They read only the file
@@ -43,8 +44,9 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 The production runtime supports the language slice implemented and stabilized
 through the `v0.22.6` final v0.22 documentation pass, the completed `v0.23.0`
 regex/range/membership implementation and test pass, the scoped `v0.32.0`
-regex runtime-string/capture/replacement production implementation, and the
-no-new-syntax `v0.33.0` collection/glob/regex stabilization pass:
+regex runtime-string/capture/replacement production implementation, the
+no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, and the
+`v0.34.0` text-literal/broken-pipe DX implementation pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -279,6 +281,12 @@ parity and clear interaction with existing block and loop scopes.
 `v0.18.0` added linear command pipelines for plain command statements and
 captured `run` expressions. Pipeline status uses Bash `pipefail` semantics: if
 any stage fails, the pipeline status is the rightmost failing stage.
+Since `v0.34.0`, the common closed-stdout case for uncaptured, unredirected
+top-level command statements and pipelines is quieted: a status-141 broken pipe
+while stdout is not a terminal is treated as successful early script completion
+after supported cleanup runs. Captured `run` results still preserve observed
+subprocess status fields, and unrelated command/pipeline failures remain
+visible.
 
 `v0.19.0` added ASCII string methods, formatted interpolation, and
 triple-quoted strings. Format widths and precisions are bounded to `1..1024`.
@@ -314,6 +322,12 @@ index-read surface remains rejected. Statement-style calls may still
 ignore returned values.
 `examples/function-values.ds` shows the supported return, arithmetic, and
 expression interpolation path.
+Since `v0.34.0`, ordinary and triple-quoted strings also support strict doubled
+literal braces: `{{` renders `{`, `}}` renders `}`, and `{expr}` keeps the
+existing interpolation meaning. A lone `}` is rejected during lowering with a
+diagnostic that points to `}}` for a literal close brace, so ambiguous strings
+must be written deterministically, for example `"{{name}}"` for literal
+`{name}` and `"{name}}}"` for interpolation followed by a literal `}`.
 The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
 diagnostic, formatting, example, and generated-Bash boundary behavior.
 
@@ -382,8 +396,9 @@ examples, diagnostics, sanitizer expectations, and generated-Bash helper hygiene
 without adding production syntax. `v0.29.0` adds map iteration, `v0.30.0`
 adds named flat array/map index assignment, `v0.31.0` adds scoped recursive
 glob patterns, `v0.32.0` adds runtime regex strings, capture maps, and regex
-replacement, and `v0.33.0` stabilizes the combined collection/glob/regex
-surface without adding syntax. Nested collections, formatter trivia
+replacement, `v0.33.0` stabilizes the combined collection/glob/regex surface
+without adding syntax, and `v0.34.0` adds the first DX-priority text-literal and
+closed-stdout broken-pipe cleanup. Nested collections, formatter trivia
 preservation, warning suppression, command-level shell logical operators, deeper
 job-control behavior, and advanced pipeline forms remain out of scope unless
 their own milestones explicitly pull them in.

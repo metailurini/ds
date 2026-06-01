@@ -548,6 +548,11 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
     for (size_t i = 0; i < input->len; i++) {
         char c = input->data[i];
         if (c == '{') {
+            if (i + 1 < input->len && input->data[i + 1] == '{') {
+                ds_string_append_char(out, '{');
+                i++;
+                continue;
+            }
             size_t start = i + 1;
             size_t j = start;
             if (j < input->len && ascii_is_ident_start(input->data[j])) {
@@ -611,6 +616,15 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                 continue;
             }
             ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported string interpolation shape");
+            ds_string_free(out); return false;
+        }
+        if (c == '}') {
+            if (i + 1 < input->len && input->data[i + 1] == '}') {
+                ds_string_append_char(out, '}');
+                i++;
+                continue;
+            }
+            ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unmatched literal close brace after lowering");
             ds_string_free(out); return false;
         }
         ds_string_append_char(out, c);
@@ -963,6 +977,23 @@ static bool fd_set_cloexec(int fd) {
 static bool vm_command_was_interrupted(const Vm *vm, int code) {
     return vm->interrupted_signal != 0 &&
            code == ds_posix_signal_default_status(vm->interrupted_signal);
+}
+
+static bool vm_command_is_quiet_broken_pipe(const VmProcessSpec *spec, int code) {
+    /*
+     * v0.34.0 closed-stdout DX: when the script itself is piped into a consumer
+     * such as `head`, ordinary output commands may conventionally surface as
+     * SIGPIPE/141. Suppress the ds command-failure diagnostic and treat the
+     * top-level statement as successful only for uncaptured, unredirected writes
+     * while stdout is not a terminal. Captured command results still expose 141.
+     */
+    return spec && !spec->capture && spec->redirect.kind == DS_REDIRECT_NONE &&
+           code == 128 + SIGPIPE && !isatty(STDOUT_FILENO);
+}
+
+static bool vm_pipeline_is_quiet_broken_pipe(const Instr *ins, int code) {
+    return ins && ins->redirect.kind == DS_REDIRECT_NONE &&
+           code == 128 + SIGPIPE && !isatty(STDOUT_FILENO);
 }
 
 static void vm_forward_signal_to_child_group(Vm *vm, pid_t pgid, int sig) {
@@ -1347,6 +1378,10 @@ int run_command(Vm *vm, Instr *ins) {
         VmProcessResult result;
         bool ok = process_execute_pipeline(vm, ins, false, &result);
         int code = ok ? result.code : 1;
+        if (ok && vm_pipeline_is_quiet_broken_pipe(ins, code)) {
+            vm->control_exit_requested = true;
+            code = 0;
+        }
         if (ok && code != 0 && !vm->diag->has_error && !vm_command_was_interrupted(vm, code)) ds_diag_error(vm->diag, ins->span, "pipeline failed with exit %d", code);
         process_result_free(&result);
         return code;
@@ -1361,6 +1396,10 @@ int run_command(Vm *vm, Instr *ins) {
     VmProcessResult result;
     bool ok = process_execute(vm, &spec, &result);
     int code = ok ? result.code : 1;
+    if (ok && vm_command_is_quiet_broken_pipe(&spec, code)) {
+        vm->control_exit_requested = true;
+        code = 0;
+    }
     if (ok && code != 0 && !vm->diag->has_error && !vm_command_was_interrupted(vm, code)) {
         ds_diag_error(vm->diag, ins->span, "command `%s` failed with exit %d", spec.argv.len > 0 ? spec.argv.items[0] : "<command>", code);
     }

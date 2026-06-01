@@ -183,6 +183,13 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
     if (!lower_decode_string_text(text, &decoded)) return true;
     for (size_t i = 0; i < decoded.len; i++) {
         char c = decoded.data[i];
+        if (c == '{' && i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
+        if (c == '}' && i + 1 < decoded.len && decoded.data[i + 1] == '}') { i++; continue; }
+        if (c == '}') {
+            ds_diag_error(lower->diag, span, "unmatched `}` in string interpolation; use `}}` for a literal `}`");
+            free(decoded.data);
+            return false;
+        }
         if (c != '{') continue;
         size_t start = i + 1;
         size_t j = start;

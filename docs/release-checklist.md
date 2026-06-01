@@ -1,15 +1,16 @@
 # 1.0.0 Release Checklist
 
 This checklist is the executable release boundary created by the `v0.24.0`
-pre-1.0 hardening pass and refreshed by the `v0.33.0` collection/glob/regex
-stabilization pass. It does not mark the project stable by itself; it lists what
-must be signed off before tagging `1.0.0`.
+pre-1.0 hardening pass and refreshed by the `v0.34.0` text-literal and
+broken-pipe DX pass. It does not mark the project stable by itself; it lists
+what must be signed off before tagging `1.0.0`.
 
 ## Required sign-offs
 
 - [ ] **Supported language surface:** `docs/status.md`, `docs/language.ds`, and
   the examples agree on the production syntax supported through the current
-  collection, environment/interpolation, glob, and regex stabilization surface.
+  collection, environment/interpolation, glob, regex, and text-output DX
+  stabilization surface.
 - [ ] **VM/Bash parity:** every supported production feature runs through the VM
   and emits standalone Bash with matching stdout, stderr, exit status, and
   deterministic side effects.
