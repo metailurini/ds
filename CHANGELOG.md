@@ -25,6 +25,10 @@
 - Added the dedicated `tests/v0_34/run.sh` suite and wired it into aggregate
   version tests after `v0.33.0`, covering the scoped literal-brace and
   broken-pipe contracts across VM execution and standalone emitted Bash.
+- Expanded the v0.34 regression suite and emitted-Bash helpers so source-level
+  redirected commands/pipelines do not inherit the quiet broken-pipe heuristic;
+  explicit status `141` under a DS redirection remains visible even when the
+  generated script stdout is piped to `head`.
 - Fixed an exposed diagnostic bug where unclosed interpolation in command-word
   strings could fall through to an unknown-variable diagnostic instead of the
   dedicated unclosed-interpolation error.

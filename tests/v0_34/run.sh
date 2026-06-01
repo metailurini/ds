@@ -197,6 +197,36 @@ run_head_both() {
   run_head_bash "$name" "$file" "$expected"
 }
 
+assert_piped_runtime_failure() {
+  local name="$1" file="$2" needle="$3"
+  local marker="${4:-}"
+  local script="$TMP/$name.sh"
+  local vm_work="$TMP/${name}_vm_work" bash_work="$TMP/${name}_bash_work"
+  rm -rf "$vm_work" "$bash_work"
+  mkdir -p "$vm_work" "$bash_work"
+  run_ok "${name}_check" "$DS" check "$file"
+  emit_checked "$name" "$file" "$script"
+  set +e
+  (cd "$vm_work" && timeout "$PIPE_TIMEOUT" bash -c 'set -o pipefail; "$1" run "$2" | head -n 1' bash "$DS" "$file") >"$TMP/${name}_vm.out" 2>"$TMP/${name}_vm.err"
+  local vm_rc=$?
+  (cd "$bash_work" && timeout "$PIPE_TIMEOUT" bash -c 'set -o pipefail; bash "$1" | head -n 1' bash "$script") >"$TMP/${name}_bash.out" 2>"$TMP/${name}_bash.err"
+  local bash_rc=$?
+  set -e
+  printf '%s' "$vm_rc" >"$TMP/${name}_vm.rc"
+  printf '%s' "$bash_rc" >"$TMP/${name}_bash.rc"
+  assert_nonzero_status "${name}_vm"
+  assert_nonzero_status "${name}_bash"
+  assert_contains "$TMP/${name}_vm.err" "$needle" "$name VM piped failure remains visible"
+  assert_contains "$TMP/${name}_bash.err" "$needle" "$name Bash piped failure remains visible"
+  assert_same "$TMP/${name}_vm.out" "$TMP/${name}_bash.out" "$name piped failure stdout parity"
+  if [[ -n "$marker" ]]; then
+    [ -f "$vm_work/$marker" ] || fail "$name VM cleanup marker missing"
+    pass "$name VM cleanup marker exists"
+    [ -f "$bash_work/$marker" ] || fail "$name Bash cleanup marker missing"
+    pass "$name Bash cleanup marker exists"
+  fi
+}
+
 # 1. Planning, docs, and scope guard.
 for doc in \
   docs/milestones/v0.34.0-spec.md \
@@ -608,6 +638,30 @@ DS
 )
 # VM must keep explicit exit 141 visible; emitted Bash must keep it visible when stdout is a regular file.
 assert_runtime_failure explicit_141_file "$explicit_141_file" '141'
+
+redirected_141_pipe=$(write_fixture redirected_141_pipe <<'DS'
+sh -c "exit 141" |> "out.txt"
+echo after
+DS
+)
+assert_piped_runtime_failure redirected_141_pipe "$redirected_141_pipe" '141'
+
+redirected_pipeline_141_pipe=$(write_fixture redirected_pipeline_141_pipe <<'DS'
+sh -c "exit 141" | cat |> "out.txt"
+echo after
+DS
+)
+assert_piped_runtime_failure redirected_pipeline_141_pipe "$redirected_pipeline_141_pipe" '141'
+
+cleanup_redirected_pipeline_141_pipe=$(write_fixture cleanup_redirected_pipeline_141_pipe <<'DS'
+defer {
+  file.write("cleaned", "yes")
+}
+sh -c "exit 141" | cat |> "out.txt"
+echo after
+DS
+)
+assert_piped_runtime_failure cleanup_redirected_pipeline_141_pipe "$cleanup_redirected_pipeline_141_pipe" '141' cleaned
 assert_contains docs/runtime.md 'inability to distinguish explicit `exit 141` from real `SIGPIPE`' 'runtime docs record emitted Bash 141 limitation'
 assert_contains docs/milestones/v0.34.0-spec.md 'portability limitation' 'spec records Bash inherited-pipe ambiguity'
 assert_not_contains docs/runtime.md 'background jobs are supported' 'docs do not introduce background job support'
@@ -616,9 +670,18 @@ assert_not_contains docs/status.md 'wait primitives are supported' 'status docs 
 # 12. Regression and examples smoke from the v0.34 suite.
 examples=(examples/basic.ds)
 for example in "${examples[@]}"; do
+  example_abs="$ROOT/$example"
   run_ok "example_check_${example//[^A-Za-z0-9_]/_}" "$DS" check "$example"
   run_ok "example_emit_${example//[^A-Za-z0-9_]/_}" "$DS" emit bash "$example" -o "$TMP/${example//[^A-Za-z0-9_]/_}.sh"
   run_ok "example_bash_n_${example//[^A-Za-z0-9_]/_}" bash -n "$TMP/${example//[^A-Za-z0-9_]/_}.sh"
+  vm_work="$TMP/example_${example//[^A-Za-z0-9_]/_}_vm_work"
+  bash_work="$TMP/example_${example//[^A-Za-z0-9_]/_}_bash_work"
+  rm -rf "$vm_work" "$bash_work"
+  mkdir -p "$vm_work" "$bash_work"
+  run_ok "example_run_${example//[^A-Za-z0-9_]/_}" bash -c 'cd "$1" && "$2" run "$3"' bash "$vm_work" "$DS" "$example_abs"
+  run_ok "example_bash_run_${example//[^A-Za-z0-9_]/_}" bash -c 'cd "$1" && bash "$2"' bash "$bash_work" "$TMP/${example//[^A-Za-z0-9_]/_}.sh"
+  assert_same "$TMP/example_run_${example//[^A-Za-z0-9_]/_}.out" "$TMP/example_bash_run_${example//[^A-Za-z0-9_]/_}.out" "example $example VM/Bash stdout parity"
+  assert_same "$TMP/example_run_${example//[^A-Za-z0-9_]/_}.err" "$TMP/example_bash_run_${example//[^A-Za-z0-9_]/_}.err" "example $example VM/Bash stderr parity"
 done
 
 printf 'ok - v0.34.0 suite completed with %s checks\n' "$pass_count"

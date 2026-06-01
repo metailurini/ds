@@ -52,6 +52,7 @@ static bool emit_direct_signal_command(BashEmitter *e, const DsCommand *command,
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_run_direct_command ");
     emit_source_loc(&e->out, e->source, span);
+    buf_append(&e->out, " 1");
     for (size_t i = 0; i < command->stages.items[0].words.len; i++) {
         buf_append(&e->out, " ");
         if (!emit_command_word(e, command->stages.items[0].words.items[i], &e->out)) return false;
@@ -70,6 +71,7 @@ static bool emit_signal_pipeline(BashEmitter *e, const DsCommand *command, DsSpa
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_run_pipeline ");
     emit_source_loc(&e->out, e->source, span);
+    buf_append(&e->out, command->redirect.kind == DS_REDIRECT_NONE ? " 1" : " 0");
     buf_append(&e->out, " ");
     bash_single_quote(&e->out, pipeline.data ? pipeline.data : "", pipeline.len);
     free(pipeline.data);
@@ -772,7 +774,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             if (is_multi) buf_append(&e->out, "if [[ -t 0 ]]; then exec </dev/null; fi; ");
             if (!emit_command_pipeline(e, &stmt->as.cmd_stmt, &e->out, stmt->span)) return false;
             if (is_multi) {
-                buf_append(&e->out, " ) || { __ds_code=$?; if __ds_is_quiet_broken_pipe \"$__ds_code\"; then ");
+                buf_append(&e->out, " ) || { __ds_code=$?; if __ds_is_quiet_broken_pipe \"$__ds_code\" ");
+                buf_append(&e->out, stmt->as.cmd_stmt.redirect.kind == DS_REDIRECT_NONE ? "1" : "0");
+                buf_append(&e->out, "; then ");
                 if (e->handler_depth > 0) buf_append(&e->out, "return 0; ");
                 else buf_append(&e->out, "exit 0; ");
                 buf_append(&e->out, "fi; printf '%s: error: pipeline failed with exit %s\\n' ");
@@ -785,6 +789,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, " ) || __ds_fail ");
                 emit_source_loc(&e->out, e->source, stmt->span);
                 buf_append(&e->out, " \"$?\"");
+                buf_append(&e->out, stmt->as.cmd_stmt.redirect.kind == DS_REDIRECT_NONE ? " 1" : " 0");
                 if (e->handler_depth > 0) buf_append(&e->out, " || return $?\n\n");
                 else buf_append(&e->out, "\n\n");
             }

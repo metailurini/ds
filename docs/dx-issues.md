@@ -44,8 +44,9 @@ let lbrace = lbrace_result.stdout
 let rbrace = rbrace_result.stdout
 ```
 
-This workaround should no longer be needed once the v0.34 dedicated regression
-suite is added and the milestone is fully closed.
+This workaround is no longer needed for the supported string/interpolation
+surface, and the dedicated v0.34 regression suite covers the strict
+doubled-brace contract across VM execution and standalone emitted Bash.
 
 ## No indexing directly after method calls
 
@@ -134,9 +135,11 @@ For CLI-style scripts, this was too noisy. `v0.34.0` quiets the common
 uncaptured, unredirected closed-stdout case: VM execution uses exact raw direct-command/final-pipeline-stage
 `SIGPIPE` status with pipe-like stdout, while emitted Bash uses the documented
 standalone status-141/pipe-stdout heuristic. Captured command-result statuses
-are preserved. Unrelated failures remain visible except for Bash's unavoidable
-explicit-`141`-under-pipe ambiguity. The dedicated regression suite is still
-pending in the next test pass.
+are preserved. Unrelated failures remain visible. Standalone emitted Bash still
+documents the unavoidable explicit-`141`-under-pipe ambiguity, but source-level
+redirected commands are not quieted by the inherited script stdout heuristic.
+The dedicated v0.34 regression suite covers the common quiet case, captured
+statuses, redirected status-141 failures, and cleanup-aware early completion.
 
 ## String parsing APIs are limited
 
