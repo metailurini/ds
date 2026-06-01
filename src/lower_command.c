@@ -393,6 +393,13 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
         }
         if (word.data[0] == '$' && form.kind == DS_COMMAND_WORD_FIELD) {
             if (sym->kind == SYM_ARRAY || sym->kind == SYM_MAP) {
+                if (sym->kind == SYM_MAP && sym->is_row) {
+                    if (!row_schema_find(&sym->row_schema, form.field)) {
+                        ds_diag_error(lower->diag, span, "unknown row field `%.*s`", (int)form.field.len, form.field.data);
+                        return false;
+                    }
+                    return true;
+                }
                 ds_diag_error(lower->diag, span, "collection access command arguments are deferred in v0.10.0; bind the indexed value to a variable first");
                 return false;
             }
@@ -449,6 +456,13 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
         lower_validate_handler_capture(lower, sym, name, span);
         if (sym->kind != SYM_COMMAND_RESULT) {
             if (sym->kind == SYM_MAP) {
+                if (sym->is_row) {
+                    if (!row_schema_find(&sym->row_schema, field)) {
+                        ds_diag_error(lower->diag, field_span, "unknown row field `%.*s`", (int)field.len, field.data);
+                        return false;
+                    }
+                    return true;
+                }
                 ds_diag_error(lower->diag, field_span, "map field command arguments are deferred in v0.10.0; bind the field to a variable first");
                 return false;
             }

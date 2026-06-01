@@ -50,6 +50,7 @@ bool lower_collection_element_is_portable(const DsLowerExpr *expr) {
 bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable) {
     if (!iterable) return false;
     if (iterable->kind == DS_LOWER_EXPR_IDENT) return true;
+    if (iterable->kind == DS_LOWER_EXPR_CALL && iterable->as.call.returns_row_array) return true;
     if (iterable->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(iterable->as.call.name)) {
         const DsStdlibHelper *helper = ds_stdlib_lookup(iterable->as.call.name);
         return helper && helper->return_kind == DS_STDLIB_RETURN_ARRAY;
@@ -165,6 +166,10 @@ bool lower_expr_row_schema(const DsLowerExpr *expr, const DsLowerRowSchema **sch
     }
     if (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.returns_row) {
         if (schema_out) *schema_out = &expr->as.index.row_schema;
+        return true;
+    }
+    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.returns_row) {
+        if (schema_out) *schema_out = &expr->as.call.row_schema;
         return true;
     }
     if (expr->kind == DS_LOWER_EXPR_IDENT) return false;

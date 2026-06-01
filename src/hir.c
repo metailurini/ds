@@ -179,7 +179,7 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
             dump_expr(out, expr->as.binary.right, level + 1);
             break;
         case DS_LOWER_EXPR_CALL:
-            fputs("Call ", out); print_str(out, expr->as.call.name); if (expr->as.call.returns_row_array) print_row_schema(out, &expr->as.call.row_schema); print_span(out, expr->span); dump_expr_vec(out, &expr->as.call.args, level); if (expr->as.call.args.len == 0) fputc('\n', out); break;
+            fputs("Call ", out); print_str(out, expr->as.call.name); if (expr->as.call.returns_row || expr->as.call.returns_row_array) print_row_schema(out, &expr->as.call.row_schema); print_span(out, expr->span); dump_expr_vec(out, &expr->as.call.args, level); if (expr->as.call.args.len == 0) fputc('\n', out); break;
         case DS_LOWER_EXPR_INTERP:
             fputs("InterpolatedString", out); print_span(out, expr->span); dump_expr_vec(out, &expr->as.interp.parts, level); if (expr->as.interp.parts.len == 0) fputc('\n', out); break;
         case DS_LOWER_EXPR_ARRAY:

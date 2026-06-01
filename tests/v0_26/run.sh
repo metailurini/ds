@@ -396,9 +396,8 @@ let value = data()
 let missing = value.missing
 echo "{missing}"
 DS
-assert_parity_same map_missing_field "$FIX/map_missing_field.ds" 1
-assert_contains "$TMP/map_missing_field_vm.err" 'missing map key' 'missing field VM diagnostic'
-assert_contains "$TMP/map_missing_field_bash.err" 'missing map key' 'missing field Bash diagnostic'
+assert_check_fails map_missing_field "$FIX/map_missing_field.ds" 'unknown row field'
+assert_emit_fails map_missing_field "$FIX/map_missing_field.ds" 'unknown row field'
 
 # 3. Command-result function returns. The roadmap field is .status; .code remains
 # as an existing compatibility alias.

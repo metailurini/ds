@@ -232,8 +232,19 @@ static void lower_validate_function_return_contract(Lower *lower, const DsStmt *
                 lower->current_function->returns_row_array = true;
                 row_schema_clone(schema, &lower->current_function->row_schema);
             }
+        } else if (ret == DS_LOWER_VALUE_MAP) {
+            lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
+            const DsLowerRowSchema *schema = NULL;
+            if (out->as.return_stmt.value && out->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+                Symbol *sym = scope_find(lower->scope, out->as.return_stmt.value->as.text);
+                if (sym && sym->is_row) schema = &sym->row_schema;
+            }
+            if (!schema) lower_expr_row_schema(out->as.return_stmt.value, &schema);
+            if (schema) {
+                lower->current_function->returns_row = true;
+                row_schema_clone(schema, &lower->current_function->row_schema);
+            }
         }
-        else if (ret == DS_LOWER_VALUE_MAP) lower->current_function->return_element_kind = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
     } else if (lower->current_function->return_kind != ret) {
         ds_diag_error(lower->diag, src->span, "all return statements in a function must have the same value kind in v0.21.0");
     } else if (ret == DS_LOWER_VALUE_ARRAY) {
@@ -261,6 +272,18 @@ static void lower_validate_function_return_contract(Lower *lower, const DsStmt *
         DsLowerValueKind element = lower_value_kind_from_sym(infer_map_value_kind(lower, out->as.return_stmt.value));
         if (lower->current_function->return_element_kind == DS_LOWER_VALUE_UNKNOWN) lower->current_function->return_element_kind = element;
         else if (element != DS_LOWER_VALUE_UNKNOWN && lower->current_function->return_element_kind != element) lower->current_function->return_element_kind = DS_LOWER_VALUE_UNKNOWN;
+        const DsLowerRowSchema *schema = NULL;
+        if (out->as.return_stmt.value && out->as.return_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
+            Symbol *sym = scope_find(lower->scope, out->as.return_stmt.value->as.text);
+            if (sym && sym->is_row) schema = &sym->row_schema;
+        }
+        if (!schema) lower_expr_row_schema(out->as.return_stmt.value, &schema);
+        if (!lower->current_function->returns_row && schema) {
+            lower->current_function->returns_row = true;
+            row_schema_clone(schema, &lower->current_function->row_schema);
+        } else if (lower->current_function->returns_row && schema && !row_schema_equal(&lower->current_function->row_schema, schema)) {
+            ds_diag_error(lower->diag, src->span, "all row returns in a function must have the same field names and scalar kinds in v0.37.0");
+        }
     }
 }
 

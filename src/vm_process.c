@@ -730,7 +730,22 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         DsValue value;
         if (!lookup_var(vm, name, &value, span)) { free(name); free(field); return false; }
         DsValue field_value = ds_value_null();
-        bool ok = vm_command_result_field(vm, &value, field, span, &field_value);
+        bool ok = false;
+        if (value.kind == DS_VALUE_COMMAND_RESULT) {
+            ok = vm_command_result_field(vm, &value, field, span, &field_value);
+        } else if (value.kind == DS_VALUE_MAP) {
+            DsStr key = {field, strlen(field)};
+            DsValue *found = ds_map_get(&value.as.map, key);
+            if (!found) {
+                ds_diag_error(vm->diag, span, "missing map key `%s`", field);
+                ok = false;
+            } else {
+                field_value = ds_value_copy(found);
+                ok = true;
+            }
+        } else {
+            ds_diag_error(vm->diag, span, "runtime field command argument requires a command result or row map");
+        }
         if (!ok) {
             ds_value_free(&value);
             free(name); free(field);

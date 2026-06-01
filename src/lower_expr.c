@@ -751,6 +751,10 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         *kind_out = sym_kind_from_lower_value_kind(fn->return_kind);
         out->as.call.is_user_function = true;
         out->as.call.return_kind = fn->return_kind;
+        if (fn->returns_row) {
+            out->as.call.returns_row = true;
+            row_schema_clone(&fn->row_schema, &out->as.call.row_schema);
+        }
         if (fn->returns_row_array) {
             out->as.call.returns_row_array = true;
             row_schema_clone(&fn->row_schema, &out->as.call.row_schema);
@@ -773,9 +777,10 @@ DsLowerExpr *lower_array_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         SymKind elem_kind = SYM_UNKNOWN;
         DsLowerExpr *element = lower_expr(lower, expr->as.array.elements.items[i], &elem_kind);
         lower_expr_vec_push(&out->as.array.elements, element);
-        if (elem_kind == SYM_MAP && lower_expr_is_row(element)) {
+        const DsLowerRowSchema *element_row_schema = NULL;
+        if (elem_kind == SYM_MAP && (lower_expr_row_schema(element, &element_row_schema) || (element_row_schema = ident_row_schema(lower, element, false)))) {
             const DsLowerRowSchema *schema = NULL;
-            lower_expr_row_schema(element, &schema);
+            schema = element_row_schema;
             if (!saw_row) row_schema_clone(schema, &common_schema);
             else if (!row_schema_equal(&common_schema, schema)) {
                 ds_diag_error(lower->diag, expr->as.array.elements.items[i]->span,
@@ -883,9 +888,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
             const DsLowerRowSchema *schema = expr_row_schema_full(lower, object);
             if (schema) {
                 const DsLowerRowField *field = row_schema_find(schema, out->as.index.map_key);
-                if (!field) {
-                    ds_diag_error(lower->diag, expr->span, "unknown row field `%.*s`", (int)out->as.index.map_key.len, out->as.index.map_key.data);
-                } else {
+                if (field) {
                     out->as.index.element_kind = field->kind;
                     *kind_out = sym_kind_from_lower_value_kind(field->kind);
                     return out;

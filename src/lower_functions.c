@@ -107,6 +107,9 @@ void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {
 typedef struct {
     DsStr name;
     DsLowerValueKind kind;
+    bool is_row;
+    bool is_row_array;
+    DsLowerRowSchema row_schema;
 } AstKindBinding;
 
 typedef struct {
@@ -123,7 +126,10 @@ static void ast_kind_env_push(AstKindEnv *env, DsStr name, DsLowerValueKind kind
     if (kind == DS_LOWER_VALUE_UNKNOWN) return;
     for (size_t i = env->len; i > 0; i--) {
         if (ast_str_eq(env->items[i - 1].name, name)) {
+            row_schema_free(&env->items[i - 1].row_schema);
             env->items[i - 1].kind = kind;
+            env->items[i - 1].is_row = false;
+            env->items[i - 1].is_row_array = false;
             return;
         }
     }
@@ -131,7 +137,38 @@ static void ast_kind_env_push(AstKindEnv *env, DsStr name, DsLowerValueKind kind
         env->cap = env->cap ? env->cap * 2 : 8;
         env->items = (AstKindBinding *)ds_xrealloc(env->items, env->cap * sizeof(AstKindBinding));
     }
-    env->items[env->len++] = (AstKindBinding){name, kind};
+    AstKindBinding binding;
+    memset(&binding, 0, sizeof(binding));
+    binding.name = name;
+    binding.kind = kind;
+    row_schema_init(&binding.row_schema);
+    env->items[env->len++] = binding;
+}
+
+static void ast_kind_env_push_row_schema(AstKindEnv *env, DsStr name, DsLowerValueKind kind, const DsLowerRowSchema *schema, bool is_array) {
+    if (!schema || (kind != DS_LOWER_VALUE_MAP && kind != DS_LOWER_VALUE_ARRAY)) return;
+    for (size_t i = env->len; i > 0; i--) {
+        if (ast_str_eq(env->items[i - 1].name, name)) {
+            row_schema_free(&env->items[i - 1].row_schema);
+            env->items[i - 1].kind = kind;
+            env->items[i - 1].is_row = !is_array;
+            env->items[i - 1].is_row_array = is_array;
+            row_schema_clone(schema, &env->items[i - 1].row_schema);
+            return;
+        }
+    }
+    if (env->len == env->cap) {
+        env->cap = env->cap ? env->cap * 2 : 8;
+        env->items = (AstKindBinding *)ds_xrealloc(env->items, env->cap * sizeof(AstKindBinding));
+    }
+    AstKindBinding binding;
+    memset(&binding, 0, sizeof(binding));
+    binding.name = name;
+    binding.kind = kind;
+    binding.is_row = !is_array;
+    binding.is_row_array = is_array;
+    row_schema_clone(schema, &binding.row_schema);
+    env->items[env->len++] = binding;
 }
 
 static bool ast_kind_env_find(const AstKindEnv *env, DsStr name, DsLowerValueKind *kind_out) {
@@ -144,18 +181,38 @@ static bool ast_kind_env_find(const AstKindEnv *env, DsStr name, DsLowerValueKin
     return false;
 }
 
+static bool ast_kind_env_find_row_schema(const AstKindEnv *env, DsStr name, bool want_array, DsLowerRowSchema *schema_out) {
+    for (size_t i = env->len; i > 0; i--) {
+        const AstKindBinding *binding = &env->items[i - 1];
+        if (!ast_str_eq(binding->name, name)) continue;
+        if (want_array ? binding->is_row_array : binding->is_row) {
+            row_schema_clone(&binding->row_schema, schema_out);
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
 static AstKindEnv ast_kind_env_clone(const AstKindEnv *env) {
     AstKindEnv copy = {0};
     if (env->len > 0) {
         copy.items = (AstKindBinding *)ds_xcalloc(env->len, sizeof(AstKindBinding));
-        memcpy(copy.items, env->items, env->len * sizeof(AstKindBinding));
         copy.len = env->len;
         copy.cap = env->len;
+        for (size_t i = 0; i < env->len; i++) {
+            copy.items[i].name = env->items[i].name;
+            copy.items[i].kind = env->items[i].kind;
+            copy.items[i].is_row = env->items[i].is_row;
+            copy.items[i].is_row_array = env->items[i].is_row_array;
+            row_schema_clone(&env->items[i].row_schema, &copy.items[i].row_schema);
+        }
     }
     return copy;
 }
 
 static void ast_kind_env_free(AstKindEnv *env) {
+    for (size_t i = 0; i < env->len; i++) row_schema_free(&env->items[i].row_schema);
     free(env->items);
     env->items = NULL;
     env->len = 0;
@@ -1040,6 +1097,196 @@ static DsLowerValueKind ast_literal_default_kind(const DsExpr *expr) {
     }
 }
 
+static bool ast_value_kind_is_row_scalar(DsLowerValueKind kind) {
+    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
+}
+
+static DsStr ast_map_key_decode(const DsMapEntry *entry) {
+    DsStr out = {0};
+    if (!entry) return out;
+    if (entry->quoted_key) lower_decode_string_text(entry->key, &out);
+    else out = str_clone(entry->key);
+    return out;
+}
+
+static bool ast_expr_row_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out);
+static bool ast_expr_row_array_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out);
+
+static bool ast_expr_row_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out) {
+    if (!expr) return false;
+    if (expr->kind == DS_EXPR_IDENT) return ast_kind_env_find_row_schema(env, expr->as.text, false, schema_out);
+    if (expr->kind == DS_EXPR_CALL) {
+        DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
+        if (fn && fn->returns_row) {
+            row_schema_clone(&fn->row_schema, schema_out);
+            return true;
+        }
+        return false;
+    }
+    if (expr->kind == DS_EXPR_INDEX) {
+        DsLowerRowSchema schema = {0};
+        if (!ast_expr_row_array_schema_known(lower, env, expr->as.index.object, &schema)) return false;
+        DsLowerValueKind index_kind = DS_LOWER_VALUE_UNKNOWN;
+        bool ok = ast_expr_kind_known(lower, env, expr->as.index.index, &index_kind) && index_kind == DS_LOWER_VALUE_INT;
+        if (ok) row_schema_clone(&schema, schema_out);
+        row_schema_free(&schema);
+        return ok;
+    }
+    if (expr->kind != DS_EXPR_MAP) return false;
+    row_schema_init(schema_out);
+    for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+        const DsMapEntry *entry = &expr->as.map.entries.items[i];
+        DsLowerValueKind kind = DS_LOWER_VALUE_UNKNOWN;
+        if (!ast_expr_kind_known(lower, env, entry->value, &kind) || !ast_value_kind_is_row_scalar(kind)) {
+            row_schema_free(schema_out);
+            return false;
+        }
+        DsStr key = ast_map_key_decode(entry);
+        if (!key.data || row_schema_find(schema_out, key)) {
+            free(key.data);
+            row_schema_free(schema_out);
+            return false;
+        }
+        row_schema_push(schema_out, key, kind);
+        free(key.data);
+    }
+    return true;
+}
+
+static bool ast_expr_row_array_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out) {
+    if (!expr) return false;
+    if (expr->kind == DS_EXPR_IDENT) return ast_kind_env_find_row_schema(env, expr->as.text, true, schema_out);
+    if (expr->kind == DS_EXPR_CALL) {
+        if (lower_str_eq(expr->as.call.name, "string.sort_by") && expr->as.call.args.len > 0) {
+            return ast_expr_row_array_schema_known(lower, env, expr->as.call.args.items[0], schema_out);
+        }
+        DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
+        if (fn && fn->returns_row_array) {
+            row_schema_clone(&fn->row_schema, schema_out);
+            return true;
+        }
+        return false;
+    }
+    if (expr->kind != DS_EXPR_ARRAY || expr->as.array.elements.len == 0) return false;
+    DsLowerRowSchema common = {0};
+    bool saw = false;
+    for (size_t i = 0; i < expr->as.array.elements.len; i++) {
+        DsLowerRowSchema current = {0};
+        if (!ast_expr_row_schema_known(lower, env, expr->as.array.elements.items[i], &current)) {
+            if (saw) row_schema_free(&common);
+            return false;
+        }
+        if (!saw) {
+            row_schema_clone(&current, &common);
+            saw = true;
+        } else if (!row_schema_equal(&common, &current)) {
+            row_schema_free(&current);
+            row_schema_free(&common);
+            return false;
+        }
+        row_schema_free(&current);
+    }
+    if (!saw) return false;
+    row_schema_clone(&common, schema_out);
+    row_schema_free(&common);
+    return true;
+}
+
+static void ast_kind_env_push_expr(AstKindEnv *env, Lower *lower, DsStr name, const DsExpr *expr) {
+    DsLowerRowSchema row_schema = {0};
+    if (ast_expr_row_schema_known(lower, env, expr, &row_schema)) {
+        ast_kind_env_push_row_schema(env, name, DS_LOWER_VALUE_MAP, &row_schema, false);
+        row_schema_free(&row_schema);
+        return;
+    }
+    if (ast_expr_row_array_schema_known(lower, env, expr, &row_schema)) {
+        ast_kind_env_push_row_schema(env, name, DS_LOWER_VALUE_ARRAY, &row_schema, true);
+        row_schema_free(&row_schema);
+        return;
+    }
+    DsLowerValueKind found = DS_LOWER_VALUE_UNKNOWN;
+    if (ast_expr_kind_known(lower, env, expr, &found)) ast_kind_env_push(env, name, found);
+}
+
+static bool ast_collect_return_schema(Lower *lower, const DsStmt *stmt, AstKindEnv *env, DsLowerValueKind *kind, DsLowerRowSchema *schema, bool *saw_return);
+
+static bool ast_record_return_schema(Lower *lower, AstKindEnv *env, const DsExpr *expr, DsLowerValueKind *kind, DsLowerRowSchema *schema, bool *saw_return) {
+    DsLowerRowSchema found_schema = {0};
+    DsLowerValueKind found_kind = DS_LOWER_VALUE_UNKNOWN;
+    if (ast_expr_row_schema_known(lower, env, expr, &found_schema)) found_kind = DS_LOWER_VALUE_MAP;
+    else if (ast_expr_row_array_schema_known(lower, env, expr, &found_schema)) found_kind = DS_LOWER_VALUE_ARRAY;
+    else return false;
+
+    if (*saw_return && (*kind != found_kind || !row_schema_equal(schema, &found_schema))) {
+        row_schema_free(&found_schema);
+        return false;
+    }
+    if (!*saw_return) {
+        *kind = found_kind;
+        row_schema_clone(&found_schema, schema);
+    }
+    *saw_return = true;
+    row_schema_free(&found_schema);
+    return true;
+}
+
+static bool ast_collect_return_schema(Lower *lower, const DsStmt *stmt, AstKindEnv *env, DsLowerValueKind *kind, DsLowerRowSchema *schema, bool *saw_return) {
+    if (!stmt) return true;
+    switch (stmt->kind) {
+        case DS_STMT_RETURN:
+            return ast_record_return_schema(lower, env, stmt->as.return_stmt.value, kind, schema, saw_return);
+        case DS_STMT_LET:
+            ast_kind_env_push_expr(env, lower, stmt->as.let_stmt.name, stmt->as.let_stmt.value);
+            return true;
+        case DS_STMT_ASSIGN:
+            ast_kind_env_push_expr(env, lower, stmt->as.assign_stmt.name, stmt->as.assign_stmt.value);
+            return true;
+        case DS_STMT_PUSH: {
+            DsLowerRowSchema row_schema = {0};
+            if (ast_expr_row_schema_known(lower, env, stmt->as.push_stmt.value, &row_schema)) {
+                DsLowerRowSchema existing = {0};
+                if (ast_kind_env_find_row_schema(env, stmt->as.push_stmt.name, true, &existing)) {
+                    row_schema_free(&existing);
+                } else {
+                    ast_kind_env_push_row_schema(env, stmt->as.push_stmt.name, DS_LOWER_VALUE_ARRAY, &row_schema, true);
+                }
+                row_schema_free(&row_schema);
+            }
+            return true;
+        }
+        case DS_STMT_BLOCK: {
+            AstKindEnv block_env = ast_kind_env_clone(env);
+            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
+                if (!ast_collect_return_schema(lower, stmt->as.block_stmt.statements.items[i], &block_env, kind, schema, saw_return)) {
+                    ast_kind_env_free(&block_env);
+                    return false;
+                }
+            }
+            ast_kind_env_free(&block_env);
+            return true;
+        }
+        case DS_STMT_IF: {
+            AstKindEnv then_env = ast_kind_env_clone(env);
+            AstKindEnv else_env = ast_kind_env_clone(env);
+            bool ok = ast_collect_return_schema(lower, stmt->as.if_stmt.then_branch, &then_env, kind, schema, saw_return) &&
+                      ast_collect_return_schema(lower, stmt->as.if_stmt.else_branch, &else_env, kind, schema, saw_return);
+            ast_kind_env_free(&then_env);
+            ast_kind_env_free(&else_env);
+            return ok;
+        }
+        case DS_STMT_CASE:
+            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
+                AstKindEnv arm_env = ast_kind_env_clone(env);
+                bool ok = ast_collect_return_schema(lower, stmt->as.case_stmt.arms.items[i].body, &arm_env, kind, schema, saw_return);
+                ast_kind_env_free(&arm_env);
+                if (!ok) return false;
+            }
+            return true;
+        default:
+            return true;
+    }
+}
+
 void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
     /*
      * Provisional forward-call contract discovery.
@@ -1058,23 +1305,50 @@ void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
             const DsStmt *stmt = ast->statements.items[i];
             if (stmt->kind != DS_STMT_FN) continue;
             DsLowerFn *fn = find_function(lower->program, stmt->as.fn_stmt.name);
-            if (!fn || fn->has_return) continue;
-            DsLowerValueKind kind = DS_LOWER_VALUE_UNKNOWN;
-            bool saw_return = false;
-            AstKindEnv env = {0};
-            for (size_t j = 0; j < stmt->as.fn_stmt.params.len && j < fn->params.len; j++) {
-                const DsFnParam *param = &stmt->as.fn_stmt.params.items[j];
-                DsLowerValueKind kind = fn_param_expected_kind(&fn->params.items[j]);
-                if (kind == DS_LOWER_VALUE_UNKNOWN) kind = ast_literal_default_kind(param->default_value);
-                ast_kind_env_push(&env, param->name, kind);
+            if (!fn) continue;
+            if (!fn->has_return) {
+                DsLowerValueKind kind = DS_LOWER_VALUE_UNKNOWN;
+                bool saw_return = false;
+                AstKindEnv env = {0};
+                for (size_t j = 0; j < stmt->as.fn_stmt.params.len && j < fn->params.len; j++) {
+                    const DsFnParam *param = &stmt->as.fn_stmt.params.items[j];
+                    DsLowerValueKind param_kind = fn_param_expected_kind(&fn->params.items[j]);
+                    if (param_kind == DS_LOWER_VALUE_UNKNOWN) param_kind = ast_literal_default_kind(param->default_value);
+                    ast_kind_env_push(&env, param->name, param_kind);
+                }
+                bool ok = ast_collect_return_kind(lower, stmt->as.fn_stmt.body, &env, &kind, &saw_return);
+                ast_kind_env_free(&env);
+                if (ok && saw_return) {
+                    fn->has_return = true;
+                    fn->return_kind = kind;
+                    fn->all_paths_return = ast_stmt_all_paths_return(stmt->as.fn_stmt.body);
+                    changed = true;
+                }
             }
-            bool ok = ast_collect_return_kind(lower, stmt->as.fn_stmt.body, &env, &kind, &saw_return);
-            ast_kind_env_free(&env);
-            if (ok && saw_return) {
-                fn->has_return = true;
-                fn->return_kind = kind;
-                fn->all_paths_return = ast_stmt_all_paths_return(stmt->as.fn_stmt.body);
-                changed = true;
+            if (!fn->returns_row && !fn->returns_row_array) {
+                DsLowerValueKind schema_kind = DS_LOWER_VALUE_UNKNOWN;
+                DsLowerRowSchema schema = {0};
+                bool saw_schema_return = false;
+                AstKindEnv env = {0};
+                for (size_t j = 0; j < stmt->as.fn_stmt.params.len && j < fn->params.len; j++) {
+                    const DsFnParam *param = &stmt->as.fn_stmt.params.items[j];
+                    DsLowerValueKind param_kind = fn_param_expected_kind(&fn->params.items[j]);
+                    if (param_kind == DS_LOWER_VALUE_UNKNOWN) param_kind = ast_literal_default_kind(param->default_value);
+                    ast_kind_env_push(&env, param->name, param_kind);
+                }
+                bool ok = ast_collect_return_schema(lower, stmt->as.fn_stmt.body, &env, &schema_kind, &schema, &saw_schema_return);
+                ast_kind_env_free(&env);
+                if (ok && saw_schema_return) {
+                    fn->has_return = true;
+                    fn->return_kind = schema_kind;
+                    fn->all_paths_return = ast_stmt_all_paths_return(stmt->as.fn_stmt.body);
+                    if (schema_kind == DS_LOWER_VALUE_MAP) fn->returns_row = true;
+                    else if (schema_kind == DS_LOWER_VALUE_ARRAY) fn->returns_row_array = true;
+                    row_schema_free(&fn->row_schema);
+                    row_schema_clone(&schema, &fn->row_schema);
+                    changed = true;
+                }
+                row_schema_free(&schema);
             }
         }
         if (!changed) break;
