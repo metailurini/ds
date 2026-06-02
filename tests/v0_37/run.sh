@@ -155,6 +155,21 @@ assert_runtime_rejected() {
   assert_not_contains "$TMP/${name}_bash.out" "$marker" "$name Bash stops before marker"
 }
 
+assert_direct_accept() {
+  local name="$1" file="$2" expected_stdout="$3"
+  shift 3
+  local direct_work="$TMP/${name}_direct_work"
+  rm -rf "$direct_work"
+  mkdir -p "$direct_work"
+  set +e
+  (cd "$direct_work" && timeout "$CASE_TIMEOUT" "$DS" "$file" "$@") >"$TMP/${name}_direct.out" 2>"$TMP/${name}_direct.err"
+  local direct_rc=$?
+  set -e
+  printf '%s' "$direct_rc" >"$TMP/${name}_direct.rc"
+  assert_status "${name}_direct" 0
+  assert_text "${name}_direct_stdout" "$expected_stdout" "$TMP/${name}_direct.out"
+}
+
 # 1. Planning, docs, and scope guard.
 [ -f docs/milestones/v0.37.0-spec.md ] || fail 'missing v0.37 spec'
 pass 'v0.37 spec exists'
@@ -735,6 +750,41 @@ DS
 )
 run_accept return_rows "$return_rows" $'helper:5\nmain:10\n'
 
+forward_return_row=$(write_fixture forward_return_row <<'DS'
+let row = make_row()
+echo "{row.name}:{row.loc}"
+
+fn make_row() {
+  return { name: "api", loc: 1 }
+}
+DS
+)
+run_accept forward_return_row "$forward_return_row" $'api:1\n'
+
+forward_return_rows=$(write_fixture forward_return_rows <<'DS'
+let rows = make_rows()
+for row in rows.sort_by("loc") {
+  echo "{row.name}:{row.loc}"
+}
+
+fn make_rows() {
+  return [{ name: "b", loc: 2 }, { name: "a", loc: 1 }]
+}
+DS
+)
+run_accept forward_return_rows "$forward_return_rows" $'a:1\nb:2\n'
+
+direct_return_sort=$(write_fixture direct_return_sort <<'DS'
+fn make_rows() {
+  return [{ name: "b", loc: 2 }, { name: "a", loc: 1 }]
+}
+for row in make_rows().sort_by("loc") {
+  echo row.name
+}
+DS
+)
+run_accept direct_return_sort "$direct_return_sort" $'a\nb\n'
+
 return_schema_bad=$(write_fixture return_schema_bad <<'DS'
 fn make_rows(flag = true) {
   if flag { return [{ name: "api", loc: 1 }] }
@@ -792,6 +842,7 @@ for row in rows.sort_by("file") { echo "{row.file}:{row.name}" }
 DS
 )
 run_accept import_main "$import_main" $'a.c:main\nb.c:helper\n'
+assert_direct_accept import_main "$import_main" $'a.c:main\nb.c:helper\n'
 run_ok import_lib_ast "$DS" ast "$FIX/rows-lib.ds"
 assert_contains "$TMP/import_main_hir.out" 'Function load_rows' 'composed HIR includes imported function'
 assert_not_contains "$TMP/import_main_ast.out" 'FunctionDecl load_rows' 'root AST stays root-only for imports'
