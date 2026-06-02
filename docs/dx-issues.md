@@ -6,19 +6,21 @@ The goal is not to decide syntax yet. These are notes for future language/runtim
 
 ## Current priority order
 
-The roadmap now prioritizes the remaining open DX issues in this order:
+The `v0.34.0` through `v0.38.0` DX wave has addressed the script-writing issues
+that were blocking a pure-`ds` analyzer flow: literal braces, common broken-pipe
+noise, core byte-oriented string parsing helpers, scalar parameter inference,
+lightweight row arrays with `sort_by`, and recursive file walking by root and
+extension.
 
-1. `v0.34.0` — make literal `{` / `}` usable in strings and quiet the common
-   broken-pipe case from pipelines such as `script | head`.
-2. `v0.35.0` — add core string parsing helpers such as `index_of`,
-   `last_index_of`, `slice`, `char_at`, and substring/character counts.
-3. `v0.37.0` — design the lightweight structured-row / in-memory buffering /
-   sort-by-field story for data-processing scripts.
-4. `v0.38.0` — polish recursive file walking beyond the current safe
-   `glob("**")` contract and reconcile solved DX notes.
+The remaining open analyzer DX priority is regex capture ergonomics. Deeper
+Unicode/string semantics, richer row schemas, metadata-oriented filesystem APIs,
+and streaming iterators stay on the broader post-wave roadmap rather than being
+implicitly pulled into the current surface.
 
-The previously planned signal/job-control wave is postponed to a later roadmap
-slot so these script-writing DX gaps can be addressed first.
+## Resolved DX-wave items
+
+The sections below describe the original pain points and the milestone that
+closed each one.
 
 ## Literal braces in strings are awkward — addressed in v0.34.0 implementation
 
@@ -96,7 +98,7 @@ helper such as `fn clean_line(line) { return line.trim() }` now infers `line` as
 the call boundary. Public typed-parameter syntax, implicit coercions, and
 collection/row parameters remain deferred rather than solved by this DX pass.
 
-## No native recursive directory walking
+## No native recursive directory walking — addressed in v0.38.0 implementation
 
 The script had to shell out to `find`:
 
@@ -104,9 +106,13 @@ The script had to shell out to `find`:
 find '{root}' -type f \( -name '*.c' -o -name '*.h' \)
 ```
 
-A future standard-library helper for recursive walking/filtering may improve script readability.
+`v0.38.0` adds `dir.walk(root)`, `dir.walk!(root)`,
+`dir.walk_ext(root, extensions)`, and `dir.walk_ext!(root, extensions)` for the
+portable common case. The helpers return deterministic string arrays of regular
+files, skip hidden descendants and symlinks, validate exact extensions such as
+`.c`, and work in both VM execution and standalone emitted Bash.
 
-## No native sort-by-field helper
+## No native sort-by-field helper — addressed in v0.37.0 implementation
 
 To sort analyzer results by LOC descending, the script shells out to `sort`:
 
@@ -114,9 +120,11 @@ To sort analyzer results by LOC descending, the script shells out to `sort`:
 sort -t ':' -k4,4nr
 ```
 
-This is acceptable for shell-native scripting, but it makes structured in-language data processing harder.
+`v0.37.0` adds `rows.sort_by(field[, "asc"|"desc"])` for same-schema row
+arrays. External `sort` remains useful for shell-native text pipelines, but the
+common in-memory analyzer/reporting shape no longer needs to leave `ds`.
 
-## No lightweight structured records for rows
+## No lightweight structured records for rows — addressed in v0.37.0 implementation
 
 The analyzer naturally wants to store rows like:
 
@@ -126,7 +134,10 @@ The analyzer naturally wants to store rows like:
 
 Instead, the script writes colon-separated text lines to a temporary file and sorts externally.
 
-This is workable, but limits clean data transformations inside `ds`.
+`v0.37.0` treats flat scalar map literals as lightweight rows when they are
+buffered in same-schema row arrays, iterated, copied, returned, and sorted. Public
+row declarations, row parameters, nested fields, mutation, and serialization APIs
+remain deferred.
 
 ## Broken pipe diagnostics are noisy — addressed in v0.34.0 implementation
 
@@ -170,19 +181,7 @@ Without these, even an approximate parser required awkward workarounds.
 explicit empty-needle behavior, and strict bounds errors rather than adding
 Unicode, regex splitting, negative indexes, or clamped slices.
 
-## Regex support does not expose captures
-
-The current `matches` support can answer yes/no questions, but this task wanted extraction:
-
-```ds
-# illustrative only
-let m = sig.match(/([A-Za-z_][A-Za-z0-9_]*)\s*\()/
-let name = m.group(1)
-```
-
-Without captures, the script approximated function-name extraction using `.split()`.
-
-## Temporary files were needed for buffering
+## Temporary files were needed for buffering — addressed in v0.37.0 implementation
 
 Because results need to be sorted after collection, the script writes intermediate output to:
 
@@ -192,4 +191,23 @@ Because results need to be sorted after collection, the script writes intermedia
 
 and removes it with `defer`.
 
-This works, but an ergonomic in-memory collection/sort flow would be nicer for data-processing scripts.
+`v0.37.0` row arrays plus `sort_by` cover this in-memory buffering/sorting use
+case. Temporary files remain a normal shell-native option for very large streams,
+but they are no longer required for the scoped analyzer-style row buffer.
+
+## Open DX issues
+
+### Regex capture ergonomics
+
+The current `matches` support can answer yes/no questions, and `v0.32.0` added
+the practical `regex.match(text, pattern[, flags])` map API for numbered captures
+up to the current flat-map boundary. This task still wanted a smoother extraction
+shape such as method-style match objects or named captures:
+
+```ds
+# illustrative only
+let m = sig.match(/([A-Za-z_][A-Za-z0-9_]*)\s*\()/
+let name = m.group(1)
+```
+
+Capture ergonomics beyond the current flat map remain an open design item.

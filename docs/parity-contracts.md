@@ -390,6 +390,35 @@ recursive segment, such as custom flags, multiple `**` segments, hidden traversa
 flags, or symlink following, is not accepted until VM and Bash matching semantics
 can be made observably equivalent or the difference is documented and tested.
 
+### Recursive filesystem walk helpers
+
+Canonical representation: stdlib metadata plus HIR string-array return metadata
+for `dir.walk`, `dir.walk!`, `dir.walk_ext`, and `dir.walk_ext!`. No new HIR node
+or public syntax is required.
+
+Validation owner: parser for ordinary call syntax including the existing bang
+helper shape, lowerer/stdlib validation for arity and static argument kinds, and
+lowerer validation for literal extension arrays. Literal extension filters must
+be non-empty strings beginning with `.`, must not contain `/`, and must reject
+glob-like values such as `*.c` with a helper-focused diagnostic.
+
+Execution owner: VM stdlib walk implementation and Bash walk helpers/emission.
+Both backends must agree on root validation, required-match failures, empty
+non-bang results, hidden-descendant skipping, symlink skipping, exact extension
+filtering, bytewise sorting, duplicate removal, and composition with normal
+string-array loops/indexing/membership/function returns.
+
+Tests: VM/Bash parity tests with controlled directory fixtures, hidden files and
+directories, symlinks, duplicate extension filters, invalid literal and dynamic
+extension values, invalid roots, direct helper indexing, and row-array
+composition. The implementation pass may use manual smoke coverage when the
+milestone is explicitly requested without adding the dedicated tests.
+
+Current maintenance rule: hidden traversal flags, symlink following, max-depth
+options, metadata rows, streaming iterators, predicate callbacks, and glob-style
+extension filters remain deferred until they have explicit VM/Bash parity
+contracts and tests.
+
 ### Environment variables
 
 Canonical representation: stdlib metadata for helper-style env operations and,

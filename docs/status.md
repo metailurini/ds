@@ -6,8 +6,9 @@ runtime regex feature wave, the `v0.33.0` stabilization implementation and
 dedicated-test pass, the `v0.34.0` text-literal/broken-pipe DX pass, the
 `v0.35.0` core string parsing helper implementation and dedicated-test pass,
 the `v0.36.0` scalar function-parameter kind-inference implementation and
-dedicated-test pass, and the `v0.37.0` lightweight row/row-array implementation
-and dedicated-test pass. It is a
+dedicated-test pass, the `v0.37.0` lightweight row/row-array implementation
+and dedicated-test pass, and the `v0.38.0` recursive walk-helper implementation
+pass. It is a
 support matrix, not a replacement for the roadmap or language catalog: it
 summarizes what users can rely on today, what is test-only or tooling-only, and
 what is deliberately deferred, rejected, or out of scope for `1.0.0`.
@@ -29,7 +30,7 @@ ds bytecode <file.ds>
 ds emit bash <file.ds> -o <file.sh>
 ```
 
-There are no hidden production commands in the current `v0.34.0` surface; the
+There are no hidden production commands in the current `v0.38.0` surface; the
 cleanup milestones harden the existing CLI instead of adding new commands.
 
 `tokens` and `ast` are root-file frontend/debug views. They read only the file
@@ -48,8 +49,9 @@ The production runtime supports the language slice implemented and stabilized
 through the `v0.22.6` final v0.22 documentation pass, the completed `v0.23.0`
 regex/range/membership implementation and test pass, the scoped `v0.32.0`
 regex runtime-string/capture/replacement production implementation, the
-no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, and the
-`v0.34.0` text-literal/broken-pipe DX implementation pass:
+no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, the
+`v0.34.0` text-literal/broken-pipe DX implementation pass, and the current
+`v0.38.0` recursive walk-helper implementation pass:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -96,7 +98,8 @@ no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, and the
 - `script { ... }` positional args, options, and boolean flags;
 - local `import "./file.ds"` composition;
 - shell-oriented helpers from `file`, `dir`, `path`, `cmd`, `env`, `glob`,
-  `glob!`, and `lines` within the scoped standard-library surface;
+  `glob!`, `dir.walk`, `dir.walk!`, `dir.walk_ext`, `dir.walk_ext!`, and
+  `lines` within the scoped standard-library surface;
 - recursive `**` glob segments through `glob` and `glob!`, with exactly one
   complete `**` path segment per pattern, zero-or-more directory semantics,
   sorted duplicate-free string results, default hidden-path skipping, and no
@@ -105,7 +108,7 @@ no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, and the
   `.replace()`, `.contains()`, `.split()`, `.starts_with()`, `.ends_with()`,
   `.len()`, `.index_of()`, `.last_index_of()`, `.count()`, `.char_at()`, and
   `.slice()`, including known string-array elements from `split`, `lines`,
-  `glob`, and `glob!` when those values are indexed or iterated;
+  `glob`, `glob!`, and `dir.walk*` when those values are indexed or iterated;
 - kind-aware Bash `case` parity for known indexed array values and array `for`
   loop variables with known string/int/bool element kinds;
 - stackable `defer { ... }` and `defer on: "EXIT"|"INT"|"TERM" { ... }` cleanup handlers, plus replacement-style `trap "EXIT"|"INT"|"TERM" { ... }`;
@@ -399,6 +402,17 @@ Multiple recursive segments, partial `**` segments, custom glob flags, hidden
 traversal flags, symlink following, brace expansion, extglob, shell variable
 expansion, and `~` expansion remain deferred.
 
+`v0.38.0` adds recursive walk helpers through the existing `dir` namespace:
+`dir.walk(root)`, `dir.walk!(root)`, `dir.walk_ext(root, extensions)`, and
+`dir.walk_ext!(root, extensions)`. They return normal string arrays of regular
+files under a string root, sorted bytewise and duplicate-free in both VM
+execution and emitted Bash. Hidden descendants and symlink entries are skipped,
+explicitly hidden roots are allowed, extension filters are exact values such as
+`.c` rather than glob patterns such as `*.c`, and bang forms fail before loop
+bodies run when no files match. Hidden traversal flags, symlink following,
+max-depth/min-depth options, metadata rows, streaming iterators, callback
+filters, and broader glob expansion remain deferred.
+
 `v0.32.0` adds the practical regex API on top of the conservative `v0.23.0`
 regex subset. Runtime string patterns are accepted by `matches` and by
 `regex.match` / `regex.replace`; direct string literals are statically validated
@@ -433,8 +447,9 @@ without adding production syntax. `v0.29.0` adds map iteration, `v0.30.0`
 adds named flat array/map index assignment, `v0.31.0` adds scoped recursive
 glob patterns, `v0.32.0` adds runtime regex strings, capture maps, and regex
 replacement, `v0.33.0` stabilizes the combined collection/glob/regex surface
-without adding syntax, and `v0.34.0` adds the first DX-priority text-literal and
-closed-stdout broken-pipe cleanup. Nested collections, formatter trivia
+without adding syntax, `v0.34.0` adds the first DX-priority text-literal and
+closed-stdout broken-pipe cleanup, and `v0.38.0` closes the current DX wave with
+recursive walk helpers. Nested collections, formatter trivia
 preservation, warning suppression, command-level shell logical operators, deeper
 job-control behavior, and advanced pipeline forms remain out of scope unless
 their own milestones explicitly pull them in.

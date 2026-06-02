@@ -220,8 +220,8 @@ for text in \
   'Option target: string = "staging"' \
   'Option retries: int = 3' \
   'Flag force: bool = false' \
-  'Function helper(label = "lib")' \
-  'Function deploy(name = "api")' \
+  'Function helper(label: default string = "lib")' \
+  'Function deploy(name: default string = "api")' \
   'Array' \
   'Map' \
   'For file' \

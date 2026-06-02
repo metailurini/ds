@@ -102,7 +102,7 @@ static void test_values(void) {
 
     DsValue a = ds_value_int(10);
     DsValue b = ds_value_int(2);
-    assert(ds_value_compare(&a, &b) < 0); /* v0.3 intentionally uses string-style comparison. */
+    assert(ds_value_compare(&a, &b) > 0); /* integers compare numerically. */
     assert(ds_value_compare(&t, &f) > 0);
 
     ds_value_free(&copy);

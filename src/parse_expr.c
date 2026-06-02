@@ -166,6 +166,16 @@ static bool parser_expr_is_stdlib_namespace(DsExpr *expr) {
            parser_ident_text_eq(expr, "env") || parser_ident_text_eq(expr, "regex");
 }
 
+static DsStr parser_copy_dotted_bang_name(DsToken *left, DsToken *right) {
+    size_t len = left->text.len + 1 + right->text.len + 1;
+    char *buf = (char *)ds_xcalloc(len + 1, 1);
+    memcpy(buf, left->text.data, left->text.len);
+    buf[left->text.len] = '.';
+    memcpy(buf + left->text.len + 1, right->text.data, right->text.len);
+    buf[len - 1] = '!';
+    return (DsStr){buf, len};
+}
+
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
     while (expr) {
@@ -220,6 +230,22 @@ static DsExpr *parse_postfix(Parser *p) {
             field_expr->as.field.object = expr;
             field_expr->as.field.field = parser_copy_token_text(field);
             expr = field_expr;
+            if (parser_expr_is_stdlib_namespace(field_expr->as.field.object) && parser_advance_if(p, DS_TOK_BANG)) {
+                DsToken *bang = parser_previous(p);
+                if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after bang standard-library helper name")) break;
+                DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, bang->span.end, dot->span.source});
+                DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
+                DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+                call->as.call.name = parser_copy_dotted_bang_name(&left, &right);
+                free(field_expr->as.field.object->as.text.data);
+                free(field_expr->as.field.object);
+                free(field_expr->as.field.field.data);
+                free(field_expr);
+                parse_call_args(p, &call->as.call.args);
+                if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
+                expr = call;
+                continue;
+            }
             if (parser_advance_if(p, DS_TOK_LPAREN)) {
                 DsToken *open = parser_previous(p);
                 DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, open->span.end, dot->span.source});

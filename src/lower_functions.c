@@ -394,6 +394,15 @@ static DsLowerValueKind infer_string_helper_return_kind(DsStr name) {
     return DS_LOWER_VALUE_STRING;
 }
 
+static bool infer_helper_is_dir_walk(DsStr name) {
+    return lower_str_eq(name, "dir.walk") || lower_str_eq(name, "dir.walk!") ||
+           lower_str_eq(name, "dir.walk_ext") || lower_str_eq(name, "dir.walk_ext!");
+}
+
+static bool infer_helper_is_dir_walk_ext(DsStr name) {
+    return lower_str_eq(name, "dir.walk_ext") || lower_str_eq(name, "dir.walk_ext!");
+}
+
 static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExpr *expr);
 static bool infer_extract_ident_arg(const char *data, size_t start, size_t end, DsStr *name_out);
 static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr word, size_t arg_start, DsStr method, DsSpan span);
@@ -623,7 +632,12 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             }
             if (ds_stdlib_is_name(expr->as.call.name)) {
                 const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
-                for (size_t i = 0; i < expr->as.call.args.len; i++) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], DS_LOWER_VALUE_STRING, "standard-library helper");
+                if (infer_helper_is_dir_walk(expr->as.call.name)) {
+                    if (expr->as.call.args.len > 0) infer_constrain_expr(ctx, env, expr->as.call.args.items[0], DS_LOWER_VALUE_STRING, "standard-library helper");
+                    if (infer_helper_is_dir_walk_ext(expr->as.call.name) && expr->as.call.args.len > 1) (void)infer_expr_binding(ctx, env, expr->as.call.args.items[1]);
+                } else {
+                    for (size_t i = 0; i < expr->as.call.args.len; i++) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], DS_LOWER_VALUE_STRING, "standard-library helper");
+                }
                 return infer_kind(lower_stdlib_return_value_kind(helper));
             }
             DsLowerFn *callee = find_function(ctx->lower->program, expr->as.call.name);

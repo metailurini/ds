@@ -50,7 +50,7 @@ if [[ "$__ds_name" == "Danh" ]]; then
   ( echo "matched" ) || __ds_fail 'tests/v0_2/fixtures/mixed.ds':6:3 "$?" 1
 
   # ds: tests/v0_2/fixtures/mixed.ds:7
-  if ! [[ "$__ds_count" < 3 ]]; then
+  if (( "$__ds_count" >= 3 )); then
     # ds: tests/v0_2/fixtures/mixed.ds:8
     __ds_trace_cmd 'tests/v0_2/fixtures/mixed.ds':8:5 echo "$__ds_name"
     ( echo "$__ds_name" ) || __ds_fail 'tests/v0_2/fixtures/mixed.ds':8:5 "$?" 1

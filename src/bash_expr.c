@@ -80,7 +80,10 @@ static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, Emi
 }
 
 static bool expr_is_stdlib_array_call(const DsLowerExpr *expr) {
-    return expr && expr->kind == DS_LOWER_EXPR_CALL && str_eq(expr->as.call.name, "string.split") && ds_stdlib_is_name(expr->as.call.name) && stdlib_returns_array(expr->as.call.name);
+    return expr && expr->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(expr->as.call.name) && stdlib_returns_array(expr->as.call.name) &&
+           (str_eq(expr->as.call.name, "string.split") || str_eq(expr->as.call.name, "dir.walk") ||
+            str_eq(expr->as.call.name, "dir.walk!") || str_eq(expr->as.call.name, "dir.walk_ext") ||
+            str_eq(expr->as.call.name, "dir.walk_ext!"));
 }
 
 static bool emit_index_argument(BashEmitter *e, const DsLowerExpr *index, bool map_index, bool allow_computed, EmitBuf *out) {
@@ -218,9 +221,9 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     if (right->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(right->as.call.name) && stdlib_returns_array(right->as.call.name)) {
         size_t temp_id = e->temp_counter++;
         buf_appendf(out, "__ds_found=false; __ds_i=0; __ds_iter_%zu=$(mktemp); ", temp_id);
-        emit_stdlib_helper_name(out, right->as.call.name);
-        if (!emit_call_args(e, &right->as.call.args, out)) return false;
-        buf_appendf(out, " >\"$__ds_iter_%zu\"; while IFS= read -r __ds_item; do [[ ", temp_id);
+        if (!emit_stdlib_call(e, right, out)) return false;
+        buf_appendf(out, " >\"$__ds_iter_%zu\"; ", temp_id);
+        buf_append(out, stdlib_array_call_uses_nul_records(right) ? "while IFS= read -r -d '' __ds_item; do [[ " : "while IFS= read -r __ds_item; do [[ ");
         buf_append(out, "$__ds_needle_type == ");
         const char *elem_type = ds_lower_value_kind_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
@@ -348,9 +351,9 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, "\"$({ ");
                 emit_var_name(out, temp);
                 buf_append(out, "=(); __ds_index_tmp=$(mktemp) || __ds_error 'failed to create collection index temp file'; ");
-                emit_stdlib_helper_name(out, expr->as.index.object->as.call.name);
-                if (!emit_call_args(e, &expr->as.index.object->as.call.args, out)) return false;
-                buf_append(out, " >\"$__ds_index_tmp\"; while IFS= read -r __ds_index_line || [[ -n \"$__ds_index_line\" ]]; do ");
+                if (!emit_stdlib_call(e, expr->as.index.object, out)) return false;
+                buf_append(out, " >\"$__ds_index_tmp\"; ");
+                buf_append(out, stdlib_array_call_uses_nul_records(expr->as.index.object) ? "while IFS= read -r -d '' __ds_index_line; do " : "while IFS= read -r __ds_index_line || [[ -n \"$__ds_index_line\" ]]; do ");
                 emit_var_name(out, temp);
                 buf_append(out, "+=(\"$__ds_index_line\"); done <\"$__ds_index_tmp\"; rm -f \"$__ds_index_tmp\"; __ds_array_get ");
                 emit_var_name(out, temp);
@@ -377,8 +380,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 return false;
             }
             buf_append(out, "\"$(");
-            emit_stdlib_helper_name(out, expr->as.call.name);
-            if (!emit_call_args(e, &expr->as.call.args, out)) return false;
+            if (!emit_stdlib_call(e, expr, out)) return false;
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_BINARY:
@@ -797,6 +799,44 @@ bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
         if (!emit_call_arg_expr(e, args->items[i], out)) return false;
     }
     return true;
+}
+
+static bool call_name_is_dir_walk_ext(DsStr name) {
+    return str_eq(name, "dir.walk_ext") || str_eq(name, "dir.walk_ext!");
+}
+
+static bool call_name_is_dir_walk(DsStr name) {
+    return str_eq(name, "dir.walk") || str_eq(name, "dir.walk!") ||
+           str_eq(name, "dir.walk_ext") || str_eq(name, "dir.walk_ext!");
+}
+
+bool stdlib_array_call_uses_nul_records(const DsLowerExpr *call) {
+    return call && call->kind == DS_LOWER_EXPR_CALL && call_name_is_dir_walk(call->as.call.name);
+}
+
+bool emit_stdlib_call(BashEmitter *e, const DsLowerExpr *call, EmitBuf *out) {
+    emit_stdlib_helper_name(out, call->as.call.name);
+    if (!call_name_is_dir_walk_ext(call->as.call.name)) return emit_call_args(e, &call->as.call.args, out);
+
+    if (call->as.call.args.len != 2) return emit_call_args(e, &call->as.call.args, out);
+    buf_append(out, " ");
+    if (!emit_call_arg_expr(e, call->as.call.args.items[0], out)) return false;
+    const DsLowerExpr *exts = call->as.call.args.items[1];
+    if (exts->kind == DS_LOWER_EXPR_ARRAY) {
+        for (size_t i = 0; i < exts->as.array.elements.len; i++) {
+            buf_append(out, " ");
+            if (!emit_call_arg_expr(e, exts->as.array.elements.items[i], out)) return false;
+        }
+        return true;
+    }
+    if (exts->kind == DS_LOWER_EXPR_IDENT) {
+        buf_append(out, " \"${");
+        emit_var_name(out, exts->as.text);
+        buf_append(out, "[@]}\"");
+        return true;
+    }
+    ds_diag_error(e->diag, exts->span, "internal Bash invariant failed: dir.walk_ext extension argument should be an array literal or named array after lowering");
+    return false;
 }
 
 bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {

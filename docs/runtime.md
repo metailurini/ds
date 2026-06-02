@@ -1108,3 +1108,27 @@ for the supported POSIX-style path surface, including spaces and leading-dash
 paths. Custom glob flags, hidden traversal flags, symlink-following traversal,
 brace expansion, extglob, shell variable expansion, `~` expansion, Windows path
 semantics, and streaming filesystem iterators remain deferred.
+
+## v0.38.0 recursive walk runtime notes
+
+`v0.38.0` adds `dir.walk`, `dir.walk!`, `dir.walk_ext`, and `dir.walk_ext!` as
+filesystem helpers rather than glob-pattern helpers. Each accepted call returns a
+normal string array of regular file paths under a user-supplied root. Results are
+sorted with bytewise ordering, deduplicated, and composed through the same array
+loop, indexing, membership, function-return, and row-array paths as other string
+arrays.
+
+The VM implementation validates that the root is a string naming an existing
+non-symlink directory, traverses with filesystem APIs, skips hidden descendants,
+skips symlink entries, filters exact extensions for `dir.walk_ext*`, and fails
+the bang forms when the final array is empty. Literal invalid extension arrays
+are checker-owned where possible; dynamic invalid roots or extension values are
+runtime diagnostics.
+
+Emitted Bash remains standalone. Generated scripts include reserved `__ds_`
+helpers only when a walk helper is used. The helpers validate dynamic roots and
+extensions, use deterministic `LC_ALL=C sort -z -u` ordering for walk payloads,
+skip hidden descendants and symlinks, and transport walk results as NUL-delimited
+records before loading them into normal generated-Bash string arrays. This keeps
+spaces, tabs, literal newlines, leading dashes, and shell metacharacters as data
+rather than shell syntax for the scoped walk-helper surface.

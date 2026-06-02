@@ -305,7 +305,7 @@ run_fail cli_ast_invalid "$DS" ast "$TMP/missing_expr.ds"
 run_fail cli_unknown_command "$DS" nope "$FIX/ast_mixed.ds"
 assert_contains "$TMP/cli_unknown_command.err" "unknown command" "cli unknown command diagnostic"
 run_ok cli_help "$DS" --help
-assert_contains "$TMP/cli_help.out" "ds v0.37.0" "cli help output"
+assert_contains "$TMP/cli_help.out" "ds v0.38.0" "cli help output"
 
 # Edge cases.
 cat >"$TMP/many_blank_lines.ds" <<'EOF_BLANK'

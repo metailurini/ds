@@ -314,7 +314,7 @@ if 1 < 2 { echo "lt-int" }
 if 2 <= 2 { echo "le-int" }
 if "a" == "a" { echo "eq-str" }
 if "a" != "b" { echo "ne-str" }
-if 10 < 2 { echo "string-style" }
+if 10 > 2 { echo "numeric-style" }
 DS
 run_ok vm_expressions "$DS" "$TMP/expressions.ds"
 cat >"$TMP/expressions.expected" <<'EOF_EXPECT'
@@ -329,7 +329,7 @@ lt-int
 le-int
 eq-str
 ne-str
-string-style
+numeric-style
 EOF_EXPECT
 assert_same "$TMP/expressions.expected" "$TMP/vm_expressions.out" "VM expression execution"
 

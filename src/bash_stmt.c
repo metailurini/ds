@@ -571,8 +571,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
         buf_append(&e->out, "__ds_stdlib_capture ");
         emit_var_name(&e->out, name);
         buf_append(&e->out, " ");
-        emit_stdlib_helper_name(&e->out, value->as.call.name);
-        if (!emit_call_args(e, &value->as.call.args, &e->out)) return false;
+        if (!emit_stdlib_call(e, value, &e->out)) return false;
         buf_append(&e->out, "\n");
         bash_emit_type_assignment_for_expr(e, name, value, indent, false);
         buf_append(&e->out, "\n");
@@ -1053,11 +1052,10 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 size_t temp_id = e->temp_counter++;
                 buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
                 emit_indent(&e->out, indent);
-                emit_stdlib_helper_name(&e->out, stmt->as.let_stmt.value->as.call.name);
-                if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
+                if (!emit_stdlib_call(e, stmt->as.let_stmt.value, &e->out)) return false;
                 buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_append(&e->out, "while IFS= read -r __ds_line; do ");
+                buf_append(&e->out, stdlib_array_call_uses_nul_records(stmt->as.let_stmt.value) ? "while IFS= read -r -d '' __ds_line; do " : "while IFS= read -r __ds_line; do ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "+=(\"$__ds_line\"); ");
                 bash_emit_elem_type_var_name(&e->out, stmt->as.let_stmt.name);
@@ -1075,8 +1073,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "__ds_stdlib_capture ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, " ");
-                emit_stdlib_helper_name(&e->out, stmt->as.let_stmt.value->as.call.name);
-                if (!emit_call_args(e, &stmt->as.let_stmt.value->as.call.args, &e->out)) return false;
+                if (!emit_stdlib_call(e, stmt->as.let_stmt.value, &e->out)) return false;
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
                 if (!emit_row_array_decls(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
@@ -1338,11 +1335,10 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 temp_id = e->temp_counter++;
                 buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
                 emit_indent(&e->out, indent);
-                emit_stdlib_helper_name(&e->out, stmt->as.for_stmt.iterable->as.call.name);
-                if (!emit_call_args(e, &stmt->as.for_stmt.iterable->as.call.args, &e->out)) return false;
+                if (!emit_stdlib_call(e, stmt->as.for_stmt.iterable, &e->out)) return false;
                 buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_append(&e->out, "while IFS= read -r ");
+                buf_append(&e->out, stdlib_array_call_uses_nul_records(stmt->as.for_stmt.iterable) ? "while IFS= read -r -d '' " : "while IFS= read -r ");
                 emit_var_name(&e->out, stmt->as.for_stmt.name);
                 buf_append(&e->out, "; do\n");
             }

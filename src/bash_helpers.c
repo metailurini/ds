@@ -298,29 +298,40 @@ const char *ds_bash_stdlib_capture_helper_source(void) {
 const char *ds_bash_stdlib_helpers_source(void) {
     /* Static helper validation is lowerer-owned; these helpers validate dynamic
      * runtime strings and OS/environment state in emitted Bash. */
-    return
-        "__ds_stdlib_file_exists() { [[ -e \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
-        "__ds_stdlib_file_is_file() { [[ -f \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
-        "__ds_stdlib_dir_exists() { [[ -d \"$1\" ]] && printf '%s' true || printf '%s' false; }\n"
-        "__ds_stdlib_has_nul() { ! cmp -s <(LC_ALL=C tr -d '\\000' <\"$1\") \"$1\"; }\n"
-        "__ds_stdlib_reject_nul() { __ds_stdlib_has_nul \"$1\" && __ds_error \"$2 '$1' contains embedded NUL bytes\" || true; }\n"
-        "__ds_stdlib_file_read() { [[ -f \"$1\" ]] || __ds_error \"failed to read file '$1'\"; __ds_stdlib_reject_nul \"$1\" file; cat -- \"$1\"; }\n"
-        "__ds_stdlib_file_write() { printf '%s' \"$2\" >\"$1\" || __ds_error \"failed to write file '$1'\"; }\n"
-        "__ds_stdlib_file_append() { printf '%s' \"$2\" >>\"$1\" || __ds_error \"failed to append file '$1'\"; }\n"
-        "__ds_stdlib_path_cwd() { pwd -P; }\n"
-        "__ds_stdlib_path_join() { local out=\"$1\" part; shift; for part in \"$@\"; do out=\"${out%/}/${part#/}\"; done; printf '%s' \"$out\"; }\n"
-        "__ds_stdlib_path_basename() { local p=\"$1\"; printf '%s' \"${p##*/}\"; }\n"
-        "__ds_stdlib_path_dirname() { local p=\"$1\"; if [[ \"$p\" != */* ]]; then printf .; elif [[ \"${p%/*}\" == \"\" ]]; then printf /; else printf '%s' \"${p%/*}\"; fi; }\n"
-        "__ds_stdlib_path_ext() { local b=\"${1##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then printf ''; else printf '%s' \".${b##*.}\"; fi; }\n"
-        "__ds_stdlib_cmd_found() { local c=\"$1\" d; if [[ \"$c\" == */* ]]; then [[ -x \"$c\" && ! -d \"$c\" ]] && return 0 || return 1; fi; IFS=: read -r -a __ds_path_parts <<<\"${PATH:-}\"; for d in \"${__ds_path_parts[@]}\"; do [[ -z \"$d\" ]] && d=.; [[ -x \"$d/$c\" && ! -d \"$d/$c\" ]] && return 0; done; return 1; }\n"
-        "__ds_stdlib_cmd_exists() { __ds_stdlib_cmd_found \"$1\" && printf '%s' true || printf '%s' false; }\n"
-        "__ds_stdlib_cmd_require() { __ds_stdlib_cmd_found \"$1\" || __ds_error \"required command '$1' was not found\"; }\n"
-        "__ds_stdlib_env_valid() { [[ \"$1\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || __ds_error \"invalid environment variable name '$1' at runtime in v0.11.0\"; }\n"
-        "__ds_stdlib_env_get() { local n=\"$1\"; __ds_stdlib_env_valid \"$n\"; if [[ ${!n+x} ]]; then printf '%s' \"${!n}\"; elif [[ $# -ge 2 ]]; then printf '%s' \"$2\"; fi; }\n"
-        "__ds_stdlib_env_set() { __ds_stdlib_env_valid \"$1\"; export \"$1=$2\"; }\n"
-        "__ds_stdlib_env_unset() { __ds_stdlib_env_valid \"$1\"; unset \"$1\"; }\n"
-        "__ds_stdlib_capture() { local __ds_var=\"$1\" __ds_data __ds_status; shift; set +e; __ds_data=\"$(\"$@\"; printf x)\"; __ds_status=$?; set -e; if (( __ds_status != 0 )); then exit \"$__ds_status\"; fi; __ds_data=\"${__ds_data%x}\"; printf -v \"$__ds_var\" '%s' \"$__ds_data\"; }\n"
-        "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; __ds_stdlib_reject_nul \"$1\" \"lines from\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\\n' \"$line\"; done <\"$1\"; }\n\n";
+    static char *data = NULL;
+    static size_t len = 0;
+    static size_t cap = 0;
+    if (data) return data;
+    source_append(&data, &len, &cap, "__ds_stdlib_file_exists() { [[ -e \"$1\" ]] && printf '%s' true || printf '%s' false; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_file_is_file() { [[ -f \"$1\" ]] && printf '%s' true || printf '%s' false; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_dir_exists() { [[ -d \"$1\" ]] && printf '%s' true || printf '%s' false; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_has_nul() { ! cmp -s <(LC_ALL=C tr -d '\\000' <\"$1\") \"$1\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_reject_nul() { __ds_stdlib_has_nul \"$1\" && __ds_error \"$2 '$1' contains embedded NUL bytes\" || true; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_file_read() { [[ -f \"$1\" ]] || __ds_error \"failed to read file '$1'\"; __ds_stdlib_reject_nul \"$1\" file; cat -- \"$1\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_file_write() { printf '%s' \"$2\" >\"$1\" || __ds_error \"failed to write file '$1'\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_file_append() { printf '%s' \"$2\" >>\"$1\" || __ds_error \"failed to append file '$1'\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_path_cwd() { pwd -P; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_path_join() { local out=\"$1\" part; shift; for part in \"$@\"; do out=\"${out%/}/${part#/}\"; done; printf '%s' \"$out\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_path_basename() { local p=\"$1\"; printf '%s' \"${p##*/}\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_path_dirname() { local p=\"$1\"; if [[ \"$p\" != */* ]]; then printf .; elif [[ \"${p%/*}\" == \"\" ]]; then printf /; else printf '%s' \"${p%/*}\"; fi; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_path_ext() { local b=\"${1##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then printf ''; else printf '%s' \".${b##*.}\"; fi; }\n");
+    source_append(&data, &len, &cap, "__ds_walk_ext_valid() { local e=\"$1\"; [[ -n \"$e\" ]] || __ds_error 'dir.walk_ext expects extensions to be non-empty and start with `.`'; if [[ \"$e\" != .* ]]; then if [[ \"$e\" == \\*.* ]]; then __ds_error \"dir.walk_ext expects extensions such as '.c', not glob patterns such as '$e'\"; else __ds_error \"dir.walk_ext expects extensions to start with '.': '$e'\"; fi; fi; [[ \"$e\" != */* ]] || __ds_error \"dir.walk_ext expects extensions not to contain '/': '$e'\"; }\n");
+    source_append(&data, &len, &cap, "__ds_walk_ext_match() { local p=\"$1\" e b ext; shift; b=\"${p##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then return 1; fi; ext=\".${b##*.}\"; for e in \"$@\"; do [[ \"$ext\" == \"$e\" ]] && return 0; done; return 1; }\n");
+    source_append(&data, &len, &cap, "__ds_walk_emit() { local helper=\"$1\" root=\"$2\" required=\"$3\" with_ext=\"$4\" p out=() e; shift 4; [[ -d \"$root\" && ! -L \"$root\" ]] || __ds_error \"$helper root '$root' is not an existing directory\"; if [[ \"$with_ext\" == true ]]; then (( $# > 0 )) || __ds_error \"$helper expects a non-empty extension array\"; for e in \"$@\"; do __ds_walk_ext_valid \"$e\"; done; fi; while IFS= read -r -d '' p; do if [[ \"$with_ext\" == true ]]; then __ds_walk_ext_match \"$p\" \"$@\" || continue; fi; out+=(\"$p\"); done < <(find -P \"$root\" -mindepth 1 \\( -name '.*' -prune -o -type f -print0 \\) | LC_ALL=C sort -z -u); if [[ \"$required\" == true && ${#out[@]} -eq 0 ]]; then __ds_error \"$helper matched no files\"; fi; if (( ${#out[@]} > 0 )); then printf '%s\\0' \"${out[@]}\"; fi; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_dir_walk() { __ds_walk_emit dir.walk \"$1\" false false; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_dir_walk_required() { __ds_walk_emit 'dir.walk!' \"$1\" true false; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_dir_walk_ext() { local root=\"$1\"; shift; __ds_walk_emit dir.walk_ext \"$root\" false true \"$@\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_dir_walk_ext_required() { local root=\"$1\"; shift; __ds_walk_emit 'dir.walk_ext!' \"$root\" true true \"$@\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_cmd_found() { local c=\"$1\" d; if [[ \"$c\" == */* ]]; then [[ -x \"$c\" && ! -d \"$c\" ]] && return 0 || return 1; fi; IFS=: read -r -a __ds_path_parts <<<\"${PATH:-}\"; for d in \"${__ds_path_parts[@]}\"; do [[ -z \"$d\" ]] && d=.; [[ -x \"$d/$c\" && ! -d \"$d/$c\" ]] && return 0; done; return 1; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_cmd_exists() { __ds_stdlib_cmd_found \"$1\" && printf '%s' true || printf '%s' false; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_cmd_require() { __ds_stdlib_cmd_found \"$1\" || __ds_error \"required command '$1' was not found\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_env_valid() { [[ \"$1\" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || __ds_error \"invalid environment variable name '$1' at runtime in v0.11.0\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_env_get() { local n=\"$1\"; __ds_stdlib_env_valid \"$n\"; if [[ ${!n+x} ]]; then printf '%s' \"${!n}\"; elif [[ $# -ge 2 ]]; then printf '%s' \"$2\"; fi; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_env_set() { __ds_stdlib_env_valid \"$1\"; export \"$1=$2\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_env_unset() { __ds_stdlib_env_valid \"$1\"; unset \"$1\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_capture() { local __ds_var=\"$1\" __ds_data __ds_status; shift; set +e; __ds_data=\"$(\"$@\"; printf x)\"; __ds_status=$?; set -e; if (( __ds_status != 0 )); then exit \"$__ds_status\"; fi; __ds_data=\"${__ds_data%x}\"; printf -v \"$__ds_var\" '%s' \"$__ds_data\"; }\n");
+    source_append(&data, &len, &cap, "__ds_stdlib_lines() { [[ -f \"$1\" ]] || __ds_error \"failed to read lines from '$1'\"; __ds_stdlib_reject_nul \"$1\" \"lines from\"; while IFS= read -r line || [[ -n \"$line\" ]]; do printf '%s\\n' \"$line\"; done <\"$1\"; }\n\n");
+    return data;
 }
 
 

@@ -253,9 +253,10 @@ a source-language construct, treat it as a candidate for a lowering diagnostic
 unless it is defensive unreachable code or an explicitly backend-specific state.
 
 Runtime/helper diagnostics may still reject unsupported values when those values
-are not statically knowable. For example, invalid literal recursive glob patterns
-and literal empty `split`/`replace` arguments are lowerer diagnostics, while the
-same values produced dynamically are VM/Bash-helper runtime data failures.
+are not statically knowable. For example, invalid literal recursive glob
+patterns, invalid literal `dir.walk_ext` extension arrays, and literal empty
+`split`/`replace` arguments are lowerer diagnostics, while the same values
+produced dynamically are VM/Bash-helper runtime data failures.
 Backend wording should make that runtime/invariant ownership visible instead of
 sounding like the backend is deciding language validity.
 
@@ -266,13 +267,14 @@ execution:
 
 - Lowering owns statically-known helper argument kinds, helper arity, invalid
   environment names in string literals or direct `env.NAME` forms, literal empty
-  `split`/`replace` separators, invalid literal recursive glob patterns, known array
-  index kinds, known `in` operands, known loop iterables, and known arithmetic
-  operand kinds.
+  `split`/`replace` separators, invalid literal recursive glob patterns, invalid
+  literal `dir.walk_ext` extension arrays, known array index kinds, known `in`
+  operands, known loop iterables, and known arithmetic operand kinds.
 - VM/runtime and emitted Bash helpers own the same class of failure when the bad
   value is produced dynamically by an accepted program, such as script arguments,
   function returns, variables with unknown value kind, runtime environment names,
-  runtime glob strings, or runtime string-helper separators.
+  runtime glob strings, runtime `dir.walk*` roots/extensions, or runtime
+  string-helper separators.
 - VM/runtime and emitted Bash helpers also own the scoped `v0.34.0` broken-pipe
   quieting classification for accepted uncaptured, unredirected command or
   pipeline executions. VM execution uses raw wait status and quiets only actual

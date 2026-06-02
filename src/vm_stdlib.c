@@ -690,6 +690,156 @@ static bool stdlib_glob(Vm *vm, Instr *ins, DsValue *out) {
     return true;
 }
 
+static bool vm_walk_extension_valid(const char *ext, const char *helper, Vm *vm, Instr *ins) {
+    if (!ext || !ext[0]) {
+        ds_diag_error(vm->diag, ins->span, "%s expects extensions to be non-empty and start with `.`", helper);
+        return false;
+    }
+    if (ext[0] != '.') {
+        if (ext[0] == '*' && ext[1] == '.') {
+            ds_diag_error(vm->diag, ins->span, "dir.walk_ext expects extensions such as `.c`, not glob patterns such as `%s`", ext);
+        } else {
+            ds_diag_error(vm->diag, ins->span, "%s expects extensions to start with `.`", helper);
+        }
+        return false;
+    }
+    if (strchr(ext, '/')) {
+        ds_diag_error(vm->diag, ins->span, "%s expects extensions not to contain `/`: `%s`", helper, ext);
+        return false;
+    }
+    return true;
+}
+
+static bool vm_walk_collect_extensions(Vm *vm, Instr *ins, VmStringVec *exts) {
+    DsValue *value = &vm->regs[ins->args[1]];
+    if (value->kind != DS_VALUE_ARRAY) {
+        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects a string-array extension argument", ins->name ? ins->name : "dir.walk_ext");
+        return false;
+    }
+    if (value->as.array.len == 0) {
+        ds_diag_error(vm->diag, ins->span, "%s expects a non-empty extension array", ins->name ? ins->name : "dir.walk_ext");
+        return false;
+    }
+    for (size_t i = 0; i < value->as.array.len; i++) {
+        DsValue *item = (DsValue *)value->as.array.items[i];
+        if (!item || item->kind != DS_VALUE_STRING) {
+            ds_diag_error(vm->diag, ins->span, "%s expects extension filters to be strings such as `.c`", ins->name ? ins->name : "dir.walk_ext");
+            return false;
+        }
+        const char *ext = item->as.string.data ? item->as.string.data : "";
+        if (memchr(ext, '\0', item->as.string.len)) {
+            ds_diag_error(vm->diag, ins->span, "%s does not support embedded NUL bytes in extensions", ins->name ? ins->name : "dir.walk_ext");
+            return false;
+        }
+        if (!vm_walk_extension_valid(ext, ins->name ? ins->name : "dir.walk_ext", vm, ins)) return false;
+        vm_string_vec_push_copy(exts, ext);
+    }
+    return true;
+}
+
+static const char *vm_path_ext_ptr(const char *path) {
+    const char *base = strrchr(path, '/');
+    base = base ? base + 1 : path;
+    const char *dot = strrchr(base, '.');
+    if (!dot || dot == base) return "";
+    return dot;
+}
+
+static bool vm_walk_ext_matches(const char *path, const VmStringVec *exts) {
+    if (!exts || exts->len == 0) return true;
+    const char *ext = vm_path_ext_ptr(path);
+    if (!ext || !*ext) return false;
+    for (size_t i = 0; i < exts->len; i++) {
+        if (strcmp(ext, exts->items[i]) == 0) return true;
+    }
+    return false;
+}
+
+static bool vm_dir_walk_collect(Vm *vm, Instr *ins, const char *dir, const VmStringVec *exts, VmStringVec *matches) {
+    DIR *dp = opendir(dir);
+    if (!dp) {
+        ds_diag_error(vm->diag, ins->span, "%s failed to open root `%s`: %s", ins->name ? ins->name : "dir.walk", dir, strerror(errno));
+        return false;
+    }
+    struct dirent *ent = NULL;
+    while ((ent = readdir(dp)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+        if (should_skip_hidden_child(ent->d_name)) continue;
+        char *child = path_join2(dir, ent->d_name);
+        struct stat st;
+        if (lstat(child, &st) != 0) {
+            free(child);
+            continue;
+        }
+        if (S_ISLNK(st.st_mode)) {
+            free(child);
+            continue;
+        }
+        if (S_ISDIR(st.st_mode)) {
+            bool ok = vm_dir_walk_collect(vm, ins, child, exts, matches);
+            free(child);
+            if (!ok) { closedir(dp); return false; }
+            continue;
+        }
+        if (S_ISREG(st.st_mode) && vm_walk_ext_matches(child, exts)) {
+            vm_string_vec_push_owned(matches, child);
+        } else {
+            free(child);
+        }
+    }
+    closedir(dp);
+    return true;
+}
+
+static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsValue *out) {
+    char *root = vm_string_arg_dup(vm, ins, 0);
+    if (!root) return false;
+    const bool with_ext = helper_is(ins, "dir.walk_ext") || helper_is(ins, "dir.walk_ext!");
+    const bool required = helper_is(ins, "dir.walk!") || helper_is(ins, "dir.walk_ext!");
+
+    struct stat st;
+    if (lstat(root, &st) != 0 || !S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) {
+        ds_diag_error(vm->diag, ins->span, "%s root `%s` is not an existing directory", ins->name ? ins->name : "dir.walk", root);
+        free(root);
+        return false;
+    }
+
+    VmStringVec exts = {0};
+    if (with_ext && !vm_walk_collect_extensions(vm, ins, &exts)) {
+        free(root);
+        vm_string_vec_free(&exts);
+        return false;
+    }
+
+    VmStringVec matches = {0};
+    bool ok = vm_dir_walk_collect(vm, ins, root, with_ext ? &exts : NULL, &matches);
+    free(root);
+    vm_string_vec_free(&exts);
+    if (!ok) {
+        vm_string_vec_free(&matches);
+        return false;
+    }
+    if (matches.len > 0) qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
+
+    DsValue array = ds_value_null();
+    array.kind = DS_VALUE_ARRAY;
+    ds_array_init(&array.as.array);
+    const char *prev = NULL;
+    for (size_t i = 0; i < matches.len; i++) {
+        if (prev && strcmp(prev, matches.items[i]) == 0) continue;
+        array_push_string(&array, matches.items[i], strlen(matches.items[i]));
+        prev = matches.items[i];
+    }
+    vm_string_vec_free(&matches);
+    if (required && array.as.array.len == 0) {
+        ds_diag_error(vm->diag, ins->span, "%s matched no files", ins->name ? ins->name : "dir.walk!");
+        ds_value_free(&array);
+        return false;
+    }
+    *out = array;
+    return true;
+}
+
 static bool stdlib_lines(Vm *vm, Instr *ins, DsValue *out) {
     char *path = vm_string_arg_dup(vm, ins, 0);
     if (!path) return false;
@@ -1138,6 +1288,7 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     if (helper_is(ins, "regex.match")) return stdlib_regex_match(vm, ins, out);
     if (helper_is(ins, "regex.replace")) return stdlib_regex_replace(vm, ins, out);
     if (helper_is(ins, "glob") || helper_is(ins, "glob!")) return stdlib_glob(vm, ins, out);
+    if (helper_is(ins, "dir.walk") || helper_is(ins, "dir.walk!") || helper_is(ins, "dir.walk_ext") || helper_is(ins, "dir.walk_ext!")) return stdlib_dir_walk(vm, ins, out);
     if (helper_is(ins, "lines")) return stdlib_lines(vm, ins, out);
 
     ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown standard-library helper `%s` after lowering", name);

@@ -80,6 +80,8 @@ bool emit_call_arg_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
+bool emit_stdlib_call(BashEmitter *e, const DsLowerExpr *call, EmitBuf *out);
+bool stdlib_array_call_uses_nul_records(const DsLowerExpr *call);
 bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
 bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 

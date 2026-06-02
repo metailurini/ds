@@ -549,6 +549,27 @@ if dir.exists("src") {
   echo "src exists"
 }
 
+# v0.38.0 adds deterministic recursive file walking for analyzer-style scripts.
+# The helpers return ordinary string arrays of regular files, sorted bytewise and
+# duplicate-free. Hidden descendants and symlinks are skipped; an explicitly
+# hidden root is allowed, but hidden children below it are still skipped.
+for path_name in dir.walk("src") {
+  echo path_name
+}
+
+for path_name in dir.walk_ext("src", [".c", ".h"]) {
+  echo "{path.ext(path_name)}\t{path_name}"
+}
+
+# Bang forms require at least one result and fail before the loop body runs.
+for path_name in dir.walk_ext!("src", [".ds"]) {
+  echo path_name
+}
+
+# Extension filters are exact extensions, not glob patterns: use ".c", not
+# "*.c". Hidden traversal flags, symlink-following, max-depth options, metadata
+# rows, and streaming iterators remain deferred.
+
 let text = file.read("README.md")
 file.write("out.txt", text)
 file.append("out.txt", "\n")

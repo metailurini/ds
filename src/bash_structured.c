@@ -342,6 +342,26 @@ bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, Ds
         buf_append(&e->out, "[@]}\")\n");
         return true;
     }
+    if (value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(value->as.call.name)) {
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "declare -ga __ds_return_array=()\n");
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, "declare -ga __ds_return_elem_type=()\n");
+        size_t temp_id = e->temp_counter++;
+        emit_indent(&e->out, indent);
+        buf_appendf(&e->out, "__ds_return_iter_%zu=$(mktemp)\n", temp_id);
+        emit_indent(&e->out, indent);
+        if (!emit_stdlib_call(e, value, &e->out)) return false;
+        buf_appendf(&e->out, " >\"$__ds_return_iter_%zu\"\n", temp_id);
+        emit_indent(&e->out, indent);
+        buf_append(&e->out, stdlib_array_call_uses_nul_records(value) ?
+                   "while IFS= read -r -d '' __ds_line; do __ds_return_array+=(\"$__ds_line\"); __ds_return_elem_type+=(\"string\"); done" :
+                   "while IFS= read -r __ds_line; do __ds_return_array+=(\"$__ds_line\"); __ds_return_elem_type+=(\"string\"); done");
+        buf_appendf(&e->out, " <\"$__ds_return_iter_%zu\"\n", temp_id);
+        emit_indent(&e->out, indent);
+        buf_appendf(&e->out, "rm -f \"$__ds_return_iter_%zu\"\n", temp_id);
+        return true;
+    }
     ds_diag_error(e->diag, span, "internal Bash invariant failed: array return should be literal, named, or forwarded after lowering");
     return false;
 }

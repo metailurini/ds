@@ -171,7 +171,8 @@ static bool lower_return_value_has_portable_backend_representation(DsLowerValueK
     if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.is_user_function) return true;
     switch (return_kind) {
         case DS_LOWER_VALUE_ARRAY:
-            return value->kind == DS_LOWER_EXPR_ARRAY || value->kind == DS_LOWER_EXPR_IDENT;
+            return value->kind == DS_LOWER_EXPR_ARRAY || value->kind == DS_LOWER_EXPR_IDENT ||
+                   (value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(value->as.call.name));
         case DS_LOWER_VALUE_MAP:
             return value->kind == DS_LOWER_EXPR_MAP || value->kind == DS_LOWER_EXPR_IDENT ||
                    (value->kind == DS_LOWER_EXPR_CALL && lower_str_eq(value->as.call.name, "regex.match"));
