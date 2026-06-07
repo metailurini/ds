@@ -67,6 +67,8 @@ bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable) {
     if (!iterable) return false;
     if (iterable->kind == DS_LOWER_EXPR_IDENT) return true;
     if (iterable->kind == DS_LOWER_EXPR_CALL && iterable->as.call.returns_row_array) return true;
+    if (iterable->kind == DS_LOWER_EXPR_CALL && iterable->as.call.is_user_function &&
+        iterable->as.call.return_kind == DS_LOWER_VALUE_ARRAY) return true;
     if (iterable->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(iterable->as.call.name)) {
         const DsStdlibHelper *helper = ds_stdlib_lookup(iterable->as.call.name);
         return helper && helper->return_kind == DS_STDLIB_RETURN_ARRAY;
@@ -83,7 +85,7 @@ bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable) 
 
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span) {
     ds_diag_error(lower->diag, span,
-                  "for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first");
+                  "for loop iterable must be a named array, known stdlib array result, or supported array-returning function call for VM/Bash parity; bind temporary arrays to a variable first");
 }
 
 void row_schema_init(DsLowerRowSchema *schema) {

@@ -1318,18 +1318,37 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "done\n\n");
                 return true;
             }
-            if (stmt->as.for_stmt.iterable->kind != DS_LOWER_EXPR_IDENT && !(stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.for_stmt.iterable->as.call.name))) {
+            bool iterable_is_user_array_call = stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL &&
+                                               stmt->as.for_stmt.iterable->as.call.is_user_function &&
+                                               stmt->as.for_stmt.iterable->as.call.return_kind == DS_LOWER_VALUE_ARRAY;
+            if (stmt->as.for_stmt.iterable->kind != DS_LOWER_EXPR_IDENT &&
+                !iterable_is_user_array_call &&
+                !(stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.for_stmt.iterable->as.call.name))) {
                 /* Lowering rejects non-portable array iterables for VM/Bash parity. */
-                ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: array loop iterable should be named or a known stdlib array result after lowering");
+                ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: array loop iterable should be named, a known stdlib array result, or a supported array-returning function after lowering");
                 return false;
             }
             size_t temp_id = 0;
+            DsStr user_iter_name = {0};
             if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) {
                 buf_append(&e->out, "for ");
                 emit_var_name(&e->out, stmt->as.for_stmt.name);
                 buf_append(&e->out, " in ");
                 buf_append(&e->out, "\"${");
                 emit_var_name(&e->out, stmt->as.for_stmt.iterable->as.text);
+                buf_append(&e->out, "[@]}\"; do\n");
+            } else if (iterable_is_user_array_call) {
+                char iter_buf[64];
+                bash_temp_ds_name(iter_buf, sizeof(iter_buf), "array_iter", e->temp_counter++);
+                user_iter_name = (DsStr){iter_buf, strlen(iter_buf)};
+                if (!bash_emit_structured_target_decl(e, user_iter_name, DS_LOWER_VALUE_ARRAY, indent, e->function_depth > 0)) return false;
+                if (!bash_emit_user_function_value_call_into(e, user_iter_name, stmt->as.for_stmt.iterable, indent)) return false;
+                emit_indent(&e->out, indent);
+                buf_append(&e->out, "for ");
+                emit_var_name(&e->out, stmt->as.for_stmt.name);
+                buf_append(&e->out, " in ");
+                buf_append(&e->out, "\"${");
+                emit_var_name(&e->out, user_iter_name);
                 buf_append(&e->out, "[@]}\"; do\n");
             } else {
                 temp_id = e->temp_counter++;
@@ -1349,7 +1368,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
             emit_indent(&e->out, indent);
-            if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) buf_append(&e->out, "done\n\n");
+            if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT || iterable_is_user_array_call) buf_append(&e->out, "done\n\n");
             else {
                 buf_appendf(&e->out, "done <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);

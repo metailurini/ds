@@ -56,6 +56,22 @@ static bool extension_text_valid(DsStr text, bool *glob_like) {
     return true;
 }
 
+static bool expr_is_static_non_string_extension_value(const DsExpr *expr) {
+    if (!expr) return false;
+    switch (expr->kind) {
+        case DS_EXPR_INT:
+        case DS_EXPR_BOOL:
+        case DS_EXPR_REGEX:
+        case DS_EXPR_RUN:
+        case DS_EXPR_ARRAY:
+        case DS_EXPR_MAP:
+        case DS_EXPR_RANGE:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static void validate_dir_walk_ext_literal_arg(Lower *lower, DsStr helper_name, const DsExpr *arg) {
     if (!helper_is_dir_walk_ext(helper_name) || !arg || arg->kind != DS_EXPR_ARRAY) return;
     if (arg->as.array.elements.len == 0) {
@@ -65,7 +81,9 @@ static void validate_dir_walk_ext_literal_arg(Lower *lower, DsStr helper_name, c
     for (size_t i = 0; i < arg->as.array.elements.len; i++) {
         const DsExpr *elem = arg->as.array.elements.items[i];
         if (!elem || elem->kind != DS_EXPR_STRING) {
-            ds_diag_error(lower->diag, elem ? elem->span : arg->span, "%.*s expects extension filters to be strings such as \".c\"", (int)helper_name.len, helper_name.data);
+            if (expr_is_static_non_string_extension_value(elem)) {
+                ds_diag_error(lower->diag, elem ? elem->span : arg->span, "%.*s expects extension filters to be strings such as \".c\"", (int)helper_name.len, helper_name.data);
+            }
             continue;
         }
         DsStr decoded = {0};
