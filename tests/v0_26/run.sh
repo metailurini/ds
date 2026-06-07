@@ -700,7 +700,7 @@ for key, value in data {
 DS
 assert_parity map_iteration_supported "$FIX/map_iteration_supported.ds" 0 $'name:api\nport:8080\n'
 
-write_fixture "$FIX/function_array_loop_rejected.ds" <<'DS'
+write_fixture "$FIX/function_array_loop_direct.ds" <<'DS'
 fn apps() {
   return ["api", "web"]
 }
@@ -709,14 +709,13 @@ for app in apps() {
   echo "{app}"
 }
 DS
-assert_check_fails function_array_loop_rejected "$FIX/function_array_loop_rejected.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity'
-assert_emit_fails function_array_loop_rejected "$FIX/function_array_loop_rejected.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity'
-run_fail function_array_loop_rejected_run "$DS" run "$FIX/function_array_loop_rejected.ds"
-assert_diag "$TMP/function_array_loop_rejected_run.err" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity' 'function_array_loop_rejected run diagnostic'
+assert_parity function_array_loop_direct "$FIX/function_array_loop_direct.ds" 0 $'api\nweb\n'
 
-write_fixture "$FIX/stdlib_array_return_rejected.ds" <<'DS'
+mkdir -p "$FIX/glob-src"
+touch "$FIX/glob-src/a.txt" "$FIX/glob-src/b.txt"
+write_fixture "$FIX/stdlib_array_return_direct.ds" <<DS
 fn files() {
-  return glob("*")
+  return glob("$FIX/glob-src/*.txt")
 }
 
 let xs = files()
@@ -724,10 +723,7 @@ for x in xs {
   echo "{x}"
 }
 DS
-assert_check_fails stdlib_array_return_rejected "$FIX/stdlib_array_return_rejected.ds" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity'
-assert_emit_fails stdlib_array_return_rejected "$FIX/stdlib_array_return_rejected.ds" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity'
-run_fail stdlib_array_return_rejected_run "$DS" run "$FIX/stdlib_array_return_rejected.ds"
-assert_diag "$TMP/stdlib_array_return_rejected_run.err" 'structured function returns require a literal, named value, run capture, or forwarded user-function call for VM/Bash parity' 'stdlib_array_return_rejected run diagnostic'
+assert_parity stdlib_array_return_direct "$FIX/stdlib_array_return_direct.ds" 0 "$FIX/glob-src/a.txt"$'\n'"$FIX/glob-src/b.txt"$'\n'
 
 write_fixture "$FIX/index_assignment_supported.ds" <<'DS'
 fn apps() {

@@ -563,7 +563,7 @@ for item in ["api", "web"] {
   echo "{item}"
 }
 DS
-assert_diag loop_array_literal "$FIX/bad_loop_array_literal.ds" 'for loop iterable must be a named array or known stdlib array result for VM/Bash parity in v0.10.0; bind temporary arrays to a variable first'
+assert_diag loop_array_literal "$FIX/bad_loop_array_literal.ds" 'for loop iterable must be a named array, known stdlib array result, or supported array-returning function call for VM/Bash parity; bind temporary arrays to a variable first'
 
 write_fixture "$FIX/map_iteration_supported.ds" <<'DS'
 let ports = { api: 3000 }

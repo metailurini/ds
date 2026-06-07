@@ -399,7 +399,7 @@ assert_parity broad "$broad" 0 $'deploy:api:production:true:alpha\n' api --targe
 # 4. Imports, functions, ranges, membership, and regex.
 cat >"$FIX/lib.ds" <<'DS'
 fn valid_app(name = "api") {
-  return name in ["api", "web"]
+  return (name == "api") || (name == "web")
 }
 
 fn release_branch(branch = "release/1") {
@@ -530,7 +530,7 @@ let parts = "api,web".split(",")
 let result = run printf "%s\n" $trimmed | grep api
 let port = ports.api
 fn ok(name = "api") {
-  return (name in apps) && (name matches /^a/)
+  return ((name == "api") || (name == "web")) && (name matches /^a/)
 }
 if ok(parts[0]) && result.ok {
   echo "{port}:{result.stdout:trim}"

@@ -7,10 +7,11 @@ The goal is not to decide syntax yet. These are notes for future language/runtim
 ## Current priority order
 
 The `v0.34.0` through `v0.38.0` DX wave has addressed the script-writing issues
-that were blocking a pure-`ds` analyzer flow: literal braces, common broken-pipe
-noise, core byte-oriented string parsing helpers, scalar parameter inference,
-lightweight row arrays with `sort_by`, and recursive file walking by root and
-extension.
+that were blocking a pure-`ds` analyzer flow: literal braces, common
+broken-pipe quieting/noise reduction, direct indexing for read-only string
+helper results, core byte-oriented string parsing helpers, function parameter kind inference
+for scalar helpers, lightweight row arrays with `sort_by`, and recursive file walking
+by root and extension.
 
 The remaining open analyzer DX priority is regex capture ergonomics. Deeper
 Unicode/string semantics, richer row schemas, metadata-oriented filesystem APIs,

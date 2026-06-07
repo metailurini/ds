@@ -399,8 +399,9 @@ assert_emit_fails regex_newline_emit "$regex_newline" 'newline'
 combined="$FIX/combined.ds"
 write_fixture "$combined" <<'DS'
 let names = ["api", "web", "db"]
+let allowed = ["api", "web"]
 for name in names {
-  if (name in ["api", "web"]) && (name matches /^[a-z]+$/) {
+  if (name in allowed) && (name matches /^[a-z]+$/) {
     echo "ok={name}"
   }
 }
@@ -413,7 +414,7 @@ for n in 1..3 {
   if s matches /^item-[0-9][0-9]$/ { echo $s }
 }
 fn valid(name) {
-  return (name in ["api", "web"]) && (name matches /^[a-z]+$/)
+  return ((name == "api") || (name == "web")) && (name matches /^[a-z]+$/)
 }
 for i in 1..2 {
   if valid("api") { echo "{i}:ok" }

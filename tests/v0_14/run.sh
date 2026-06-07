@@ -466,7 +466,8 @@ test "arrays and maps" {
 
 test "missing map key" {
   let ports = { api: 3000 }
-  assert ports.web == 5173
+  let key = "web"
+  assert ports[key] == 5173
 }
 DS
 capture_status collections "$DS" test "$FIX/collections.ds"
