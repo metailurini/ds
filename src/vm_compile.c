@@ -609,6 +609,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             Instr ins = {0};
             ins.op = find_function_meta(p, stmt->as.call_stmt.name) >= 0 ? OP_CALL : OP_STDLIB_CALL;
             ins.span = stmt->span;
+            ins.dst = new_reg(p);
             ins.target = find_function_meta(p, stmt->as.call_stmt.name);
             if (ins.op == OP_STDLIB_CALL) ins.name = ds_str_dup_range(stmt->as.call_stmt.name.data, stmt->as.call_stmt.name.len);
             ins.arg_count = stmt->as.call_stmt.args.len;

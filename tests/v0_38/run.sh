@@ -282,6 +282,20 @@ run_ok debug_return_bytecode "$DS" bytecode "$debug_return"
 assert_contains "$TMP/debug_return_bytecode.out" 'STDLIB_CALL' 'bytecode shows stdlib call for walk helper'
 assert_contains "$TMP/debug_return_bytecode.out" 'FOR_ARRAY' 'bytecode records walk result as array iterable'
 
+debug_all_returns=$(write_fixture debug_all_returns <<'DS'
+let walked = dir.walk("root")
+let walked_required = dir.walk!("root")
+let walked_ext = dir.walk_ext("root", [".c"])
+let walked_ext_required = dir.walk_ext!("root", [".c"])
+DS
+)
+run_ok debug_all_returns_hir "$DS" hir "$debug_all_returns"
+run_ok debug_all_returns_bytecode "$DS" bytecode "$debug_all_returns"
+assert_contains "$TMP/debug_all_returns_bytecode.out" 'dir.walk(' 'bytecode records dir.walk as array-returning stdlib call'
+assert_contains "$TMP/debug_all_returns_bytecode.out" 'dir.walk!(' 'bytecode records dir.walk! as array-returning stdlib call'
+assert_contains "$TMP/debug_all_returns_bytecode.out" 'dir.walk_ext(' 'bytecode records dir.walk_ext as array-returning stdlib call'
+assert_contains "$TMP/debug_all_returns_bytecode.out" 'dir.walk_ext!(' 'bytecode records dir.walk_ext! as array-returning stdlib call'
+
 for item in \
   'walk_none|let files = dir.walk()|helper `dir.walk` expects 1 arguments' \
   'walk_extra|let files = dir.walk("src", ".c")|helper `dir.walk` expects 1 arguments' \
@@ -340,6 +354,17 @@ dirs_not_returned_seed="$SEED/dirs_not_returned"
 mkdir -p "$dirs_not_returned_seed/root/dir_without_files" "$dirs_not_returned_seed/root/dir_with_file"
 touch "$dirs_not_returned_seed/root/file.ds" "$dirs_not_returned_seed/root/dir_with_file/child.ds"
 run_parity_seed walk_dirs_not_returned "$walk_basic" "$dirs_not_returned_seed" $'root/dir_with_file/child.ds\nroot/file.ds\n'
+
+dot_root_seed="$SEED/dot_root"
+mkdir -p "$dot_root_seed/nested" "$dot_root_seed/.hidden"
+touch "$dot_root_seed/top.c" "$dot_root_seed/nested/child.c" "$dot_root_seed/.hidden/secret.c"
+dot_root=$(write_fixture dot_root <<'DS'
+for path_name in dir.walk(".") {
+  echo "{path_name}"
+}
+DS
+)
+run_parity_seed walk_dot_root "$dot_root" "$dot_root_seed" $'./nested/child.c\n./top.c\n'
 
 # 4. Extension filtering.
 walk_c=$(write_fixture walk_c <<'DS'
@@ -541,9 +566,21 @@ if touch "$unicode_seed/root/é.c" "$unicode_seed/root/中.c" 2>/dev/null; then
 else
   pass 'unicode filename preservation skipped because host filesystem rejected fixture names'
 fi
-newline_name=$(printf '%b' "$hostile_seed/root/new\\nline.c")
+
+newline_seed="$SEED/newline"
+mkdir -p "$newline_seed/root"
+newline_name=$(printf '%b' "$newline_seed/root/new\\nline.c")
 if touch "$newline_name" 2>/dev/null; then
-  pass 'newline filename fixture can be created; source-level line-oriented echo comparison is intentionally skipped'
+  newline_side_effect=$(write_fixture newline_side_effect <<'DS'
+for path_name in dir.walk_ext("root", [".c"]) {
+  file.write("marker", path_name)
+}
+DS
+)
+  run_parity_seed newline_name_side_effect "$newline_side_effect" "$newline_seed" ''
+  printf '%b' 'root/new\nline.c' >"$TMP/newline_expected_path.txt"
+  assert_same "$TMP/newline_expected_path.txt" "$TMP/newline_name_side_effect_vm_work/marker" 'VM preserves newline filename bytes in walked string value'
+  assert_same "$TMP/newline_expected_path.txt" "$TMP/newline_name_side_effect_bash_work/marker" 'Bash preserves newline filename bytes in walked string value'
 else
   pass 'newline filename fixture skipped because host filesystem rejected fixture name'
 fi
