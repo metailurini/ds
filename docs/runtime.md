@@ -1066,6 +1066,9 @@ and row-array assignment follows the existing collection copy-by-value rule, so
 later `push` operations on a copied row array do not mutate the original. The VM
 sorts row arrays by the requested string/int/bool field using deterministic,
 stable ordering and returns a sorted copy rather than mutating the receiver.
+The current sort contract is intentionally small-data oriented for analyzer and
+reporting scripts: ordering is stable and parity-safe, but the implementation is
+not a table-scale sorting engine.
 
 Generated Bash remains standalone. It represents row arrays with reserved
 `__ds_` sidecar arrays: one array tracks row positions and element kind, and one
@@ -1119,16 +1122,19 @@ loop, indexing, membership, function-return, and row-array paths as other string
 arrays.
 
 The VM implementation validates that the root is a string naming an existing
-non-symlink directory, traverses with filesystem APIs, skips hidden descendants,
-skips symlink entries, filters exact extensions for `dir.walk_ext*`, and fails
-the bang forms when the final array is empty. Literal invalid extension arrays
-are checker-owned where possible; dynamic invalid roots or extension values are
-runtime diagnostics.
+readable non-symlink directory, traverses with filesystem APIs, skips hidden
+descendants, skips symlink entries, filters exact extensions for
+`dir.walk_ext*`, and fails the bang forms when the final array is empty. Child
+entries that disappear during traversal may be skipped as transient filesystem races.
+Literal invalid extension arrays are checker-owned where possible;
+dynamic invalid roots or extension values are runtime diagnostics.
 
 Emitted Bash remains standalone. Generated scripts include reserved `__ds_`
 helpers only when a walk helper is used. The helpers validate dynamic roots and
-extensions, use deterministic `LC_ALL=C sort -z -u` ordering for walk payloads,
-skip hidden descendants and symlinks, and transport walk results as NUL-delimited
-records before loading them into normal generated-Bash string arrays. This keeps
+extensions, fail invalid or unreadable roots, use deterministic `LC_ALL=C sort
+-z -u` ordering for walk payloads, skip hidden descendants and symlinks, and
+transport walk results as NUL-delimited records before loading them into normal
+generated-Bash string arrays. Children that disappear while `find` traverses may
+be skipped as transient races. This keeps
 spaces, tabs, literal newlines, leading dashes, and shell metacharacters as data
 rather than shell syntax for the scoped walk-helper surface.

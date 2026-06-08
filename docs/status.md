@@ -85,7 +85,7 @@ no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, the
   first-row-push inference, row-array iteration, row-array indexing,
   copy-by-value assignment, function row-array returns, and
   `sort_by(field[, "asc"|"desc"])` with deterministic stable ordering in the
-  VM and emitted Bash;
+  VM and emitted Bash; row sorting is intentionally scoped to small in-memory analyzer/reporting datasets rather than table-scale workloads;
 - scalar reassignment with `name = expr` plus integer `+=`, `-=`, `*=`, `/=`, and
   `%=` updates;
 - integer arithmetic `+`, `-`, `*`, `/`, `%`, `**`, and unary `-` in supported
@@ -406,12 +406,14 @@ expansion, and `~` expansion remain deferred.
 `dir.walk(root)`, `dir.walk!(root)`, `dir.walk_ext(root, extensions)`, and
 `dir.walk_ext!(root, extensions)`. They return normal string arrays of regular
 files under a string root, sorted bytewise and duplicate-free in both VM
-execution and emitted Bash. Hidden descendants and symlink entries are skipped,
-explicitly hidden roots are allowed, extension filters are exact values such as
-`.c` rather than glob patterns such as `*.c`, and bang forms fail before loop
-bodies run when no files match. Hidden traversal flags, symlink following,
-max-depth/min-depth options, metadata rows, streaming iterators, callback
-filters, and broader glob expansion remain deferred.
+execution and emitted Bash. Invalid or unreadable roots fail, hidden descendants
+and symlink entries are skipped, children that disappear during traversal may be
+skipped as transient filesystem races, explicitly hidden roots are allowed,
+extension filters are exact values such as `.c` rather than glob patterns such
+as `*.c`, and bang forms fail before loop bodies run when no files match. Hidden
+traversal flags, symlink following, max-depth/min-depth options, metadata rows,
+streaming iterators, callback filters, and broader glob expansion remain
+deferred.
 
 `v0.32.0` adds the practical regex API on top of the conservative `v0.23.0`
 regex subset. Runtime string patterns are accepted by `matches` and by

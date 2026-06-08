@@ -36,6 +36,154 @@ more splitting. Do not create a new `.c` file merely because a concept appears i
    leave it in the caller and make the function clearer.
 7. Prefer net-neutral consolidation over continued file growth by new leaves.
 
+## H12 — Standard-library helper metadata can drift across layers
+
+**Status:** In progress; canonical descriptor APIs added, keep consolidating
+call-site facts
+**Kind:** metadata duplication / VM-Bash parity debt
+**Files:**
+
+- `src/ds_stdlib.c`, `src/ds_stdlib.h`
+- `src/lower_expr.c`, `src/lower_functions.c`, `src/lower_stmt.c`
+- `src/bash_deps.c`, `src/bash_expr.c`, `src/vm_stdlib.c`
+
+**Problem:**
+
+Standard-library helper facts had started to repeat across lowering, Bash helper
+dependency analysis, Bash expression emission, VM dispatch, and function-return
+inference. The repeated facts included namespace classification, string-helper
+membership, array transport shape, array element kind, Bash helper masks, and
+selected argument validation rules.
+
+**Why this matters:**
+
+Adding one helper could silently change one backend without changing another.
+That is exactly the kind of parity drift the milestone tests are meant to catch,
+but descriptor-level drift should be prevented before it reaches tests.
+
+**Preferred fix:**
+
+Keep `ds_stdlib` as the canonical helper descriptor layer. Prefer exported
+descriptor APIs such as namespace classification, string-helper classification,
+Bash helper-mask lookup, array transport lookup, and array element-kind lookup
+over local helper-name lists. If a new backend needs another helper fact, add it
+to the descriptor API first instead of adding a local string comparison chain.
+
+## H13 — `lower_functions.c` owns too many function-contract concerns
+
+**Status:** Watch; use cohesive extractions only when a cluster grows
+**Kind:** cohesion / readability debt
+**File:** `src/lower_functions.c`
+
+**Problem:**
+
+`lower_functions.c` owns function signature/default validation, scalar parameter
+inference, interpolation/call scanning, return-kind inference, row schema
+inference, and recursion/call-graph checks. Some of that is legitimately
+function-contract logic, but the file is easy to expand with unrelated checks.
+
+**Preferred fix:**
+
+Do not split by line count. Extract only stable, cohesive clusters such as
+signature/default collection, scalar parameter-kind inference, return/row-schema
+inference, or recursion/call-graph checks when one of those clusters needs
+non-trivial new work. Until then, keep section boundaries and naming explicit.
+
+## H14 — Row-array Bash ABI must stay separate from statement dispatch
+
+**Status:** Addressed for the current pass; keep on watch
+**Kind:** backend cohesion debt
+**Files:** `src/bash_stmt.c`, `src/bash_structured.c`
+
+**Problem:**
+
+Row-array materialization, row-field sidecars, row sorting, row copying, and
+row-array return payloads are structured-value ABI concerns. Keeping that logic
+inside `bash_stmt.c` made statement dispatch harder to scan and blurred the
+boundary between statement rendering and structured data transport.
+
+**Preferred fix:**
+
+Keep row-array ABI helpers in `bash_structured.c`. `bash_stmt.c` may call those
+helpers when a statement needs a row-array operation, but it should not own row
+field-array naming, sorting mechanics, or row-array return payload construction.
+
+## H15 — Generated Bash temp cleanup should be centralized
+
+**Status:** In progress; central register/remove helpers added for temp files
+and dirs
+**Kind:** runtime hygiene / data-safety debt
+**Files:** `src/bash_helpers.c`, `src/bash_emit.c`, `src/bash_command.c`,
+`src/bash_expr.c`, `src/bash_stmt.c`, `src/bash_structured.c`
+
+**Problem:**
+
+Several emitted Bash paths used `mktemp` and local cleanup. Normal success paths
+removed files, but an early error could leave temp files or directories behind.
+
+**Preferred fix:**
+
+Use generated temp helpers that register temp paths when they are created and
+remove them either explicitly on success or from a final cleanup trap. New Bash
+emission paths should not call `mktemp` directly unless they also route the path
+through the shared registration helper.
+
+## H16 — Recursive walk runtime error policy must be explicit
+
+**Status:** Documented in runtime/status docs; keep tests aligned where feasible
+**Kind:** runtime parity / edge-case debt
+**Files:** `src/vm_stdlib.c`, `src/bash_helpers.c`, `docs/runtime.md`,
+`docs/status.md`
+
+**Problem:**
+
+Recursive walk helpers have several filesystem edge cases: invalid roots,
+unreadable roots, hidden descendants, symlinks, zero matches for bang helpers,
+and child entries that disappear while traversing. The implementation handled
+most of these, but the intended contract needed to be explicit.
+
+**Preferred fix:**
+
+Document and preserve this policy: invalid/unreadable roots fail; hidden
+descendants and symlink entries are skipped; children that disappear during
+traversal may be skipped as transient races; `dir.walk!` and `dir.walk_ext!`
+fail on zero matches.
+
+## H17 — README/docs status can drift from focused milestone tests
+
+**Status:** Addressed for the v0.38 status line; keep on watch
+**Kind:** documentation accuracy debt
+**Files:** `README.md`, `docs/status.md`
+
+**Problem:**
+
+`README.md` still described v0.38 dedicated tests as intentionally deferred even
+after the dedicated v0.38 test pass had landed.
+
+**Preferred fix:**
+
+Keep milestone status in a compact table or update the long status paragraph as
+part of each completion pass. Documentation should not imply tests are deferred
+after the focused suite has been wired into `make test`.
+
+## H18 — Milestone test harness patterns are repeated
+
+**Status:** Gradual cleanup only
+**Kind:** test maintenance debt
+**Files:** `tests/lib/testlib.sh`, `tests/v0_37/run.sh`, `tests/v0_38/run.sh`
+
+**Problem:**
+
+Recent milestone suites repeat stable harness mechanics: parity seed setup,
+emitted Bash standalone checks, helper duplicate checks, static rejection
+helpers, and host-dependent filesystem skips.
+
+**Preferred fix:**
+
+Move only stable reusable pieces into `tests/lib/testlib.sh`. Do not rewrite all
+milestone tests in one pass, and do not hide milestone intent behind overly
+generic harness abstractions.
+
 ## H1 — Concept micro-files from recent maintenance passes
 
 **Status:** Addressed for one-function recent files; keep watching for new leaves

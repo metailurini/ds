@@ -53,7 +53,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/frontend.h` | lexer/parser public entrypoints and token vectors | no lower/backend APIs |
 | `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract and lowered value-kind labels | backend-neutral only; `ds_lower_value_kind_name()` owns shared lowered-value metadata labels |
 | `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
-| `src/ds_stdlib.h` | stdlib helper metadata and recursive-glob pattern classifier shared by lowerer/VM/Bash | metadata and shared validation helpers, not backend traversal implementation |
+| `src/ds_stdlib.h` | stdlib helper metadata, namespace/classification APIs, Bash dependency masks, array transport/kind facts, and recursive-glob pattern classifier shared by lowerer/VM/Bash | metadata and shared validation helpers, not backend traversal implementation |
 | `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |
 | `src/ds_signal.h` | shared supported-signal names and conventional INT/TERM runtime status metadata | consumed by VM and Bash; lowerer still owns source-level signal legality |
 | `src/ds_checker.h` | checker warning entrypoint for `ds check` | narrow checker façade; no Bash/VM/backend dependency |
@@ -76,7 +76,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/ds_command.c` | command payload lifecycle helpers: clone/free/init for words, stages, redirects, and command payloads | data ownership only; no command-word policy, command-result fields, or pipeline semantics |
 | `src/ds_command_facts.c` | compact policy-neutral command facts: word shape, command-result field descriptors, and pipeline shape/status helpers | shared facts for lowerer, VM, and Bash; no source-language diagnostics or process execution |
 | `src/ds_interpolation.c` | interpolation format-spec parser and kind support table | shared contract for format specs only; lowerer still owns acceptance |
-| `src/ds_stdlib.c` | stdlib helper metadata table and recursive-glob segment validation | canonical helper facts and static/dynamic pattern classification for lowerer/VM/Bash |
+| `src/ds_stdlib.c` | stdlib helper metadata table, helper classification facts, Bash dependency masks, array transport/kind facts, and recursive-glob segment validation | canonical helper facts and static/dynamic pattern classification for lowerer/VM/Bash |
 | `src/ds_signal.c` | shared supported-signal names and conventional INT/TERM runtime status metadata | consumed by VM and Bash; lowerer still owns source-level signal legality |
 
 ### Frontend implementations
@@ -116,13 +116,13 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | `src/bash_emit.c` | standalone script wrapper, prologue, helper emission | consumes shared signal status metadata for cleanup-aware wrappers; artifact assembly only |
 | `src/bash_deps.c` | helper dependency detection from accepted HIR, including expression payloads nested in statement-style user function call arguments | no semantic validation |
-| `src/bash_structured.c` | Bash structured-value ABI names, type-sidecar writes, structured declarations, command-result storage, and structured return payload helpers | no language validity or semantic value-kind ownership |
+| `src/bash_structured.c` | Bash structured-value ABI names, type-sidecar writes, structured declarations, command-result storage, row-array ABI helpers, and structured return payload helpers | no language validity or semantic value-kind ownership |
 | `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
 | `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering and captured pipeline assignment mechanics | consumes validated `DsCommand`; no command semantics ownership |
 | `src/bash_function.c` | Bash function definition emission, parameter/default binding, and user-function call materialization | owns function wrapper shape and nested user-call argument plumbing; body emission delegates back to statement emitter |
 | `src/bash_stmt.c` | Bash rendering for accepted HIR statements, return control flow, handlers, assignment/mutation, and control flow | statement dispatcher; delegates structured payload ABI to `src/bash_structured.c` |
 | `src/bash_quote.c` | Bash quoting and accepted string interpolation rendering | interpolation shape invariants are defensive |
-| `src/bash_helpers.c` | emitted Bash helper implementations, including standalone recursive-glob traversal helpers | runtime/artifact behavior for accepted HIR |
+| `src/bash_helpers.c` | emitted Bash helper implementations, including registered temp cleanup, standalone recursive-glob traversal helpers, and stdlib runtime helpers | runtime/artifact behavior for accepted HIR |
 
 ### VM backend
 
