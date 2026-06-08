@@ -166,7 +166,7 @@ bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsC
     size_t id = e->temp_counter++;
 
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_tmpdir_%zu=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n", id);
+    buf_appendf(&e->out, "__ds_mktemp_dir __ds_tmpdir_%zu 'failed to create command capture temp dir'\n", id);
     emit_indent(&e->out, indent);
     buf_appendf(&e->out, "__ds_stdout_%zu=\"$__ds_tmpdir_%zu/stdout\"\n", id, id);
     emit_indent(&e->out, indent);
@@ -240,6 +240,6 @@ bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsC
     buf_append(&e->out, "fi\n");
 
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "rm -rf \"$__ds_tmpdir_%zu\"\n", id);
+    buf_appendf(&e->out, "__ds_temp_remove \"$__ds_tmpdir_%zu\"\n", id);
     return true;
 }

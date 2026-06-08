@@ -72,6 +72,17 @@ void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *
 void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent);
 bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
 bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
+void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field);
+const DsLowerMapEntry *bash_row_map_entry(const DsLowerExpr *row, DsStr field);
+bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
+bool bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent);
+bool bash_emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl);
+bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, const DsLowerExpr *row, int indent);
+bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *index_expr, const DsLowerRowSchema *schema, int indent, bool local_decl);
+bool bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl);
+bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr *value, const DsLowerRowSchema *schema, int indent, bool local_decl);
+bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr *call, const DsLowerRowSchema *schema, int indent, bool local_decl);
+bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value, const DsLowerRowSchema *schema, DsSpan span, int indent);
 
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_array_elements(BashEmitter *e, const DsLowerExprVec *elements, EmitBuf *out);

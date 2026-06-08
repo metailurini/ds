@@ -56,36 +56,12 @@ static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
     }
 }
 
-static bool str_has_prefix(DsStr text, const char *prefix) {
-    size_t len = strlen(prefix);
-    return text.len >= len && memcmp(text.data, prefix, len) == 0;
-}
-
-static unsigned string_call_helper_mask(DsStr name) {
-    if (str_eq(name, "string.trim")) return DS_BASH_STRING_HELPER_TRIM;
-    if (str_eq(name, "string.upper")) return DS_BASH_STRING_HELPER_UPPER;
-    if (str_eq(name, "string.lower")) return DS_BASH_STRING_HELPER_LOWER;
-    if (str_eq(name, "string.replace")) return DS_BASH_STRING_HELPER_REPLACE;
-    if (str_eq(name, "string.contains")) return DS_BASH_STRING_HELPER_CONTAINS;
-    if (str_eq(name, "string.split")) return DS_BASH_STRING_HELPER_SPLIT;
-    if (str_eq(name, "string.starts_with")) return DS_BASH_STRING_HELPER_STARTS_WITH;
-    if (str_eq(name, "string.ends_with")) return DS_BASH_STRING_HELPER_ENDS_WITH;
-    if (str_eq(name, "string.len")) return DS_BASH_STRING_HELPER_LEN;
-    if (str_eq(name, "string.index_of")) return DS_BASH_STRING_HELPER_INDEX_OF;
-    if (str_eq(name, "string.last_index_of")) return DS_BASH_STRING_HELPER_LAST_INDEX_OF;
-    if (str_eq(name, "string.count")) return DS_BASH_STRING_HELPER_COUNT;
-    if (str_eq(name, "string.char_at")) return DS_BASH_STRING_HELPER_CHAR_AT;
-    if (str_eq(name, "string.slice")) return DS_BASH_STRING_HELPER_SLICE;
-    return 0;
-}
-
 static bool stdlib_call_uses_base_helpers(DsStr name) {
+    DsStdlibNamespace ns = ds_stdlib_namespace(name);
     return ds_stdlib_is_name(name) &&
-           !str_has_prefix(name, "string.") &&
-           !str_eq(name, "regex.match") &&
-           !str_eq(name, "regex.replace") &&
-           !str_eq(name, "glob") &&
-           !str_eq(name, "glob!");
+           ns != DS_STDLIB_NAMESPACE_STRING &&
+           ns != DS_STDLIB_NAMESPACE_REGEX &&
+           !ds_stdlib_is_glob_helper(name);
 }
 
 static unsigned string_literal_helper_mask(DsStr text) {
@@ -235,7 +211,7 @@ static unsigned expr_string_helper_mask(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_STRING:
             return string_literal_helper_mask(expr->as.text);
         case DS_LOWER_EXPR_CALL:
-            mask |= string_call_helper_mask(expr->as.call.name);
+            mask |= ds_stdlib_bash_helper_mask(expr->as.call.name);
             for (size_t i = 0; i < expr->as.call.args.len; i++) mask |= expr_string_helper_mask(expr->as.call.args.items[i]);
             return mask;
         case DS_LOWER_EXPR_FIELD:
@@ -577,7 +553,7 @@ static unsigned stmt_string_helper_mask(const DsLowerStmt *stmt) {
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) mask |= stmt_string_helper_mask(stmt->as.block_stmt.statements.items[i]);
             return mask;
         case DS_LOWER_STMT_CALL:
-            mask |= string_call_helper_mask(stmt->as.call_stmt.name);
+            mask |= ds_stdlib_bash_helper_mask(stmt->as.call_stmt.name);
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) mask |= expr_string_helper_mask(stmt->as.call_stmt.args.items[i]);
             return mask;
         case DS_LOWER_STMT_FOR_ARRAY:

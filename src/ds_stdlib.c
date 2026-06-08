@@ -7,6 +7,11 @@ static bool str_eq(DsStr a, const char *b) {
     return a.len == len && memcmp(a.data, b, len) == 0;
 }
 
+static bool str_has_prefix(DsStr a, const char *prefix) {
+    size_t len = strlen(prefix);
+    return a.len >= len && memcmp(a.data, prefix, len) == 0;
+}
+
 static const DsStdlibHelper HELPERS[] = {
     {"file.exists", "__ds_stdlib_file_exists", 1, 1, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
     {"file.is_file", "__ds_stdlib_file_is_file", 1, 1, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
@@ -58,7 +63,8 @@ const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
 
 bool ds_stdlib_is_namespace(DsStr name) {
     return str_eq(name, "file") || str_eq(name, "dir") || str_eq(name, "path") ||
-           str_eq(name, "cmd") || str_eq(name, "env") || str_eq(name, "regex");
+           str_eq(name, "cmd") || str_eq(name, "env") || str_eq(name, "regex") ||
+           str_eq(name, "string");
 }
 
 bool ds_stdlib_is_name(DsStr name) {
@@ -68,6 +74,91 @@ bool ds_stdlib_is_name(DsStr name) {
 bool ds_stdlib_arity_ok(const DsStdlibHelper *helper, size_t argc) {
     return helper && argc >= helper->min_arity &&
            (helper->max_arity == (size_t)-1 || argc <= helper->max_arity);
+}
+
+DsStdlibNamespace ds_stdlib_namespace(DsStr name) {
+    if (str_has_prefix(name, "file.")) return DS_STDLIB_NAMESPACE_FILE;
+    if (str_has_prefix(name, "dir.")) return DS_STDLIB_NAMESPACE_DIR;
+    if (str_has_prefix(name, "path.")) return DS_STDLIB_NAMESPACE_PATH;
+    if (str_has_prefix(name, "cmd.")) return DS_STDLIB_NAMESPACE_CMD;
+    if (str_has_prefix(name, "env.")) return DS_STDLIB_NAMESPACE_ENV;
+    if (str_has_prefix(name, "regex.")) return DS_STDLIB_NAMESPACE_REGEX;
+    if (str_has_prefix(name, "string.")) return DS_STDLIB_NAMESPACE_STRING;
+    if (str_eq(name, "glob") || str_eq(name, "glob!") || str_eq(name, "lines")) {
+        return DS_STDLIB_NAMESPACE_TOP_LEVEL;
+    }
+    return DS_STDLIB_NAMESPACE_UNKNOWN;
+}
+
+bool ds_stdlib_is_string_helper(DsStr name) {
+    return ds_stdlib_lookup(name) && ds_stdlib_namespace(name) == DS_STDLIB_NAMESPACE_STRING;
+}
+
+bool ds_stdlib_is_glob_helper(DsStr name) {
+    return str_eq(name, "glob") || str_eq(name, "glob!");
+}
+
+bool ds_stdlib_is_dir_walk_helper(DsStr name) {
+    return str_eq(name, "dir.walk") || str_eq(name, "dir.walk!") ||
+           str_eq(name, "dir.walk_ext") || str_eq(name, "dir.walk_ext!");
+}
+
+bool ds_stdlib_is_dir_walk_ext_helper(DsStr name) {
+    return str_eq(name, "dir.walk_ext") || str_eq(name, "dir.walk_ext!");
+}
+
+bool ds_stdlib_arg_expects_int(DsStr name, size_t arg_index) {
+    if (str_eq(name, "string.char_at")) return arg_index == 1;
+    if (str_eq(name, "string.slice")) return arg_index == 1 || arg_index == 2;
+    return false;
+}
+
+bool ds_stdlib_arg_expects_string(DsStr name, size_t arg_index) {
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    if (!helper) return false;
+    if (ds_stdlib_arg_expects_int(name, arg_index)) return false;
+    if (ds_stdlib_is_dir_walk_ext_helper(name) && arg_index == 1) return false;
+    if (ds_stdlib_is_dir_walk_helper(name)) return arg_index == 0;
+    return helper->string_args_only || ds_stdlib_is_string_helper(name);
+}
+
+unsigned ds_stdlib_bash_helper_mask(DsStr name) {
+    if (str_eq(name, "string.trim")) return DS_BASH_STRING_HELPER_TRIM;
+    if (str_eq(name, "string.upper")) return DS_BASH_STRING_HELPER_UPPER;
+    if (str_eq(name, "string.lower")) return DS_BASH_STRING_HELPER_LOWER;
+    if (str_eq(name, "string.replace")) return DS_BASH_STRING_HELPER_REPLACE;
+    if (str_eq(name, "string.contains")) return DS_BASH_STRING_HELPER_CONTAINS;
+    if (str_eq(name, "string.split")) return DS_BASH_STRING_HELPER_SPLIT;
+    if (str_eq(name, "string.starts_with")) return DS_BASH_STRING_HELPER_STARTS_WITH;
+    if (str_eq(name, "string.ends_with")) return DS_BASH_STRING_HELPER_ENDS_WITH;
+    if (str_eq(name, "string.len")) return DS_BASH_STRING_HELPER_LEN;
+    if (str_eq(name, "string.index_of")) return DS_BASH_STRING_HELPER_INDEX_OF;
+    if (str_eq(name, "string.last_index_of")) return DS_BASH_STRING_HELPER_LAST_INDEX_OF;
+    if (str_eq(name, "string.count")) return DS_BASH_STRING_HELPER_COUNT;
+    if (str_eq(name, "string.char_at")) return DS_BASH_STRING_HELPER_CHAR_AT;
+    if (str_eq(name, "string.slice")) return DS_BASH_STRING_HELPER_SLICE;
+    return 0;
+}
+
+DsStdlibArrayTransport ds_stdlib_array_transport(DsStr name) {
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    if (!helper || helper->return_kind != DS_STDLIB_RETURN_ARRAY) {
+        return DS_STDLIB_ARRAY_TRANSPORT_NONE;
+    }
+    if (ds_stdlib_is_dir_walk_helper(name)) return DS_STDLIB_ARRAY_TRANSPORT_NUL_RECORDS;
+    return DS_STDLIB_ARRAY_TRANSPORT_NEWLINE_RECORDS;
+}
+
+bool ds_stdlib_array_uses_nul_records(DsStr name) {
+    return ds_stdlib_array_transport(name) == DS_STDLIB_ARRAY_TRANSPORT_NUL_RECORDS;
+}
+
+DsStdlibArrayElementKind ds_stdlib_array_element_kind(DsStr name) {
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    if (!helper || helper->return_kind != DS_STDLIB_RETURN_ARRAY) {
+        return DS_STDLIB_ARRAY_ELEMENT_UNKNOWN;
+    }
+    return DS_STDLIB_ARRAY_ELEMENT_STRING;
 }
 
 static bool segment_has_recursive_marker(const char *data, size_t len) {

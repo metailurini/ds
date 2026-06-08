@@ -1281,14 +1281,14 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     }
 
     if (helper_is(ins, "cmd.exists") || helper_is(ins, "cmd.require")) return stdlib_cmd(vm, ins, out);
-    if (strncmp(name, "string.", 7) == 0) return string_method(vm, ins, out);
+    if (ds_stdlib_is_string_helper(helper_name)) return string_method(vm, ins, out);
     if (helper_is(ins, "env.get")) return stdlib_env_get(vm, ins, out);
     if (helper_is(ins, "env.set")) return stdlib_env_set(vm, ins);
     if (helper_is(ins, "env.unset")) return stdlib_env_unset(vm, ins);
     if (helper_is(ins, "regex.match")) return stdlib_regex_match(vm, ins, out);
     if (helper_is(ins, "regex.replace")) return stdlib_regex_replace(vm, ins, out);
-    if (helper_is(ins, "glob") || helper_is(ins, "glob!")) return stdlib_glob(vm, ins, out);
-    if (helper_is(ins, "dir.walk") || helper_is(ins, "dir.walk!") || helper_is(ins, "dir.walk_ext") || helper_is(ins, "dir.walk_ext!")) return stdlib_dir_walk(vm, ins, out);
+    if (ds_stdlib_is_glob_helper(helper_name)) return stdlib_glob(vm, ins, out);
+    if (ds_stdlib_is_dir_walk_helper(helper_name)) return stdlib_dir_walk(vm, ins, out);
     if (helper_is(ins, "lines")) return stdlib_lines(vm, ins, out);
 
     ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown standard-library helper `%s` after lowering", name);

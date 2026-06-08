@@ -372,35 +372,15 @@ static void infer_constrain_binding(InferCtx *ctx, InferBinding binding, DsLower
 }
 
 static bool infer_string_helper_name(DsStr name) {
-    return lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") ||
-           lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.replace") ||
-           lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.split") ||
-           lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with") ||
-           lower_str_eq(name, "string.len") || lower_str_eq(name, "string.index_of") ||
-           lower_str_eq(name, "string.last_index_of") || lower_str_eq(name, "string.count") ||
-           lower_str_eq(name, "string.char_at") || lower_str_eq(name, "string.slice");
+    return ds_stdlib_is_string_helper(name);
 }
 
 static bool infer_string_helper_arg_expects_int(DsStr name, size_t arg_index) {
-    if (lower_str_eq(name, "string.char_at")) return arg_index == 1;
-    if (lower_str_eq(name, "string.slice")) return arg_index == 1 || arg_index == 2;
-    return false;
+    return ds_stdlib_arg_expects_int(name, arg_index);
 }
 
 static DsLowerValueKind infer_string_helper_return_kind(DsStr name) {
-    if (lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with")) return DS_LOWER_VALUE_BOOL;
-    if (lower_str_eq(name, "string.len") || lower_str_eq(name, "string.index_of") || lower_str_eq(name, "string.last_index_of") || lower_str_eq(name, "string.count")) return DS_LOWER_VALUE_INT;
-    if (lower_str_eq(name, "string.split")) return DS_LOWER_VALUE_ARRAY;
-    return DS_LOWER_VALUE_STRING;
-}
-
-static bool infer_helper_is_dir_walk(DsStr name) {
-    return lower_str_eq(name, "dir.walk") || lower_str_eq(name, "dir.walk!") ||
-           lower_str_eq(name, "dir.walk_ext") || lower_str_eq(name, "dir.walk_ext!");
-}
-
-static bool infer_helper_is_dir_walk_ext(DsStr name) {
-    return lower_str_eq(name, "dir.walk_ext") || lower_str_eq(name, "dir.walk_ext!");
+    return lower_stdlib_return_value_kind(ds_stdlib_lookup(name));
 }
 
 static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExpr *expr);
@@ -632,9 +612,9 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             }
             if (ds_stdlib_is_name(expr->as.call.name)) {
                 const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
-                if (infer_helper_is_dir_walk(expr->as.call.name)) {
+                if (ds_stdlib_is_dir_walk_helper(expr->as.call.name)) {
                     if (expr->as.call.args.len > 0) infer_constrain_expr(ctx, env, expr->as.call.args.items[0], DS_LOWER_VALUE_STRING, "standard-library helper");
-                    if (infer_helper_is_dir_walk_ext(expr->as.call.name) && expr->as.call.args.len > 1) (void)infer_expr_binding(ctx, env, expr->as.call.args.items[1]);
+                    if (ds_stdlib_is_dir_walk_ext_helper(expr->as.call.name) && expr->as.call.args.len > 1) (void)infer_expr_binding(ctx, env, expr->as.call.args.items[1]);
                 } else {
                     for (size_t i = 0; i < expr->as.call.args.len; i++) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], DS_LOWER_VALUE_STRING, "standard-library helper");
                 }
@@ -663,8 +643,7 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             InferBinding object = infer_expr_binding(ctx, env, expr->as.index.object);
             infer_constrain_expr(ctx, env, expr->as.index.index, DS_LOWER_VALUE_INT, "index expression");
             if (expr->as.index.object && expr->as.index.object->kind == DS_EXPR_CALL &&
-                infer_string_helper_name(expr->as.index.object->as.call.name) &&
-                infer_string_helper_return_kind(expr->as.index.object->as.call.name) == DS_LOWER_VALUE_ARRAY) return infer_kind(DS_LOWER_VALUE_STRING);
+                ds_stdlib_array_element_kind(expr->as.index.object->as.call.name) == DS_STDLIB_ARRAY_ELEMENT_STRING) return infer_kind(DS_LOWER_VALUE_STRING);
             DsLowerValueKind object_kind = DS_LOWER_VALUE_UNKNOWN;
             if (infer_binding_known_kind(ctx, object, &object_kind) && object_kind == DS_LOWER_VALUE_ARRAY) return infer_none();
             return infer_none();

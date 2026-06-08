@@ -18,6 +18,16 @@ static void source_append(char **data, size_t *len, size_t *cap, const char *tex
     (*data)[*len] = '\0';
 }
 
+const char *ds_bash_temp_helpers_source(void) {
+    return
+        "__ds_tmp_paths=()\n"
+        "__ds_temp_register() { __ds_tmp_paths+=(\"$1\"); }\n"
+        "__ds_temp_remove() { local __ds_p=$1 __ds_i; rm -rf \"$__ds_p\" 2>/dev/null || true; for __ds_i in \"${!__ds_tmp_paths[@]}\"; do if [[ \"${__ds_tmp_paths[$__ds_i]:-}\" == \"$__ds_p\" ]]; then unset \"__ds_tmp_paths[$__ds_i]\"; fi; done; }\n"
+        "__ds_temp_cleanup() { local __ds_p; for __ds_p in \"${__ds_tmp_paths[@]}\"; do [[ -n \"$__ds_p\" ]] && rm -rf \"$__ds_p\" 2>/dev/null || true; done; __ds_tmp_paths=(); }\n"
+        "__ds_mktemp_file() { local __ds_var=$1 __ds_msg=$2 __ds_path; __ds_path=$(mktemp) || __ds_error \"$__ds_msg\"; __ds_temp_register \"$__ds_path\"; printf -v \"$__ds_var\" '%s' \"$__ds_path\"; }\n"
+        "__ds_mktemp_dir() { local __ds_var=$1 __ds_msg=$2 __ds_path; __ds_path=$(mktemp -d) || __ds_error \"$__ds_msg\"; __ds_temp_register \"$__ds_path\"; printf -v \"$__ds_var\" '%s' \"$__ds_path\"; }\n\n";
+}
+
 const char *ds_bash_debug_helpers_source(void) {
     return
         "__ds_trace_quote() {\n"
@@ -87,24 +97,24 @@ const char *ds_bash_function_value_capture_helpers_source(void) {
         "  __ds_return_type=\n"
         "  __ds_return_value=\n"
         "  unset -v __ds_return_array __ds_return_elem_type __ds_return_map __ds_return_value_type __ds_return_stdout __ds_return_stderr __ds_return_code __ds_return_status __ds_return_ok __ds_return_failed 2>/dev/null || true\n"
-        "  __ds_cv_tmpdir=$(mktemp -d) || __ds_error 'failed to create function capture temp dir'\n"
+        "  __ds_mktemp_dir __ds_cv_tmpdir 'failed to create function capture temp dir'\n"
         "  __ds_cv_stdout=\"$__ds_cv_tmpdir/stdout\"\n"
         "  __ds_cv_stderr=\"$__ds_cv_tmpdir/stderr\"\n"
         "  set +e\n"
         "  \"$__ds_cv_fn\" \"$@\" >\"$__ds_cv_stdout\" 2>\"$__ds_cv_stderr\"\n"
         "  __ds_cv_code=$?\n"
         "  set -e\n"
-        "  if (( __ds_cv_code != 0 )); then cat \"$__ds_cv_stderr\" >&2; rm -rf \"$__ds_cv_tmpdir\"; exit \"$__ds_cv_code\"; fi\n"
-        "  if [[ -s \"$__ds_cv_stdout\" ]]; then cat \"$__ds_cv_stdout\" >&2; rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'value-returning function produced stdout during expression capture'; fi\n"
-        "  if [[ -z \"$__ds_return_type\" ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'value-returning function did not set an internal return payload'; fi\n"
-        "  case \"$__ds_return_type\" in string|int|bool|null|array|map|command_result) ;; *) rm -rf \"$__ds_cv_tmpdir\"; __ds_error \"invalid internal function return type '$__ds_return_type'\" ;; esac\n"
-        "  if [[ \"$__ds_cv_expected\" != unknown && \"$__ds_cv_expected\" != \"$__ds_return_type\" ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error \"internal function return kind mismatch: got $__ds_return_type but expected $__ds_cv_expected\"; fi\n"
-        "  if [[ \"$__ds_return_type\" == int ]]; then __ds_int_check \"$__ds_return_value\" || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal int function return payload'; }; fi\n"
-        "  if [[ \"$__ds_return_type\" == bool && \"$__ds_return_value\" != true && \"$__ds_return_value\" != false ]]; then rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal bool function return payload'; fi\n"
-        "  if [[ \"$__ds_return_type\" == array ]]; then declare -p __ds_return_array >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal array function return payload'; }; declare -p __ds_return_elem_type >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal array element-type function return payload'; }; fi\n"
-        "  if [[ \"$__ds_return_type\" == map ]]; then declare -p __ds_return_map >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal map function return payload'; }; declare -p __ds_return_value_type >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal map value-type function return payload'; }; fi\n"
-        "  if [[ \"$__ds_return_type\" == command_result ]]; then declare -p __ds_return_stdout __ds_return_stderr __ds_return_code __ds_return_ok __ds_return_failed >/dev/null 2>&1 || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result function return payload'; }; __ds_int_check \"$__ds_return_code\" || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result status function return payload'; }; [[ \"$__ds_return_ok\" == true || \"$__ds_return_ok\" == false ]] || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result ok function return payload'; }; [[ \"$__ds_return_failed\" == true || \"$__ds_return_failed\" == false ]] || { rm -rf \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result failed function return payload'; }; fi\n"
-        "  rm -rf \"$__ds_cv_tmpdir\"\n"
+        "  if (( __ds_cv_code != 0 )); then cat \"$__ds_cv_stderr\" >&2; __ds_temp_remove \"$__ds_cv_tmpdir\"; exit \"$__ds_cv_code\"; fi\n"
+        "  if [[ -s \"$__ds_cv_stdout\" ]]; then cat \"$__ds_cv_stdout\" >&2; __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'value-returning function produced stdout during expression capture'; fi\n"
+        "  if [[ -z \"$__ds_return_type\" ]]; then __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'value-returning function did not set an internal return payload'; fi\n"
+        "  case \"$__ds_return_type\" in string|int|bool|null|array|map|command_result) ;; *) __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error \"invalid internal function return type '$__ds_return_type'\" ;; esac\n"
+        "  if [[ \"$__ds_cv_expected\" != unknown && \"$__ds_cv_expected\" != \"$__ds_return_type\" ]]; then __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error \"internal function return kind mismatch: got $__ds_return_type but expected $__ds_cv_expected\"; fi\n"
+        "  if [[ \"$__ds_return_type\" == int ]]; then __ds_int_check \"$__ds_return_value\" || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal int function return payload'; }; fi\n"
+        "  if [[ \"$__ds_return_type\" == bool && \"$__ds_return_value\" != true && \"$__ds_return_value\" != false ]]; then __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal bool function return payload'; fi\n"
+        "  if [[ \"$__ds_return_type\" == array ]]; then declare -p __ds_return_array >/dev/null 2>&1 || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal array function return payload'; }; declare -p __ds_return_elem_type >/dev/null 2>&1 || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal array element-type function return payload'; }; fi\n"
+        "  if [[ \"$__ds_return_type\" == map ]]; then declare -p __ds_return_map >/dev/null 2>&1 || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal map function return payload'; }; declare -p __ds_return_value_type >/dev/null 2>&1 || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal map value-type function return payload'; }; fi\n"
+        "  if [[ \"$__ds_return_type\" == command_result ]]; then declare -p __ds_return_stdout __ds_return_stderr __ds_return_code __ds_return_ok __ds_return_failed >/dev/null 2>&1 || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result function return payload'; }; __ds_int_check \"$__ds_return_code\" || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result status function return payload'; }; [[ \"$__ds_return_ok\" == true || \"$__ds_return_ok\" == false ]] || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result ok function return payload'; }; [[ \"$__ds_return_failed\" == true || \"$__ds_return_failed\" == false ]] || { __ds_temp_remove \"$__ds_cv_tmpdir\"; __ds_error 'invalid internal command-result failed function return payload'; }; fi\n"
+        "  __ds_temp_remove \"$__ds_cv_tmpdir\"\n"
         "}\n";
 }
 
@@ -137,7 +147,7 @@ const char *ds_bash_command_result_helpers_source(void) {
         "  local __ds_loc=$1\n"
         "  shift\n"
         "  local __ds_tmpdir\n"
-        "  __ds_tmpdir=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'\n"
+        "  __ds_mktemp_dir __ds_tmpdir 'failed to create command capture temp dir'\n"
         "  local __ds_stdout=\"$__ds_tmpdir/stdout\"\n"
         "  local __ds_stderr=\"$__ds_tmpdir/stderr\"\n"
         "  set +e\n"
@@ -159,7 +169,7 @@ const char *ds_bash_command_result_helpers_source(void) {
         "    printf -v \"${__ds_prefix}_ok\" '%s' false\n"
         "    printf -v \"${__ds_prefix}_failed\" '%s' true\n"
         "  fi\n"
-        "  rm -rf \"$__ds_tmpdir\"\n"
+        "  __ds_temp_remove \"$__ds_tmpdir\"\n"
         "}\n\n";
 }
 
@@ -317,7 +327,7 @@ const char *ds_bash_stdlib_helpers_source(void) {
     source_append(&data, &len, &cap, "__ds_stdlib_path_ext() { local b=\"${1##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then printf ''; else printf '%s' \".${b##*.}\"; fi; }\n");
     source_append(&data, &len, &cap, "__ds_walk_ext_valid() { local e=\"$1\"; [[ -n \"$e\" ]] || __ds_error 'dir.walk_ext expects extensions to be non-empty and start with `.`'; if [[ \"$e\" != .* ]]; then if [[ \"$e\" == \\*.* ]]; then __ds_error \"dir.walk_ext expects extensions such as '.c', not glob patterns such as '$e'\"; else __ds_error \"dir.walk_ext expects extensions to start with '.': '$e'\"; fi; fi; [[ \"$e\" != */* ]] || __ds_error \"dir.walk_ext expects extensions not to contain '/': '$e'\"; }\n");
     source_append(&data, &len, &cap, "__ds_walk_ext_match() { local p=\"$1\" e b ext; shift; b=\"${p##*/}\"; if [[ \"$b\" == .* || \"$b\" != *.* ]]; then return 1; fi; ext=\".${b##*.}\"; for e in \"$@\"; do [[ \"$ext\" == \"$e\" ]] && return 0; done; return 1; }\n");
-    source_append(&data, &len, &cap, "__ds_walk_emit() { local helper=\"$1\" root=\"$2\" required=\"$3\" with_ext=\"$4\" p out=() e find_root strip_dot=false tmp; shift 4; [[ -d \"$root\" && ! -L \"$root\" ]] || __ds_error \"$helper root '$root' is not an existing directory\"; if [[ \"$with_ext\" == true ]]; then (( $# > 0 )) || __ds_error \"$helper expects a non-empty extension array\"; for e in \"$@\"; do __ds_walk_ext_valid \"$e\"; done; fi; find_root=\"$root\"; if [[ \"$root\" == -* ]]; then find_root=\"./$root\"; strip_dot=true; fi; tmp=$(mktemp) || __ds_error \"$helper failed to create walk temp file\"; if ! find -P \"$find_root\" -mindepth 1 \\( -name '.*' -prune -o -type f -print0 \\) | LC_ALL=C sort -z -u >\"$tmp\"; then rm -f \"$tmp\"; __ds_error \"$helper failed to walk root '$root'\"; fi; while IFS= read -r -d '' p; do if [[ \"$strip_dot\" == true ]]; then p=\"${p#./}\"; fi; if [[ \"$with_ext\" == true ]]; then __ds_walk_ext_match \"$p\" \"$@\" || continue; fi; out+=(\"$p\"); done <\"$tmp\"; rm -f \"$tmp\"; if [[ \"$required\" == true && ${#out[@]} -eq 0 ]]; then __ds_error \"$helper matched no files\"; fi; if (( ${#out[@]} > 0 )); then printf '%s\\0' \"${out[@]}\"; fi; }\n");
+    source_append(&data, &len, &cap, "__ds_walk_emit() { local helper=\"$1\" root=\"$2\" required=\"$3\" with_ext=\"$4\" p out=() e find_root strip_dot=false tmp; shift 4; [[ -d \"$root\" && ! -L \"$root\" ]] || __ds_error \"$helper root '$root' is not an existing directory\"; if [[ \"$with_ext\" == true ]]; then (( $# > 0 )) || __ds_error \"$helper expects a non-empty extension array\"; for e in \"$@\"; do __ds_walk_ext_valid \"$e\"; done; fi; find_root=\"$root\"; if [[ \"$root\" == -* ]]; then find_root=\"./$root\"; strip_dot=true; fi; __ds_mktemp_file tmp \"$helper failed to create walk temp file\"; if ! find -P \"$find_root\" -mindepth 1 \\( -name '.*' -prune -o -type f -print0 \\) | LC_ALL=C sort -z -u >\"$tmp\"; then __ds_temp_remove \"$tmp\"; __ds_error \"$helper failed to walk root '$root'\"; fi; while IFS= read -r -d '' p; do if [[ \"$strip_dot\" == true ]]; then p=\"${p#./}\"; fi; if [[ \"$with_ext\" == true ]]; then __ds_walk_ext_match \"$p\" \"$@\" || continue; fi; out+=(\"$p\"); done <\"$tmp\"; __ds_temp_remove \"$tmp\"; if [[ \"$required\" == true && ${#out[@]} -eq 0 ]]; then __ds_error \"$helper matched no files\"; fi; if (( ${#out[@]} > 0 )); then printf '%s\\0' \"${out[@]}\"; fi; }\n");
     source_append(&data, &len, &cap, "__ds_stdlib_dir_walk() { __ds_walk_emit dir.walk \"$1\" false false; }\n");
     source_append(&data, &len, &cap, "__ds_stdlib_dir_walk_required() { __ds_walk_emit 'dir.walk!' \"$1\" true false; }\n");
     source_append(&data, &len, &cap, "__ds_stdlib_dir_walk_ext() { local root=\"$1\"; shift; __ds_walk_emit dir.walk_ext \"$root\" false true \"$@\"; }\n");
@@ -372,17 +382,17 @@ const char *ds_bash_recursive_glob_helpers_source(void) {
         "  __ds_glob_validate_recursive \"$p\"\n"
         "  pre=$(__ds_glob_prefix_for_recursive \"$p\"); suf=$(__ds_glob_suffix_for_recursive \"$p\"); bp=$(__ds_glob_base_pattern \"$pre\")\n"
         "  [[ -n \"$pre\" ]] || strip=true\n"
-        "  bt=$(mktemp) || __ds_error 'failed to create recursive glob temp file'\n"
-        "  dt=$(mktemp) || { rm -f \"$bt\"; __ds_error 'failed to create recursive glob temp file'; }\n"
-        "  de=$(mktemp) || { rm -f \"$bt\" \"$dt\"; __ds_error 'failed to create recursive glob temp file'; }\n"
-        "  mt=$(mktemp) || { rm -f \"$bt\" \"$dt\" \"$de\"; __ds_error 'failed to create recursive glob temp file'; }\n"
+        "  __ds_mktemp_file bt 'failed to create recursive glob temp file'\n"
+        "  __ds_mktemp_file dt 'failed to create recursive glob temp file'\n"
+        "  __ds_mktemp_file de 'failed to create recursive glob temp file'\n"
+        "  __ds_mktemp_file mt 'failed to create recursive glob temp file'\n"
         "  { compgen -G \"$bp\" || true; } >\"$bt\"\n"
         "  while IFS= read -r b; do\n"
         "    local sm=\"$strip\"\n"
         "    if [[ \"$b\" == -* ]]; then b=\"./$b\"; sm=true; fi\n"
         "    [[ -d \"$b\" && ! -L \"$b\" ]] || continue\n"
         "    if ! __ds_glob_recursive_dirs \"$b\" >\"$dt\" 2>\"$de\"; then\n"
-        "      IFS= read -r m <\"$de\" || true; rm -f \"$bt\" \"$dt\" \"$de\" \"$mt\"; __ds_error \"failed to traverse recursive glob directory '$b'${m:+: $m}\"\n"
+        "      IFS= read -r m <\"$de\" || true; __ds_temp_remove \"$bt\"; __ds_temp_remove \"$dt\"; __ds_temp_remove \"$de\"; __ds_temp_remove \"$mt\"; __ds_error \"failed to traverse recursive glob directory '$b'${m:+: $m}\"\n"
         "    fi\n"
         "    while IFS= read -r d; do\n"
         "      if [[ -z \"$suf\" ]]; then if [[ \"$sm\" == true && \"$d\" == ./* ]]; then e=$(__ds_glob_esc \"${d#./}\"); else e=$(__ds_glob_esc \"$d\"); fi; gp=\"$e\"\n"
@@ -394,7 +404,7 @@ const char *ds_bash_recursive_glob_helpers_source(void) {
         "    done <\"$dt\"\n"
         "  done <\"$bt\"\n"
         "  LC_ALL=C sort -u \"$mt\"\n"
-        "  rm -f \"$bt\" \"$dt\" \"$de\" \"$mt\"\n"
+        "  __ds_temp_remove \"$bt\"; __ds_temp_remove \"$dt\"; __ds_temp_remove \"$de\"; __ds_temp_remove \"$mt\"\n"
         "}\n"
         "__ds_stdlib_glob(){ if [[ -z \"$1\" ]]; then return 0; fi; if __ds_glob_has_recursive \"$1\"; then __ds_glob_recursive \"$1\"; else { compgen -G \"$1\" || true; } | LC_ALL=C sort -u; fi; }\n"
         "__ds_stdlib_glob_required(){ local out; out=$(__ds_stdlib_glob \"$1\"); [[ -n \"$out\" ]] || __ds_error \"required glob '$1' had no matches\"; printf '%s\n' \"$out\"; }\n"

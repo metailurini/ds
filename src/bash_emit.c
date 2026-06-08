@@ -189,6 +189,14 @@ static void emit_stdlib_helpers(BashEmitter *e) {
     buf_append(&e->out, ds_bash_stdlib_helpers_source());
 }
 
+static void emit_temp_helpers(BashEmitter *e) {
+    buf_append(&e->out, ds_bash_temp_helpers_source());
+}
+
+static void emit_plain_temp_cleanup_trap(BashEmitter *e) {
+    buf_append(&e->out, "trap '__ds_rc=$?; __ds_temp_cleanup; exit \"$__ds_rc\"' EXIT\n\n");
+}
+
 static void emit_string_helpers(BashEmitter *e, unsigned helper_mask) {
     buf_append(&e->out, ds_bash_string_helpers_source(helper_mask));
 }
@@ -254,8 +262,8 @@ static void emit_cleanup_helpers(BashEmitter *e) {
     buf_append(&e->out, "__ds_control_fail() { local __ds_loc=$1; shift; local __ds_msg=\"$*\"; if [[ -n \"$__ds_msg\" ]]; then echo \"$__ds_loc: error: $__ds_msg\" >&2; else echo \"$__ds_loc: error: fail\" >&2; fi; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; }\n");
     buf_append(&e->out, "__ds_control_exit() { local __ds_loc=$1; shift; if (( $# != 1 )); then echo \"$__ds_loc: error: `exit` expects exactly one integer code\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; fi; if [[ ! \"$1\" =~ ^[0-9]+$ ]] || (( $1 < 0 || $1 > 255 )); then echo \"$__ds_loc: error: `exit` code must be an integer from 0 to 255\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; fi; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then __ds_handler_exit_requested=true; return \"$1\"; fi; exit \"$1\"; }\n");
     buf_append(&e->out, "__ds_run_stack_lifo() { local __ds_arr=$1 __ds_cleanup_stack_index __ds_cleanup_stack_fn __ds_code __ds_status=0; __ds_stack_exit_requested=false; __ds_stack_status=0; eval \"__ds_cleanup_stack_index=\\${#${__ds_arr}[@]}\"; while ((__ds_cleanup_stack_index > 0)); do __ds_cleanup_stack_index=$((__ds_cleanup_stack_index - 1)); eval \"__ds_cleanup_stack_fn=\\${${__ds_arr}[__ds_cleanup_stack_index]}\"; __ds_handler_exit_requested=false; set +e; \"$__ds_cleanup_stack_fn\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]]; then __ds_stack_exit_requested=true; __ds_status=$__ds_code; elif (( __ds_code != 0 )); then __ds_status=$__ds_code; fi; done; __ds_stack_status=$__ds_status; return \"$__ds_status\"; }\n");
-    buf_append(&e->out, "__ds_run_cleanup() { local __ds_rc=${1:-0} __ds_code; if $__ds_cleanup_running; then exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then __ds_handler_exit_requested=false; set +e; \"$__ds_trap_EXIT\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_code; fi; fi; __ds_run_stack_lifo __ds_defer_EXIT; __ds_code=$?; if [[ \"$__ds_stack_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_stack_status; fi; exit \"$__ds_rc\"; }\n");
-    buf_append(&e->out, "__ds_run_signal() { local __ds_sig=$1 __ds_rc=$2 __ds_trap __ds_stack __ds_code; if [[ -n \"${__ds_foreground_pid:-}\" ]]; then kill -\"$__ds_sig\" \"-$__ds_foreground_pid\" 2>/dev/null || kill -\"$__ds_sig\" \"$__ds_foreground_pid\" 2>/dev/null || true; fi; __ds_trap=__ds_trap_${__ds_sig}; __ds_stack=__ds_defer_${__ds_sig}; if $__ds_cleanup_running; then exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; local __ds_fn=\"${!__ds_trap:-}\"; if [[ -n \"$__ds_fn\" ]]; then __ds_handler_exit_requested=false; set +e; \"$__ds_fn\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_code; fi; fi; __ds_run_stack_lifo \"$__ds_stack\"; __ds_code=$?; if [[ \"$__ds_stack_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_stack_status; fi; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then __ds_handler_exit_requested=false; set +e; \"$__ds_trap_EXIT\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_code; fi; fi; __ds_run_stack_lifo __ds_defer_EXIT; __ds_code=$?; if [[ \"$__ds_stack_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_stack_status; fi; exit \"$__ds_rc\"; }\n");
+    buf_append(&e->out, "__ds_run_cleanup() { local __ds_rc=${1:-0} __ds_code; if $__ds_cleanup_running; then __ds_temp_cleanup; exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then __ds_handler_exit_requested=false; set +e; \"$__ds_trap_EXIT\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_code; fi; fi; __ds_run_stack_lifo __ds_defer_EXIT; __ds_code=$?; if [[ \"$__ds_stack_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_stack_status; fi; __ds_temp_cleanup; exit \"$__ds_rc\"; }\n");
+    buf_append(&e->out, "__ds_run_signal() { local __ds_sig=$1 __ds_rc=$2 __ds_trap __ds_stack __ds_code; if [[ -n \"${__ds_foreground_pid:-}\" ]]; then kill -\"$__ds_sig\" \"-$__ds_foreground_pid\" 2>/dev/null || kill -\"$__ds_sig\" \"$__ds_foreground_pid\" 2>/dev/null || true; fi; __ds_trap=__ds_trap_${__ds_sig}; __ds_stack=__ds_defer_${__ds_sig}; if $__ds_cleanup_running; then __ds_temp_cleanup; exit \"$__ds_rc\"; fi; __ds_cleanup_running=true; trap - EXIT INT TERM; local __ds_fn=\"${!__ds_trap:-}\"; if [[ -n \"$__ds_fn\" ]]; then __ds_handler_exit_requested=false; set +e; \"$__ds_fn\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_code; fi; fi; __ds_run_stack_lifo \"$__ds_stack\"; __ds_code=$?; if [[ \"$__ds_stack_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_stack_status; fi; if [[ -n \"${__ds_trap_EXIT:-}\" ]]; then __ds_handler_exit_requested=false; set +e; \"$__ds_trap_EXIT\"; __ds_code=$?; set -e; if [[ \"$__ds_handler_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_code; fi; fi; __ds_run_stack_lifo __ds_defer_EXIT; __ds_code=$?; if [[ \"$__ds_stack_exit_requested\" == true ]] || (( __ds_code != 0 )); then __ds_rc=$__ds_stack_status; fi; __ds_temp_cleanup; exit \"$__ds_rc\"; }\n");
     /*
      * Direct command/pipeline helpers are Bash runtime mechanics for accepted
      * HIR. They preserve the VM cleanup contract: classify INT/TERM foreground
@@ -298,6 +306,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_stdlib = program_uses_stdlib(lowered);
     bool needs_stdlib_capture = program_uses_stdlib_capture(lowered);
     unsigned string_helper_mask = program_string_helper_mask(lowered);
+    bool needs_string_array_capture = (string_helper_mask & DS_BASH_STRING_HELPER_SPLIT) != 0;
     bool needs_glob_helpers = program_uses_glob_helpers(lowered);
     bool needs_recursive_glob_helpers = program_uses_recursive_glob_helpers(lowered);
     bool needs_regex_helpers = program_uses_regex_base_helpers(lowered);
@@ -309,6 +318,9 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_cleanup_helpers = program_uses_handlers(lowered);
     bool needs_signal_handlers = program_uses_signal_handlers(lowered);
     bool needs_control_helpers = program_uses_control_commands(lowered);
+    bool needs_temp_helpers = needs_function_value_helpers || program_uses_run(lowered) ||
+                              needs_collection_helpers || needs_stdlib || needs_glob_helpers ||
+                              needs_string_array_capture || program_uses_membership(lowered) || needs_cleanup_helpers;
     unsigned string_helpers_needing_error = DS_BASH_STRING_HELPER_REPLACE |
                                             DS_BASH_STRING_HELPER_SPLIT |
                                             DS_BASH_STRING_HELPER_CHAR_AT |
@@ -316,6 +328,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers ||
                               program_uses_run(lowered) || needs_collection_helpers || needs_stdlib ||
                               needs_glob_helpers || needs_regex_helpers ||
+                              needs_temp_helpers ||
                               ((string_helper_mask & string_helpers_needing_error) != 0);
     e.has_cleanup_helpers = needs_cleanup_helpers;
     e.has_signal_handlers = needs_signal_handlers;
@@ -339,11 +352,13 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
 
     if (needs_error_helper) emit_error_helper(&e);
     emit_script_args(&e, lowered);
+    if (needs_temp_helpers) emit_temp_helpers(&e);
     if (needs_int_helpers) emit_int_helpers(&e);
     if (needs_function_value_helpers) emit_function_value_helpers(&e);
     if (needs_debug) emit_debug_helpers(&e);
     if (needs_cleanup_helpers) emit_cleanup_helpers(&e);
     else {
+        if (needs_temp_helpers) emit_plain_temp_cleanup_trap(&e);
         if (needs_debug) emit_plain_command_fail_helper(&e);
         if (needs_control_helpers) emit_plain_control_helpers(&e);
     }

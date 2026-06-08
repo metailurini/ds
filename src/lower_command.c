@@ -437,6 +437,17 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
             ds_diag_error(lower->diag, field_span, "expected field name after `.`");
             return false;
         }
+        if (name.len == 6 && memcmp(name.data, "string", 6) == 0) {
+            DsStr member = field;
+            for (size_t j = 0; j < member.len; j++) {
+                if (member.data[j] == '(') {
+                    member.len = j;
+                    break;
+                }
+            }
+            ds_diag_error(lower->diag, field_span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
+            return false;
+        }
         if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
             if (!is_env_name_text(field)) {
                 ds_diag_error(lower->diag, field_span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);

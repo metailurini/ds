@@ -48,400 +48,6 @@ static bool emit_regex_match_map_call(BashEmitter *e, DsStr name, const DsLowerE
     return true;
 }
 
-static void emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
-    buf_append(out, "__ds_row_");
-    buf_append_len(out, array_name.data, array_name.len);
-    buf_append(out, "_");
-    static const char hex[] = "0123456789abcdef";
-    for (size_t i = 0; i < field.len; i++) {
-        unsigned char c = (unsigned char)field.data[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-            buf_append_len(out, (const char *)&field.data[i], 1);
-        } else {
-            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
-            buf_append(out, esc);
-        }
-    }
-}
-
-static void emit_return_row_field_array_name(EmitBuf *out, DsStr field) {
-    buf_append(out, "__ds_return_row_");
-    static const char hex[] = "0123456789abcdef";
-    for (size_t i = 0; i < field.len; i++) {
-        unsigned char c = (unsigned char)field.data[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-            buf_append_len(out, (const char *)&field.data[i], 1);
-        } else {
-            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
-            buf_append(out, esc);
-        }
-    }
-}
-
-static bool emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
-static bool emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl);
-static bool emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr *value, const DsLowerRowSchema *schema, int indent, bool local_decl);
-static bool emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr *call, const DsLowerRowSchema *schema, int indent, bool local_decl);
-
-static bool emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value, const DsLowerRowSchema *schema, DsSpan span, int indent) {
-    if (!value) return false;
-    char temp_buf[64];
-    DsStr source = {0};
-    if (value->kind == DS_LOWER_EXPR_IDENT) {
-        source = value->as.text;
-    } else {
-        bash_temp_ds_name(temp_buf, sizeof(temp_buf), "return_rows", e->temp_counter++);
-        source = (DsStr){temp_buf, strlen(temp_buf)};
-        if (value->kind == DS_LOWER_EXPR_ARRAY) {
-            if (!emit_row_array_literal(e, source, value, schema, indent, true)) return false;
-        } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && str_eq(value->as.call.name, "rowarray.sort_by")) {
-            if (!emit_row_array_sort_call(e, source, value, schema, indent, true)) return false;
-        } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && value->as.call.is_user_function) {
-            if (!emit_row_array_decls(e, source, schema, indent, true)) return false;
-            if (!bash_emit_user_function_value_call_into(e, source, value, indent)) return false;
-        } else {
-            ds_diag_error(e->diag, span, "internal Bash invariant failed: unsupported row-array return expression after lowering");
-            return false;
-        }
-    }
-    DsLowerExpr source_expr;
-    memset(&source_expr, 0, sizeof(source_expr));
-    source_expr.kind = DS_LOWER_EXPR_IDENT;
-    source_expr.span = value->span;
-    source_expr.as.text = source;
-    if (!bash_emit_array_return_payload(e, &source_expr, span, indent)) return false;
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "declare -ga ");
-        emit_return_row_field_array_name(&e->out, schema->items[i].name);
-        buf_append(&e->out, "=(\"${");
-        emit_row_field_array_name(&e->out, source, schema->items[i].name);
-        buf_append(&e->out, "[@]}\")\n");
-    }
-    return true;
-}
-
-static const DsLowerMapEntry *row_map_entry(const DsLowerExpr *row, DsStr field) {
-    if (!row || row->kind != DS_LOWER_EXPR_MAP) return NULL;
-    for (size_t i = 0; i < row->as.map.entries.len; i++) {
-        const DsLowerMapEntry *entry = &row->as.map.entries.items[i];
-        if (entry->key.len == field.len && memcmp(entry->key.data, field.data, field.len) == 0) return entry;
-    }
-    return NULL;
-}
-
-static bool emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, "=()\n");
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
-    bash_emit_elem_type_var_name(&e->out, name);
-    buf_append(&e->out, "=()\n");
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
-        emit_row_field_array_name(&e->out, name, schema->items[i].name);
-        buf_append(&e->out, "=()\n");
-    }
-    return true;
-}
-
-static void emit_row_map_field_ref(EmitBuf *out, DsStr row_name, DsStr field) {
-    buf_append(out, "${");
-    emit_var_name(out, row_name);
-    buf_append(out, "[");
-    bash_single_quote(out, field.data, field.len);
-    buf_append(out, "]}");
-}
-
-static bool emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent) {
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        const DsLowerRowField *field = &schema->items[i];
-        if (!is_safe_identifier(field->name)) continue;
-        emit_indent(&e->out, indent);
-        emit_var_name(&e->out, name);
-        buf_append(&e->out, "_");
-        buf_append_len(&e->out, field->name.data, field->name.len);
-        buf_append(&e->out, "=\"");
-        emit_row_map_field_ref(&e->out, name, field->name);
-        buf_append(&e->out, "\"\n");
-    }
-    return true;
-}
-
-static bool emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, const DsLowerExpr *row, int indent) {
-    if (e->function_depth > 0) {
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "local -p ");
-        bash_emit_elem_type_var_name(&e->out, name);
-        buf_append(&e->out, " >/dev/null 2>&1 || local -a ");
-        bash_emit_elem_type_var_name(&e->out, name);
-        buf_append(&e->out, "=()\n");
-        for (size_t i = 0; schema && i < schema->len; i++) {
-            emit_indent(&e->out, indent);
-            buf_append(&e->out, "local -p ");
-            emit_row_field_array_name(&e->out, name, schema->items[i].name);
-            buf_append(&e->out, " >/dev/null 2>&1 || local -a ");
-            emit_row_field_array_name(&e->out, name, schema->items[i].name);
-            buf_append(&e->out, "=()\n");
-        }
-    }
-    emit_indent(&e->out, indent);
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, "+=(\"${#");
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, "[@]}\")\n");
-    emit_indent(&e->out, indent);
-    bash_emit_elem_type_var_name(&e->out, name);
-    buf_append(&e->out, "+=(\"map\")\n");
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        emit_indent(&e->out, indent);
-        emit_row_field_array_name(&e->out, name, schema->items[i].name);
-        buf_append(&e->out, "+=(");
-        if (row && row->kind == DS_LOWER_EXPR_MAP) {
-            const DsLowerMapEntry *entry = row_map_entry(row, schema->items[i].name);
-            if (!entry) {
-                ds_diag_error(e->diag, row ? row->span : (DsSpan){0}, "internal Bash invariant failed: row literal missing schema field");
-                return false;
-            }
-            if (!emit_value_expr(e, entry->value, &e->out)) return false;
-        } else if (row && row->kind == DS_LOWER_EXPR_IDENT) {
-            buf_append(&e->out, "\"");
-            emit_row_map_field_ref(&e->out, row->as.text, schema->items[i].name);
-            buf_append(&e->out, "\"");
-        } else {
-            ds_diag_error(e->diag, row ? row->span : (DsSpan){0}, "internal Bash invariant failed: row-array literal elements should be row literals or named rows after lowering");
-            return false;
-        }
-        buf_append(&e->out, ")\n");
-    }
-    return true;
-}
-
-static bool emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!emit_row_array_decls(e, name, schema, indent, local_decl)) return false;
-    for (size_t i = 0; array && i < array->as.array.elements.len; i++) {
-        if (!emit_row_array_push_literal(e, name, schema, array->as.array.elements.items[i], indent)) return false;
-    }
-    return true;
-}
-
-static bool emit_row_index_arg(BashEmitter *e, const DsLowerExpr *index, EmitBuf *out) {
-    if (index->kind == DS_LOWER_EXPR_INT) {
-        buf_append_len(out, index->as.text.data, index->as.text.len);
-        return true;
-    }
-    if (index->kind == DS_LOWER_EXPR_IDENT) {
-        buf_append(out, "\"$");
-        emit_var_name(out, index->as.text);
-        buf_append(out, "\"");
-        return true;
-    }
-    ds_diag_error(e->diag, index->span, "internal Bash invariant failed: row-array index should be a literal or variable after lowering");
-    return false;
-}
-
-static bool emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *index_expr, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!index_expr || index_expr->kind != DS_LOWER_EXPR_INDEX || !index_expr->as.index.returns_row ||
-        !index_expr->as.index.object || index_expr->as.index.object->kind != DS_LOWER_EXPR_IDENT) return false;
-    DsStr src = index_expr->as.index.object->as.text;
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
-    emit_var_name(&e->out, dest);
-    buf_append(&e->out, "=()\n");
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
-    bash_emit_map_value_type_var_name(&e->out, dest);
-    buf_append(&e->out, "=()\n");
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        const DsLowerRowField *field = &schema->items[i];
-        emit_indent(&e->out, indent);
-        emit_var_name(&e->out, dest);
-        buf_append(&e->out, "[");
-        bash_single_quote(&e->out, field->name.data, field->name.len);
-        buf_append(&e->out, "]=\"$( __ds_array_get ");
-        emit_row_field_array_name(&e->out, src, field->name);
-        buf_append(&e->out, " ");
-        if (!emit_row_index_arg(e, index_expr->as.index.index, &e->out)) return false;
-        buf_append(&e->out, " )\"\n");
-        emit_indent(&e->out, indent);
-        bash_emit_map_value_type_var_name(&e->out, dest);
-        buf_append(&e->out, "[");
-        bash_single_quote(&e->out, field->name.data, field->name.len);
-        buf_append(&e->out, "]=");
-        bash_single_quote(&e->out, ds_lower_value_kind_name(field->kind), strlen(ds_lower_value_kind_name(field->kind)));
-        buf_append(&e->out, "\n");
-        if (is_safe_identifier(field->name)) {
-            emit_indent(&e->out, indent);
-            emit_var_name(&e->out, dest);
-            buf_append(&e->out, "_");
-            buf_append_len(&e->out, field->name.data, field->name.len);
-            buf_append(&e->out, "=\"$( __ds_array_get ");
-            emit_row_field_array_name(&e->out, src, field->name);
-            buf_append(&e->out, " ");
-            if (!emit_row_index_arg(e, index_expr->as.index.index, &e->out)) return false;
-            buf_append(&e->out, " )\"\n");
-        }
-    }
-    return true;
-}
-
-static bool emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!emit_row_array_decls(e, dest, schema, indent, local_decl)) return false;
-    emit_indent(&e->out, indent);
-    emit_var_name(&e->out, dest);
-    buf_append(&e->out, "=(\"${");
-    emit_var_name(&e->out, src);
-    buf_append(&e->out, "[@]}\")\n");
-    emit_indent(&e->out, indent);
-    bash_emit_elem_type_var_name(&e->out, dest);
-    buf_append(&e->out, "=(\"${");
-    bash_emit_elem_type_var_name(&e->out, src);
-    buf_append(&e->out, "[@]}\")\n");
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        emit_indent(&e->out, indent);
-        emit_row_field_array_name(&e->out, dest, schema->items[i].name);
-        buf_append(&e->out, "=(\"${");
-        emit_row_field_array_name(&e->out, src, schema->items[i].name);
-        buf_append(&e->out, "[@]}\")\n");
-    }
-    return true;
-}
-
-static bool emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr *value, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!value) return false;
-    if (value->kind == DS_LOWER_EXPR_IDENT) {
-        return emit_row_array_copy(e, dest, value->as.text, schema, indent, local_decl);
-    }
-    if (value->kind == DS_LOWER_EXPR_ARRAY) {
-        return emit_row_array_literal(e, dest, value, schema, indent, local_decl);
-    }
-    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && str_eq(value->as.call.name, "rowarray.sort_by")) {
-        return emit_row_array_sort_call(e, dest, value, schema, indent, local_decl);
-    }
-    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && value->as.call.is_user_function) {
-        if (!emit_row_array_decls(e, dest, schema, indent, local_decl)) return false;
-        return bash_emit_user_function_value_call_into(e, dest, value, indent);
-    }
-    ds_diag_error(e->diag, value->span, "internal Bash invariant failed: unsupported row-array expression after lowering");
-    return false;
-}
-
-static DsLowerValueKind row_schema_field_kind(const DsLowerRowSchema *schema, DsStr field) {
-    if (!schema) return DS_LOWER_VALUE_UNKNOWN;
-    for (size_t i = 0; i < schema->len; i++) {
-        if (schema->items[i].name.len == field.len && memcmp(schema->items[i].name.data, field.data, field.len) == 0) {
-            return schema->items[i].kind;
-        }
-    }
-    return DS_LOWER_VALUE_UNKNOWN;
-}
-
-static bool emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr *call, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!call || call->as.call.args.len < 3) return false;
-    char *field_data = NULL, *dir_data = NULL;
-    size_t field_len = 0, dir_len = 0;
-    if (!decode_string_literal(e->diag, call->as.call.args.items[1], &field_data, &field_len) ||
-        !decode_string_literal(e->diag, call->as.call.args.items[2], &dir_data, &dir_len)) return false;
-    DsStr field = {field_data, field_len};
-    DsLowerValueKind field_kind = row_schema_field_kind(schema, field);
-    bool desc = dir_len == 4 && memcmp(dir_data, "desc", 4) == 0;
-    size_t id = e->temp_counter++;
-    char source_buf[64];
-    DsStr src = {0};
-    const DsLowerExpr *source_expr = call->as.call.args.items[0];
-    if (source_expr->kind == DS_LOWER_EXPR_IDENT) {
-        src = source_expr->as.text;
-    } else {
-        bash_temp_ds_name(source_buf, sizeof(source_buf), "row_sort_src", id);
-        src = (DsStr){source_buf, strlen(source_buf)};
-        if (!emit_row_array_expr_into(e, src, source_expr, schema, indent, local_decl)) { free(field_data); free(dir_data); return false; }
-    }
-    if (!emit_row_array_decls(e, dest, schema, indent, local_decl)) { free(field_data); free(dir_data); return false; }
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "%s -a __ds_sort_%zu=(\"${!", e->function_depth > 0 ? "local" : "declare", id);
-    emit_var_name(&e->out, src);
-    buf_append(&e->out, "[@]}\")\n");
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "%s __ds_i_%zu __ds_j_%zu __ds_key_%zu __ds_prev_%zu __ds_left_%zu __ds_right_%zu __ds_lc_set_%zu=0 __ds_lc_old_%zu=\"\"\n", e->function_depth > 0 ? "local" : "declare", id, id, id, id, id, id, id, id);
-    if (field_kind == DS_LOWER_VALUE_STRING) {
-        emit_indent(&e->out, indent);
-        buf_appendf(&e->out, "if [[ ${LC_ALL+x} ]]; then __ds_lc_set_%zu=1; __ds_lc_old_%zu=\"$LC_ALL\"; fi\n", id, id);
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "LC_ALL=C\n");
-    }
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "for ((__ds_i_%zu=1; __ds_i_%zu<${#__ds_sort_%zu[@]}; __ds_i_%zu++)); do\n", id, id, id, id);
-    emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "__ds_key_%zu=\"${__ds_sort_%zu[$__ds_i_%zu]}\"\n", id, id, id);
-    emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "__ds_j_%zu=$__ds_i_%zu\n", id, id);
-    emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "while (( __ds_j_%zu > 0 )); do\n", id);
-    emit_indent(&e->out, indent + 2);
-    buf_appendf(&e->out, "__ds_prev_%zu=\"${__ds_sort_%zu[$((__ds_j_%zu - 1))]}\"\n", id, id, id);
-    emit_indent(&e->out, indent + 2);
-    buf_appendf(&e->out, "__ds_left_%zu=\"${", id);
-    emit_row_field_array_name(&e->out, src, field);
-    buf_appendf(&e->out, "[$__ds_prev_%zu]}\"\n", id);
-    emit_indent(&e->out, indent + 2);
-    buf_appendf(&e->out, "__ds_right_%zu=\"${", id);
-    emit_row_field_array_name(&e->out, src, field);
-    buf_appendf(&e->out, "[$__ds_key_%zu]}\"\n", id);
-    emit_indent(&e->out, indent + 2);
-    if (field_kind == DS_LOWER_VALUE_INT) {
-        buf_appendf(&e->out, "if (( __ds_left_%zu %s __ds_right_%zu )); then\n", id, desc ? "<" : ">", id);
-    } else if (field_kind == DS_LOWER_VALUE_BOOL) {
-        buf_appendf(&e->out, "if [[ \"$__ds_left_%zu\" == true ]]; then __ds_left_%zu=1; else __ds_left_%zu=0; fi\n", id, id, id);
-        emit_indent(&e->out, indent + 2);
-        buf_appendf(&e->out, "if [[ \"$__ds_right_%zu\" == true ]]; then __ds_right_%zu=1; else __ds_right_%zu=0; fi\n", id, id, id);
-        emit_indent(&e->out, indent + 2);
-        buf_appendf(&e->out, "if (( __ds_left_%zu %s __ds_right_%zu )); then\n", id, desc ? "<" : ">", id);
-    } else {
-        buf_appendf(&e->out, "if [[ \"$__ds_left_%zu\" %s \"$__ds_right_%zu\" ]]; then\n", id, desc ? "<" : ">", id);
-    }
-    emit_indent(&e->out, indent + 3);
-    buf_appendf(&e->out, "__ds_sort_%zu[$__ds_j_%zu]=\"$__ds_prev_%zu\"\n", id, id, id);
-    emit_indent(&e->out, indent + 3);
-    buf_appendf(&e->out, "__ds_j_%zu=$((__ds_j_%zu - 1))\n", id, id);
-    emit_indent(&e->out, indent + 2);
-    buf_append(&e->out, "else break; fi\n");
-    emit_indent(&e->out, indent + 1);
-    buf_append(&e->out, "done\n");
-    emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "__ds_sort_%zu[$__ds_j_%zu]=\"$__ds_key_%zu\"\n", id, id, id);
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "done\n");
-    emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "for __ds_idx_%zu in \"${__ds_sort_%zu[@]}\"; do\n", id, id);
-    emit_indent(&e->out, indent + 1);
-    emit_var_name(&e->out, dest);
-    buf_append(&e->out, "+=(\"${#");
-    emit_var_name(&e->out, dest);
-    buf_append(&e->out, "[@]}\")\n");
-    emit_indent(&e->out, indent + 1);
-    bash_emit_elem_type_var_name(&e->out, dest);
-    buf_append(&e->out, "+=(\"map\")\n");
-    for (size_t i = 0; schema && i < schema->len; i++) {
-        emit_indent(&e->out, indent + 1);
-        emit_row_field_array_name(&e->out, dest, schema->items[i].name);
-        buf_append(&e->out, "+=(\"${");
-        emit_row_field_array_name(&e->out, src, schema->items[i].name);
-        buf_appendf(&e->out, "[$__ds_idx_%zu]}\")\n", id);
-    }
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "done\n");
-    if (field_kind == DS_LOWER_VALUE_STRING) {
-        emit_indent(&e->out, indent);
-        buf_appendf(&e->out, "if (( __ds_lc_set_%zu )); then LC_ALL=\"$__ds_lc_old_%zu\"; else unset LC_ALL; fi\n", id, id);
-    }
-    free(field_data);
-    free(dir_data);
-    return true;
-}
-
 static bool emit_direct_signal_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_run_direct_command ");
@@ -953,7 +559,7 @@ static bool emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent
         bash_emit_return_type(e, kind, indent);
     } else if (kind == DS_LOWER_VALUE_ARRAY) {
         if (stmt->as.return_stmt.returns_row_array) {
-            if (!emit_row_array_return_payload(e, value, &stmt->as.return_stmt.row_schema, stmt->span, indent)) return false;
+            if (!bash_emit_row_array_return_payload(e, value, &stmt->as.return_stmt.row_schema, stmt->span, indent)) return false;
         } else if (!bash_emit_array_return_payload(e, value, stmt->span, indent)) return false;
     } else if (kind == DS_LOWER_VALUE_MAP) {
         if (is_regex_match_call(value)) {
@@ -1019,17 +625,17 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     if (!emit_capture_command(e, &stmt->as.let_stmt.value->as.run, &e->out, stmt->as.let_stmt.value->span)) return false;
                 }
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                if (!emit_row_array_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.text, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                if (!bash_emit_row_array_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.text, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
                 if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, DS_LOWER_VALUE_MAP, indent)) return false;
-                if (!emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent)) return false;
+                if (!bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT &&
                        (stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_ARRAY || stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_MAP)) {
                 if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, stmt->as.let_stmt.value_kind, indent)) return false;
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
-                if (!emit_row_array_literal(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                if (!bash_emit_row_array_literal(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_INDEX && stmt->as.let_stmt.value->as.index.returns_row) {
-                if (!emit_row_from_index(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                if (!bash_emit_row_from_index(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
                 if (e->function_depth > 0) buf_append(&e->out, "local -a ");
                 else buf_append(&e->out, "declare -a ");
@@ -1050,7 +656,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent);
                 size_t temp_id = e->temp_counter++;
-                buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
+                buf_appendf(&e->out, "__ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'\n", temp_id);
                 emit_indent(&e->out, indent);
                 if (!emit_stdlib_call(e, stmt->as.let_stmt.value, &e->out)) return false;
                 buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
@@ -1062,9 +668,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "+=(\"string\"); done");
                 buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"", temp_id);
+                buf_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"", temp_id);
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && str_eq(stmt->as.let_stmt.value->as.call.name, "rowarray.sort_by")) {
-                if (!emit_row_array_sort_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                if (!bash_emit_row_array_sort_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(stmt->as.let_stmt.value->as.call.name)) {
                 if (e->function_depth > 0) buf_append(&e->out, "local ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
@@ -1075,12 +681,12 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, " ");
                 if (!emit_stdlib_call(e, stmt->as.let_stmt.value, &e->out)) return false;
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
-                if (!emit_row_array_decls(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                if (!bash_emit_row_array_decls(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
                 if (!bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, DS_LOWER_VALUE_MAP, indent, e->function_depth > 0)) return false;
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
-                if (!emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent)) return false;
+                if (!bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
                 if (!bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.call.return_kind, indent, e->function_depth > 0)) return false;
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
@@ -1094,7 +700,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     buf_append(&e->out, "\n");
                     for (size_t i = 0; i < stmt->as.let_stmt.row_schema.len; i++) {
                         const DsLowerRowField *field = &stmt->as.let_stmt.row_schema.items[i];
-                        const DsLowerMapEntry *entry = row_map_entry(stmt->as.let_stmt.value, field->name);
+                        const DsLowerMapEntry *entry = bash_row_map_entry(stmt->as.let_stmt.value, field->name);
                         if (!entry || !is_safe_identifier(field->name)) continue;
                         emit_indent(&e->out, indent);
                         emit_var_name(&e->out, stmt->as.let_stmt.name);
@@ -1234,7 +840,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
 
         case DS_LOWER_STMT_PUSH:
             if (stmt->as.push_stmt.target_is_row_array) {
-                if (!emit_row_array_push_literal(e, stmt->as.push_stmt.name, &stmt->as.push_stmt.row_schema, stmt->as.push_stmt.value, indent)) return false;
+                if (!bash_emit_row_array_push_literal(e, stmt->as.push_stmt.name, &stmt->as.push_stmt.row_schema, stmt->as.push_stmt.value, indent)) return false;
                 buf_append(&e->out, "\n");
                 return true;
             }
@@ -1264,7 +870,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     char iter_buf[64];
                     bash_temp_ds_name(iter_buf, sizeof(iter_buf), "row_iter", e->temp_counter++);
                     iter_name = (DsStr){iter_buf, strlen(iter_buf)};
-                    if (!emit_row_array_expr_into(e, iter_name, stmt->as.for_stmt.iterable, &stmt->as.for_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                    if (!bash_emit_row_array_expr_into(e, iter_name, stmt->as.for_stmt.iterable, &stmt->as.for_stmt.row_schema, indent, e->function_depth > 0)) return false;
                     emit_indent(&e->out, indent);
                 } else {
                     ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: row-array loop iterable should be named or a known row-array result after lowering");
@@ -1289,7 +895,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     buf_append(&e->out, "[");
                     bash_single_quote(&e->out, field->name.data, field->name.len);
                     buf_append(&e->out, "]=\"${");
-                    emit_row_field_array_name(&e->out, iter_name, field->name);
+                    bash_emit_row_field_array_name(&e->out, iter_name, field->name);
                     buf_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
                     emit_indent(&e->out, indent + 1);
                     bash_emit_map_value_type_var_name(&e->out, stmt->as.for_stmt.name);
@@ -1304,7 +910,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                         buf_append(&e->out, "_");
                         buf_append_len(&e->out, field->name.data, field->name.len);
                         buf_append(&e->out, "=\"${");
-                        emit_row_field_array_name(&e->out, iter_name, field->name);
+                        bash_emit_row_field_array_name(&e->out, iter_name, field->name);
                         buf_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
                     }
                 }
@@ -1352,7 +958,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "[@]}\"; do\n");
             } else {
                 temp_id = e->temp_counter++;
-                buf_appendf(&e->out, "__ds_iter_%zu=$(mktemp)\n", temp_id);
+                buf_appendf(&e->out, "__ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'\n", temp_id);
                 emit_indent(&e->out, indent);
                 if (!emit_stdlib_call(e, stmt->as.for_stmt.iterable, &e->out)) return false;
                 buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
@@ -1372,7 +978,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             else {
                 buf_appendf(&e->out, "done <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_appendf(&e->out, "rm -f \"$__ds_iter_%zu\"\n\n", temp_id);
+                buf_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"\n\n", temp_id);
             }
             return true;
         }

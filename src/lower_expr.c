@@ -34,15 +34,6 @@ void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *ar
     }
 }
 
-static bool helper_is_dir_walk(DsStr name) {
-    return lower_str_eq(name, "dir.walk") || lower_str_eq(name, "dir.walk!") ||
-           lower_str_eq(name, "dir.walk_ext") || lower_str_eq(name, "dir.walk_ext!");
-}
-
-static bool helper_is_dir_walk_ext(DsStr name) {
-    return lower_str_eq(name, "dir.walk_ext") || lower_str_eq(name, "dir.walk_ext!");
-}
-
 static bool extension_text_valid(DsStr text, bool *glob_like) {
     if (glob_like) *glob_like = false;
     if (text.len == 0) return false;
@@ -73,7 +64,7 @@ static bool expr_is_static_non_string_extension_value(const DsExpr *expr) {
 }
 
 static void validate_dir_walk_ext_literal_arg(Lower *lower, DsStr helper_name, const DsExpr *arg) {
-    if (!helper_is_dir_walk_ext(helper_name) || !arg || arg->kind != DS_EXPR_ARRAY) return;
+    if (!ds_stdlib_is_dir_walk_ext_helper(helper_name) || !arg || arg->kind != DS_EXPR_ARRAY) return;
     if (arg->as.array.elements.len == 0) {
         ds_diag_error(lower->diag, arg->span, "dir.walk_ext expects a non-empty extension array");
         return;
@@ -531,33 +522,22 @@ DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
 
 
 static bool is_string_helper_name(DsStr name) {
-    return lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") ||
-           lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.replace") ||
-           lower_str_eq(name, "string.contains") || lower_str_eq(name, "string.split") ||
-           lower_str_eq(name, "string.starts_with") || lower_str_eq(name, "string.ends_with") ||
-           lower_str_eq(name, "string.len") || lower_str_eq(name, "string.index_of") ||
-           lower_str_eq(name, "string.last_index_of") || lower_str_eq(name, "string.count") ||
-           lower_str_eq(name, "string.char_at") || lower_str_eq(name, "string.slice");
+    return ds_stdlib_is_string_helper(name);
 }
 
 static bool string_helper_arg_count_ok(DsStr name, size_t argc, size_t *expected) {
-    if (lower_str_eq(name, "string.trim") || lower_str_eq(name, "string.upper") || lower_str_eq(name, "string.lower") || lower_str_eq(name, "string.len")) { *expected = 1; return argc == 1; }
-    if (lower_str_eq(name, "string.replace")) { *expected = 3; return argc == 3; }
-    if (lower_str_eq(name, "string.slice")) { *expected = 3; return argc == 3; }
-    *expected = 2;
-    return argc == 2;
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    if (!helper) { *expected = 0; return false; }
+    *expected = helper->min_arity;
+    return ds_stdlib_arity_ok(helper, argc);
 }
 
 static bool string_helper_arg_expects_int(DsStr name, size_t arg_index) {
-    if (lower_str_eq(name, "string.char_at")) return arg_index == 1;
-    if (lower_str_eq(name, "string.slice")) return arg_index == 1 || arg_index == 2;
-    return false;
+    return ds_stdlib_arg_expects_int(name, arg_index);
 }
 
 static bool string_helper_arg_expects_string(DsStr name, size_t arg_index) {
-    if (arg_index == 0) return true;
-    if (string_helper_arg_expects_int(name, arg_index)) return false;
-    return true;
+    return ds_stdlib_arg_expects_string(name, arg_index);
 }
 
 static DsLowerExpr *lower_raw_string_expr(DsStr raw, DsSpan span) {
@@ -709,10 +689,10 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             } else if (i > 0 && string_helper_arg_expects_string(expr->as.call.name, i) && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects string arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
             }
-        } else if (helper_is_dir_walk(expr->as.call.name)) {
+        } else if (ds_stdlib_is_dir_walk_helper(expr->as.call.name)) {
             if (i == 0 && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library helper `%.*s` expects a string root argument", (int)expr->as.call.name.len, expr->as.call.name.data);
-            } else if (i == 1 && helper_is_dir_walk_ext(expr->as.call.name) && arg_kind != SYM_ARRAY && arg_kind != SYM_UNKNOWN) {
+            } else if (i == 1 && ds_stdlib_is_dir_walk_ext_helper(expr->as.call.name) && arg_kind != SYM_ARRAY && arg_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "standard-library helper `%.*s` expects a string-array extension argument", (int)expr->as.call.name.len, expr->as.call.name.data);
             }
         } else if (ds_stdlib_is_name(expr->as.call.name) && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
@@ -804,13 +784,13 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         return out;
     }
     DsStr ns = {0}, member = {0};
-    if (split_member_name(expr->as.call.name, &ns, &member) && ds_stdlib_is_namespace(ns)) {
-        ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
+    if (split_member_name(expr->as.call.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
+        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
         free(arg_kinds);
         return out;
     }
-    if (split_member_name(expr->as.call.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
-        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
+    if (split_member_name(expr->as.call.name, &ns, &member) && ds_stdlib_is_namespace(ns)) {
+        ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
         free(arg_kinds);
         return out;
     }
@@ -917,7 +897,7 @@ static bool lower_expr_is_portable_stdlib_array_result(const DsLowerExpr *expr) 
     if (!expr || expr->kind != DS_LOWER_EXPR_CALL || !ds_stdlib_is_name(expr->as.call.name)) return false;
     const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
     return helper && helper->return_kind == DS_STDLIB_RETURN_ARRAY &&
-           (lower_str_eq(expr->as.call.name, "string.split") || helper_is_dir_walk(expr->as.call.name));
+           ds_stdlib_array_element_kind(expr->as.call.name) == DS_STDLIB_ARRAY_ELEMENT_STRING;
 }
 
 DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
@@ -982,9 +962,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
 }
 
 static bool helper_returns_string_array(DsStr name) {
-    return lower_str_eq(name, "string.split") || lower_str_eq(name, "glob") ||
-           lower_str_eq(name, "glob!") || lower_str_eq(name, "lines") ||
-           helper_is_dir_walk(name);
+    return ds_stdlib_array_element_kind(name) == DS_STDLIB_ARRAY_ELEMENT_STRING;
 }
 
 SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
