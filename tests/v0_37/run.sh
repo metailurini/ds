@@ -50,32 +50,6 @@ capture_cmd() {
   printf '%s' "$rc" >"$TMP/$name.rc"
 }
 
-assert_no_ds_call() {
-  local script="$1" name="$2"
-  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
-  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
-  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
-  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
-}
-
-assert_no_duplicate_helpers() {
-  local script="$1" name="$2" defs dups
-  defs="$TMP/${name//[^A-Za-z0-9_]/_}_helper_defs.txt"
-  dups="$TMP/${name//[^A-Za-z0-9_]/_}_helper_dups.txt"
-  grep -E '^__ds_[A-Za-z0-9_]+\(\)' "$script" | sed 's/(.*//' | sort >"$defs" || true
-  uniq -d "$defs" >"$dups"
-  [ ! -s "$dups" ] || { cat "$dups" >&2; fail "$name has duplicate helper definitions"; }
-  pass "$name has no duplicate helper definitions"
-}
-
-emit_checked() {
-  local name="$1" file="$2" script="$3"
-  run_ok "${name}_emit" "$DS" emit bash "$file" -o "$script"
-  run_ok "${name}_bash_n" bash -n "$script"
-  assert_no_ds_call "$script" "$name emitted Bash standalone"
-  assert_no_duplicate_helpers "$script" "$name emitted Bash"
-}
-
 run_accept() {
   local name="$1" file="$2" expected_stdout="$3"
   shift 3
@@ -180,8 +154,10 @@ for needle in 'flat row' 'row arrays' 'same-schema' 'push' 'field access' 'sort_
 done
 assert_contains docs/roadmap.md 'v0.37.0 — Lightweight Rows and In-Memory Data Processing' 'roadmap lists v0.37 rows'
 assert_contains docs/status.md 'lightweight rows and row arrays' 'status docs mention rows'
+assert_contains docs/status.md 'small in-memory analyzer/reporting datasets' 'status docs document row sort scale contract'
 assert_contains docs/language.ds 'rows.sort_by' 'language docs include row-array sort example'
 assert_contains docs/runtime.md 'row-array' 'runtime docs mention row-array representation'
+assert_contains docs/runtime.md 'small-data oriented' 'runtime docs document row sort performance contract'
 assert_contains README.md 'lightweight rows' 'README mentions v0.37 rows'
 assert_contains Makefile '0-37' 'Makefile wires v0.37 suite'
 

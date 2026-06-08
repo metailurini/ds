@@ -60,37 +60,11 @@ copy_seed() {
   fi
 }
 
-assert_no_ds_call() {
-  local script="$1" name="$2"
-  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
-  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
-  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
-  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
-}
-
-assert_no_duplicate_helpers() {
-  local script="$1" name="$2" defs dups
-  defs="$TMP/${name//[^A-Za-z0-9_]/_}_helper_defs.txt"
-  dups="$TMP/${name//[^A-Za-z0-9_]/_}_helper_dups.txt"
-  grep -E '^__ds_[A-Za-z0-9_]+\(\)' "$script" | sed 's/(.*//' | sort >"$defs" || true
-  uniq -d "$defs" >"$dups"
-  [ ! -s "$dups" ] || { cat "$dups" >&2; fail "$name has duplicate helper definitions"; }
-  pass "$name has no duplicate helper definitions"
-}
-
 assert_helper_def_count() {
   local script="$1" helper="$2" expected="$3" name="$4" count
   count=$(grep -c -F -- "$helper()" "$script" || true)
   [ "$count" = "$expected" ] || fail "$name: expected $helper definition count $expected, got $count"
   pass "$name"
-}
-
-emit_checked() {
-  local name="$1" file="$2" script="$3"
-  run_ok "${name}_emit" "$DS" emit bash "$file" -o "$script"
-  run_ok "${name}_bash_n" bash -n "$script"
-  assert_no_ds_call "$script" "$name emitted Bash standalone"
-  assert_no_duplicate_helpers "$script" "$name emitted Bash"
 }
 
 run_parity_seed() {
@@ -227,14 +201,17 @@ done
 assert_doc_contains docs/roadmap.md 'v0.38.0 — Recursive Walk Helpers and DX Integration Cleanup' 'roadmap lists v0.38 recursive walk cleanup'
 assert_doc_contains docs/language.ds 'dir.walk_ext("src", [".c", ".h"])' 'language docs show dir.walk_ext'
 assert_doc_contains docs/runtime.md 'skip hidden descendants and symlinks' 'runtime docs describe hidden/symlink walk behavior'
+assert_doc_contains docs/runtime.md 'readable non-symlink directory' 'runtime docs describe invalid/unreadable walk roots'
+assert_doc_contains docs/runtime.md 'transient filesystem races' 'runtime docs describe disappearing walk children'
 assert_doc_contains docs/status.md 'dir.walk(root)' 'status docs mark dir.walk supported'
+assert_doc_contains docs/status.md 'Invalid or unreadable roots fail' 'status docs document walk root failures'
 assert_doc_contains docs/parity-contracts.md 'Recursive filesystem walk helpers' 'parity contracts cover walk helpers'
 assert_doc_contains docs/diagnostics.md 'runtime `dir.walk*` roots/extensions' 'diagnostics docs cover runtime walk diagnostics'
 assert_doc_contains docs/dx-issues.md 'recursive file walking' 'DX issues resolved section includes recursive walking'
 assert_doc_contains Makefile '0-38' 'Makefile wires v0.38 suite'
 assert_doc_not_contains src/lexer.c 'walk' 'v0.38 did not add walk syntax keywords'
 assert_doc_not_contains src/parser.c 'walk_ext' 'v0.38 did not add parser grammar for walk helpers'
-dir_helpers=$(grep -o '"dir\.[^"]*"' src/ds_stdlib.c | tr -d '"' | sort | tr '\n' ' ')
+dir_helpers=$(grep -o '{"dir\.[^"]*"' src/ds_stdlib.c | sed 's/^{"//; s/"$//' | sort | tr '\n' ' ')
 [ "$dir_helpers" = 'dir.exists dir.walk dir.walk! dir.walk_ext dir.walk_ext! ' ] || fail "unexpected dir namespace helper surface: $dir_helpers"
 pass 'dir namespace public helper surface is scoped'
 for f in docs/language.ds docs/runtime.md docs/status.md docs/parity-contracts.md docs/diagnostics.md docs/dx-issues.md; do

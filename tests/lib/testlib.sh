@@ -143,6 +143,32 @@ emit_bash() {
   }
 }
 
+assert_no_ds_call() {
+  local script="$1" name="$2"
+  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
+  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
+  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
+  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
+}
+
+assert_no_duplicate_helpers() {
+  local script="$1" name="$2" defs dups
+  defs="$TMP/${name//[^A-Za-z0-9_]/_}_helper_defs.txt"
+  dups="$TMP/${name//[^A-Za-z0-9_]/_}_helper_dups.txt"
+  grep -E '^__ds_[A-Za-z0-9_]+\(\)' "$script" | sed 's/(.*//' | sort >"$defs" || true
+  uniq -d "$defs" >"$dups"
+  [ ! -s "$dups" ] || { cat "$dups" >&2; fail "$name has duplicate helper definitions"; }
+  pass "$name has no duplicate helper definitions"
+}
+
+emit_checked() {
+  local name="$1" file="$2" script="$3"
+  run_ok "${name}_emit" "$DS" emit bash "$file" -o "$script"
+  run_ok "${name}_bash_n" bash -n "$script"
+  assert_no_ds_call "$script" "$name emitted Bash standalone"
+  assert_no_duplicate_helpers "$script" "$name emitted Bash"
+}
+
 assert_vm_bash_parity() {
   local name="$1"
   local fixture="$2"

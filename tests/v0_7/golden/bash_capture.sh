@@ -3,6 +3,13 @@ set -euo pipefail
 
 __ds_error() { echo "${0##*/}: error: $1" >&2; exit 1; }
 
+__ds_tmp_paths=()
+__ds_temp_register() { __ds_tmp_paths+=("$1"); }
+__ds_temp_remove() { local __ds_p=$1 __ds_i; rm -rf "$__ds_p" 2>/dev/null || true; for __ds_i in "${!__ds_tmp_paths[@]}"; do if [[ "${__ds_tmp_paths[$__ds_i]:-}" == "$__ds_p" ]]; then unset "__ds_tmp_paths[$__ds_i]"; fi; done; }
+__ds_temp_cleanup() { local __ds_p; for __ds_p in "${__ds_tmp_paths[@]}"; do [[ -n "$__ds_p" ]] && rm -rf "$__ds_p" 2>/dev/null || true; done; __ds_tmp_paths=(); }
+__ds_mktemp_file() { local __ds_var=$1 __ds_msg=$2 __ds_path; __ds_path=$(mktemp) || __ds_error "$__ds_msg"; __ds_temp_register "$__ds_path"; printf -v "$__ds_var" '%s' "$__ds_path"; }
+__ds_mktemp_dir() { local __ds_var=$1 __ds_msg=$2 __ds_path; __ds_path=$(mktemp -d) || __ds_error "$__ds_msg"; __ds_temp_register "$__ds_path"; printf -v "$__ds_var" '%s' "$__ds_path"; }
+
 __ds_trace_quote() {
   local __ds_q=$1
   __ds_q=${__ds_q//\\/\\\\}
@@ -23,6 +30,8 @@ __ds_trace_cmd() {
   done
   printf '\n' >&2
 }
+trap '__ds_rc=$?; __ds_temp_cleanup; exit "$__ds_rc"' EXIT
+
 __ds_stdout_is_pipe_like() { [[ -p /dev/stdout || -S /dev/stdout ]]; }
 __ds_is_quiet_broken_pipe() { local __ds_code=$1 __ds_allow=${2:-0}; (( __ds_allow == 1 && __ds_code == 141 )) && __ds_stdout_is_pipe_like; }
 __ds_fail() {
@@ -38,7 +47,7 @@ __ds_capture() {
   local __ds_loc=$1
   shift
   local __ds_tmpdir
-  __ds_tmpdir=$(mktemp -d) || __ds_error 'failed to create command capture temp dir'
+  __ds_mktemp_dir __ds_tmpdir 'failed to create command capture temp dir'
   local __ds_stdout="$__ds_tmpdir/stdout"
   local __ds_stderr="$__ds_tmpdir/stderr"
   set +e
@@ -60,7 +69,7 @@ __ds_capture() {
     printf -v "${__ds_prefix}_ok" '%s' false
     printf -v "${__ds_prefix}_failed" '%s' true
   fi
-  rm -rf "$__ds_tmpdir"
+  __ds_temp_remove "$__ds_tmpdir"
 }
 
 # ds: tests/v0_7/fixtures/helpers/bash_capture.ds:1
