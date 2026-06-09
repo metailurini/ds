@@ -1,40 +1,20 @@
 # ds
 
-`ds` is an experimental shell-native scripting language. It is designed to keep the useful parts of Bash—commands, pipes, environment interaction, and scriptability—while replacing Bash's confusing syntax with a simpler, more readable language model.
+`ds` is an experimental shell-native scripting language written in C. It keeps
+commands, pipes, environment access, and standalone Bash compatibility, but gives
+script logic a simpler language model than raw Bash.
 
-The working name is temporary. The project is currently in pre-`1.0.0` planning and early implementation mode.
+The project is pre-`1.0.0`. The current implementation is the `v0.38.0` scoped
+surface: direct VM execution, checking/formatting/debug views, tests, and
+standalone Bash emission for the supported language subset.
 
-## Purpose
+## Why this exists
 
-Bash is powerful, but many common tasks are painful or fragile:
+Bash is useful, but large scripts become fragile because quoting, arrays,
+conditionals, redirection, errors, and refactors are hard to reason about. `ds`
+tries to make those parts boring while still feeling like a shell.
 
-- argument parsing is repetitive and error-prone;
-- conditionals use confusing forms like `[ ... ]`, `[[ ... ]]`, `then`, and `fi`;
-- redirection syntax such as `2>&1` is difficult to read;
-- arrays and maps are awkward;
-- quoting and word splitting are easy to get wrong;
-- debugging failed scripts can be painful;
-- refactoring large scripts is risky.
-
-`ds` aims to provide a better scripting experience while remaining close to the shell.
-
-## Core goals
-
-- Run scripts directly with `ds ./script.ds`.
-- Implement the `ds` tool in C.
-- Interpret scripts rather than compile them to native binaries.
-- Use an internal register bytecode VM for direct execution.
-- Emit every supported feature to standalone Bash.
-- Keep generated Bash independent: users should not need `ds` installed to run emitted scripts.
-- Make command execution feel shell-native.
-- Make programming logic feel like a normal readable language.
-- Make CLI argument parsing a first-class feature.
-- Make scripts easy to debug during both language development and normal usage.
-- Keep the language simple, boring, testable, and easy to extend.
-
-## Example direction
-
-This is an example of the style `ds` is expected to move toward:
+## Tiny example
 
 ```ds
 script {
@@ -62,299 +42,89 @@ if target == "production" {
 ./deploy.sh $app $target
 ```
 
-The emitted Bash should be standalone and equivalent in behavior:
-
-`v0.36.0` adds local usage-based inference for required untyped scalar function
-parameters. String-helper receivers/arguments infer `string`, arithmetic and
-index positions infer `int`, boolean conditions and logical operators infer
-`bool`, and nested user-function calls propagate already inferred scalar
-contracts. Calls with incompatible scalar arguments are rejected before partial
-function body side effects, while public typed-parameter syntax, implicit
-coercion, collection-valued parameters, and recursive broad type solving remain
-out of scope.
-
-`v0.37.0` adds lightweight rows and row arrays for in-memory analyzer/reporting
-scripts. Flat scalar row literals can be buffered in same-schema row arrays,
-iterated, copied by value, returned from functions/imports, and sorted with
-`sort_by(field[, direction])` in both VM execution and standalone emitted Bash.
-Public row/schema declarations, row or row-array parameters, nested row fields,
-row-field mutation, serialization helpers, and dataframe-style APIs remain out
-of scope.
-
-`v0.38.0` adds recursive filesystem walking helpers for source-scanning scripts:
-`dir.walk(root)`, `dir.walk_ext(root, extensions)`, and required-match bang
-forms. They return deterministic, duplicate-free string arrays of regular files,
-skip hidden descendants and symlinks, validate extension filters, and run in both
-the VM and standalone emitted Bash without relying on shell globstar or ambient
-shell options. Hidden traversal flags, symlink following, max-depth options,
-metadata rows, streaming iterators, and glob-pattern extension filters remain out
-of scope.
+Emit standalone Bash:
 
 ```sh
-ds emit bash deploy.ds -o deploy.sh
+./ds emit bash deploy.ds -o deploy.sh
 bash deploy.sh api --target production --force
 ```
 
-## Development model
+## What works today
 
-Development follows pre-`1.0.0` milestone versions:
+The supported production surface includes:
 
-- `0.x.0` is a planned feature, integration, or cleanup version.
-- `0.x.y` is reserved for bug fixes, documentation fixes, or test fixes for `0.x.0`.
-- `1.0.0` is the first stable release where the supported language surface is expected to remain reliable.
+- `ds <file.ds>`, `ds run`, `ds check`, `ds fmt`, `ds test`, debug views, and
+  `ds emit bash`;
+- strings, integers, booleans, interpolation, `if`/`else`, `while`, `case`,
+  `break`, `continue`, and integer arithmetic;
+- shell commands, readable redirections, plain/captured pipelines, and captured
+  command-result fields;
+- script args/options/flags and local `import "./file.ds"` composition;
+- top-level functions with defaults, statement calls, scalar returns, arrays,
+  maps, lightweight rows, and row arrays;
+- shell-oriented helpers for files, dirs, paths, commands, env, globs, recursive
+  file walks, lines, strings, and regex;
+- VM/Bash parity for the supported subset: emitted Bash should be standalone and
+  should not require the `ds` binary at runtime.
 
-Every planned version should have:
+For exact guarantees, deferred items, and edge-case behavior, read
+[`docs/status.md`](docs/status.md).
 
-- a milestone spec;
-- a test plan;
-- implementation work;
-- tests based on the test plan;
-- docs and examples updates;
-- completion review.
-
-For the initial project, the first two planned versions are:
-
-- `v0.1.0` — Lexer, parser, AST, diagnostics, and frontend debug commands.
-- `v0.2.0` — Basic standalone Bash emitter for the `v0.1.0` language subset.
-
-## Project layout
-
-The project started with documentation only, then `v0.1.0` added the first frontend implementation.
-
-Current implementation directories:
-
-- `include/` — public internal C declarations for the early implementation;
-- `src/` — source loading, diagnostics, lexer, parser, AST printer, shared lowering, bytecode/VM runtime, Bash emitter, and CLI entrypoint;
-- `examples/` — small scripts used for manual frontend smoke checks;
-- `src/runtime/hashmap.c` and `src/runtime/hashmap.h` — absorbed project-owned hashmap implementation used only behind the `DsMap` runtime abstraction.
-
-Important planning files:
-
-Important files:
-
-- `docs/language.ds`
-- `docs/product-principles.md`
-- `docs/roadmap.md`
-- `docs/architecture.md`
-- `docs/runtime.md`
-- `docs/version-workflow.md`
-- `docs/editor.md`
-- `docs/status.md`
-- `docs/release-checklist.md`
-- `docs/milestones/v0.1.0-spec.md`
-- `docs/milestones/v0.1.0-test-plan.md`
-- `docs/milestones/v0.2.0-spec.md`
-- `docs/milestones/v0.2.0-test-plan.md`
-- `docs/milestones/v0.3.0-spec.md`
-- `docs/milestones/v0.3.0-test-plan.md`
-- `docs/milestones/v0.4.0-spec.md`
-- `docs/milestones/v0.4.0-test-plan.md`
-- `docs/milestones/v0.5.0-spec.md`
-- `docs/milestones/v0.5.0-test-plan.md`
-- `docs/milestones/v0.6.0-spec.md`
-- `docs/milestones/v0.6.0-test-plan.md`
-- `docs/milestones/v0.7.0-spec.md`
-- `docs/milestones/v0.7.0-test-plan.md`
-- `docs/milestones/v0.8.0-spec.md`
-- `docs/milestones/v0.8.0-test-plan.md`
-- `docs/milestones/v0.9.0-spec.md`
-- `docs/milestones/v0.9.0-test-plan.md`
-- `docs/milestones/v0.10.0-spec.md`
-- `docs/milestones/v0.10.0-test-plan.md`
-- `docs/milestones/v0.11.0-spec.md`
-- `docs/milestones/v0.11.0-test-plan.md`
-- `docs/milestones/v0.12.0-spec.md`
-- `docs/milestones/v0.12.0-test-plan.md`
-- `docs/milestones/v0.13.0-spec.md`
-- `docs/milestones/v0.13.0-test-plan.md`
-- `docs/milestones/v0.14.0-spec.md`
-- `docs/milestones/v0.14.0-test-plan.md`
-- `docs/milestones/v0.15.0-spec.md`
-- `docs/milestones/v0.15.0-test-plan.md`
-- `docs/milestones/v0.16.0-spec.md`
-- `docs/milestones/v0.16.0-test-plan.md`
-- `docs/milestones/v0.17.0-spec.md`
-- `docs/milestones/v0.17.0-test-plan.md`
-- `docs/milestones/v0.18.0-spec.md`
-- `docs/milestones/v0.18.0-test-plan.md`
-- `docs/milestones/v0.19.0-spec.md`
-- `docs/milestones/v0.19.0-test-plan.md`
-- `docs/milestones/v0.20.0-spec.md`
-- `docs/milestones/v0.20.0-test-plan.md`
-- `docs/milestones/v0.21.0-spec.md`
-- `docs/milestones/v0.21.0-test-plan.md`
-- `docs/milestones/v0.22.0-spec.md`
-- `docs/milestones/v0.22.0-test-plan.md`
-- `docs/milestones/v0.23.0-spec.md`
-- `docs/milestones/v0.23.0-test-plan.md`
-- `docs/milestones/v0.24.0-spec.md`
-- `docs/milestones/v0.24.0-test-plan.md`
-- `docs/milestones/v0.25.0-spec.md`
-- `docs/milestones/v0.25.0-test-plan.md`
-- `docs/milestones/v0.26.0-spec.md`
-- `docs/milestones/v0.26.0-test-plan.md`
-- `docs/milestones/v0.27.0-spec.md`
-- `docs/milestones/v0.27.0-test-plan.md`
-- `docs/milestones/v0.28.0-spec.md`
-- `docs/milestones/v0.28.0-test-plan.md`
-- `docs/milestones/v0.29.0-spec.md`
-- `docs/milestones/v0.29.0-test-plan.md`
-- `docs/milestones/v0.30.0-spec.md`
-- `docs/milestones/v0.30.0-test-plan.md`
-- `docs/milestones/v0.31.0-spec.md`
-- `docs/milestones/v0.31.0-test-plan.md`
-- `docs/milestones/v0.32.0-spec.md`
-- `docs/milestones/v0.32.0-test-plan.md`
-- `docs/milestones/v0.33.0-spec.md`
-- `docs/milestones/v0.33.0-test-plan.md`
-- `docs/milestones/v0.34.0-spec.md`
-- `docs/milestones/v0.34.0-test-plan.md`
-- `docs/milestones/v0.35.0-spec.md`
-- `docs/milestones/v0.35.0-test-plan.md`
-
-## Editor / LSP setup
-
-`compile_flags.txt` is checked in so `clangd` can resolve project headers and use
-the same baseline flags as the Makefile build when the workspace is opened in an
-IDE. See `docs/editor.md` for notes on `clangd` and local Neovim `lua_ls` setup.
-
-## Project status
-
-Current status: `v0.9.0` implementation and tests are complete for the scoped user-defined functions pass; `v0.10.0` implementation and tests are complete for the scoped arrays, maps, and array-loop pass; `v0.11.0` implementation and tests are complete for the scoped shell-oriented standard library pass; `v0.12.0` implementation and tests are complete for the scoped standard-library/type consistency cleanup, VM/Bash helper-boundary refactors, and hashmap absorption pass; `v0.13.0` implementation and tests are complete for the scoped debugging/tracing pass; `v0.14.0` implementation and tests are complete for the scoped VM-backed test-runner pass; `v0.15.0` implementation and tests are complete for the scoped formatter/checker pass; `v0.16.0` implementation and tests are complete for the scoped pre-beta cleanup pass; `v0.17.0` implementation and tests are complete for scoped control flow; `v0.18.0` implementation and tests are complete for scoped linear pipelines; `v0.19.0` implementation and tests are complete for scoped string methods, interpolation formatting, and triple-quoted strings; `v0.20.0` implementation and tests are complete for the scoped Wave 2 stabilization cleanup; `v0.21.0` implementation and tests are complete for scoped scalar function values and integer arithmetic; `v0.22.0` implementation is complete for the initial scoped process cleanup and signal-handler pass; `v0.22.1` tests are complete for deterministic non-signal cleanup-core stabilization; `v0.22.2` tests are complete for signal syntax, diagnostics, formatter/lowering visibility, and emitted-Bash helper structure without real OS signal delivery; `v0.22.3` adds the deterministic process-session signal harness and smallest VM/Bash `TERM` direct-command proof; `v0.22.4` stabilizes foreground direct-command `INT`/`TERM` runtime cleanup parity for VM execution and emitted Bash; `v0.22.5` extends the same parity to simple foreground pipelines; `v0.22.6` finalizes the v0.22 handler-context/documentation pass by explicitly deferring portable handler line/context values and locking the supported/rejected/out-of-scope cleanup contract; the final v0.22 test-plan audit fills the remaining deterministic coverage gaps and keeps the focused suite wired through `make test-v0-22`; `v0.23.0` implementation and tests are complete for exact membership, integer range loops, conservative regex matching, and their VM/Bash parity surface; `v0.24.0` is the pre-1.0 hardening pass and currently adds support-matrix/release-checklist documentation plus generated-Bash helper deduplication without adding production syntax; `v0.32.0` production implementation is complete for runtime regex strings, flat capture maps, and global regex replacement; `v0.33.0` implementation and tests are complete for collection/glob/regex stabilization, helper hygiene, checker warning parity, and current-doc reconciliation without adding production syntax; `v0.34.0` implementation and focused tests are complete for doubled-brace string literals and quiet common broken-pipe output; `v0.35.0` implementation and focused tests are complete for byte-oriented core string parsing helpers, direct split-index method chains, scalar method-chain interpolation, and emitted-Bash helper hygiene; `v0.36.0` production implementation and tests are complete for local scalar function-parameter kind inference and call validation; `v0.37.0` production implementation and tests are complete for lightweight rows and row arrays; `v0.38.0` production implementation and dedicated tests are complete for recursive file-walk helpers.
-
-For the current user-facing support matrix, see `docs/status.md`. For the
-stable-release boundary, see `docs/release-checklist.md`.
-
-The current implementation supports the `v0.1.0` frontend, the `v0.2.0` Bash emission path, the first `v0.3.0` direct VM execution path, the `v0.4.0` internal cleanup pass, the first `v0.5.0` script argument contract, the initial `v0.6.0` local import composition path, the initial `v0.7.0` command-result/redirection path, the `v0.8.0` command-model/process-wrapper cleanup, the scoped `v0.9.0` user-defined functions pass, the initial `v0.10.0` collection/array-loop implementation, the initial `v0.11.0` shell-oriented standard library implementation, the scoped `v0.23.0` regex/range/membership implementation and test pass, the scoped `v0.32.0` regex runtime-string/capture/replacement implementation, the `v0.33.0` no-new-syntax stabilization pass, the `v0.34.0` text-literal/broken-pipe DX pass, the `v0.35.0` core string parsing helper pass, the `v0.36.0` scalar function-parameter inference pass, the `v0.37.0` lightweight row-array pass, and the `v0.38.0` recursive walk-helper pass:
-
-Local imports use simple quoted paths resolved relative to the importing file:
-
-```ds
-import "./lib.ds"
-```
-
-Command results capture stdout, stderr, and exit status without making non-zero
-captured exits fatal:
-
-```ds
-let result = run npm test
-
-if result.failed {
-  echo result.stderr
-  exit result.code
-}
-```
-
-Plain command statements also support readable redirection syntax:
-
-```ds
-npm run build &> "build.log"
-```
-
-Functions are top-level reusable procedures with positional parameters, trailing literal defaults, local function scopes, statement-style calls, and scalar `return expr` values for expression-style calls:
-
-```ds
-fn greet(name = "world") {
-  echo "hello {name}"
-}
-
-greet()
-greet("ds")
-
-fn double(n = 2) {
-  return n * 2
-}
-
-let answer = double(21)
-```
-
-Collections support array literals, array indexing, `push`, string-keyed map literals, map access, array iteration, and key/value map iteration:
-
-```ds
-let services = ["api", "web"]
-services.push("worker")
-
-for service in services {
-  echo "service={service}"
-}
-
-let ports = { api: 3000, web: 5173 }
-let api_port = ports.api
-
-for name, port in ports {
-  echo "{name}:{port}"
-}
-```
-
-`v0.10.0` deliberately deferred ranges, index assignment, empty map literals, empty map keys, nested collections, passing whole collection values to functions or commands, direct collection access in command arguments, and collection element expressions that cannot yet be emitted into Bash assignments. `v0.29.0` adds map iteration for named maps and supported flat map-returning user-function calls, with keys visited in deterministic ascending bytewise/ASCII order. Bind/index scalar values first for the remaining deferred collection forms. `v0.17.0` fills the previously deferred basic control-flow gap with scalar reassignment, bounded `while` loops, lexical `break`/`continue`, and expression-style `case`.
-
-`v0.11.0` adds the first standard-library helpers: `file.exists`, `file.is_file`, `file.read`, `file.write`, `file.append`, `dir.exists`, `path.cwd`, `path.join`, `path.basename`, `path.dirname`, `path.ext`, `cmd.exists`, `cmd.require`, `env.get`, `env.set`, `env.unset`, `glob`, `glob!`, and `lines`. Later milestones add direct `env.NAME` access and scoped recursive `**` glob patterns. The implementation still rejects embedded NUL bytes in text file helpers while deferring binary file APIs, directory mutation/listing, and streaming `lines`.
-
-`v0.16.0` keeps comment-preserving formatting deferred. Comments are accepted by normal lexing/parsing/checking/running/emission, but `ds fmt` rejects comment-bearing files with a clear diagnostic rather than silently dropping trivia. The CLI source/import composition path now lives behind a focused internal `src/cli_program.c` boundary; `tokens` and `ast` remain root-file debug views, while `check`, `hir`, `bytecode`, `run`, direct execution, `test`, and `emit bash` use the composed import-aware path.
-
-`v0.17.0` implements the scoped control-flow milestone: `name = expr`, integer `+=`/`-=`, `while condition { ... }`, `break`, `continue`, and `case selector { ... }` with exact literal alternatives. `case` selectors use normal expression syntax such as `case target`, not command-word syntax such as `case $target`. `v0.18.0` implements scoped linear pipelines for plain commands and captured `run` commands, with Bash `pipefail`-style status parity. `v0.21.0` adds scalar `return expr`, function calls as value expressions including supported forward calls to later value-returning functions, checked integer `*`, `/`, `%`, `**`, unary `-`, and checked integer `*=`, `/=`, `%=`. `v0.32.0` adds runtime string regex patterns, `regex.match` flat capture maps for present capture groups up to `"9"`, and `regex.replace` global replacement with `$0`..`$9`/`$$` expansion. `v0.33.0` stabilizes collection, glob, regex, checker, and helper-hygiene contracts without adding syntax. `v0.34.0` adds strict doubled-brace literal spelling in strings (`{{` and `}}`) and quiets the common uncaptured closed-stdout broken-pipe case without changing captured command-result statuses; VM execution uses exact SIGPIPE wait-status classification for direct commands and final pipeline stages while emitted Bash uses the documented standalone Bash status-141/pipe-stdout heuristic. `v0.35.0` adds byte-oriented string parsing helpers (`len`, `index_of`, `last_index_of`, `count`, `char_at`, and `slice`), direct read-only `split(...)[index]` method chains, and scalar string method chains in interpolation/quoted command words. Value-returning functions reject plain command statements when used as expression values; statement-style calls may still stream stdout and ignore the scalar return. Use captured `run` expressions inside value functions when command output must participate in the returned value. String binary `+`, labeled/depth loop control, loop `else`, `until`, fallthrough case arms, regex/glob case patterns, collection parameters, recursive functions, regex split, named captures, Unicode-aware string indexing, negative/clamped slices, and first-class regex values remain deferred.
+## Quick start
 
 ```sh
 make
-./ds tokens examples/basic.ds
-./ds ast examples/basic.ds
 ./ds check examples/basic.ds
-./ds check --warnings-as-errors examples/basic.ds
-./ds fmt examples/args.ds > /tmp/args.formatted.ds
-./ds fmt --check /tmp/args.formatted.ds
-./ds fmt --write /tmp/args.formatted.ds
-./ds hir examples/basic.ds
-./ds bytecode examples/basic.ds
 ./ds run examples/basic.ds
-./ds run --trace-cmd examples/basic.ds
-./ds run --trace-vm examples/basic.ds
-./ds examples/basic.ds
-./ds examples/vm.ds
-./ds examples/args.ds api --target production --retries 5 --force
-./ds examples/args.ds --help
-./ds examples/import-main.ds
-./ds examples/command-result.ds
-./ds examples/redirection.ds
-./ds examples/functions.ds
-./ds examples/collections.ds
-./ds examples/stdlib.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
-./ds emit bash examples/args.ds -o /tmp/args.sh
-./ds emit bash examples/import-main.ds -o /tmp/import-main.sh
-./ds emit bash examples/command-result.ds -o /tmp/command-result.sh
-./ds emit bash examples/redirection.ds -o /tmp/redirection.sh
-./ds emit bash examples/functions.ds -o /tmp/functions.sh
-./ds emit bash examples/collections.ds -o /tmp/collections.sh
-./ds emit bash examples/stdlib.ds -o /tmp/stdlib.sh
-./ds emit bash examples/control-flow.ds -o /tmp/control-flow.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
-bash /tmp/args.sh api --target production --retries 5 --force
-bash /tmp/args.sh --help
-bash /tmp/import-main.sh
-bash /tmp/command-result.sh
-bash /tmp/redirection.sh
-bash /tmp/functions.sh
-bash /tmp/collections.sh
-bash /tmp/stdlib.sh
-bash /tmp/control-flow.sh
+make test-v0-38
+```
+
+Useful commands:
+
+```sh
+./ds fmt --check examples/args.ds
+./ds hir examples/basic.ds
+./ds bytecode examples/basic.ds
+./ds run --trace-cmd examples/basic.ds
 DS_TRACE_CMD=1 bash /tmp/basic.sh
 ```
 
-The CLI now centralizes source loading, import resolution, lexing, parsing, and lowering so `check`, `hir`, `test`, `emit bash`, `run`, direct script execution, and `bytecode` all share the same composed parse/lower path. `script { ... }` declarations introduce first-class positional args, options with defaults, and boolean flags for VM execution and standalone emitted Bash. The VM and Bash emitter consume the same lowered program representation for the conservative language subset: `let`, strings including triple-quoted strings and doubled literal braces, integers, booleans, simple and formatted interpolation, scoped string methods including byte-oriented parsing helpers, comparisons, `if`/`else`, nested blocks, simple command statements and linear pipelines, captured `run` commands and pipelines, command-result fields, plain command/pipeline redirections, top-level function declarations/calls and scalar return values, array/map literals, array/map access, array `push`, array `for` loops, key/value map loops, scalar reassignment, `while`, `break`/`continue`, expression-style `case`, scoped integer arithmetic, scoped shell-oriented stdlib helpers, and process-level `defer`/`trap` cleanup handlers for `EXIT`, `INT`, and `TERM`. The VM also maintains runtime block scopes for lowered blocks, function invocations, and loop iterations. The v0.7.0 implementation supports `result.stdout`, `result.stderr`, `result.code`, `result.ok`, and `result.failed`; captured non-zero commands are inspectable instead of fatal, while plain commands remain fail-fast. The v0.8.0 cleanup centralizes lowered command ownership and command-result field metadata without changing that language surface. The v0.9.0 implementation supports untyped function parameters, trailing literal defaults, calls before declaration, imported function declarations through the existing composition path, and local function variables; typed parameters and recursive calls remain deferred. The v0.10.0 implementation uses value-copy collection assignment semantics, emits a Bash 4+ guard when maps require associative arrays, gives explicit Bash runtime failures for missing map keys and out-of-range array indexes, rejects collection element expressions that cannot emit to Bash with parity, and deliberately kept collection function arguments and map iteration deferred until later parity contracts. `v0.29.0` adds key/value map loops over named maps and supported flat map-returning user functions using sorted bytewise/ASCII key order. The v0.11.0 implementation lowers stdlib helper calls through the shared pipeline, executes them in the VM, emits standalone Bash helpers when needed, preserves fail-fast parity for required globs, missing line files, and embedded-NUL text inputs, and treats executable command checks consistently by ignoring directories. The v0.13.0 implementation adds `ds hir`, `ds run --trace-cmd`, `ds run --trace-vm`, improved bytecode metadata, and standalone emitted-Bash command tracing/failure markers through `DS_TRACE_CMD=1` without adding source-language syntax. The v0.14.0 implementation adds top-level `test "name" { ... }` declarations, `assert expr` inside tests, and `ds test <file.ds>`; normal VM execution and normal standalone Bash emission ignore test blocks, while the initial test runner executes tests through the VM backend only. Inside tests, `fail "message"` fails the active test, `exit 0` stops it as a pass, and `exit nonzero` fails it. The v0.15.0 implementation adds `ds fmt [--check|--write|-w] <file.ds>` for deterministic source formatting and extends `ds check` with warning-only unused local/parameter, test-block unreachable statement, and conservative shadowing diagnostics plus `--warnings-as-errors`/`--no-warnings`; comment-bearing files are rejected by the first formatter rather than rewritten with dropped trivia. The v0.17.0 implementation adds direct control flow without changing the standalone Bash contract. The v0.18.0 implementation adds linear pipelines with explicit VM pipe wiring and standalone Bash `pipefail` parity. The v0.19.0 implementation adds ASCII string methods (`trim`, `upper`, `lower`, `replace`, `contains`, `split`, `starts_with`, `ends_with`), portable interpolation specifiers, and triple-quoted strings while keeping generated Bash standalone. The v0.20.0 cleanup tightens Wave 2 composition by tracking known array element kinds through lowering, resetting VM `for` iterator state after lexical `break`, preserving kind-aware exact `case` fallthrough parity, and making Bash helper dependency scans recurse through call arguments, so strings, pipelines, loops, imports, script args, and tests compose with VM/Bash parity. The v0.21.0 implementation adds `return expr` for scalar function values, expression-style function calls with supported forward return-kind inference, checked integer arithmetic (`*`, `/`, `%`, `**`, unary `-`, `*=`, `/=`, `%=`), and a conservative stdout safety rule for value-returning functions. The v0.22.0 implementation adds `defer`, `defer on:`, and replacement-style `trap` handlers for `EXIT`, `INT`, and `TERM`; the v0.22.1 test pass stabilizes deterministic non-signal cleanup-core parity, v0.22.2 stabilizes the signal syntax/diagnostic/emission surface, v0.22.3 adds the deterministic process-session signal harness, v0.22.4 stabilizes VM/Bash foreground direct-command `INT`/`TERM` cleanup parity, v0.22.5 extends that parity to simple foreground pipelines, and v0.22.6 finalizes the handler-context/documentation pass by explicitly deferring portable `$LINENO`-equivalent context values until VM and emitted Bash share one source-location model. `v0.23.0` adds conservative regex literals, exact scalar-array membership, integer range loop sources, and expression-level `&&`/`||`; `v0.29.0` adds deterministic map iteration; `v0.30.0` adds named flat array/map index assignment; `v0.31.0` adds scoped recursive `**` glob support; `v0.32.0` adds runtime regex strings, `regex.match`, and `regex.replace`; `v0.33.0` stabilizes the combined collection/glob/regex surface without adding new user-facing syntax or APIs; `v0.34.0` implements the first DX-priority pass for doubled literal braces plus quiet closed-stdout broken-pipe behavior; and `v0.35.0` implements byte-oriented string parsing helpers, direct split-index method chains, interpolation method chains, and name-aware string helper emission.
+Run everything:
 
-`v0.36.0` extends that shared lowered representation with inferred/defaulted
-scalar parameter-kind metadata. The VM uses it when binding function arguments;
-emitted Bash writes private type sidecars and defensive pre-body checks so a
-standalone script preserves the same accepted/rejected boundary as direct VM
-execution.
+```sh
+make test
+```
 
-Known `v0.2.0` Bash-emission limitation, now mirrored by the first VM: comparison operators intentionally use string-style semantics and do not perform type-aware numeric dispatch yet. Type-aware numeric dispatch remains deferred until the language has a fuller semantic model.
+## Repository map
 
-## Syntax catalog
+- `src/` — lexer/parser, lowering, checker, formatter, VM, stdlib, Bash emitter,
+  and CLI implementation.
+- `include/` — public internal declarations.
+- `examples/` — small scripts for manual smoke checks.
+- `tests/` — milestone regression and parity suites.
+- `docs/` — language catalog, status, architecture, runtime notes, roadmap,
+  milestones, release checklist, and technical-debt DB.
 
-`docs/language.ds` is the project-wide syntax inventory.
+## Important docs
 
-It is intentionally not a runnable script. It exists to keep the full planned language surface visible in one place and to make syntax drift obvious. Milestone specs define what is actually implemented in each version; `docs/language.ds` shows the broader direction and marks syntax by planned version/status.
+- [`docs/status.md`](docs/status.md) — current support matrix.
+- [`docs/language.ds`](docs/language.ds) — full planned syntax catalog.
+- [`docs/roadmap.md`](docs/roadmap.md) — milestone direction.
+- [`docs/architecture.md`](docs/architecture.md) — implementation boundaries.
+- [`docs/runtime.md`](docs/runtime.md) — runtime behavior and parity contracts.
+- [`docs/version-workflow.md`](docs/version-workflow.md) — milestone process.
+- [`docs/technical-debt.md`](docs/technical-debt.md) — known technical debt.
 
-When syntax changes, update `docs/language.ds` together with the relevant milestone spec, test plan, roadmap entry, and examples.
+## Development model
+
+Milestones are pre-`1.0.0` slices:
+
+- `0.x.0` is a planned feature, integration, or cleanup pass.
+- `0.x.y` is a focused fix/test/doc pass for `0.x.0`.
+- `1.0.0` is the first stable release boundary.
+
+Every completed milestone should leave specs, tests, docs, VM behavior, and Bash
+emission aligned for the scoped language surface.
