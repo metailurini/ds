@@ -23,7 +23,7 @@ const char *ds_bash_temp_helpers_source(void) {
         "__ds_tmp_paths=()\n"
         "__ds_temp_register() { __ds_tmp_paths+=(\"$1\"); }\n"
         "__ds_temp_remove() { local __ds_p=$1 __ds_i; rm -rf \"$__ds_p\" 2>/dev/null || true; for __ds_i in \"${!__ds_tmp_paths[@]}\"; do if [[ \"${__ds_tmp_paths[$__ds_i]:-}\" == \"$__ds_p\" ]]; then unset \"__ds_tmp_paths[$__ds_i]\"; fi; done; }\n"
-        "__ds_temp_cleanup() { local __ds_p; for __ds_p in \"${__ds_tmp_paths[@]}\"; do [[ -n \"$__ds_p\" ]] && rm -rf \"$__ds_p\" 2>/dev/null || true; done; __ds_tmp_paths=(); }\n"
+        "__ds_temp_cleanup() { local __ds_p; if ((${#__ds_tmp_paths[@]})); then for __ds_p in \"${__ds_tmp_paths[@]}\"; do [[ -n \"$__ds_p\" ]] && rm -rf \"$__ds_p\" 2>/dev/null || true; done; fi; __ds_tmp_paths=(); }\n"
         "__ds_mktemp_file() { local __ds_var=$1 __ds_msg=$2 __ds_path; __ds_path=$(mktemp) || __ds_error \"$__ds_msg\"; __ds_temp_register \"$__ds_path\"; printf -v \"$__ds_var\" '%s' \"$__ds_path\"; }\n"
         "__ds_mktemp_dir() { local __ds_var=$1 __ds_msg=$2 __ds_path; __ds_path=$(mktemp -d) || __ds_error \"$__ds_msg\"; __ds_temp_register \"$__ds_path\"; printf -v \"$__ds_var\" '%s' \"$__ds_path\"; }\n\n";
 }

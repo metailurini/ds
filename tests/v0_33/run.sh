@@ -91,7 +91,7 @@ emit_checked() {
 copy_seed() {
   local src="$1" dest="$2"
   mkdir -p "$dest"
-  (cd "$src" && tar cf - .) | (cd "$dest" && tar xf -)
+  cp -a "$src/." "$dest/"
 }
 
 run_parity() {
@@ -773,7 +773,6 @@ perm_seed="$SEED/perm"
 mkdir -p "$perm_seed/private" "$perm_seed/open"
 : >"$perm_seed/open/ok.ds"
 : >"$perm_seed/private/nope.ds"
-chmod 000 "$perm_seed/private" 2>/dev/null || true
 perm_fixture=$(write_fixture glob_perm <<'DS'
 for file in glob("**/*.ds") { echo $file }
 echo after
@@ -800,9 +799,34 @@ if [ "$(id -u)" = 0 ]; then
     pass 'running as root and no nobody/su fallback available; skipping permission traversal assertion'
   fi
 else
-  run_runtime_failure_in_seed glob_perm "$perm_fixture" "$perm_seed" 'failed to traverse recursive glob directory' ''
+  perm_vm_work="$TMP/glob_perm_vm_work"
+  perm_bash_work="$TMP/glob_perm_bash_work"
+  rm -rf "$perm_vm_work" "$perm_bash_work"
+  mkdir -p "$perm_vm_work" "$perm_bash_work"
+  copy_seed "$perm_seed" "$perm_vm_work"
+  copy_seed "$perm_seed" "$perm_bash_work"
+  chmod 000 "$perm_vm_work/private" "$perm_bash_work/private" 2>/dev/null || true
+  run_ok glob_perm_check "$DS" check "$perm_fixture"
+  emit_checked glob_perm "$perm_fixture" "$TMP/glob_perm.sh"
+  set +e
+  (cd "$perm_vm_work" && "$DS" run "$perm_fixture") >"$TMP/glob_perm_vm.out" 2>"$TMP/glob_perm_vm.err"
+  glob_perm_vm_rc=$?
+  (cd "$perm_bash_work" && bash "$TMP/glob_perm.sh") >"$TMP/glob_perm_bash.out" 2>"$TMP/glob_perm_bash.err"
+  glob_perm_bash_rc=$?
+  set -e
+  printf '%s' "$glob_perm_vm_rc" >"$TMP/glob_perm_vm.rc"
+  printf '%s' "$glob_perm_bash_rc" >"$TMP/glob_perm_bash.rc"
+  assert_nonzero_status glob_perm_vm
+  assert_nonzero_status glob_perm_bash
+  assert_contains "$TMP/glob_perm_vm.err" 'failed to traverse recursive glob directory' 'VM permission diagnostic'
+  assert_contains "$TMP/glob_perm_bash.err" 'failed to traverse recursive glob directory' 'Bash permission diagnostic'
+  assert_not_contains "$TMP/glob_perm_vm.out" 'after' 'VM traversal failure is fail-fast'
+  assert_not_contains "$TMP/glob_perm_bash.out" 'after' 'Bash traversal failure is fail-fast'
 fi
 chmod 700 "$perm_seed/private" 2>/dev/null || true
+chmod 700 \
+  "$TMP/glob_perm_vm_work/private" \
+  "$TMP/glob_perm_bash_work/private" 2>/dev/null || true
 
 # 4. Regex stabilization.
 regex_core=$(write_fixture regex_core <<'DS'

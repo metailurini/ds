@@ -56,7 +56,7 @@ copy_seed() {
   rm -rf "$to"
   mkdir -p "$to"
   if [ -d "$from" ]; then
-    (cd "$from" && tar cf - .) | (cd "$to" && tar xf -)
+    cp -a "$from/." "$to/"
   fi
 }
 
@@ -211,7 +211,7 @@ assert_doc_contains docs/dx-issues.md 'recursive file walking' 'DX issues resolv
 assert_doc_contains Makefile '0-38' 'Makefile wires v0.38 suite'
 assert_doc_not_contains src/lexer.c 'walk' 'v0.38 did not add walk syntax keywords'
 assert_doc_not_contains src/parser.c 'walk_ext' 'v0.38 did not add parser grammar for walk helpers'
-dir_helpers=$(grep -o '{"dir\.[^"]*"' src/ds_stdlib.c | sed 's/^{"//; s/"$//' | sort | tr '\n' ' ')
+dir_helpers=$(grep -o '{"dir\.[^"]*"' src/ds_stdlib.c | sed 's/^{"//; s/"$//' | LC_ALL=C sort | tr '\n' ' ')
 [ "$dir_helpers" = 'dir.exists dir.walk dir.walk! dir.walk_ext dir.walk_ext! ' ] || fail "unexpected dir namespace helper surface: $dir_helpers"
 pass 'dir namespace public helper surface is scoped'
 for f in docs/language.ds docs/runtime.md docs/status.md docs/parity-contracts.md docs/diagnostics.md docs/dx-issues.md; do
@@ -451,9 +451,15 @@ assert_runtime_rejected_seed file_root "$file_root" "$file_root_seed" 'dir.walk'
 unreadable_seed="$SEED/unreadable"
 mkdir -p "$unreadable_seed/root/closed"
 touch "$unreadable_seed/root/closed/file.c"
+unreadable_vm_work="$TMP/unreadable_root_vm_work"
+unreadable_bash_work="$TMP/unreadable_root_bash_work"
+rm -rf "$unreadable_vm_work" "$unreadable_bash_work"
+mkdir -p "$unreadable_vm_work" "$unreadable_bash_work"
+copy_seed "$unreadable_seed" "$unreadable_vm_work"
+copy_seed "$unreadable_seed" "$unreadable_bash_work"
 if [ "$(id -u 2>/dev/null || echo 1)" = 0 ]; then
   pass 'unreadable root permission enforcement skipped while tests run as root'
-elif chmod 000 "$unreadable_seed/root/closed" 2>/dev/null; then
+elif chmod 000 "$unreadable_vm_work/root/closed" "$unreadable_bash_work/root/closed" 2>/dev/null; then
   unreadable=$(write_fixture unreadable <<'DS'
 for path_name in dir.walk("root") {
   echo "{path_name}"
@@ -462,11 +468,22 @@ echo "after"
 DS
 )
   set +e
-  run_parity_seed unreadable_root "$unreadable" "$unreadable_seed" '' 1
-  unreadable_rc=$?
+  run_ok unreadable_root_check "$DS" check "$unreadable"
+  run_ok unreadable_root_ast "$DS" ast "$unreadable"
+  run_ok unreadable_root_hir "$DS" hir "$unreadable"
+  run_ok unreadable_root_bytecode "$DS" bytecode "$unreadable"
+  emit_checked unreadable_root "$unreadable" "$TMP/unreadable_root.sh"
+  (cd "$unreadable_vm_work" && timeout "$CASE_TIMEOUT" "$DS" run "$unreadable") >"$TMP/unreadable_root_vm.out" 2>"$TMP/unreadable_root_vm.err"
+  unreadable_vm_rc=$?
+  (cd "$unreadable_bash_work" && timeout "$CASE_TIMEOUT" bash "$TMP/unreadable_root.sh") >"$TMP/unreadable_root_bash.out" 2>"$TMP/unreadable_root_bash.err"
+  unreadable_bash_rc=$?
   set -e
-  chmod 755 "$unreadable_seed/root/closed" 2>/dev/null || true
-  if [ "$unreadable_rc" = 0 ]; then
+  printf '%s' "$unreadable_vm_rc" >"$TMP/unreadable_root_vm.rc"
+  printf '%s' "$unreadable_bash_rc" >"$TMP/unreadable_root_bash.rc"
+  assert_status unreadable_root_vm 1
+  assert_status unreadable_root_bash 1
+  chmod 755 "$unreadable_vm_work/root/closed" "$unreadable_bash_work/root/closed" "$unreadable_seed/root/closed" 2>/dev/null || true
+  if [ "$unreadable_vm_rc" = 0 ] && [ "$unreadable_bash_rc" = 0 ]; then
     assert_contains "$TMP/unreadable_root_vm.err" 'dir.walk' 'unreadable root VM diagnostic names dir.walk'
     assert_contains "$TMP/unreadable_root_bash.err" 'dir.walk' 'unreadable root Bash diagnostic names dir.walk'
   else
@@ -514,9 +531,9 @@ fi
 # 10. Ordering and duplicate policy.
 ordering_seed="$SEED/ordering"
 mkdir -p "$ordering_seed/root"
-touch "$ordering_seed/root/b.c" "$ordering_seed/root/aa.c" "$ordering_seed/root/B.c" "$ordering_seed/root/a.c"
-run_parity_seed ordering_bytewise "$walk_duplicate_ext" "$ordering_seed" $'root/B.c\nroot/a.c\nroot/aa.c\nroot/b.c\n'
-run_parity_seed_env ordering_hostile_locale "$walk_duplicate_ext" "$ordering_seed" $'root/B.c\nroot/a.c\nroot/aa.c\nroot/b.c\n' 'LC_ALL=C.UTF-8'
+touch "$ordering_seed/root/b.c" "$ordering_seed/root/aa.c" "$ordering_seed/root/A.c" "$ordering_seed/root/a1.c"
+run_parity_seed ordering_bytewise "$walk_duplicate_ext" "$ordering_seed" $'root/A.c\nroot/a1.c\nroot/aa.c\nroot/b.c\n'
+run_parity_seed_env ordering_hostile_locale "$walk_duplicate_ext" "$ordering_seed" $'root/A.c\nroot/a1.c\nroot/aa.c\nroot/b.c\n' 'LC_ALL=C.UTF-8'
 
 # 11. Hostile file names.
 hostile_seed="$SEED/hostile"
@@ -687,7 +704,7 @@ standalone_work="$TMP/standalone_work"
 copy_seed "$ext_seed" "$standalone_work"
 cp "$ext_script" "$standalone_work/walk_ext.sh"
 set +e
-(cd "$standalone_work" && PATH=/usr/bin:/bin timeout "$CASE_TIMEOUT" bash walk_ext.sh) >"$TMP/standalone.out" 2>"$TMP/standalone.err"
+(cd "$standalone_work" && timeout "$CASE_TIMEOUT" bash -c 'export PATH=/usr/bin:/bin; bash walk_ext.sh') >"$TMP/standalone.out" 2>"$TMP/standalone.err"
 standalone_rc=$?
 set -e
 printf '%s' "$standalone_rc" >"$TMP/standalone.rc"
@@ -853,7 +870,7 @@ copy_elsewhere="$TMP/copy_elsewhere"
 copy_seed "$ext_seed" "$copy_elsewhere"
 cp "$ext_script" "$copy_elsewhere/copied.sh"
 set +e
-(cd "$copy_elsewhere" && PATH=/usr/bin:/bin timeout "$CASE_TIMEOUT" bash copied.sh) >"$TMP/copy_elsewhere.out" 2>"$TMP/copy_elsewhere.err"
+(cd "$copy_elsewhere" && timeout "$CASE_TIMEOUT" bash -c 'export PATH=/usr/bin:/bin; bash copied.sh') >"$TMP/copy_elsewhere.out" 2>"$TMP/copy_elsewhere.err"
 copy_elsewhere_rc=$?
 set -e
 printf '%s' "$copy_elsewhere_rc" >"$TMP/copy_elsewhere.rc"

@@ -58,14 +58,33 @@ The supported production surface includes:
 - strings, integers, booleans, interpolation, `if`/`else`, `while`, `case`,
   `break`, `continue`, and integer arithmetic;
 - shell commands, readable redirections, plain/captured pipelines, and captured
-  command-result fields;
-- script args/options/flags and local `import "./file.ds"` composition;
+  command-result fields, e.g. `let result = run npm test`; `&> "build.log"`
+  documents readable redirection;
+- script args/options/flags and local `import "./lib.ds"` composition;
 - top-level functions with defaults, statement calls, scalar returns, arrays,
-  maps, lightweight rows, and row arrays;
+  maps, array/map literals, lightweight rows, and row arrays;
 - shell-oriented helpers for files, dirs, paths, commands, env, globs, recursive
   file walks, lines, strings, and regex;
 - VM/Bash parity for the supported subset: emitted Bash should be standalone and
   should not require the `ds` binary at runtime.
+
+Known `v0.2.0` Bash-emission limitation: the Bash emitter uses Bash `[[ ... ]]`
+string-style comparison semantics and does not perform type-aware numeric dispatch
+yet. `<`, `<=`, `>`, and `>=` are emitted with Bash-compatible string comparison
+shapes rather than selecting arithmetic comparison from tracked `ds` operand types.
+
+Current status: `v0.9.0` implementation and tests are complete for the scoped
+user-defined functions pass; `v0.10.0` implementation and tests are complete for
+the scoped arrays, maps, and array-loop pass; `v0.17.0` implementation and tests are complete for scoped control flow; `v0.18.0` implementation and tests are
+complete for scoped linear pipelines; `v0.19.0` implementation and tests are complete for scoped string methods, interpolation formatting, and triple-quoted strings; `v0.20.0` implementation and tests are complete for the scoped Wave 2
+stabilization cleanup; `v0.21.0` implementation and tests are complete for scoped
+scalar function values and integer arithmetic; `v0.22.0` implementation is
+complete for the initial scoped process cleanup and signal-handler pass. Later
+milestone slices through `v0.38.0` are complete for their scoped surfaces (regex,
+glob, collection mutation, lightweight rows, recursive file walks, and more).
+The `v0.5.0` script argument contract is complete. The current implementation is
+`v0.38.0`. The formatter keeps comment-preserving formatting deferred rather than
+rewriting comment-bearing files with dropped trivia.
 
 For exact guarantees, deferred items, and edge-case behavior, read
 [`docs/status.md`](docs/status.md).
@@ -74,8 +93,9 @@ For exact guarantees, deferred items, and edge-case behavior, read
 
 ```sh
 make
-./ds check examples/basic.ds
+./ds examples/basic.ds
 ./ds run examples/basic.ds
+./ds check examples/basic.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
@@ -87,6 +107,8 @@ Useful commands:
 ```sh
 ./ds fmt --check examples/args.ds
 ./ds hir examples/basic.ds
+./ds tokens examples/basic.ds
+./ds ast examples/basic.ds
 ./ds bytecode examples/basic.ds
 ./ds run --trace-cmd examples/basic.ds
 DS_TRACE_CMD=1 bash /tmp/basic.sh
@@ -117,6 +139,12 @@ make test
 - [`docs/runtime.md`](docs/runtime.md) — runtime behavior and parity contracts.
 - [`docs/version-workflow.md`](docs/version-workflow.md) — milestone process.
 - [`docs/technical-debt.md`](docs/technical-debt.md) — known technical debt.
+- [`docs/milestones/v0.22.0-spec.md`](docs/milestones/v0.22.0-spec.md) and
+  [`docs/milestones/v0.22.0-test-plan.md`](docs/milestones/v0.22.0-test-plan.md) — v0.22 process cleanup/signal contract.
+- [`docs/milestones/v0.23.0-spec.md`](docs/milestones/v0.23.0-spec.md) and
+  [`docs/milestones/v0.23.0-test-plan.md`](docs/milestones/v0.23.0-test-plan.md) — v0.23 membership/range/regex contract.
+- [`docs/milestones/v0.24.0-spec.md`](docs/milestones/v0.24.0-spec.md) and
+  [`docs/milestones/v0.24.0-test-plan.md`](docs/milestones/v0.24.0-test-plan.md) — v0.24 pre-1.0 hardening contract.
 
 ## Development model
 
