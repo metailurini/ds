@@ -47,6 +47,18 @@ static inline bool vm_i64_pow_checked(int64_t base, int64_t exp, int64_t *out) {
     return true;
 }
 
+static inline bool vm_ascii_space(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
+}
+
+static inline void vm_ascii_trim_bounds(const char *data, size_t len, size_t *start, size_t *end) {
+    size_t a = 0, b = len;
+    while (a < b && vm_ascii_space(data[a])) a++;
+    while (b > a && vm_ascii_space(data[b - 1])) b--;
+    *start = a;
+    *end = b;
+}
+
 typedef enum {
     OP_CMP_ADD,
     OP_CMP_SUB,

@@ -943,13 +943,6 @@ static size_t count_non_overlapping_bytes(const char *s, size_t len, const char 
     return count;
 }
 
-static bool ascii_trim_bounds(const char *s, size_t len, size_t *start, size_t *end) {
-    size_t a = 0, b = len;
-    while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\n' || s[a] == '\r' || s[a] == '\v' || s[a] == '\f')) a++;
-    while (b > a && (s[b - 1] == ' ' || s[b - 1] == '\t' || s[b - 1] == '\n' || s[b - 1] == '\r' || s[b - 1] == '\v' || s[b - 1] == '\f')) b--;
-    *start = a; *end = b; return true;
-}
-
 static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
     const char *s = NULL; size_t len = 0;
     if (!vm_string_arg(vm, ins, 0, &s, &len)) return false;
@@ -959,7 +952,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         *out = ds_value_int(n); return true;
     }
     if (helper_is(ins, "string.trim")) {
-        size_t a = 0, b = 0; ascii_trim_bounds(s, len, &a, &b);
+        size_t a = 0, b = 0; vm_ascii_trim_bounds(s, len, &a, &b);
         DsString r; ds_string_from_range(&r, s + a, b - a); *out = ds_value_string_take(&r); return true;
     }
     if (helper_is(ins, "string.upper") || helper_is(ins, "string.lower")) {

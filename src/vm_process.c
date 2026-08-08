@@ -40,8 +40,7 @@ static bool ascii_transform_string(const DsString *in, DsString *out, const char
     ds_string_init(out);
     size_t a = 0, b = in->len;
     if (strcmp(spec, "trim") == 0) {
-        while (a < b && (in->data[a] == ' ' || in->data[a] == '\t' || in->data[a] == '\n' || in->data[a] == '\r' || in->data[a] == '\v' || in->data[a] == '\f')) a++;
-        while (b > a && (in->data[b - 1] == ' ' || in->data[b - 1] == '\t' || in->data[b - 1] == '\n' || in->data[b - 1] == '\r' || in->data[b - 1] == '\v' || in->data[b - 1] == '\f')) b--;
+        vm_ascii_trim_bounds(in->data, in->len, &a, &b);
     }
     ds_string_append_range(out, in->data ? in->data + a : "", b - a);
     if (strcmp(spec, "upper") == 0 || strcmp(spec, "lower") == 0) {
