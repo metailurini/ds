@@ -1,5 +1,17 @@
 #include "vm_internal.h"
 
+static void print_span_comment(FILE *out, const DsSource *fallback, DsSpan span) {
+    const DsSource *source = span.source ? span.source : fallback;
+    fprintf(out, "    # %s:%d:%d\n", source && source->path ? source->path : "<source>", span.start.line, span.start.column);
+}
+
+static void print_reg_args(FILE *out, const Instr *ins) {
+    for (size_t i = 0; i < ins->arg_count; i++) {
+        if (i) fputs(", ", out);
+        fprintf(out, "r%d", ins->args[i]);
+    }
+}
+
 static void print_instr_command(FILE *out, const Instr *ins) {
     size_t word = 0;
     size_t stages = ins->stage_count ? ins->stage_count : 1;
@@ -128,7 +140,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                     fprintf(out, " = %s", decl->default_bool ? "true" : "false");
                 }
             }
-            { const DsSource *span_source = decl->span.source ? decl->span.source : source; fprintf(out, "    # %s:%d:%d\n", span_source && span_source->path ? span_source->path : "<source>", decl->span.start.line, decl->span.start.column); }
+            print_span_comment(out, source, decl->span);
         }
     }
 
@@ -175,7 +187,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
             case OP_INTERP_JOIN:
                 fprintf(out, " r%d, join(", ins->dst);
-                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                print_reg_args(out, ins);
                 fputc(')', out);
                 break;
             case OP_RUN_CAPTURE:
@@ -198,20 +210,17 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 break;
             case OP_CALL:
                 fprintf(out, " fn%d(", ins->target);
-                for (size_t j = 0; j < ins->arg_count; j++) {
-                    if (j) fputs(", ", out);
-                    fprintf(out, "r%d", ins->args[j]);
-                }
+                print_reg_args(out, ins);
                 fputc(')', out);
                 break;
             case OP_STDLIB_CALL:
                 fprintf(out, " r%d, %s(", ins->dst, ins->name ? ins->name : "<helper>");
-                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                print_reg_args(out, ins);
                 fputc(')', out);
                 break;
             case OP_ARRAY_LITERAL:
                 fprintf(out, " r%d, [", ins->dst);
-                for (size_t j = 0; j < ins->arg_count; j++) { if (j) fputs(", ", out); fprintf(out, "r%d", ins->args[j]); }
+                print_reg_args(out, ins);
                 fputc(']', out);
                 break;
             case OP_MAP_LITERAL:
@@ -231,13 +240,13 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_RETURN_FUNC: break;
             case OP_REGISTER_HANDLER:
                 fprintf(out, " %s %s -> %d", ins->b ? "trap" : "defer",
-                        ins->a == DS_HANDLER_INT ? "INT" : (ins->a == DS_HANDLER_TERM ? "TERM" : "EXIT"), ins->target);
+                        ds_handler_signal_name((DsHandlerSignal)ins->a), ins->target);
                 break;
             case OP_END_HANDLER: break;
             case OP_RETURN: fprintf(out, " %d", ins->target); break;
             case OP_NOP: break;
         }
-        { const DsSource *span_source = ins->span.source ? ins->span.source : source; fprintf(out, "    # %s:%d:%d\n", span_source && span_source->path ? span_source->path : "<source>", ins->span.start.line, ins->span.start.column); }
+        print_span_comment(out, source, ins->span);
     }
     program_free(&p);
     return true;
