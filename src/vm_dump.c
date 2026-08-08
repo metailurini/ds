@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static void print_escaped(FILE *out, const char *data, size_t len);
-
 static void print_instr_command(FILE *out, const Instr *ins) {
     size_t word = 0;
     size_t stages = ins->stage_count ? ins->stage_count : 1;
@@ -15,7 +13,7 @@ static void print_instr_command(FILE *out, const Instr *ins) {
         for (size_t j = 0; j < count; j++, word++) {
             if (j || s) fputs(", ", out);
             fputc('"', out);
-            print_escaped(out, ins->words[word].data, ins->words[word].len);
+            vm_fprint_escaped(out, ins->words[word].data, ins->words[word].len);
             fputc('"', out);
         }
     }
@@ -125,7 +123,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             if (decl->has_default) {
                 if (decl->type == DS_SCRIPT_TYPE_STRING) {
                     fputs(" = \"", out);
-                    print_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+                    vm_fprint_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
                     fputc('"', out);
                 } else if (decl->type == DS_SCRIPT_TYPE_INT) {
                     fprintf(out, " = %lld", (long long)decl->default_int);
@@ -197,7 +195,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 print_instr_command(out, ins);
                 if (ins->redirect.kind != DS_REDIRECT_NONE) {
                     fprintf(out, " %s \"", ds_redirect_source_op(ins->redirect.kind));
-                    print_escaped(out, ins->redirect.target.data, ins->redirect.target.len);
+                    vm_fprint_escaped(out, ins->redirect.target.data, ins->redirect.target.len);
                     fputc('"', out);
                 }
                 break;
