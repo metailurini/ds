@@ -70,6 +70,15 @@ static bool is_direct_script_arg(const char *arg) {
            strcmp(arg, "hir") != 0 && strcmp(arg, "bytecode") != 0 && strcmp(arg, "emit") != 0;
 }
 
+static int cli_run_program(const char *path, int argc, char **argv, DsVmOptions options) {
+    DsCliProgram program;
+    int rc = ds_cli_load_lower(path, &program)
+        ? ds_vm_run_program_args_options(&program.source, program.lowered, argc, argv, &program.diag, options)
+        : 1;
+    ds_cli_program_free(&program);
+    return rc;
+}
+
 static int cli_run_tests(const char *path) {
     DsCliProgram program;
     int rc = 1;
@@ -201,10 +210,7 @@ int main(int argc, char **argv) {
 
     if (argc >= 2 && is_direct_script_arg(argv[1]) &&
         (access(argv[1], R_OK) == 0 || ds_path_looks_like_script(argv[1]))) {
-        DsCliProgram program;
-        int rc = ds_cli_load_lower(argv[1], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 2, argv + 2, &program.diag) : 1;
-        ds_cli_program_free(&program);
-        return rc;
+        return cli_run_program(argv[1], argc - 2, argv + 2, (DsVmOptions){0});
     }
 
     if (strcmp(argv[1], "run") == 0) {
@@ -214,10 +220,7 @@ int main(int argc, char **argv) {
         int path_index;
         if (parse_flagged_path(argc, argv, 2, "run", flags, 2, true,
                                "expected script path after `ds run` flags", NULL, &path_index)) return 1;
-        DsCliProgram program;
-        int rc = ds_cli_load_lower(argv[path_index], &program) ? ds_vm_run_program_args_options(&program.source, program.lowered, argc - path_index - 1, argv + path_index + 1, &program.diag, options) : 1;
-        ds_cli_program_free(&program);
-        return rc;
+        return cli_run_program(argv[path_index], argc - path_index - 1, argv + path_index + 1, options);
     }
 
     if (strcmp(argv[1], "test") == 0) {
