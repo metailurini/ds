@@ -500,6 +500,11 @@ static unsigned program_mask(const DsLowerProgram *program, StmtMaskPredicate pr
 #define DEFINE_PROGRAM_USES(name, predicate) \
     bool name(const DsLowerProgram *program) { return program_uses_stmt(program, predicate); }
 
+#define DEFINE_SIMPLE_STMT_PROGRAM_USES(predicate, stmt_query, program_query, condition) \
+    static bool predicate(const DsLowerStmt *stmt) { return (condition); } \
+    DEFINE_STMT_USES_NESTED(stmt_query, predicate) \
+    DEFINE_PROGRAM_USES(program_query, stmt_query)
+
 DEFINE_PROGRAM_USES(program_uses_run, stmt_uses_run)
 DEFINE_PROGRAM_USES(program_uses_pipeline_run, stmt_uses_pipeline_run)
 DEFINE_PROGRAM_USES(program_uses_stdlib, stmt_uses_stdlib)
@@ -558,30 +563,14 @@ DEFINE_PROGRAM_USES(program_uses_collection_index, stmt_uses_collection_index)
 DEFINE_PROGRAM_USES(program_uses_array_helpers, stmt_uses_array_helper)
 DEFINE_PROGRAM_USES(program_uses_map_helpers, stmt_uses_map_helper)
 
-static bool stmt_is_map_iteration(const DsLowerStmt *stmt) {
-    return stmt->kind == DS_LOWER_STMT_FOR_MAP;
-}
-
-DEFINE_STMT_USES_NESTED(stmt_uses_map_iteration, stmt_is_map_iteration)
-
-DEFINE_PROGRAM_USES(program_uses_map_iteration, stmt_uses_map_iteration)
-
-static bool stmt_is_map_assignment(const DsLowerStmt *stmt) {
-    return stmt->kind == DS_LOWER_STMT_INDEX_ASSIGN && stmt->as.index_assign_stmt.target_is_map;
-}
-
-DEFINE_STMT_USES_NESTED(stmt_uses_map_assignment, stmt_is_map_assignment)
-
-DEFINE_PROGRAM_USES(program_uses_map_assignment, stmt_uses_map_assignment)
+DEFINE_SIMPLE_STMT_PROGRAM_USES(stmt_is_map_iteration, stmt_uses_map_iteration, program_uses_map_iteration,
+                                stmt->kind == DS_LOWER_STMT_FOR_MAP)
+DEFINE_SIMPLE_STMT_PROGRAM_USES(stmt_is_map_assignment, stmt_uses_map_assignment, program_uses_map_assignment,
+                                stmt->kind == DS_LOWER_STMT_INDEX_ASSIGN && stmt->as.index_assign_stmt.target_is_map)
 DEFINE_PROGRAM_USES(program_uses_map_literal, stmt_uses_map_literal)
 
-static bool stmt_is_control_command(const DsLowerStmt *stmt) {
-    return stmt->kind == DS_LOWER_STMT_CMD && bash_command_is_control(&stmt->as.cmd_stmt, NULL);
-}
-
-DEFINE_STMT_USES_NESTED(stmt_uses_control_commands, stmt_is_control_command)
-
-DEFINE_PROGRAM_USES(program_uses_control_commands, stmt_uses_control_commands)
+DEFINE_SIMPLE_STMT_PROGRAM_USES(stmt_is_control_command, stmt_uses_control_commands, program_uses_control_commands,
+                                stmt->kind == DS_LOWER_STMT_CMD && bash_command_is_control(&stmt->as.cmd_stmt, NULL))
 
 static bool stmt_needs_int_helpers(const DsLowerStmt *stmt) {
     return (stmt->kind == DS_LOWER_STMT_ASSIGN && stmt->as.assign_stmt.op != DS_ASSIGN_SET) ||
@@ -601,21 +590,11 @@ static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
 
 DEFINE_PROGRAM_USES(program_uses_function_value_helpers, stmt_uses_function_value_helpers)
 
-static bool stmt_is_handler(const DsLowerStmt *stmt) {
-    return stmt->kind == DS_LOWER_STMT_DEFER || stmt->kind == DS_LOWER_STMT_TRAP;
-}
-
-DEFINE_STMT_USES_NESTED(stmt_uses_handlers, stmt_is_handler)
-
-DEFINE_PROGRAM_USES(program_uses_handlers, stmt_uses_handlers)
-
-static bool stmt_is_signal_handler(const DsLowerStmt *stmt) {
-    return stmt_is_handler(stmt) && ds_handler_signal_is_runtime_cleanup(stmt->as.handler_stmt.signal);
-}
-
-DEFINE_STMT_USES_NESTED(stmt_uses_signal_handlers, stmt_is_signal_handler)
-
-DEFINE_PROGRAM_USES(program_uses_signal_handlers, stmt_uses_signal_handlers)
+DEFINE_SIMPLE_STMT_PROGRAM_USES(stmt_is_handler, stmt_uses_handlers, program_uses_handlers,
+                                stmt->kind == DS_LOWER_STMT_DEFER || stmt->kind == DS_LOWER_STMT_TRAP)
+DEFINE_SIMPLE_STMT_PROGRAM_USES(stmt_is_signal_handler, stmt_uses_signal_handlers, program_uses_signal_handlers,
+                                (stmt->kind == DS_LOWER_STMT_DEFER || stmt->kind == DS_LOWER_STMT_TRAP) &&
+                                ds_handler_signal_is_runtime_cleanup(stmt->as.handler_stmt.signal))
 
 static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
     if (!expr) return false;
