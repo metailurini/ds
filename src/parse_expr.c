@@ -31,38 +31,32 @@ typedef bool (*ParseCollectionItemFn)(Parser *p, DsExpr *expr);
 
 static void skip_collection_newlines(Parser *p) { parser_skip_newlines(p); }
 
-static bool parse_collection_next(Parser *p, DsTokenKind closing, const char *trailing_message) {
-    skip_collection_newlines(p);
-    if (!parser_advance_if(p, DS_TOK_COMMA)) return false;
-    skip_collection_newlines(p);
-    return !parser_reject_trailing_comma(p, closing, trailing_message);
-}
-
-static void parse_collection_close(Parser *p, DsExpr *expr, DsTokenKind closing, const char *message) {
-    if (parser_expect(p, closing, message)) expr->span.end = parser_previous(p)->span.end;
-}
-
 static DsExpr *parser_new_text_expr(DsExprKind kind, const DsToken *token) {
     DsExpr *expr = parser_new_expr(kind, token->span);
     expr->as.text = parser_copy_token_text(token);
     return expr;
 }
 
-static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, DsTokenKind closing,
-                                        const char *trailing_message, const char *closing_message,
-                                        const char *empty_message, ParseCollectionItemFn parse_item) {
+static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, ParseCollectionItemFn parse_item) {
+    bool map = kind == DS_EXPR_MAP;
+    DsTokenKind closing = map ? DS_TOK_RBRACE : DS_TOK_RBRACKET;
+    const char *trailing_message = map ? "expected map entry after `,`" : "expected array element after `,`";
+    const char *closing_message = map ? "expected `}` to close map literal" : "expected `]` to close array literal";
     DsToken *open = parser_previous(p);
     DsExpr *expr = parser_new_expr(kind, open->span);
     skip_collection_newlines(p);
-    if (empty_message && parser_at(p, closing)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "%s", empty_message);
+    if (map && parser_at(p, closing)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "empty map literals are deferred in v0.10.0");
     } else {
         while (!parser_at_end(p) && !parser_at(p, closing)) {
             if (!parse_item(p, expr)) break;
-            if (!parse_collection_next(p, closing, trailing_message)) break;
+            skip_collection_newlines(p);
+            if (!parser_advance_if(p, DS_TOK_COMMA)) break;
+            skip_collection_newlines(p);
+            if (parser_reject_trailing_comma(p, closing, trailing_message)) break;
         }
     }
-    parse_collection_close(p, expr, closing, closing_message);
+    if (parser_expect(p, closing, closing_message)) expr->span.end = parser_previous(p)->span.end;
     return expr;
 }
 
@@ -99,15 +93,11 @@ fail:
 }
 
 static DsExpr *parse_array_literal(Parser *p) {
-    return parse_collection_literal(p, DS_EXPR_ARRAY, DS_TOK_RBRACKET,
-                                    "expected array element after `,`", "expected `]` to close array literal",
-                                    NULL, parse_array_element);
+    return parse_collection_literal(p, DS_EXPR_ARRAY, parse_array_element);
 }
 
 static DsExpr *parse_map_literal(Parser *p) {
-    return parse_collection_literal(p, DS_EXPR_MAP, DS_TOK_RBRACE,
-                                    "expected map entry after `,`", "expected `}` to close map literal",
-                                    "empty map literals are deferred in v0.10.0", parse_map_entry);
+    return parse_collection_literal(p, DS_EXPR_MAP, parse_map_entry);
 }
 
 
