@@ -60,6 +60,10 @@ static hm_allocator hm_make_default_allocator(void) {
     return a;
 }
 
+static hm_allocator hm_allocator_get(const hashmap *hm) {
+    return hm ? hm->config.allocator : hm_make_default_allocator();
+}
+
 static uint64_t hm_default_hash(const char *key, size_t key_len, uint64_t seed, void *ctx) {
     uint64_t h = 1469598103934665603ULL ^ seed;
     size_t i;
@@ -131,21 +135,19 @@ static int hm_config_normalize(hm_config *dst, const hm_config *src) {
 }
 
 static void *hm_alloc(const hashmap *hm, size_t size) {
-    hm_allocator a = hm ? hm->config.allocator : hm_make_default_allocator();
+    hm_allocator a = hm_allocator_get(hm);
     return a.malloc_fn(size, a.ctx);
 }
 
 static void *hm_calloc(const hashmap *hm, size_t count, size_t size) {
-    hm_allocator a;
     if (size != 0 && count > ((size_t)-1) / size) return NULL;
-    a = hm ? hm->config.allocator : hm_make_default_allocator();
+    hm_allocator a = hm_allocator_get(hm);
     return a.calloc_fn(count, size, a.ctx);
 }
 
 static void hm_dealloc(const hashmap *hm, void *ptr) {
-    hm_allocator a;
     if (!ptr) return;
-    a = hm ? hm->config.allocator : hm_make_default_allocator();
+    hm_allocator a = hm_allocator_get(hm);
     a.free_fn(ptr, a.ctx);
 }
 
@@ -608,8 +610,15 @@ hm_result hm_reserve(hashmap *hm, size_t min_capacity) {
     return hm_rehash(hm, wanted);
 }
 
-hm_result hm_freeze_capacity(hashmap *hm) { if (!hm) return HM_ERR_INVALID; hm->config.no_growth = 1; hm->version++; return HM_OK; }
-hm_result hm_unfreeze_capacity(hashmap *hm) { if (!hm) return HM_ERR_INVALID; hm->config.no_growth = 0; hm->version++; return HM_OK; }
+static hm_result hm_set_frozen(hashmap *hm, int frozen) {
+    if (!hm) return HM_ERR_INVALID;
+    hm->config.no_growth = frozen ? 1 : 0;
+    hm->version++;
+    return HM_OK;
+}
+
+hm_result hm_freeze_capacity(hashmap *hm) { return hm_set_frozen(hm, 1); }
+hm_result hm_unfreeze_capacity(hashmap *hm) { return hm_set_frozen(hm, 0); }
 int hm_is_frozen(const hashmap *hm) { return hm ? hm->config.no_growth != 0 : 0; }
 
 hm_result hm_compact(hashmap *hm) {

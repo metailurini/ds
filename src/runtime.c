@@ -156,6 +156,11 @@ static void ds_value_free_boxed(void *boxed) {
     free(boxed);
 }
 
+static void ds_value_free_boxed_callback(void *boxed, void *ctx) {
+    (void)ctx;
+    ds_value_free_boxed(boxed);
+}
+
 void ds_value_free(DsValue *value) {
     switch (value->kind) {
         case DS_VALUE_STRING:
@@ -346,13 +351,8 @@ void ds_map_sorted_keys_free(DsStr *keys, size_t len) {
 }
 
 void ds_map_clear(DsMap *map) {
-    hm_iter it;
-    void *raw = NULL;
     if (!map->impl) return;
-    if (hm_iter_init(ds_map_impl(map), &it) == HM_OK) {
-        while (hm_iter_next_len(ds_map_impl(map), &it, NULL, NULL, &raw) == HM_OK) ds_value_free_boxed(raw);
-    }
-    hm_clear(ds_map_impl(map));
+    hm_clear_with_values(ds_map_impl(map), ds_value_free_boxed_callback, NULL);
 }
 
 void ds_map_free(DsMap *map) {
