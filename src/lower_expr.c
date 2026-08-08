@@ -20,7 +20,7 @@ void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *ar
     if (!(lower_str_eq(helper_name, "glob") || lower_str_eq(helper_name, "glob!"))) return;
     if (!arg || arg->kind != DS_EXPR_STRING) return;
     DsStr decoded = {0};
-    if (lower_decode_string_text(arg->as.text, &decoded)) {
+    if (ds_decode_string_text(arg->as.text, &decoded)) {
         size_t recursive_count = 0;
         DsGlobPatternStatus status = ds_glob_pattern_validate(decoded, &recursive_count);
         if (status != DS_GLOB_PATTERN_OK) {
@@ -74,7 +74,7 @@ static void validate_dir_walk_ext_literal_arg(Lower *lower, DsStr helper_name, c
             continue;
         }
         DsStr decoded = {0};
-        if (!lower_decode_string_text(elem->as.text, &decoded)) continue;
+        if (!ds_decode_string_text(elem->as.text, &decoded)) continue;
         bool glob_like = false;
         if (!extension_text_valid(decoded, &glob_like)) {
             if (glob_like) {
@@ -93,7 +93,7 @@ void lower_map_entry_vec_push(DsLowerMapEntryVec *vec, DsLowerMapEntry entry) {
 
 DsStr lower_map_key_decode(const DsMapEntry *entry) {
     DsStr out = {0};
-    if (entry->quoted_key) lower_decode_string_text(entry->key, &out);
+    if (entry->quoted_key) ds_decode_string_text(entry->key, &out);
     else out = str_clone(entry->key);
     return out;
 }
@@ -264,7 +264,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         if (left_kind != SYM_STRING && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "left operand of `matches` must be a string in v0.32.0");
         if (right->kind == DS_LOWER_EXPR_STRING && expr->as.binary.right->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
-            if (lower_decode_string_text(expr->as.binary.right->as.text, &decoded)) {
+            if (ds_decode_string_text(expr->as.binary.right->as.text, &decoded)) {
                 lower_validate_static_regex_pattern(lower, expr->as.binary.right, decoded);
                 free(decoded.data);
             }
@@ -543,7 +543,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
         lower_expr_vec_push(&out->as.call.args, lowered);
         if (i == 1 && arg->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
-            if (lower_decode_string_text(arg->as.text, &decoded)) {
+            if (ds_decode_string_text(arg->as.text, &decoded)) {
                 size_t captures = 0;
                 DsRegexStatus status = ds_regex_validate_pattern(decoded, &captures);
                 if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
@@ -553,7 +553,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
         }
         if (i == 2 && is_replace && arg->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
-            if (lower_decode_string_text(arg->as.text, &decoded)) {
+            if (ds_decode_string_text(arg->as.text, &decoded)) {
                 lower_validate_static_regex_replacement(lower, arg, decoded, pattern_capture_count, pattern_capture_count_known);
                 free(decoded.data);
             }
@@ -561,7 +561,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
         size_t flags_index = is_match ? 2 : 3;
         if (i == flags_index && arg->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
-            if (lower_decode_string_text(arg->as.text, &decoded)) {
+            if (ds_decode_string_text(arg->as.text, &decoded)) {
                 lower_validate_static_regex_flags(lower, arg, decoded);
                 free(decoded.data);
             }
@@ -634,7 +634,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         }
         DsStr field = {0};
         if (expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
-            lower_decode_string_text(expr->as.call.args.items[1]->as.text, &field);
+            ds_decode_string_text(expr->as.call.args.items[1]->as.text, &field);
             if (field.len == 0) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "sort_by field must be non-empty in v0.37.0");
             else if (schema && !row_schema_find(schema, field)) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "unknown row field `%.*s`", (int)field.len, field.data);
         } else if (expr->as.call.args.len > 1) {
@@ -642,7 +642,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         }
         DsStr direction = {0};
         if (expr->as.call.args.len > 2 && expr->as.call.args.items[2]->kind == DS_EXPR_STRING) {
-            lower_decode_string_text(expr->as.call.args.items[2]->as.text, &direction);
+            ds_decode_string_text(expr->as.call.args.items[2]->as.text, &direction);
             if (!ds_str_eq_cstr(direction, "asc") && !ds_str_eq_cstr(direction, "desc")) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[2]->span, "sort_by direction must be \"asc\" or \"desc\" in v0.37.0");
             }
@@ -679,7 +679,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         if (is_string_helper) {
             if ((lower_str_eq(expr->as.call.name, "string.split") || lower_str_eq(expr->as.call.name, "string.replace")) && expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
                 DsStr decoded = {0};
-                if (lower_decode_string_text(expr->as.call.args.items[1]->as.text, &decoded)) {
+                if (ds_decode_string_text(expr->as.call.args.items[1]->as.text, &decoded)) {
                     if (decoded.len == 0) {
                         if (lower_str_eq(expr->as.call.name, "string.split")) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "split with an empty separator is deferred in v0.19.0");
                         else ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "replace with an empty source is deferred in v0.19.0");
@@ -690,7 +690,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         }
         if (stdlib_helper->validates_env_name && expr->as.call.args.len > 0 && expr->as.call.args.items[0]->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
-            if (lower_decode_string_text(expr->as.call.args.items[0]->as.text, &decoded)) {
+            if (ds_decode_string_text(expr->as.call.args.items[0]->as.text, &decoded)) {
                 lower_validate_env_name(lower, decoded, expr->as.call.args.items[0]->span, "v0.11.0");
                 free(decoded.data);
             }
@@ -859,7 +859,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         lower_validate_portable_collection_index(lower, index, true, expr->as.index.index->span);
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;
-            lower_decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);
+            ds_decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);
             const DsLowerRowSchema *schema = expr_row_schema_full(lower, object);
             if (schema) {
                 const DsLowerRowField *field = row_schema_find(schema, out->as.index.map_key);

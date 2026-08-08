@@ -71,7 +71,7 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     }
     if (stdlib_helper && stdlib_helper->validates_env_name && stmt->as.call_stmt.args.len > 0 && stmt->as.call_stmt.args.items[0]->kind == DS_EXPR_STRING) {
         DsStr decoded = {0};
-        if (lower_decode_string_text(stmt->as.call_stmt.args.items[0]->as.text, &decoded)) {
+        if (ds_decode_string_text(stmt->as.call_stmt.args.items[0]->as.text, &decoded)) {
             lower_validate_env_name(lower, decoded, stmt->as.call_stmt.args.items[0]->span, "v0.11.0");
             free(decoded.data);
         }
@@ -502,7 +502,7 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
         lower_validate_portable_collection_index(lower, out->as.index_assign_stmt.index, true, index_expr ? index_expr->span : target->span);
         if (index_expr && index_expr->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
-            if (lower_decode_string_text(index_expr->as.text, &decoded)) {
+            if (ds_decode_string_text(index_expr->as.text, &decoded)) {
                 if (decoded.len == 0) ds_diag_error(lower->diag, index_expr->span, "empty map keys are deferred in v0.30.0");
                 free(decoded.data);
             }

@@ -151,6 +151,15 @@ static inline bool ds_decode_string_literal(DsStr literal, DsStr *out) {
     return true;
 }
 
+static inline bool ds_decode_string_text(DsStr text, DsStr *out) {
+    if (text.len >= 6 && memcmp(text.data, "\"\"\"", 3) == 0 &&
+        memcmp(text.data + text.len - 3, "\"\"\"", 3) == 0) {
+        *out = (DsStr){ds_str_dup_range(text.data + 3, text.len - 6), text.len - 6};
+        return true;
+    }
+    return ds_decode_string_literal(text, out);
+}
+
 static inline const char *ds_path_basename(const char *path) {
     const char *slash = strrchr(path, '/');
     return slash ? slash + 1 : path;

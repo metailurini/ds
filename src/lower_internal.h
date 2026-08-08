@@ -190,7 +190,6 @@ bool lower_collection_row_field_is_portable(const DsLowerExpr *expr);
 bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable);
 bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable);
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span);
-bool lower_decode_string_text(DsStr text, DsStr *out);
 DsStr lower_map_key_decode(const DsMapEntry *entry);
 
 bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program);

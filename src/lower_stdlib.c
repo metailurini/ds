@@ -13,34 +13,6 @@ bool parse_i64(DsStr text, int64_t *out) {
     return ok;
 }
 
-bool lower_decode_string_text(DsStr text, DsStr *out) {
-    out->data = NULL;
-    out->len = 0;
-    if (text.len >= 6 && memcmp(text.data, "\"\"\"", 3) == 0 && memcmp(text.data + text.len - 3, "\"\"\"", 3) == 0) {
-        out->data = ds_str_dup_range(text.data + 3, text.len - 6);
-        out->len = text.len - 6;
-        return true;
-    }
-    if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') return false;
-    char *buf = (char *)ds_xcalloc(text.len, 1);
-    size_t len = 0;
-    for (size_t i = 1; i + 1 < text.len; i++) {
-        char c = text.data[i];
-        if (c == '\\' && i + 1 < text.len - 1) {
-            char escaped = text.data[++i];
-            if (escaped == 'n') c = '\n';
-            else if (escaped == 't') c = '\t';
-            else if (escaped == '"') c = '"';
-            else if (escaped == '\\') c = '\\';
-            else c = escaped;
-        }
-        buf[len++] = c;
-    }
-    out->data = buf;
-    out->len = len;
-    return true;
-}
-
 SymKind script_type_to_sym(DsScriptType type) {
     switch (type) {
         case DS_SCRIPT_TYPE_STRING: return SYM_STRING;
@@ -72,7 +44,7 @@ bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *p
                 if (decl->default_value->kind != DS_EXPR_STRING) {
                     ds_diag_error(lower->diag, decl->default_value->span, "default for `%.*s` must be a string", (int)decl->name.len, decl->name.data);
                 } else {
-                    lower_decode_string_text(decl->default_value->as.text, &out.default_text);
+                    ds_decode_string_text(decl->default_value->as.text, &out.default_text);
                 }
                 break;
             case DS_SCRIPT_TYPE_INT:

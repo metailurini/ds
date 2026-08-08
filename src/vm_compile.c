@@ -202,23 +202,10 @@ static void pop_loop(Program *p, size_t end) {
 
 bool decode_string_text(DsStr text, DsString *out) {
     ds_string_init(out);
-    if (text.len >= 6 && memcmp(text.data, "\"\"\"", 3) == 0 && memcmp(text.data + text.len - 3, "\"\"\"", 3) == 0) {
-        ds_string_append_range(out, text.data + 3, text.len - 6);
-        return true;
-    }
-    if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') return false;
-    for (size_t i = 1; i + 1 < text.len; i++) {
-        char c = text.data[i];
-        if (c == '\\' && i + 1 < text.len - 1) {
-            char escaped = text.data[++i];
-            if (escaped == 'n') c = '\n';
-            else if (escaped == 't') c = '\t';
-            else if (escaped == '"') c = '"';
-            else if (escaped == '\\') c = '\\';
-            else c = escaped;
-        }
-        ds_string_append_char(out, c);
-    }
+    DsStr decoded = {0};
+    if (!ds_decode_string_text(text, &decoded)) return false;
+    ds_string_append_range(out, decoded.data, decoded.len);
+    free(decoded.data);
     return true;
 }
 

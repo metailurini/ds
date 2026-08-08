@@ -133,7 +133,7 @@ static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded,
         if (sym->kind == SYM_MAP) {
             DsStr literal = {decoded.data + literal_start, *j - literal_start};
             DsStr key = {0};
-            if (lower_decode_string_text(literal, &key)) {
+            if (ds_decode_string_text(literal, &key)) {
                 if (key.len == 0) ds_diag_error(lower->diag, span, "empty map keys are deferred in v0.30.0");
                 free(key.data);
             }
@@ -187,7 +187,7 @@ static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded,
 
 bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
     DsStr decoded = {0};
-    if (!lower_decode_string_text(text, &decoded)) return true;
+    if (!ds_decode_string_text(text, &decoded)) return true;
     for (size_t i = 0; i < decoded.len; i++) {
         char c = decoded.data[i];
         if (c == '{' && i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
@@ -459,7 +459,7 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
 static bool command_quoted_word_needs_value_call_materialization(Lower *lower, DsStr word) {
     if (word.len < 2 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
     DsStr decoded = {0};
-    if (!lower_decode_string_text(word, &decoded)) return false;
+    if (!ds_decode_string_text(word, &decoded)) return false;
     bool found = ds_command_word_contains_direct_call_interpolation(decoded);
     if (!found) {
         for (size_t i = 0; i < decoded.len; i++) {

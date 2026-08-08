@@ -114,21 +114,11 @@ void emit_source_loc(EmitBuf *out, const DsSource *fallback, DsSpan span) {
     buf_append(out, buf);
 }
 bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_data, size_t *out_len) {
-    DsStr text = expr->as.text;
-    if (text.len >= 6 && memcmp(text.data, "\"\"\"", 3) == 0 && memcmp(text.data + text.len - 3, "\"\"\"", 3) == 0) {
-        size_t len = text.len - 6;
-        char *buf = ds_str_dup_range(text.data + 3, len);
-        *out_data = buf;
-        *out_len = len;
-        return true;
-    }
-    if (text.len < 2 || text.data[0] != '"' || text.data[text.len - 1] != '"') {
+    DsStr decoded = {0};
+    if (!ds_decode_string_text(expr->as.text, &decoded)) {
         ds_diag_error(diag, expr->span, "internal Bash invariant failed: non-string literal reached Bash string decoding after lowering");
         return false;
     }
-
-    DsStr decoded = {0};
-    if (!ds_decode_string_literal(text, &decoded)) return false;
     *out_data = decoded.data;
     *out_len = decoded.len;
     return true;

@@ -329,7 +329,7 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
 
 DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     DsStr decoded = {0};
-    if (lower_decode_string_text(expr->as.text, &decoded)) {
+    if (ds_decode_string_text(expr->as.text, &decoded)) {
         if (decoded_needs_expr_interpolation(decoded)) {
             DsLowerExpr *out = lower_interpolated_expr(lower, expr, decoded, kind_out);
             free(decoded.data);
