@@ -144,6 +144,10 @@ static inline const char *ds_path_basename(const char *path) {
     return slash ? slash + 1 : path;
 }
 
+static inline const char *ds_source_basename(const DsSource *source) {
+    return ds_path_basename(source && source->path ? source->path : "<script>");
+}
+
 static inline char *ds_path_dirname_dup(const char *path) {
     const char *slash = strrchr(path, '/');
     if (!slash) return ds_str_dup_range(".", 1);

@@ -8,11 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char *script_basename(const DsSource *source) {
-    const char *path = source && source->path ? source->path : "<script>";
-    return ds_path_basename(path);
-}
-
 static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_type_");
     buf_append_dsstr(out, name);
@@ -30,7 +25,7 @@ static void emit_script_type_assignment(BashEmitter *e, DsStr name, DsScriptType
 static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
     buf_append(&e->out, "__ds_usage() {\n");
     buf_append(&e->out, "  cat <<'__DS_USAGE__'\n");
-    buf_appendf(&e->out, "Usage: %s", script_basename(e->source));
+    buf_appendf(&e->out, "Usage: %s", ds_source_basename(e->source));
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, " <%.*s>", (int)decl->name.len, decl->name.data);

@@ -6,11 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char *script_basename(const DsSource *source) {
-    const char *path = source && source->path ? source->path : "<script>";
-    return ds_path_basename(path);
-}
-
 static bool parse_runtime_int(const char *text, int64_t *out) {
     if (!text || text[0] == '\0') return false;
     errno = 0;
@@ -31,7 +26,7 @@ static bool parse_runtime_bool(const char *text, bool *out) {
 }
 
 static void print_script_help(const DsSource *source, const DsLowerProgram *program, FILE *out) {
-    fprintf(out, "Usage: %s", script_basename(source));
+    fprintf(out, "Usage: %s", ds_source_basename(source));
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, " <%.*s>", (int)decl->name.len, decl->name.data);
@@ -128,7 +123,7 @@ static bool set_default_from_decl(Vm *vm, const DsLowerScriptDecl *decl) {
 int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **argv) {
     if (!program->has_script) {
         if (argc > 0) {
-            fprintf(stderr, "%s: error: unexpected script arguments\n", script_basename(vm->source));
+            fprintf(stderr, "%s: error: unexpected script arguments\n", ds_source_basename(vm->source));
             return 1;
         }
         return 0;
