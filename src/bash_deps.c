@@ -51,35 +51,21 @@ static bool expr_uses(const DsLowerExpr *expr, ExprUsePredicate predicate, void 
 #define DEFINE_EXPR_USES(name, predicate) \
     static bool name(const DsLowerExpr *expr) { return expr_uses(expr, predicate, NULL); }
 
+typedef struct {
+    ExprMaskPredicate predicate;
+    unsigned mask;
+} ExprMaskContext;
+
+static bool expr_accumulate_mask(const DsLowerExpr *expr, void *context) {
+    ExprMaskContext *ctx = (ExprMaskContext *)context;
+    ctx->mask |= ctx->predicate(expr);
+    return false;
+}
+
 static unsigned expr_mask(const DsLowerExpr *expr, ExprMaskPredicate predicate) {
-    if (!expr) return 0;
-    unsigned mask = predicate(expr);
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_FIELD:
-            return mask | expr_mask(expr->as.field.object, predicate);
-        case DS_LOWER_EXPR_INDEX:
-            return mask | expr_mask(expr->as.index.object, predicate) | expr_mask(expr->as.index.index, predicate);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) mask |= expr_mask(expr->as.array.elements.items[i], predicate);
-            return mask;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) mask |= expr_mask(expr->as.map.entries.items[i].value, predicate);
-            return mask;
-        case DS_LOWER_EXPR_UNARY:
-            return mask | expr_mask(expr->as.unary.right, predicate);
-        case DS_LOWER_EXPR_BINARY:
-            return mask | expr_mask(expr->as.binary.left, predicate) | expr_mask(expr->as.binary.right, predicate);
-        case DS_LOWER_EXPR_RANGE:
-            return mask | expr_mask(expr->as.range.start, predicate) | expr_mask(expr->as.range.end, predicate);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) mask |= expr_mask(expr->as.call.args.items[i], predicate);
-            return mask;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) mask |= expr_mask(expr->as.interp.parts.items[i], predicate);
-            return mask;
-        default:
-            return mask;
-    }
+    ExprMaskContext ctx = {predicate, 0};
+    expr_uses(expr, expr_accumulate_mask, &ctx);
+    return ctx.mask;
 }
 
 static bool expr_is_run(const DsLowerExpr *expr, void *context) {
