@@ -40,6 +40,34 @@ static int usage_error(const char *fmt, ...) {
     return 1;
 }
 
+typedef struct {
+    const char *name;
+    bool *value;
+} CliBoolFlag;
+
+static int parse_flagged_path(int argc, char **argv, int start, const char *command,
+                              const CliBoolFlag *flags, size_t flag_count, bool stop_at_path,
+                              const char *usage_message, int *path_index) {
+    *path_index = -1;
+    for (int i = start; i < argc; i++) {
+        bool matched = false;
+        for (size_t j = 0; j < flag_count; j++) {
+            if (strcmp(argv[i], flags[j].name) == 0) {
+                *flags[j].value = true;
+                matched = true;
+                break;
+            }
+        }
+        if (matched) continue;
+        if (strncmp(argv[i], "--", 2) == 0) return usage_error("unknown %s flag `%s`", command, argv[i]);
+        if (*path_index >= 0) return usage_error("%s", usage_message);
+        *path_index = i;
+        if (stop_at_path) break;
+    }
+    if (*path_index < 0) return usage_error("%s", usage_message);
+    return 0;
+}
+
 static bool is_direct_script_arg(const char *arg) {
     return strcmp(arg, "run") != 0 && strcmp(arg, "tokens") != 0 &&
            strcmp(arg, "ast") != 0 && strcmp(arg, "check") != 0 && strcmp(arg, "test") != 0 &&
@@ -114,21 +142,11 @@ static bool write_formatted_file(const char *path, const DsString *formatted) {
 static int cli_format(int argc, char **argv) {
     bool check = false;
     bool write = false;
-    const char *path = NULL;
-    for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--check") == 0) {
-            check = true;
-        } else if (strcmp(argv[i], "--write") == 0 || strcmp(argv[i], "-w") == 0) {
-            write = true;
-        } else if (strncmp(argv[i], "--", 2) == 0) {
-            return usage_error("unknown fmt flag `%s`", argv[i]);
-        } else if (!path) {
-            path = argv[i];
-        } else {
-            return usage_error("expected `ds fmt [--check] [--write|-w] <file.ds>`");
-        }
-    }
-    if (!path) return usage_error("expected `ds fmt [--check] [--write|-w] <file.ds>`");
+    CliBoolFlag flags[] = {{"--check", &check}, {"--write", &write}, {"-w", &write}};
+    int path_index;
+    if (parse_flagged_path(argc, argv, 2, "fmt", flags, 3, false,
+                           "expected `ds fmt [--check] [--write|-w] <file.ds>`", &path_index)) return 1;
+    const char *path = argv[path_index];
     if (check && write) return usage_error("`ds fmt --check --write` is invalid");
 
     DsCliProgram program;
@@ -183,21 +201,11 @@ static int cli_inspect(const char *cmd, const char *path) {
 static int cli_check(int argc, char **argv) {
     bool warnings_as_errors = false;
     bool no_warnings = false;
-    const char *path = NULL;
-    for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--warnings-as-errors") == 0) {
-            warnings_as_errors = true;
-        } else if (strcmp(argv[i], "--no-warnings") == 0) {
-            no_warnings = true;
-        } else if (strncmp(argv[i], "--", 2) == 0) {
-            return usage_error("unknown check flag `%s`", argv[i]);
-        } else if (!path) {
-            path = argv[i];
-        } else {
-            return usage_error("expected a command and <file.ds>");
-        }
-    }
-    if (!path) return usage_error("expected `ds check [--warnings-as-errors] [--no-warnings] <file.ds>`");
+    CliBoolFlag flags[] = {{"--warnings-as-errors", &warnings_as_errors}, {"--no-warnings", &no_warnings}};
+    int path_index;
+    if (parse_flagged_path(argc, argv, 2, "check", flags, 2, false,
+                           "expected `ds check [--warnings-as-errors] [--no-warnings] <file.ds>`", &path_index)) return 1;
+    const char *path = argv[path_index];
     if (warnings_as_errors && no_warnings) return usage_error("`ds check --warnings-as-errors --no-warnings` is invalid");
 
     DsCliProgram program;
@@ -239,14 +247,10 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "run") == 0) {
         if (argc < 3) return usage_error("expected `ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]`");
         DsVmOptions options = {0};
-        int path_index = 2;
-        while (path_index < argc && strncmp(argv[path_index], "--", 2) == 0) {
-            if (strcmp(argv[path_index], "--trace-cmd") == 0) options.trace_cmd = true;
-            else if (strcmp(argv[path_index], "--trace-vm") == 0) options.trace_vm = true;
-            else return usage_error("unknown run flag `%s`", argv[path_index]);
-            path_index++;
-        }
-        if (path_index >= argc) return usage_error("expected script path after `ds run` flags");
+        CliBoolFlag flags[] = {{"--trace-cmd", &options.trace_cmd}, {"--trace-vm", &options.trace_vm}};
+        int path_index;
+        if (parse_flagged_path(argc, argv, 2, "run", flags, 2, true,
+                               "expected script path after `ds run` flags", &path_index)) return 1;
         DsCliProgram program;
         int rc = ds_cli_load_lower(argv[path_index], &program) ? ds_vm_run_program_args_options(&program.source, program.lowered, argc - path_index - 1, argv + path_index + 1, &program.diag, options) : 1;
         ds_cli_program_free(&program);
