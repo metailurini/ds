@@ -131,13 +131,16 @@ DsValue ds_value_copy(const DsValue *value) {
             }
             break;
         case DS_VALUE_MAP:
-            out = ds_value_map();
+            if (!ds_value_map_init(&out)) return ds_value_null();
             const char *key = NULL;
             size_t key_len = 0;
             void *raw = NULL;
             DS_MAP_FOREACH(&value->as.map, it, key, key_len, raw) {
                 DsStr key_view = {(char *)key, key_len};
-                ds_map_set(&out.as.map, key_view, ds_value_copy((const DsValue *)raw));
+                if (!ds_map_set(&out.as.map, key_view, ds_value_copy((const DsValue *)raw))) {
+                    ds_value_free(&out);
+                    return ds_value_null();
+                }
             }
             break;
         case DS_VALUE_BOOL:

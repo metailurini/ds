@@ -212,7 +212,11 @@ dispatch_loop:
                     ds_value_free(slot);
                     *slot = ds_value_copy(&vm.regs[ins->a]);
                 } else {
-                    ds_map_set(&vm.scope->vars, key, ds_value_copy(&vm.regs[ins->a]));
+                    if (!ds_map_set(&vm.scope->vars, key, ds_value_copy(&vm.regs[ins->a]))) {
+                        ds_diag_error(diag, ins->span, "failed to store variable `%s`", ins->name);
+                        rc = 1;
+                        goto done;
+                    }
                 }
                 ip++;
                 break;
