@@ -127,7 +127,7 @@ DsRegexStatus ds_regex_validate_pattern(DsStr pattern, size_t *capture_count_out
     if (capture_count_out) *capture_count_out = captures;
     if (captures > 9) return DS_REGEX_ERR_TOO_MANY_CAPTURES;
 
-    char *tmp = ds_str_dup_range(pattern.data ? pattern.data : "", pattern.len);
+    char *tmp = ds_str_dup_len(pattern);
     regex_t re;
     int err = regcomp(&re, tmp, REG_EXTENDED);
     free(tmp);

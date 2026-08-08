@@ -1088,7 +1088,7 @@ static bool regex_compile_runtime(Vm *vm, Instr *ins, DsStr pattern, DsStr flags
         ds_diag_error(vm->diag, ins->span, "%s", ds_regex_status_message(status));
         return false;
     }
-    char *tmp = ds_str_dup_range(pattern.data ? pattern.data : "", pattern.len);
+    char *tmp = ds_str_dup_len(pattern);
     int err = regcomp(re, tmp, cflags);
     free(tmp);
     if (err != 0) {
