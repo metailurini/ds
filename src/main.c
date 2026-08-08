@@ -4,6 +4,7 @@
 #include "ds_checker.h"
 
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,8 +29,13 @@ static void usage(FILE *out) {
     fputs("  ds emit bash <file.ds> -o <file.sh>\n", out);
 }
 
-static int usage_error(const char *message) {
-    fprintf(stderr, "error: %s\n\n", message);
+static int usage_error(const char *fmt, ...) {
+    va_list args;
+    fputs("error: ", stderr);
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fputs("\n\n", stderr);
     usage(stderr);
     return 1;
 }
@@ -114,9 +120,7 @@ static int cli_format(int argc, char **argv) {
         } else if (strcmp(argv[i], "--write") == 0 || strcmp(argv[i], "-w") == 0) {
             write = true;
         } else if (strncmp(argv[i], "--", 2) == 0) {
-            char message[256];
-            snprintf(message, sizeof(message), "unknown fmt flag `%s`", argv[i]);
-            return usage_error(message);
+            return usage_error("unknown fmt flag `%s`", argv[i]);
         } else if (!path) {
             path = argv[i];
         } else {
@@ -165,9 +169,7 @@ static int cli_check(int argc, char **argv) {
         } else if (strcmp(argv[i], "--no-warnings") == 0) {
             no_warnings = true;
         } else if (strncmp(argv[i], "--", 2) == 0) {
-            char message[256];
-            snprintf(message, sizeof(message), "unknown check flag `%s`", argv[i]);
-            return usage_error(message);
+            return usage_error("unknown check flag `%s`", argv[i]);
         } else if (!path) {
             path = argv[i];
         } else {
@@ -220,11 +222,7 @@ int main(int argc, char **argv) {
         while (path_index < argc && strncmp(argv[path_index], "--", 2) == 0) {
             if (strcmp(argv[path_index], "--trace-cmd") == 0) options.trace_cmd = true;
             else if (strcmp(argv[path_index], "--trace-vm") == 0) options.trace_vm = true;
-            else {
-                char message[256];
-                snprintf(message, sizeof(message), "unknown run flag `%s`", argv[path_index]);
-                return usage_error(message);
-            }
+            else return usage_error("unknown run flag `%s`", argv[path_index]);
             path_index++;
         }
         if (path_index >= argc) return usage_error("expected script path after `ds run` flags");
@@ -284,7 +282,5 @@ int main(int argc, char **argv) {
         return rc;
     }
 
-    fprintf(stderr, "error: unknown command `%s`\n\n", cmd);
-    usage(stderr);
-    return 1;
+    return usage_error("unknown command `%s`", cmd);
 }
