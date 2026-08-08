@@ -123,13 +123,6 @@ typedef struct {
     size_t cap;
 } VmStringVec;
 
-static char *vm_strdup_range(const char *data, size_t len) {
-    char *out = (char *)ds_xcalloc(len + 1, 1);
-    if (len) memcpy(out, data, len);
-    out[len] = '\0';
-    return out;
-}
-
 static void vm_string_vec_free(VmStringVec *vec) {
     ds_free_cstr_array(vec->items, vec->len);
     *vec = (VmStringVec){0};
@@ -208,7 +201,7 @@ static void normalize_recursive_prefix(const char *prefix, char **base_pattern, 
         *base_pattern = ds_str_dup_cstr(".");
         return;
     }
-    *base_pattern = vm_strdup_range(prefix, len);
+    *base_pattern = ds_str_dup_range(prefix, len);
 }
 
 static bool collect_base_dirs(Vm *vm, Instr *ins, const char *base_pattern, VmStringVec *bases) {
@@ -324,7 +317,7 @@ static bool stdlib_recursive_glob(Vm *vm, Instr *ins, const char *pattern, DsVal
     if (!marker) return false;
     size_t prefix_len = (size_t)(marker - pattern);
     size_t suffix_start = prefix_len + 2;
-    char *prefix = vm_strdup_range(pattern, prefix_len);
+    char *prefix = ds_str_dup_range(pattern, prefix_len);
     char *suffix = ds_str_dup_cstr(pattern + suffix_start);
     if (suffix[0] == '/') memmove(suffix, suffix + 1, strlen(suffix));
 
