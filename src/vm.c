@@ -124,9 +124,18 @@ static void vm_register_handler(Vm *vm, DsHandlerSignal signal, size_t target, b
     vm->handlers[vm->handler_len++] = (VmHandler){signal, target, is_trap};
 }
 
-static const char *op_cmp_name(OpCmp e) {
-    static const char *const names[] = {"+", "-", "*", "/", "%", "**", "==", "!=", "<", "<=", ">", ">=", "===", "!=="};
-    return (unsigned)e < DS_ARRAY_LEN(names) ? names[e] : "?";
+static const char *const k_op_cmp_names[] = {"+", "-", "*", "/", "%", "**", "==", "!=", "<", "<=", ">", ">=", "===", "!=="};
+
+const char *op_cmp_name(OpCmp op) {
+    return (unsigned)op < DS_ARRAY_LEN(k_op_cmp_names) ? k_op_cmp_names[op] : "?";
+}
+
+OpCmp op_cmp_from_str(const char *text, size_t len) {
+    for (size_t i = 0; i < DS_ARRAY_LEN(k_op_cmp_names); i++) {
+        const char *name = k_op_cmp_names[i];
+        if (strlen(name) == len && memcmp(name, text, len) == 0) return (OpCmp)i;
+    }
+    return OP_CMP_ADD;
 }
 
 static bool check_div_zero_and_overflow(DsDiag *diag, DsSpan span,

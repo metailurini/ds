@@ -300,10 +300,6 @@ static void infer_env_free(InferEnv *env) {
     *env = (InferEnv){0};
 }
 
-static const char *infer_kind_name(DsLowerValueKind kind) {
-    return ds_lower_value_kind_name(kind);
-}
-
 static void infer_constrain_param(InferCtx *ctx, size_t param_index, DsLowerValueKind expected, DsSpan span, const char *reason) {
     if (!lower_value_kind_is_scalar(expected) || param_index >= ctx->fn->params.len) return;
     DsLowerFnParam *param = &ctx->fn->params.items[param_index];
@@ -317,7 +313,7 @@ static void infer_constrain_param(InferCtx *ctx, size_t param_index, DsLowerValu
         ds_diag_error(ctx->lower->diag, span,
                       "parameter `%.*s` inferred as %s but later used as %s%s%s",
                       (int)param->name.len, param->name.data,
-                      infer_kind_name(current), infer_kind_name(expected),
+                      ds_lower_value_kind_name(current), ds_lower_value_kind_name(expected),
                       reason && reason[0] ? " from " : "",
                       reason && reason[0] ? reason : "");
     }
@@ -330,7 +326,7 @@ static void infer_constrain_binding(InferCtx *ctx, InferBinding binding, DsLower
         return;
     }
     if (binding.kind == INFER_BIND_KIND && binding.value_kind != DS_LOWER_VALUE_UNKNOWN && binding.value_kind != expected) {
-        ds_diag_error(ctx->lower->diag, span, "expected %s value but found %s", infer_kind_name(expected), infer_kind_name(binding.value_kind));
+        ds_diag_error(ctx->lower->diag, span, "expected %s value but found %s", ds_lower_value_kind_name(expected), ds_lower_value_kind_name(binding.value_kind));
     }
 }
 

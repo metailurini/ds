@@ -245,6 +245,8 @@ bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag);
 bool decode_string_text(DsStr text, DsString *out);
 
 const char *op_name(OpCode op);
+const char *op_cmp_name(OpCmp op);
+OpCmp op_cmp_from_str(const char *text, size_t len);
 const char *span_path(const DsSource *fallback, DsSpan span);
 void trace_vm_instr(Vm *vm, size_t ip, const Instr *ins);
 

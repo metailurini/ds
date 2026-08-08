@@ -10,30 +10,6 @@
 
 void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
 
-static OpCmp op_cmp_from_str(const char *s, size_t len) {
-    if (len == 1) {
-        switch (s[0]) {
-            case '+': return OP_CMP_ADD;
-            case '-': return OP_CMP_SUB;
-            case '*': return OP_CMP_MUL;
-            case '/': return OP_CMP_DIV;
-            case '%': return OP_CMP_MOD;
-            case '>': return OP_CMP_GT;
-            case '<': return OP_CMP_LT;
-        }
-    } else if (len == 2) {
-        if (s[0] == '=' && s[1] == '=') return OP_CMP_EQ_EQ;
-        if (s[0] == '!' && s[1] == '=') return OP_CMP_NE;
-        if (s[0] == '>' && s[1] == '=') return OP_CMP_GE;
-        if (s[0] == '<' && s[1] == '=') return OP_CMP_LE;
-        if (s[0] == '*' && s[1] == '*') return OP_CMP_POW;
-    } else if (len == 3) {
-        if (s[0] == '=' && s[1] == '=' && s[2] == '=') return OP_CMP_EQ_EQ_EQ;
-        if (s[0] == '!' && s[1] == '=' && s[2] == '=') return OP_CMP_NE_EQ;
-    }
-    return OP_CMP_ADD;
-}
-
 static void instr_free(Instr *ins) {
     free(ins->name);
     free(ins->value_name);
