@@ -60,17 +60,6 @@ static inline void vm_ascii_trim_bounds(const char *data, size_t len, size_t *st
     *end = b;
 }
 
-static inline void vm_fprint_escaped(FILE *out, const char *data, size_t len) {
-    for (size_t i = 0; i < len; i++) {
-        char c = data[i];
-        if (c == '\\') fputs("\\\\", out);
-        else if (c == '"') fputs("\\\"", out);
-        else if (c == '\n') fputs("\\n", out);
-        else if (c == '\t') fputs("\\t", out);
-        else fputc(c, out);
-    }
-}
-
 typedef enum {
     VM_READ_STREAM_OK,
     VM_READ_STREAM_IO_ERROR,

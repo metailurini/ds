@@ -32,18 +32,6 @@ static const char *script_decl_kind(DsScriptDeclKind kind) {
     return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "Decl";
 }
 
-static void print_escaped(FILE *out, const char *data, size_t len) {
-    for (size_t i = 0; i < len; i++) {
-        unsigned char c = (unsigned char)data[i];
-        if (c == '\\') fputs("\\\\", out);
-        else if (c == '"') fputs("\\\"", out);
-        else if (c == '\n') fputs("\\n", out);
-        else if (c == '\t') fputs("\\t", out);
-        else if (c < 32 || c == 127) fprintf(out, "\\x%02x", c);
-        else fputc((int)c, out);
-    }
-}
-
 static void dump_expr(FILE *out, const DsLowerExpr *expr, int level);
 static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level);
 
@@ -73,7 +61,7 @@ static void dump_word_vec(FILE *out, const DsWordVec *words) {
     for (size_t i = 0; i < words->len; i++) {
         if (i) fputs(", ", out);
         fputc('"', out);
-        print_escaped(out, words->items[i].text.data, words->items[i].text.len);
+        ds_fprint_escaped(out, words->items[i].text.data, words->items[i].text.len, true);
         fputc('"', out);
     }
     fputc(']', out);
@@ -94,7 +82,7 @@ static void dump_redirect(FILE *out, const DsRedirect *redirect) {
     if (!op) return;
     fprintf(out, " Redirect %s ", op);
     fputc('"', out);
-    print_escaped(out, redirect->target.data ? redirect->target.data : "", redirect->target.len);
+    ds_fprint_escaped(out, redirect->target.data ? redirect->target.data : "", redirect->target.len, true);
     fputc('"', out);
     print_span(out, redirect->target_span);
 }
@@ -114,7 +102,7 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
         case DS_LOWER_EXPR_IDENT:
             fputs("Ident ", out); ds_fprint_str(out, expr->as.text); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_STRING:
-            fputs("String \"", out); print_escaped(out, expr->as.text.data, expr->as.text.len); fputs("\"", out); print_span(out, expr->span); fputc('\n', out); break;
+            fputs("String \"", out); ds_fprint_escaped(out, expr->as.text.data, expr->as.text.len, true); fputs("\"", out); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_INT:
             fputs("Int ", out); ds_fprint_str(out, expr->as.text); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_BOOL:
@@ -293,7 +281,7 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
             ds_fprint_str(out, decl->name);
             fprintf(out, ": %s", ds_script_type_name(decl->type));
             if (decl->has_default) {
-                if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); print_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len); fputc('"', out); }
+                if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); ds_fprint_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len, true); fputc('"', out); }
                 else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, " = %lld", (long long)decl->default_int);
                 else fprintf(out, " = %s", decl->default_bool ? "true" : "false");
             }

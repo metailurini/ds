@@ -23,7 +23,7 @@
 static void print_trace_escaped(FILE *out, const char *data) {
     fputc('"', out);
     const char *text = data ? data : "";
-    vm_fprint_escaped(out, text, strlen(text));
+    ds_fprint_escaped(out, text, strlen(text), false);
     fputc('"', out);
 }
 

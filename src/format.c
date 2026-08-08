@@ -30,14 +30,7 @@ static void indent(Formatter *fmt, int level) {
 
 static void append_quoted(Formatter *fmt, DsStr value) {
     append_cstr(fmt, "\"");
-    for (size_t i = 0; i < value.len; i++) {
-        char c = value.data[i];
-        if (c == '\n') append_cstr(fmt, "\\n");
-        else if (c == '\t') append_cstr(fmt, "\\t");
-        else if (c == '"') append_cstr(fmt, "\\\"");
-        else if (c == '\\') append_cstr(fmt, "\\\\");
-        else fmt->ok = ds_string_append_char(&fmt->out, c);
-    }
+    if (fmt->ok) fmt->ok = ds_string_append_escaped(&fmt->out, value.data, value.len);
     append_cstr(fmt, "\"");
 }
 

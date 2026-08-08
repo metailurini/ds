@@ -13,7 +13,7 @@ static void print_instr_command(FILE *out, const Instr *ins) {
         for (size_t j = 0; j < count; j++, word++) {
             if (j || s) fputs(", ", out);
             fputc('"', out);
-            vm_fprint_escaped(out, ins->words[word].data, ins->words[word].len);
+            ds_fprint_escaped(out, ins->words[word].data, ins->words[word].len, false);
             fputc('"', out);
         }
     }
@@ -90,7 +90,7 @@ static void print_value_literal(FILE *out, const DsValue *v) {
             break;
         case DS_VALUE_STRING:
             fputs("string \"", out);
-            vm_fprint_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
+            ds_fprint_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len, false);
             fputc('"', out);
             break;
         case DS_VALUE_COMMAND_RESULT:
@@ -123,7 +123,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             if (decl->has_default) {
                 if (decl->type == DS_SCRIPT_TYPE_STRING) {
                     fputs(" = \"", out);
-                    vm_fprint_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+                    ds_fprint_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len, false);
                     fputc('"', out);
                 } else if (decl->type == DS_SCRIPT_TYPE_INT) {
                     fprintf(out, " = %lld", (long long)decl->default_int);
@@ -195,7 +195,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 print_instr_command(out, ins);
                 if (ins->redirect.kind != DS_REDIRECT_NONE) {
                     fprintf(out, " %s \"", ds_redirect_source_op(ins->redirect.kind));
-                    vm_fprint_escaped(out, ins->redirect.target.data, ins->redirect.target.len);
+                    ds_fprint_escaped(out, ins->redirect.target.data, ins->redirect.target.len, false);
                     fputc('"', out);
                 }
                 break;

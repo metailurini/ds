@@ -511,19 +511,7 @@ static DsLowerExpr *lower_raw_string_expr(DsStr raw, DsSpan span) {
     DsString quoted;
     ds_string_init(&quoted);
     ds_string_append_char(&quoted, '"');
-    for (size_t i = 0; i < raw.len; i++) {
-        char c = raw.data[i];
-        if (c == '"' || c == '\\') {
-            ds_string_append_char(&quoted, '\\');
-            ds_string_append_char(&quoted, c);
-        } else if (c == '\n') {
-            ds_string_append_range(&quoted, "\\n", 2);
-        } else if (c == '\t') {
-            ds_string_append_range(&quoted, "\\t", 2);
-        } else {
-            ds_string_append_char(&quoted, c);
-        }
-    }
+    ds_string_append_escaped(&quoted, raw.data, raw.len);
     ds_string_append_char(&quoted, '"');
     out->as.text = (DsStr){quoted.data, quoted.len};
     return out;

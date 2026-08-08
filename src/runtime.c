@@ -44,6 +44,22 @@ bool ds_string_append_char(DsString *s, char c) {
     return ds_string_append_range(s, &c, 1);
 }
 
+bool ds_string_append_escaped(DsString *s, const char *data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        char c = data[i];
+        if (c == '\n') {
+            if (!ds_string_append_range(s, "\\n", 2)) return false;
+        } else if (c == '\t') {
+            if (!ds_string_append_range(s, "\\t", 2)) return false;
+        } else if (c == '"' || c == '\\') {
+            if (!ds_string_append_char(s, '\\') || !ds_string_append_char(s, c)) return false;
+        } else if (!ds_string_append_char(s, c)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ds_string_from_range(DsString *s, const char *data, size_t len) {
     ds_string_init(s);
     return ds_string_append_range(s, data, len);

@@ -168,6 +168,18 @@ static inline void ds_fprint_str(FILE *out, DsStr value) {
     fprintf(out, "%.*s", (int)value.len, value.data ? value.data : "");
 }
 
+static inline void ds_fprint_escaped(FILE *out, const char *data, size_t len, bool hex_controls) {
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)data[i];
+        if (c == '\\') fputs("\\\\", out);
+        else if (c == '"') fputs("\\\"", out);
+        else if (c == '\n') fputs("\\n", out);
+        else if (c == '\t') fputs("\\t", out);
+        else if (hex_controls && (c < 32 || c == 127)) fprintf(out, "\\x%02x", c);
+        else fputc((int)c, out);
+    }
+}
+
 static inline void ds_fprint_indent(FILE *out, int level) {
     for (int i = 0; i < level; i++) fputs("  ", out);
 }
