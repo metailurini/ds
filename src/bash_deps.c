@@ -51,6 +51,13 @@ static bool expr_uses(const DsLowerExpr *expr, ExprUsePredicate predicate, void 
 #define DEFINE_EXPR_USES(name, predicate) \
     static bool name(const DsLowerExpr *expr) { return expr_uses(expr, predicate, NULL); }
 
+#define DEFINE_SIMPLE_EXPR_USES(predicate, query, condition) \
+    static bool predicate(const DsLowerExpr *expr, void *context) { \
+        (void)context; \
+        return (condition); \
+    } \
+    DEFINE_EXPR_USES(query, predicate)
+
 typedef struct {
     ExprMaskPredicate predicate;
     unsigned mask;
@@ -68,19 +75,9 @@ static unsigned expr_mask(const DsLowerExpr *expr, ExprMaskPredicate predicate) 
     return ctx.mask;
 }
 
-static bool expr_is_run(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_RUN;
-}
-
-DEFINE_EXPR_USES(expr_uses_run, expr_is_run)
-
-static bool expr_is_pipeline_run(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_RUN && ds_command_is_pipeline(&expr->as.run);
-}
-
-DEFINE_EXPR_USES(expr_uses_pipeline_run, expr_is_pipeline_run)
+DEFINE_SIMPLE_EXPR_USES(expr_is_run, expr_uses_run, expr->kind == DS_LOWER_EXPR_RUN)
+DEFINE_SIMPLE_EXPR_USES(expr_is_pipeline_run, expr_uses_pipeline_run,
+                        expr->kind == DS_LOWER_EXPR_RUN && ds_command_is_pipeline(&expr->as.run))
 
 static bool stdlib_call_uses_base_helpers(DsStr name) {
     DsStdlibNamespace ns = ds_stdlib_namespace(name);
@@ -116,12 +113,8 @@ static bool string_literal_contains_index_interpolation(DsStr text) {
     return false;
 }
 
-static bool expr_is_base_stdlib_call(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_CALL && stdlib_call_uses_base_helpers(expr->as.call.name);
-}
-
-DEFINE_EXPR_USES(expr_uses_stdlib, expr_is_base_stdlib_call)
+DEFINE_SIMPLE_EXPR_USES(expr_is_base_stdlib_call, expr_uses_stdlib,
+                        expr->kind == DS_LOWER_EXPR_CALL && stdlib_call_uses_base_helpers(expr->as.call.name))
 
 static bool literal_glob_arg_is_recursive(const DsLowerExpr *expr) {
     if (!expr || expr->kind != DS_LOWER_EXPR_STRING) return true;
@@ -175,13 +168,9 @@ static unsigned command_string_helper_mask(const DsCommand *command) {
     return mask;
 }
 
-static bool expr_is_collection_index(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_INDEX ||
-           (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text));
-}
-
-DEFINE_EXPR_USES(expr_uses_collection_index, expr_is_collection_index)
+DEFINE_SIMPLE_EXPR_USES(expr_is_collection_index, expr_uses_collection_index,
+                        expr->kind == DS_LOWER_EXPR_INDEX ||
+                        (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text)))
 
 static bool command_uses_collection_index(const DsCommand *command) {
     if (!command) return false;
@@ -195,12 +184,7 @@ static bool command_uses_collection_index(const DsCommand *command) {
     return false;
 }
 
-static bool expr_is_map_literal(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_MAP;
-}
-
-DEFINE_EXPR_USES(expr_uses_map_literal, expr_is_map_literal)
+DEFINE_SIMPLE_EXPR_USES(expr_is_map_literal, expr_uses_map_literal, expr->kind == DS_LOWER_EXPR_MAP)
 
 static bool word_has_arith_interp(DsStr word) {
     if (word.len < 4 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
@@ -226,20 +210,11 @@ static bool command_uses_int_helpers(const DsCommand *command) {
     return word_has_arith_interp(command->redirect.target);
 }
 
-static bool expr_is_int_helper(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return (expr->kind == DS_LOWER_EXPR_BINARY && bash_is_int_binary_op(expr->as.binary.op)) ||
-           (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "-"));
-}
-
-DEFINE_EXPR_USES(expr_uses_int_helpers, expr_is_int_helper)
-
-static bool expr_is_user_function_call(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
-}
-
-DEFINE_EXPR_USES(expr_uses_function_value_helpers, expr_is_user_function_call)
+DEFINE_SIMPLE_EXPR_USES(expr_is_int_helper, expr_uses_int_helpers,
+                        (expr->kind == DS_LOWER_EXPR_BINARY && bash_is_int_binary_op(expr->as.binary.op)) ||
+                        (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "-")))
+DEFINE_SIMPLE_EXPR_USES(expr_is_user_function_call, expr_uses_function_value_helpers,
+                        expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function)
 
 static bool stmt_uses_nested(const DsLowerStmt *stmt, StmtPredicate predicate) {
     if (!stmt) return false;
@@ -430,21 +405,12 @@ static bool stmt_needs_collection_index(const DsLowerStmt *stmt) {
 
 DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_collection_index, expr_uses_collection_index, stmt_needs_collection_index, true)
 
-static bool expr_is_array_helper(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.object_is_array) ||
-           (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text));
-}
-
-DEFINE_EXPR_USES(expr_uses_array_helper, expr_is_array_helper)
-
-static bool expr_is_map_helper(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.object_is_map) ||
-           (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text));
-}
-
-DEFINE_EXPR_USES(expr_uses_map_helper, expr_is_map_helper)
+DEFINE_SIMPLE_EXPR_USES(expr_is_array_helper, expr_uses_array_helper,
+                        (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.object_is_array) ||
+                        (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text)))
+DEFINE_SIMPLE_EXPR_USES(expr_is_map_helper, expr_uses_map_helper,
+                        (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.object_is_map) ||
+                        (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text)))
 
 static bool stmt_needs_array_helper(const DsLowerStmt *stmt) {
     return (stmt->kind == DS_LOWER_STMT_INDEX_ASSIGN && stmt->as.index_assign_stmt.target_is_array) ||
@@ -599,12 +565,8 @@ DEFINE_STMT_USES_NESTED(stmt_uses_case, stmt_needs_case_helpers)
 
 DEFINE_PROGRAM_USES(program_uses_case, stmt_uses_case)
 
-static bool expr_is_membership(const DsLowerExpr *expr, void *context) {
-    (void)context;
-    return expr->kind == DS_LOWER_EXPR_BINARY && str_eq(expr->as.binary.op, "in");
-}
-
-DEFINE_EXPR_USES(expr_uses_membership, expr_is_membership)
+DEFINE_SIMPLE_EXPR_USES(expr_is_membership, expr_uses_membership,
+                        expr->kind == DS_LOWER_EXPR_BINARY && str_eq(expr->as.binary.op, "in"))
 
 DEFINE_STMT_EXPR_USES(stmt_uses_membership, expr_uses_membership, false)
 
