@@ -135,6 +135,7 @@ typedef struct {
 } DsCasePatternVec;
 
 void ds_case_pattern_fprint(FILE *out, const DsCasePattern *pattern);
+void ds_case_pattern_vec_free(DsCasePatternVec *patterns);
 
 typedef struct {
     DsCasePatternVec patterns;

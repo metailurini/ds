@@ -118,8 +118,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             lower_expr_free(stmt->as.case_stmt.selector);
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
                 DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
-                for (size_t j = 0; j < arm->patterns.len; j++) free(arm->patterns.items[j].text.data);
-                free(arm->patterns.items);
+                ds_case_pattern_vec_free(&arm->patterns);
                 lower_stmt_free(arm->body);
             }
             free(stmt->as.case_stmt.arms.items);

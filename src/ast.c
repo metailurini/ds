@@ -9,6 +9,13 @@ void ds_case_pattern_fprint(FILE *out, const DsCasePattern *pattern) {
     else ds_fprint_str(out, pattern->text);
 }
 
+void ds_case_pattern_vec_free(DsCasePatternVec *patterns) {
+    if (!patterns) return;
+    for (size_t i = 0; i < patterns->len; i++) free(patterns->items[i].text.data);
+    free(patterns->items);
+    *patterns = (DsCasePatternVec){0};
+}
+
 static void print_expr(const DsExpr *expr, FILE *out, int level) {
     if (!expr) {
         ds_fprint_indent(out, level);
@@ -392,8 +399,7 @@ static void free_stmt(DsStmt *stmt) {
             ds_expr_free(stmt->as.case_stmt.selector);
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
                 DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
-                for (size_t j = 0; j < arm->patterns.len; j++) free(arm->patterns.items[j].text.data);
-                free(arm->patterns.items);
+                ds_case_pattern_vec_free(&arm->patterns);
                 free_stmt(arm->body);
             }
             free(stmt->as.case_stmt.arms.items);
