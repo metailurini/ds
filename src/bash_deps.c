@@ -817,22 +817,28 @@ static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
     return false;
 }
 
-bool program_uses_run(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_run(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_run(program->statements.items[i])) return true;
+typedef bool (*StmtUsePredicate)(const DsLowerStmt *stmt);
+
+static bool program_uses_stmt(const DsLowerProgram *program, StmtUsePredicate predicate) {
+    for (size_t i = 0; i < program->functions.len; i++) {
+        if (program->functions.items[i].body && predicate(program->functions.items[i].body)) return true;
+    }
+    for (size_t i = 0; i < program->statements.len; i++) {
+        if (predicate(program->statements.items[i])) return true;
+    }
     return false;
+}
+
+bool program_uses_run(const DsLowerProgram *program) {
+    return program_uses_stmt(program, stmt_uses_run);
 }
 
 bool program_uses_pipeline_run(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_pipeline_run(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_pipeline_run(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_pipeline_run);
 }
 
 bool program_uses_stdlib(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_stdlib(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_stdlib(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_stdlib);
 }
 
 unsigned program_string_helper_mask(const DsLowerProgram *program) {
@@ -845,9 +851,7 @@ unsigned program_string_helper_mask(const DsLowerProgram *program) {
 }
 
 bool program_uses_stdlib_capture(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_stdlib_capture(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_stdlib_capture(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_stdlib_capture);
 }
 
 bool program_uses_glob_helpers(const DsLowerProgram *program) {
@@ -979,21 +983,15 @@ bool program_uses_regex_replace_helpers(const DsLowerProgram *program) {
 }
 
 bool program_uses_collection_index(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_collection_index(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_collection_index(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_collection_index);
 }
 
 bool program_uses_array_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_array_helper(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_array_helper(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_array_helper);
 }
 
 bool program_uses_map_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_map_helper(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_map_helper(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_map_helper);
 }
 
 static bool stmt_uses_map_iteration(const DsLowerStmt *stmt) {
@@ -1033,9 +1031,7 @@ static bool stmt_uses_map_iteration(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_map_iteration(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_map_iteration(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_map_iteration(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_map_iteration);
 }
 
 static bool stmt_uses_map_assignment(const DsLowerStmt *stmt) {
@@ -1075,15 +1071,11 @@ static bool stmt_uses_map_assignment(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_map_assignment(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_map_assignment(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_map_assignment(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_map_assignment);
 }
 
 bool program_uses_map_literal(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_map_literal(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_map_literal(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_map_literal);
 }
 
 static bool stmt_uses_control_commands(const DsLowerStmt *stmt) {
@@ -1123,9 +1115,7 @@ static bool stmt_uses_control_commands(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_control_commands(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_control_commands(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_control_commands(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_control_commands);
 }
 
 static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
@@ -1167,9 +1157,7 @@ static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_int_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_int_helpers(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_int_helpers(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_int_helpers);
 }
 
 static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
@@ -1208,9 +1196,7 @@ static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_function_value_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_function_value_helpers(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_function_value_helpers(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_function_value_helpers);
 }
 
 static bool stmt_uses_handlers(const DsLowerStmt *stmt) {
@@ -1249,9 +1235,7 @@ static bool stmt_uses_handlers(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_handlers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_handlers(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_handlers(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_handlers);
 }
 
 static bool stmt_uses_signal_handlers(const DsLowerStmt *stmt) {
@@ -1290,9 +1274,7 @@ static bool stmt_uses_signal_handlers(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_signal_handlers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_signal_handlers(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_signal_handlers(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_signal_handlers);
 }
 
 static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
@@ -1335,9 +1317,7 @@ static bool stmt_uses_case(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_case(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_case(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_case(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_case);
 }
 
 static bool expr_uses_membership(const DsLowerExpr *expr) {
@@ -1400,9 +1380,7 @@ static bool stmt_uses_membership(const DsLowerStmt *stmt) {
 }
 
 bool program_uses_membership(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_uses_membership(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_membership(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_membership);
 }
 
 bool program_uses_function_param_types(const DsLowerProgram *program) {
