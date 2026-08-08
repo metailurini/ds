@@ -28,8 +28,8 @@ const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
                 ? ds_lower_value_kind_name(DS_LOWER_VALUE_INT)
                 : ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
         case DS_LOWER_EXPR_UNARY:
-            if (str_eq(expr->as.unary.op, "!")) return ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
-            if (str_eq(expr->as.unary.op, "-")) return ds_lower_value_kind_name(DS_LOWER_VALUE_INT);
+            if (ds_str_eq_cstr(expr->as.unary.op, "!")) return ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
+            if (ds_str_eq_cstr(expr->as.unary.op, "-")) return ds_lower_value_kind_name(DS_LOWER_VALUE_INT);
             return ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
         case DS_LOWER_EXPR_CALL:
             return ds_lower_value_kind_name(expr->as.call.return_kind);
@@ -436,7 +436,7 @@ bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value
         source = (DsStr){temp_buf, strlen(temp_buf)};
         if (value->kind == DS_LOWER_EXPR_ARRAY) {
             if (!bash_emit_row_array_literal(e, source, value, schema, indent, true)) return false;
-        } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && str_eq(value->as.call.name, "rowarray.sort_by")) {
+        } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && ds_str_eq_cstr(value->as.call.name, "rowarray.sort_by")) {
             if (!bash_emit_row_array_sort_call(e, source, value, schema, indent, true)) return false;
         } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && value->as.call.is_user_function) {
             if (!bash_emit_row_array_decls(e, source, schema, indent, true)) return false;
@@ -655,7 +655,7 @@ bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr
     if (value->kind == DS_LOWER_EXPR_ARRAY) {
         return bash_emit_row_array_literal(e, dest, value, schema, indent, local_decl);
     }
-    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && str_eq(value->as.call.name, "rowarray.sort_by")) {
+    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && ds_str_eq_cstr(value->as.call.name, "rowarray.sort_by")) {
         return bash_emit_row_array_sort_call(e, dest, value, schema, indent, local_decl);
     }
     if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && value->as.call.is_user_function) {

@@ -209,7 +209,7 @@ static bool command_uses_int_helpers(const DsCommand *command) {
 
 DEFINE_SIMPLE_EXPR_USES(expr_is_int_helper, expr_uses_int_helpers,
                         (expr->kind == DS_LOWER_EXPR_BINARY && bash_is_int_binary_op(expr->as.binary.op)) ||
-                        (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "-")))
+                        (expr->kind == DS_LOWER_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "-")))
 DEFINE_SIMPLE_EXPR_USES(expr_is_user_function_call, expr_uses_function_value_helpers,
                         expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function)
 
@@ -474,8 +474,8 @@ enum {
 };
 
 static unsigned regex_call_helper_mask(DsStr name) {
-    if (str_eq(name, "regex.match")) return DS_BASH_REGEX_BASE_HELPER | DS_BASH_REGEX_MATCH_HELPER;
-    if (str_eq(name, "regex.replace")) return DS_BASH_REGEX_BASE_HELPER | DS_BASH_REGEX_REPLACE_HELPER;
+    if (ds_str_eq_cstr(name, "regex.match")) return DS_BASH_REGEX_BASE_HELPER | DS_BASH_REGEX_MATCH_HELPER;
+    if (ds_str_eq_cstr(name, "regex.replace")) return DS_BASH_REGEX_BASE_HELPER | DS_BASH_REGEX_REPLACE_HELPER;
     return 0;
 }
 
@@ -483,7 +483,7 @@ static unsigned expr_regex_helper_bit(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_CALL: return regex_call_helper_mask(expr->as.call.name);
         case DS_LOWER_EXPR_BINARY:
-            return str_eq(expr->as.binary.op, "matches") && expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX
+            return ds_str_eq_cstr(expr->as.binary.op, "matches") && expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX
                 ? DS_BASH_REGEX_BASE_HELPER : 0;
         default: return 0;
     }
@@ -545,7 +545,7 @@ static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
     if (!expr) return false;
     if (expr->kind == DS_LOWER_EXPR_IDENT) return true;
     if (expr->kind == DS_LOWER_EXPR_INDEX) return true;
-    if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "!")) return expr_needs_type_tags_for_truthiness(expr->as.unary.right);
+    if (expr->kind == DS_LOWER_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "!")) return expr_needs_type_tags_for_truthiness(expr->as.unary.right);
     return false;
 }
 
@@ -563,7 +563,7 @@ DEFINE_STMT_USES_NESTED(stmt_uses_case, stmt_needs_case_helpers)
 DEFINE_PROGRAM_USES(program_uses_case, stmt_uses_case)
 
 DEFINE_SIMPLE_EXPR_USES(expr_is_membership, expr_uses_membership,
-                        expr->kind == DS_LOWER_EXPR_BINARY && str_eq(expr->as.binary.op, "in"))
+                        expr->kind == DS_LOWER_EXPR_BINARY && ds_str_eq_cstr(expr->as.binary.op, "in"))
 
 DEFINE_STMT_EXPR_USES(stmt_uses_membership, expr_uses_membership, false)
 

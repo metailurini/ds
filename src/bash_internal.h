@@ -64,14 +64,13 @@ static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const
 }
 
 void symbol_vec_push(SymbolVec *vec, DsStr name);
-static inline bool str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
 static inline bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message) {
     ds_diag_error(e->diag, span, "internal Bash invariant failed: %s", message);
     return false;
 }
 static inline bool bash_is_int_binary_op(DsStr op) {
-    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
-           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
+    return ds_str_eq_cstr(op, "+") || ds_str_eq_cstr(op, "-") || ds_str_eq_cstr(op, "*") ||
+           ds_str_eq_cstr(op, "/") || ds_str_eq_cstr(op, "%") || ds_str_eq_cstr(op, "**");
 }
 bool symbol_exists(const SymbolVec *symbols, DsStr name);
 void free_symbols(SymbolVec *symbols);

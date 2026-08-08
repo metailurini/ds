@@ -58,7 +58,6 @@ typedef struct {
 
 #define DS_STRING_METHODS "trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice"
 
-static inline bool lower_str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
 static inline bool lower_sym_kind_is_scalar(SymKind kind) {
     return kind == SYM_STRING || kind == SYM_INT || kind == SYM_BOOL;
 }
@@ -66,21 +65,21 @@ static inline bool lower_value_kind_is_scalar(DsLowerValueKind kind) {
     return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
 }
 static inline bool lower_op_is_arithmetic(DsStr op) {
-    return lower_str_eq(op, "+") || lower_str_eq(op, "-") || lower_str_eq(op, "*") ||
-           lower_str_eq(op, "/") || lower_str_eq(op, "%") || lower_str_eq(op, "**");
+    return ds_str_eq_cstr(op, "+") || ds_str_eq_cstr(op, "-") || ds_str_eq_cstr(op, "*") ||
+           ds_str_eq_cstr(op, "/") || ds_str_eq_cstr(op, "%") || ds_str_eq_cstr(op, "**");
 }
 static inline bool lower_op_is_logical(DsStr op) {
-    return lower_str_eq(op, "&&") || lower_str_eq(op, "||");
+    return ds_str_eq_cstr(op, "&&") || ds_str_eq_cstr(op, "||");
 }
 static inline bool lower_op_is_comparison(DsStr op) {
-    return lower_str_eq(op, "==") || lower_str_eq(op, "!=") || lower_str_eq(op, ">") ||
-           lower_str_eq(op, ">=") || lower_str_eq(op, "<") || lower_str_eq(op, "<=");
+    return ds_str_eq_cstr(op, "==") || ds_str_eq_cstr(op, "!=") || ds_str_eq_cstr(op, ">") ||
+           ds_str_eq_cstr(op, ">=") || ds_str_eq_cstr(op, "<") || ds_str_eq_cstr(op, "<=");
 }
 static inline bool lower_op_is_strict_comparison(DsStr op) {
-    return lower_op_is_comparison(op) || lower_str_eq(op, "===") || lower_str_eq(op, "!==");
+    return lower_op_is_comparison(op) || ds_str_eq_cstr(op, "===") || ds_str_eq_cstr(op, "!==");
 }
 static inline bool lower_op_is_comparison_like(DsStr op) {
-    return lower_op_is_comparison(op) || lower_str_eq(op, "in") || lower_str_eq(op, "matches");
+    return lower_op_is_comparison(op) || ds_str_eq_cstr(op, "in") || ds_str_eq_cstr(op, "matches");
 }
 static inline void lower_diag_stdlib_arity_error(Lower *lower, DsSpan span, DsStr name,
                                                   size_t min_arity, size_t max_arity, size_t actual) {

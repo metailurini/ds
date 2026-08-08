@@ -17,7 +17,7 @@ bool text_contains_recursive_glob(DsStr text) {
 }
 
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg) {
-    if (!(lower_str_eq(helper_name, "glob") || lower_str_eq(helper_name, "glob!"))) return;
+    if (!(ds_str_eq_cstr(helper_name, "glob") || ds_str_eq_cstr(helper_name, "glob!"))) return;
     if (!arg || arg->kind != DS_EXPR_STRING) return;
     DsStr decoded = {0};
     if (ds_decode_string_text(arg->as.text, &decoded)) {
@@ -236,7 +236,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     SymKind right_kind = SYM_UNKNOWN;
     DsLowerExpr *left = lower_expr(lower, expr->as.binary.left, &left_kind);
     DsLowerExpr *right = NULL;
-    if (lower_str_eq(expr->as.binary.op, "matches") && expr->as.binary.right->kind == DS_EXPR_REGEX) right = lower_regex_expr(lower, expr->as.binary.right, &right_kind, true);
+    if (ds_str_eq_cstr(expr->as.binary.op, "matches") && expr->as.binary.right->kind == DS_EXPR_REGEX) right = lower_regex_expr(lower, expr->as.binary.right, &right_kind, true);
     else right = lower_expr(lower, expr->as.binary.right, &right_kind);
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_BINARY, expr->span);
     out->as.binary.left = left;
@@ -248,7 +248,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         (ast_binary_op_is_comparison_like(expr->as.binary.left) || ast_binary_op_is_comparison_like(expr->as.binary.right))) {
         ds_diag_error(lower->diag, expr->span, "ambiguous comparison chain in v0.23.0; add parentheses around `in`, `matches`, or comparison operands");
     }
-    if (lower_str_eq(expr->as.binary.op, "in")) {
+    if (ds_str_eq_cstr(expr->as.binary.op, "in")) {
         if (right_kind != SYM_ARRAY && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `in` must be an array in v0.23.0");
         SymKind element_kind = infer_array_element_kind(lower, right);
         bool empty_array_literal = right && right->kind == DS_LOWER_EXPR_ARRAY && right->as.array.elements.len == 0;
@@ -260,7 +260,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         *kind_out = SYM_BOOL;
         return out;
     }
-    if (lower_str_eq(expr->as.binary.op, "matches")) {
+    if (ds_str_eq_cstr(expr->as.binary.op, "matches")) {
         if (left_kind != SYM_STRING && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "left operand of `matches` must be a string in v0.32.0");
         if (right->kind == DS_LOWER_EXPR_STRING && expr->as.binary.right->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
@@ -284,7 +284,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         *kind_out = SYM_BOOL;
         return out;
     }
-    if (lower_str_eq(expr->as.binary.op, "+")) {
+    if (ds_str_eq_cstr(expr->as.binary.op, "+")) {
         if (left_kind == SYM_INT && right_kind == SYM_INT) *kind_out = SYM_INT;
         else if (left_kind == SYM_STRING && right_kind == SYM_STRING) {
             ds_diag_error(lower->diag, expr->span, "string binary `+` cannot be emitted to standalone Bash with parity in v0.17.0; use interpolation instead");
@@ -410,7 +410,7 @@ DsLowerExpr *lower_map_field_expr(Lower *lower, const DsExpr *expr, DsLowerExpr 
 }
 
 DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    if (expr->as.field.object && expr->as.field.object->kind == DS_EXPR_IDENT && lower_str_eq(expr->as.field.object->as.text, "env")) {
+    if (expr->as.field.object && expr->as.field.object->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.field.object->as.text, "env")) {
         lower_validate_env_name(lower, expr->as.field.field, expr->span, "v0.27.0");
         DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
         out->as.call.name = (DsStr){ds_str_dup_range("env.get", 7), 7};
@@ -453,8 +453,8 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
 DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind right_kind = SYM_UNKNOWN;
     DsLowerExpr *right = lower_expr(lower, expr->as.unary.right, &right_kind);
-    if (!lower_str_eq(expr->as.unary.op, "!")) {
-        if (lower_str_eq(expr->as.unary.op, "-")) {
+    if (!ds_str_eq_cstr(expr->as.unary.op, "!")) {
+        if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
             if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->span, "unary `-` requires an integer operand in v0.21.0");
             *kind_out = SYM_INT;
         } else {
@@ -500,8 +500,8 @@ static void lower_validate_static_regex_replacement(Lower *lower, const DsExpr *
 }
 
 static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    bool is_match = lower_str_eq(expr->as.call.name, "regex.match");
-    bool is_replace = lower_str_eq(expr->as.call.name, "regex.replace");
+    bool is_match = ds_str_eq_cstr(expr->as.call.name, "regex.match");
+    bool is_replace = ds_str_eq_cstr(expr->as.call.name, "regex.replace");
     size_t min_arity = is_match ? 2 : 3;
     size_t max_arity = is_match ? 3 : 4;
     if (expr->as.call.args.len < min_arity || expr->as.call.args.len > max_arity) {
@@ -589,7 +589,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
     if (stdlib_helper && ds_stdlib_namespace(expr->as.call.name) == DS_STDLIB_NAMESPACE_REGEX) {
         return lower_regex_helper_call_expr(lower, expr, kind_out);
     }
-    bool is_row_sort_method = lower_str_eq(expr->as.call.name, "string.sort_by");
+    bool is_row_sort_method = ds_str_eq_cstr(expr->as.call.name, "string.sort_by");
     bool is_string_helper = stdlib_helper && ds_stdlib_namespace(expr->as.call.name) == DS_STDLIB_NAMESPACE_STRING;
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
@@ -677,11 +677,11 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             ds_diag_error(lower->diag, expr->span, "helper `%.*s` is statement-only in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
         }
         if (is_string_helper) {
-            if ((lower_str_eq(expr->as.call.name, "string.split") || lower_str_eq(expr->as.call.name, "string.replace")) && expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
+            if ((ds_str_eq_cstr(expr->as.call.name, "string.split") || ds_str_eq_cstr(expr->as.call.name, "string.replace")) && expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
                 DsStr decoded = {0};
                 if (ds_decode_string_text(expr->as.call.args.items[1]->as.text, &decoded)) {
                     if (decoded.len == 0) {
-                        if (lower_str_eq(expr->as.call.name, "string.split")) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "split with an empty separator is deferred in v0.19.0");
+                        if (ds_str_eq_cstr(expr->as.call.name, "string.split")) ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "split with an empty separator is deferred in v0.19.0");
                         else ds_diag_error(lower->diag, expr->as.call.args.items[1]->span, "replace with an empty source is deferred in v0.19.0");
                     }
                     free(decoded.data);
@@ -836,7 +836,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
             lower_validate_portable_collection_index(lower, index, false, expr->as.index.index->span);
         }
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
-        if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.index.index->as.unary.op, "-") &&
+        if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && ds_str_eq_cstr(expr->as.index.index->as.unary.op, "-") &&
             expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {
             ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be non-negative in v0.10.0");
         }
@@ -895,7 +895,7 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_REGEX: return SYM_UNKNOWN;
         case DS_LOWER_EXPR_RUN: return SYM_COMMAND_RESULT;
         case DS_LOWER_EXPR_UNARY:
-            return lower_str_eq(expr->as.unary.op, "-") ? SYM_INT : SYM_BOOL;
+            return ds_str_eq_cstr(expr->as.unary.op, "-") ? SYM_INT : SYM_BOOL;
         case DS_LOWER_EXPR_BINARY:
             if (lower_op_is_arithmetic(expr->as.binary.op)) return SYM_INT;
             if (lower_op_is_comparison_like(expr->as.binary.op) || lower_op_is_logical(expr->as.binary.op)) return SYM_BOOL;

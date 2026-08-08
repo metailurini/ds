@@ -14,7 +14,7 @@ static bool can_emit_direct_signal_command(const DsCommand *command) {
 }
 
 static bool is_regex_match_call(const DsLowerExpr *value) {
-    return value && value->kind == DS_LOWER_EXPR_CALL && str_eq(value->as.call.name, "regex.match");
+    return value && value->kind == DS_LOWER_EXPR_CALL && ds_str_eq_cstr(value->as.call.name, "regex.match");
 }
 
 static bool emit_regex_match_map_call(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl, bool declare_target) {
@@ -647,7 +647,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"", temp_id);
-            } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && str_eq(stmt->as.let_stmt.value->as.call.name, "rowarray.sort_by")) {
+            } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_str_eq_cstr(stmt->as.let_stmt.value->as.call.name, "rowarray.sort_by")) {
                 if (!bash_emit_row_array_sort_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(stmt->as.let_stmt.value->as.call.name)) {
                 emit_bash_decl_prefix(&e->out, e->function_depth, "");

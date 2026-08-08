@@ -16,7 +16,7 @@ static bool lower_validate_handler_signal(Lower *lower, const DsStmt *stmt) {
 }
 
 static bool expr_is_env_namespace(const DsExpr *expr) {
-    return expr && expr->kind == DS_EXPR_IDENT && lower_str_eq(expr->as.text, "env");
+    return expr && expr->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.text, "env");
 }
 
 static bool expr_is_env_value_access(const DsExpr *expr) {
@@ -196,7 +196,7 @@ static bool lower_return_value_has_portable_backend_representation(DsLowerValueK
                    (value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(value->as.call.name));
         case DS_LOWER_VALUE_MAP:
             return value->kind == DS_LOWER_EXPR_MAP || value->kind == DS_LOWER_EXPR_IDENT ||
-                   (value->kind == DS_LOWER_EXPR_CALL && lower_str_eq(value->as.call.name, "regex.match"));
+                   (value->kind == DS_LOWER_EXPR_CALL && ds_str_eq_cstr(value->as.call.name, "regex.match"));
         case DS_LOWER_VALUE_COMMAND_RESULT:
             return lower_expr_is_portable_command_result_return(value);
         case DS_LOWER_VALUE_STRING:
@@ -402,7 +402,7 @@ static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, S
 }
 
 static bool expr_is_negative_int_literal(const DsExpr *expr) {
-    return expr && expr->kind == DS_EXPR_UNARY && lower_str_eq(expr->as.unary.op, "-") &&
+    return expr && expr->kind == DS_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "-") &&
            expr->as.unary.right && expr->as.unary.right->kind == DS_EXPR_INT;
 }
 
@@ -436,7 +436,7 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
     if (!object || object->kind != DS_EXPR_IDENT) {
         if (object && object->kind == DS_EXPR_FIELD && object->as.field.object &&
             object->as.field.object->kind == DS_EXPR_IDENT &&
-            lower_str_eq(object->as.field.object->as.text, "env")) {
+            ds_str_eq_cstr(object->as.field.object->as.text, "env")) {
             ds_diag_error(lower->diag, object->span,
                           "environment values are scalar strings, not mutable arrays in v0.30.0");
         } else if (object && object->kind == DS_EXPR_FIELD && object->as.field.object &&

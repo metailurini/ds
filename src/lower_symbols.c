@@ -53,7 +53,7 @@ void scope_free(Scope *scope) {
 
 Symbol *scope_find_current(Scope *scope, DsStr name) {
     for (size_t i = 0; i < scope->len; i++) {
-        if (lower_str_eq(name, scope->items[i].name)) return &scope->items[i];
+        if (ds_str_eq_cstr(name, scope->items[i].name)) return &scope->items[i];
     }
     return NULL;
 }
@@ -90,7 +90,7 @@ void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan s
 }
 
 void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span) {
-    if (lower_str_eq(name, "env")) {
+    if (ds_str_eq_cstr(name, "env")) {
         ds_diag_error(lower->diag, span, "`env` is a reserved environment namespace in v0.27.0");
         return;
     }

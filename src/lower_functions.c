@@ -509,11 +509,11 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             return infer_none();
         }
         case DS_EXPR_UNARY:
-            if (lower_str_eq(expr->as.unary.op, "-")) {
+            if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
                 infer_constrain_expr(ctx, env, expr->as.unary.right, DS_LOWER_VALUE_INT, "unary `-`");
                 return infer_kind(DS_LOWER_VALUE_INT);
             }
-            if (lower_str_eq(expr->as.unary.op, "!")) {
+            if (ds_str_eq_cstr(expr->as.unary.op, "!")) {
                 infer_constrain_expr(ctx, env, expr->as.unary.right, DS_LOWER_VALUE_BOOL, "`!`");
                 return infer_kind(DS_LOWER_VALUE_BOOL);
             }
@@ -529,7 +529,7 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
                 infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_BOOL, "logical operator");
                 return infer_kind(DS_LOWER_VALUE_BOOL);
             }
-            if (lower_str_eq(expr->as.binary.op, "matches")) {
+            if (ds_str_eq_cstr(expr->as.binary.op, "matches")) {
                 infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_STRING, "`matches`");
                 if (expr->as.binary.right && expr->as.binary.right->kind != DS_EXPR_REGEX) {
                     infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_STRING, "`matches`");
@@ -858,13 +858,13 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
             *kind_out = DS_LOWER_VALUE_BOOL;
             return true;
         case DS_EXPR_UNARY:
-            if (lower_str_eq(expr->as.unary.op, "-")) {
+            if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
                 DsLowerValueKind right = DS_LOWER_VALUE_UNKNOWN;
                 if (!ast_expr_kind_known(lower, env, expr->as.unary.right, &right) || right != DS_LOWER_VALUE_INT) return false;
                 *kind_out = DS_LOWER_VALUE_INT;
                 return true;
             }
-            if (lower_str_eq(expr->as.unary.op, "!")) {
+            if (ds_str_eq_cstr(expr->as.unary.op, "!")) {
                 *kind_out = DS_LOWER_VALUE_BOOL;
                 return true;
             }
@@ -1072,7 +1072,7 @@ static bool ast_expr_row_array_schema_known(Lower *lower, const AstKindEnv *env,
     if (!expr) return false;
     if (expr->kind == DS_EXPR_IDENT) return ast_kind_env_find_row_schema(env, expr->as.text, true, schema_out);
     if (expr->kind == DS_EXPR_CALL) {
-        if (lower_str_eq(expr->as.call.name, "string.sort_by") && expr->as.call.args.len > 0) {
+        if (ds_str_eq_cstr(expr->as.call.name, "string.sort_by") && expr->as.call.args.len > 0) {
             return ast_expr_row_array_schema_known(lower, env, expr->as.call.args.items[0], schema_out);
         }
         DsLowerFn *fn = find_function(lower->program, expr->as.call.name);

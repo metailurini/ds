@@ -336,11 +336,11 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            if (str_eq(expr->as.binary.op, "==") || str_eq(expr->as.binary.op, "!=") ||
-                str_eq(expr->as.binary.op, ">") || str_eq(expr->as.binary.op, ">=") ||
-                str_eq(expr->as.binary.op, "<") || str_eq(expr->as.binary.op, "<=") ||
-                str_eq(expr->as.binary.op, "in") || str_eq(expr->as.binary.op, "matches") ||
-                str_eq(expr->as.binary.op, "&&") || str_eq(expr->as.binary.op, "||")) {
+            if (ds_str_eq_cstr(expr->as.binary.op, "==") || ds_str_eq_cstr(expr->as.binary.op, "!=") ||
+                ds_str_eq_cstr(expr->as.binary.op, ">") || ds_str_eq_cstr(expr->as.binary.op, ">=") ||
+                ds_str_eq_cstr(expr->as.binary.op, "<") || ds_str_eq_cstr(expr->as.binary.op, "<=") ||
+                ds_str_eq_cstr(expr->as.binary.op, "in") || ds_str_eq_cstr(expr->as.binary.op, "matches") ||
+                ds_str_eq_cstr(expr->as.binary.op, "&&") || ds_str_eq_cstr(expr->as.binary.op, "||")) {
                 buf_append(out, "$(if ");
                 if (!emit_condition(e, expr, out)) return false;
                 buf_append(out, "; then printf true; else printf false; fi)");
@@ -348,13 +348,13 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             }
             return bash_invariant_fail(e, expr->span, "binary value expression should be supported or rejected by lowering");
         case DS_LOWER_EXPR_UNARY:
-            if (str_eq(expr->as.unary.op, "!")) {
+            if (ds_str_eq_cstr(expr->as.unary.op, "!")) {
                 buf_append(out, "$(if ");
                 if (!emit_condition(e, expr, out)) return false;
                 buf_append(out, "; then printf true; else printf false; fi)");
                 return true;
             }
-            if (str_eq(expr->as.unary.op, "-")) {
+            if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
                 buf_append(out, "\"$(__ds_int_neg ");
                 if (!emit_value_expr(e, expr->as.unary.right, out)) return false;
                 buf_append(out, ")\"");
@@ -587,7 +587,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         }
     }
-    if (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "!")) {
+    if (expr->kind == DS_LOWER_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "!")) {
         buf_append(out, "! ");
         return emit_condition(e, expr->as.unary.right, out);
     }
@@ -595,36 +595,36 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         const char *source_op = NULL;
         const char *op = NULL;
         bool negate = false;
-        if (str_eq(expr->as.binary.op, "==")) source_op = "==";
-        else if (str_eq(expr->as.binary.op, "!=")) source_op = "!=";
-        else if (str_eq(expr->as.binary.op, ">")) source_op = ">";
-        else if (str_eq(expr->as.binary.op, ">=")) source_op = ">=";
-        else if (str_eq(expr->as.binary.op, "<")) source_op = "<";
-        else if (str_eq(expr->as.binary.op, "<=")) source_op = "<=";
+        if (ds_str_eq_cstr(expr->as.binary.op, "==")) source_op = "==";
+        else if (ds_str_eq_cstr(expr->as.binary.op, "!=")) source_op = "!=";
+        else if (ds_str_eq_cstr(expr->as.binary.op, ">")) source_op = ">";
+        else if (ds_str_eq_cstr(expr->as.binary.op, ">=")) source_op = ">=";
+        else if (ds_str_eq_cstr(expr->as.binary.op, "<")) source_op = "<";
+        else if (ds_str_eq_cstr(expr->as.binary.op, "<=")) source_op = "<=";
         bool int_compare = source_op && expr->as.binary.left_kind == DS_LOWER_VALUE_INT && expr->as.binary.right_kind == DS_LOWER_VALUE_INT;
         if (int_compare) op = source_op;
-        else if (str_eq(expr->as.binary.op, "==")) op = "==";
-        else if (str_eq(expr->as.binary.op, "!=")) op = "!=";
-        else if (str_eq(expr->as.binary.op, ">")) op = ">";
-        else if (str_eq(expr->as.binary.op, ">=")) {
+        else if (ds_str_eq_cstr(expr->as.binary.op, "==")) op = "==";
+        else if (ds_str_eq_cstr(expr->as.binary.op, "!=")) op = "!=";
+        else if (ds_str_eq_cstr(expr->as.binary.op, ">")) op = ">";
+        else if (ds_str_eq_cstr(expr->as.binary.op, ">=")) {
             op = "<";
             negate = true;
-        } else if (str_eq(expr->as.binary.op, "<")) op = "<";
-        else if (str_eq(expr->as.binary.op, "<=")) {
+        } else if (ds_str_eq_cstr(expr->as.binary.op, "<")) op = "<";
+        else if (ds_str_eq_cstr(expr->as.binary.op, "<=")) {
             op = ">";
             negate = true;
         }
         if (!op) {
-            if (str_eq(expr->as.binary.op, "&&") || str_eq(expr->as.binary.op, "||")) {
+            if (ds_str_eq_cstr(expr->as.binary.op, "&&") || ds_str_eq_cstr(expr->as.binary.op, "||")) {
                 buf_append(out, "{ ");
                 if (!emit_condition(e, expr->as.binary.left, out)) return false;
-                buf_append(out, str_eq(expr->as.binary.op, "&&") ? "; } && { " : "; } || { ");
+                buf_append(out, ds_str_eq_cstr(expr->as.binary.op, "&&") ? "; } && { " : "; } || { ");
                 if (!emit_condition(e, expr->as.binary.right, out)) return false;
                 buf_append(out, "; }");
                 return true;
             }
-            if (str_eq(expr->as.binary.op, "in")) return emit_membership_condition(e, expr, out);
-            if (str_eq(expr->as.binary.op, "matches")) {
+            if (ds_str_eq_cstr(expr->as.binary.op, "in")) return emit_membership_condition(e, expr, out);
+            if (ds_str_eq_cstr(expr->as.binary.op, "matches")) {
                 char left_temp_buf[64];
                 char right_temp_buf[64];
                 DsStr left_temp = {0};
