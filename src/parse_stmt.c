@@ -482,7 +482,7 @@ static bool parse_handler_signal(Parser *p, const char *form, DsHandlerSignal *s
     if (!parser_expect(p, DS_TOK_STRING, form[0] == 't' ? "expected signal string after `trap`" : "expected signal string after `defer on:`")) return false;
     DsToken *tok = parser_previous(p);
     DsStr decoded = {0};
-    bool ok = parser_decode_string_literal(tok->text, &decoded);
+    bool ok = ds_decode_string_literal(tok->text, &decoded);
     if (!ok) {
         ds_diag_error(p->diag, tok->span, "%s signal must be a string literal", form);
         return false;

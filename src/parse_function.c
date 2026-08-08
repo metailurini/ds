@@ -55,7 +55,7 @@ DsStmt *parse_test(Parser *p, bool top_level) {
     if (!parser_expect(p, DS_TOK_STRING, "expected string literal test name after `test`")) return NULL;
     DsToken *name = parser_previous(p);
     DsStr decoded;
-    if (!parser_decode_string_literal(name->text, &decoded)) {
+    if (!ds_decode_string_literal(name->text, &decoded)) {
         ds_diag_error(p->diag, name->span, "invalid test name string literal");
         return NULL;
     }

@@ -98,28 +98,6 @@ static char *join_path(const char *dir, const char *rel) {
     return out;
 }
 
-static bool decode_import_path(DsStr literal, char **out) {
-    *out = NULL;
-    if (literal.len < 2 || literal.data[0] != '"' || literal.data[literal.len - 1] != '"') return false;
-    char *buf = (char *)ds_xcalloc(literal.len, 1);
-    size_t len = 0;
-    for (size_t i = 1; i + 1 < literal.len; i++) {
-        char c = literal.data[i];
-        if (c == '\\' && i + 1 < literal.len - 1) {
-            char escaped = literal.data[++i];
-            if (escaped == 'n') c = '\n';
-            else if (escaped == 't') c = '\t';
-            else if (escaped == '"') c = '"';
-            else if (escaped == '\\') c = '\\';
-            else c = escaped;
-        }
-        buf[len++] = c;
-    }
-    buf[len] = '\0';
-    *out = buf;
-    return true;
-}
-
 static void append_import_stack(DsCliProgram *program, const char *cycle_path, DsString *out) {
     ds_string_init(out);
     for (size_t i = 0; i < program->stack_len; i++) {
@@ -157,20 +135,20 @@ static bool process_ast_statements(DsCliProgram *program, LoadedUnit *unit, bool
     for (size_t i = 0; i < unit->ast->statements.len; i++) {
         DsStmt *stmt = unit->ast->statements.items[i];
         if (stmt->kind == DS_STMT_IMPORT) {
-            char *import_rel = NULL;
-            if (!decode_import_path(stmt->as.import_stmt.path, &import_rel)) {
+            DsStr import_rel = {0};
+            if (!ds_decode_string_literal(stmt->as.import_stmt.path, &import_rel)) {
                 ds_diag_error(&program->diag, stmt->span, "invalid import path");
                 continue;
             }
             char *dir = dir_name_dup(unit->source.path ? unit->source.path : ".");
-            char *joined = join_path(dir, import_rel);
+            char *joined = join_path(dir, import_rel.data);
             bool loaded = load_composed_file(program, joined, stmt->span, false, composed);
             if (!loaded && !program->diag.has_error) {
                 ds_diag_error(&program->diag, stmt->span, "failed to load imported file `%s`", joined);
             }
             free(joined);
             free(dir);
-            free(import_rel);
+            free(import_rel.data);
         } else {
             stmt_vec_push_cli(&composed->statements, stmt);
             unit->ast->statements.items[i] = NULL;

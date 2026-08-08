@@ -130,23 +130,10 @@ bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_dat
         return false;
     }
 
-    char *buf = (char *)ds_xcalloc(text.len, 1);
-    size_t len = 0;
-    for (size_t i = 1; i + 1 < text.len; i++) {
-        char c = text.data[i];
-        if (c == '\\' && i + 1 < text.len - 1) {
-            char escaped = text.data[++i];
-            if (escaped == 'n') c = '\n';
-            else if (escaped == 't') c = '\t';
-            else if (escaped == '"') c = '"';
-            else if (escaped == '\\') c = '\\';
-            else c = escaped;
-        }
-        buf[len++] = c;
-    }
-    buf[len] = '\0';
-    *out_data = buf;
-    *out_len = len;
+    DsStr decoded = {0};
+    if (!ds_decode_string_literal(text, &decoded)) return false;
+    *out_data = decoded.data;
+    *out_len = decoded.len;
     return true;
 }
 

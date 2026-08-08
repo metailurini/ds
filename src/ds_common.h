@@ -67,6 +67,27 @@ static inline DsStr ds_str_clone(DsStr value) {
     return out;
 }
 
+static inline bool ds_decode_string_literal(DsStr literal, DsStr *out) {
+    out->data = NULL;
+    out->len = 0;
+    if (literal.len < 2 || literal.data[0] != '"' || literal.data[literal.len - 1] != '"') return false;
+    char *buf = (char *)ds_xcalloc(literal.len, 1);
+    size_t len = 0;
+    for (size_t i = 1; i + 1 < literal.len; i++) {
+        char c = literal.data[i];
+        if (c == '\\' && i + 1 < literal.len - 1) {
+            char escaped = literal.data[++i];
+            if (escaped == 'n') c = '\n';
+            else if (escaped == 't') c = '\t';
+            else c = escaped;
+        }
+        buf[len++] = c;
+    }
+    buf[len] = '\0';
+    *out = (DsStr){buf, len};
+    return true;
+}
+
 static inline DsSpan ds_span_zero(const DsSource *source) {
     return (DsSpan){{0, 1, 1}, {0, 1, 1}, source};
 }

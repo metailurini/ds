@@ -164,30 +164,6 @@ static inline bool parser_expect_identifier_like(Parser *p, const char *message)
     return false;
 }
 
-static inline bool parser_decode_string_literal(DsStr literal, DsStr *out) {
-    out->data = NULL;
-    out->len = 0;
-    if (literal.len < 2 || literal.data[0] != '"' || literal.data[literal.len - 1] != '"') return false;
-    char *buf = (char *)ds_xcalloc(literal.len, 1);
-    size_t len = 0;
-    for (size_t i = 1; i + 1 < literal.len; i++) {
-        char c = literal.data[i];
-        if (c == '\\' && i + 1 < literal.len - 1) {
-            char escaped = literal.data[++i];
-            if (escaped == 'n') c = '\n';
-            else if (escaped == 't') c = '\t';
-            else if (escaped == '"') c = '"';
-            else if (escaped == '\\') c = '\\';
-            else c = escaped;
-        }
-        buf[len++] = c;
-    }
-    buf[len] = '\0';
-    out->data = buf;
-    out->len = len;
-    return true;
-}
-
 static inline bool parser_is_redirect_token(DsTokenKind kind) {
     return kind == DS_TOK_REDIRECT_OUT || kind == DS_TOK_REDIRECT_OUT_APPEND ||
            kind == DS_TOK_REDIRECT_ERR || kind == DS_TOK_REDIRECT_ERR_APPEND ||
