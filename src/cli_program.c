@@ -188,7 +188,6 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         return false;
     }
     unit->source.path = owned_path;
-    ds_diag_init(&program->diag, &unit->source);
     bool ok = ds_lex(&unit->source, &unit->tokens, &program->diag);
     if (ok) {
         unit->ast = ds_parse(&unit->tokens, &program->diag);
@@ -210,7 +209,6 @@ bool ds_cli_load_source(const char *path, DsCliProgram *program) {
     memset(program, 0, sizeof(*program));
     ds_diag_init(&program->diag, &program->source);
     if (!ds_source_read(path, &program->source, &program->diag)) return false;
-    ds_diag_init(&program->diag, &program->source);
     return true;
 }
 
