@@ -150,20 +150,33 @@ DsValue ds_value_copy(const DsValue *value) {
     return out;
 }
 
+static void ds_value_free_boxed(void *boxed) {
+    if (!boxed) return;
+    ds_value_free((DsValue *)boxed);
+    free(boxed);
+}
+
 void ds_value_free(DsValue *value) {
-    if (value->kind == DS_VALUE_STRING) ds_string_free(&value->as.string);
-    if (value->kind == DS_VALUE_COMMAND_RESULT) {
-        ds_string_free(&value->as.command_result.stdout_text);
-        ds_string_free(&value->as.command_result.stderr_text);
+    switch (value->kind) {
+        case DS_VALUE_STRING:
+            ds_string_free(&value->as.string);
+            break;
+        case DS_VALUE_COMMAND_RESULT:
+            ds_string_free(&value->as.command_result.stdout_text);
+            ds_string_free(&value->as.command_result.stderr_text);
+            break;
+        case DS_VALUE_ARRAY:
+            for (size_t i = 0; i < value->as.array.len; i++) ds_value_free_boxed(value->as.array.items[i]);
+            ds_array_free(&value->as.array);
+            break;
+        case DS_VALUE_MAP:
+            ds_map_free(&value->as.map);
+            break;
+        case DS_VALUE_NULL:
+        case DS_VALUE_BOOL:
+        case DS_VALUE_INT:
+            break;
     }
-    if (value->kind == DS_VALUE_ARRAY) {
-        for (size_t i = 0; i < value->as.array.len; i++) {
-            DsValue *item = (DsValue *)value->as.array.items[i];
-            if (item) { ds_value_free(item); free(item); }
-        }
-        ds_array_free(&value->as.array);
-    }
-    if (value->kind == DS_VALUE_MAP) ds_map_free(&value->as.map);
     *value = ds_value_null();
 }
 
@@ -278,14 +291,10 @@ bool ds_map_set(DsMap *map, DsStr key, DsValue value) {
     *boxed = value;
     rc = hm_put_len(ds_map_impl(map), key.data, key.len, boxed, &old);
     if (rc != HM_OK) {
-        ds_value_free(boxed);
-        free(boxed);
+        ds_value_free_boxed(boxed);
         return false;
     }
-    if (old) {
-        ds_value_free((DsValue *)old);
-        free(old);
-    }
+    ds_value_free_boxed(old);
     return true;
 }
 
@@ -341,10 +350,7 @@ void ds_map_clear(DsMap *map) {
     void *raw = NULL;
     if (!map->impl) return;
     if (hm_iter_init(ds_map_impl(map), &it) == HM_OK) {
-        while (hm_iter_next_len(ds_map_impl(map), &it, NULL, NULL, &raw) == HM_OK) {
-            ds_value_free((DsValue *)raw);
-            free(raw);
-        }
+        while (hm_iter_next_len(ds_map_impl(map), &it, NULL, NULL, &raw) == HM_OK) ds_value_free_boxed(raw);
     }
     hm_clear(ds_map_impl(map));
 }
