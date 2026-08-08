@@ -186,24 +186,18 @@ void bash_emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int
     buf_append(&e->out, "\n");
 }
 
-static void emit_expr_array_element_types(BashEmitter *e, const DsLowerExprVec *elements, int indent, const char *decl, DsStr target_name) {
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, decl);
-    bash_emit_elem_type_var_name(&e->out, target_name);
-    buf_append(&e->out, "=(");
+static void emit_array_element_type_values(BashEmitter *e, const DsLowerExprVec *elements) {
+    buf_append(&e->out, "(");
     for (size_t i = 0; i < elements->len; i++) {
         if (i) buf_append(&e->out, " ");
         const char *type = bash_lower_expr_static_type_name(elements->items[i]);
         bash_single_quote(&e->out, type, strlen(type));
     }
-    buf_append(&e->out, ")\n");
+    buf_append(&e->out, ")");
 }
 
-static void emit_expr_map_value_types(BashEmitter *e, const DsLowerMapEntryVec *entries, int indent, const char *decl, DsStr target_name) {
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, decl);
-    bash_emit_map_value_type_var_name(&e->out, target_name);
-    buf_append(&e->out, "=(");
+static void emit_map_value_type_values(BashEmitter *e, const DsLowerMapEntryVec *entries) {
+    buf_append(&e->out, "(");
     for (size_t i = 0; i < entries->len; i++) {
         if (i) buf_append(&e->out, " ");
         buf_append(&e->out, "[");
@@ -212,7 +206,25 @@ static void emit_expr_map_value_types(BashEmitter *e, const DsLowerMapEntryVec *
         const char *type = bash_lower_expr_static_type_name(entries->items[i].value);
         bash_single_quote(&e->out, type, strlen(type));
     }
-    buf_append(&e->out, ")\n");
+    buf_append(&e->out, ")");
+}
+
+static void emit_expr_array_element_types(BashEmitter *e, const DsLowerExprVec *elements, int indent, const char *decl, DsStr target_name) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, decl);
+    bash_emit_elem_type_var_name(&e->out, target_name);
+    buf_append(&e->out, "=");
+    emit_array_element_type_values(e, elements);
+    buf_append(&e->out, "\n");
+}
+
+static void emit_expr_map_value_types(BashEmitter *e, const DsLowerMapEntryVec *entries, int indent, const char *decl, DsStr target_name) {
+    emit_indent(&e->out, indent);
+    buf_append(&e->out, decl);
+    bash_emit_map_value_type_var_name(&e->out, target_name);
+    buf_append(&e->out, "=");
+    emit_map_value_type_values(e, entries);
+    buf_append(&e->out, "\n");
 }
 
 static void emit_index_type_assignment(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl) {
@@ -290,29 +302,18 @@ static void emit_return_array_element_types(BashEmitter *e, const DsLowerExprVec
     emit_indent(&e->out, indent);
     buf_append(&e->out, "declare -ga ");
     buf_append(&e->out, target_name);
-    buf_append(&e->out, "=(");
-    for (size_t i = 0; i < elements->len; i++) {
-        if (i) buf_append(&e->out, " ");
-        const char *type = bash_lower_expr_static_type_name(elements->items[i]);
-        bash_single_quote(&e->out, type, strlen(type));
-    }
-    buf_append(&e->out, ")\n");
+    buf_append(&e->out, "=");
+    emit_array_element_type_values(e, elements);
+    buf_append(&e->out, "\n");
 }
 
 static void emit_return_map_value_types(BashEmitter *e, const DsLowerMapEntryVec *entries, int indent, const char *target_name) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "declare -gA ");
     buf_append(&e->out, target_name);
-    buf_append(&e->out, "=(");
-    for (size_t i = 0; i < entries->len; i++) {
-        if (i) buf_append(&e->out, " ");
-        buf_append(&e->out, "[");
-        bash_single_quote(&e->out, entries->items[i].key.data, entries->items[i].key.len);
-        buf_append(&e->out, "]=");
-        const char *type = bash_lower_expr_static_type_name(entries->items[i].value);
-        bash_single_quote(&e->out, type, strlen(type));
-    }
-    buf_append(&e->out, ")\n");
+    buf_append(&e->out, "=");
+    emit_map_value_type_values(e, entries);
+    buf_append(&e->out, "\n");
 }
 
 bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent) {
