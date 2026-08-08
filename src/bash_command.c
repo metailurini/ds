@@ -77,21 +77,8 @@ bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsS
     return true;
 }
 
-static const char *trace_redirect_op(DsRedirectKind kind) {
-    switch (kind) {
-        case DS_REDIRECT_OUT: return ">";
-        case DS_REDIRECT_OUT_APPEND: return ">>";
-        case DS_REDIRECT_ERR: return "2>";
-        case DS_REDIRECT_ERR_APPEND: return "2>>";
-        case DS_REDIRECT_ALL: return "&>";
-        case DS_REDIRECT_ALL_APPEND: return "&>>";
-        case DS_REDIRECT_NONE: return NULL;
-    }
-    return NULL;
-}
-
 bool emit_trace_redirect_args(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out) {
-    const char *op = trace_redirect_op(redirect->kind);
+    const char *op = ds_redirect_shell_op(redirect->kind);
     if (!op) return true;
     DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = redirect->target_span};
     fake.as.text = redirect->target;

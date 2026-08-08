@@ -1,17 +1,6 @@
 #include "lower_internal.h"
 
 #include <stdlib.h>
-#include <string.h>
-
-bool lower_str_eq(DsStr a, const char *b) {
-    size_t len = strlen(b);
-    return a.len == len && memcmp(a.data, b, len) == 0;
-}
-
-bool name_eq(DsStr a, const char *b) {
-    size_t len = strlen(b);
-    return a.len == len && memcmp(a.data, b, len) == 0;
-}
 
 bool is_env_name_text(DsStr name) {
     if (name.len == 0) return false;
@@ -57,11 +46,6 @@ bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind) {
     return true;
 }
 
-DsStr str_clone(DsStr s) {
-    DsStr out = {ds_str_dup_range(s.data, s.len), s.len};
-    return out;
-}
-
 void scope_init(Scope *scope, Scope *parent) {
     scope->parent = parent;
     scope->items = NULL;
@@ -79,7 +63,7 @@ void scope_free(Scope *scope) {
 
 Symbol *scope_find_current(Scope *scope, DsStr name) {
     for (size_t i = 0; i < scope->len; i++) {
-        if (name_eq(name, scope->items[i].name)) return &scope->items[i];
+        if (lower_str_eq(name, scope->items[i].name)) return &scope->items[i];
     }
     return NULL;
 }
@@ -97,7 +81,7 @@ void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan s
 }
 
 void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span) {
-    if (name_eq(name, "env")) {
+    if (lower_str_eq(name, "env")) {
         ds_diag_error(lower->diag, span, "`env` is a reserved environment namespace in v0.27.0");
         return;
     }
@@ -201,65 +185,33 @@ int find_function_index(DsLowerProgram *program, DsStr name) {
 }
 
 void lower_stmt_vec_push(DsLowerStmtVec *vec, DsLowerStmt *stmt) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 16;
-        vec->items = (DsLowerStmt **)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerStmt *));
-    }
-    vec->items[vec->len++] = stmt;
+    DS_VEC_PUSH(vec, stmt, 16);
 }
 
 void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsLowerExpr **)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerExpr *));
-    }
-    vec->items[vec->len++] = expr;
+    DS_VEC_PUSH(vec, expr, 8);
 }
 
 void lower_fn_param_vec_push(DsLowerFnParamVec *vec, DsLowerFnParam param) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsLowerFnParam *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerFnParam));
-    }
-    vec->items[vec->len++] = param;
+    DS_VEC_PUSH(vec, param, 8);
 }
 
 void lower_fn_vec_push(DsLowerFnVec *vec, DsLowerFn fn) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsLowerFn *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerFn));
-    }
-    vec->items[vec->len++] = fn;
+    DS_VEC_PUSH(vec, fn, 8);
 }
 
 void lower_test_vec_push(DsLowerTestVec *vec, DsLowerTest test) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsLowerTest *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerTest));
-    }
-    vec->items[vec->len++] = test;
+    DS_VEC_PUSH(vec, test, 8);
 }
 
 void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsLowerScriptDecl *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerScriptDecl));
-    }
-    vec->items[vec->len++] = decl;
+    DS_VEC_PUSH(vec, decl, 8);
 }
 
 void lower_case_pattern_vec_push(DsLowerCasePatternVec *vec, DsLowerCasePattern pattern) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 4;
-        vec->items = (DsLowerCasePattern *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerCasePattern));
-    }
-    vec->items[vec->len++] = pattern;
+    DS_VEC_PUSH(vec, pattern, 4);
 }
 
 void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 4;
-        vec->items = (DsLowerCaseArm *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerCaseArm));
-    }
-    vec->items[vec->len++] = arm;
+    DS_VEC_PUSH(vec, arm, 4);
 }

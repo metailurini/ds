@@ -5,11 +5,7 @@
 #include <string.h>
 
 static void token_vec_push(DsTokenVec *vec, DsToken token) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 64;
-        vec->items = (DsToken *)ds_xrealloc(vec->items, vec->cap * sizeof(DsToken));
-    }
-    vec->items[vec->len++] = token;
+    DS_VEC_PUSH(vec, token, 64);
 }
 
 static bool is_ident_start(char c) {

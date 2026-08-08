@@ -1,4 +1,5 @@
 #include "ds_hir.h"
+#include "ds_signal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -66,16 +67,6 @@ static void print_escaped(FILE *out, const char *data, size_t len) {
 static void dump_expr(FILE *out, const DsLowerExpr *expr, int level);
 static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level);
 
-static const char *handler_signal_name(DsHandlerSignal signal) {
-    switch (signal) {
-        case DS_HANDLER_EXIT: return "EXIT";
-        case DS_HANDLER_INT: return "INT";
-        case DS_HANDLER_TERM: return "TERM";
-        case DS_HANDLER_INVALID: return "<invalid>";
-    }
-    return "EXIT";
-}
-
 static void print_literal_expr(FILE *out, const DsLowerExpr *expr) {
     if (!expr) {
         fputs("<default>", out);
@@ -118,21 +109,8 @@ static void dump_command(FILE *out, const DsCommand *command) {
     dump_redirect(out, &command->redirect);
 }
 
-static const char *redirect_op(DsRedirectKind kind) {
-    switch (kind) {
-        case DS_REDIRECT_OUT: return ">";
-        case DS_REDIRECT_OUT_APPEND: return ">>";
-        case DS_REDIRECT_ERR: return "2>";
-        case DS_REDIRECT_ERR_APPEND: return "2>>";
-        case DS_REDIRECT_ALL: return "&>";
-        case DS_REDIRECT_ALL_APPEND: return "&>>";
-        case DS_REDIRECT_NONE: return NULL;
-    }
-    return NULL;
-}
-
 static void dump_redirect(FILE *out, const DsRedirect *redirect) {
-    const char *op = redirect_op(redirect->kind);
+    const char *op = ds_redirect_shell_op(redirect->kind);
     if (!op) return;
     fprintf(out, " Redirect %s ", op);
     fputc('"', out);
@@ -324,11 +302,11 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.return_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_DEFER:
-            fprintf(out, "Defer %s", handler_signal_name(stmt->as.handler_stmt.signal)); print_span(out, stmt->span); fputc('\n', out);
+            fprintf(out, "Defer %s", ds_handler_signal_name(stmt->as.handler_stmt.signal)); print_span(out, stmt->span); fputc('\n', out);
             dump_block(out, stmt->as.handler_stmt.body, level + 1);
             break;
         case DS_LOWER_STMT_TRAP:
-            fprintf(out, "Trap %s", handler_signal_name(stmt->as.handler_stmt.signal)); print_span(out, stmt->span); fputc('\n', out);
+            fprintf(out, "Trap %s", ds_handler_signal_name(stmt->as.handler_stmt.signal)); print_span(out, stmt->span); fputc('\n', out);
             dump_block(out, stmt->as.handler_stmt.body, level + 1);
             break;
     }

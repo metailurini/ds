@@ -25,21 +25,8 @@ typedef struct {
     bool in_test;
 } Checker;
 
-static bool str_eq(DsStr a, const char *b) {
-    size_t len = strlen(b);
-    return a.len == len && memcmp(a.data, b, len) == 0;
-}
-
-static bool dsstr_eq(DsStr a, DsStr b) {
-    return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
-}
-
 static void symbol_push(Checker *c, DsStr name, DsSpan span, SymKind kind, size_t depth) {
-    if (c->len == c->cap) {
-        c->cap = c->cap ? c->cap * 2 : 32;
-        c->items = (Symbol *)ds_xrealloc(c->items, c->cap * sizeof(Symbol));
-    }
-    c->items[c->len++] = (Symbol){name, span, kind, depth, false};
+    DS_VEC_PUSH(c, ((Symbol){name, span, kind, depth, false}), 32);
 }
 
 static void warning_name(Checker *c, DsSpan span, const char *kind, DsStr name) {
@@ -55,7 +42,7 @@ static void warning_text(Checker *c, DsSpan span, const char *message) {
 static const Symbol *find_visible_symbol(const Checker *c, DsStr name) {
     for (size_t i = c->len; i > 0; i--) {
         const Symbol *sym = &c->items[i - 1];
-        if (dsstr_eq(sym->name, name)) return sym;
+        if (ds_str_eq(sym->name, name)) return sym;
     }
     return NULL;
 }
@@ -71,7 +58,7 @@ static void warn_if_shadowing(Checker *c, DsStr name, DsSpan span) {
 static void use_name(Checker *c, DsStr name) {
     for (size_t i = c->len; i > 0; i--) {
         Symbol *sym = &c->items[i - 1];
-        if (dsstr_eq(sym->name, name)) {
+        if (ds_str_eq(sym->name, name)) {
             sym->used = true;
             return;
         }
@@ -288,7 +275,7 @@ static void finish_scope(Checker *c, size_t base) {
 static bool is_test_terminal_command(const DsStmt *stmt) {
     if (!stmt || stmt->kind != DS_STMT_CMD || stmt->as.cmd_stmt.stages.len != 1 || stmt->as.cmd_stmt.stages.items[0].words.len == 0) return false;
     DsStr first = stmt->as.cmd_stmt.stages.items[0].words.items[0].text;
-    return str_eq(first, "fail") || str_eq(first, "exit");
+    return ds_str_eq_cstr(first, "fail") || ds_str_eq_cstr(first, "exit");
 }
 
 static void check_block(Checker *c, const DsStmt *block, size_t depth) {
@@ -311,7 +298,7 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
     switch (stmt->kind) {
         case DS_STMT_LET:
             check_expr(c, stmt->as.let_stmt.value);
-            if (!str_eq(stmt->as.let_stmt.name, "_")) {
+            if (!ds_str_eq_cstr(stmt->as.let_stmt.name, "_")) {
                 warn_if_shadowing(c, stmt->as.let_stmt.name, stmt->span);
                 symbol_push(c, stmt->as.let_stmt.name, stmt->span, SYM_LET, depth);
             }
@@ -342,7 +329,7 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
                 DsFnParam *param = &stmt->as.fn_stmt.params.items[i];
                 if (param->default_value) check_expr(c, param->default_value);
-                if (!str_eq(param->name, "_")) {
+                if (!ds_str_eq_cstr(param->name, "_")) {
                     warn_if_shadowing(c, param->name, param->span);
                     symbol_push(c, param->name, param->span, SYM_PARAM, depth + 1);
                 }

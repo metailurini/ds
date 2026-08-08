@@ -23,11 +23,7 @@ static void report_unsupported_command_operator(Parser *p, const DsToken *tok) {
 }
 
 static void command_stage_vec_push(DsCommandStageVec *vec, DsCommandStage stage) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 4;
-        vec->items = (DsCommandStage *)ds_xrealloc(vec->items, vec->cap * sizeof(DsCommandStage));
-    }
-    vec->items[vec->len++] = stage;
+    DS_VEC_PUSH(vec, stage, 4);
 }
 
 static void flush_word(DsWordVec *words, DsWord *current, size_t *cap, bool *have_current) {

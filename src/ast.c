@@ -1,19 +1,10 @@
 #include "ds_ast.h"
+#include "ds_signal.h"
 
 #include <stdlib.h>
 
 static void indent(FILE *out, int level) {
     for (int i = 0; i < level; i++) fputs("  ", out);
-}
-
-static const char *handler_signal_name(DsHandlerSignal signal) {
-    switch (signal) {
-        case DS_HANDLER_EXIT: return "EXIT";
-        case DS_HANDLER_INT: return "INT";
-        case DS_HANDLER_TERM: return "TERM";
-        case DS_HANDLER_INVALID: return "<invalid>";
-    }
-    return "EXIT";
 }
 
 static void print_expr(const DsExpr *expr, FILE *out, int level) {
@@ -156,9 +147,8 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
                 }
             }
             if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
-                static const char *names[] = {"none", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
                 indent(out, level + 1);
-                fprintf(out, "Redirect %s %.*s\n", names[stmt->as.cmd_stmt.redirect.kind],
+                fprintf(out, "Redirect %s %.*s\n", ds_redirect_source_op(stmt->as.cmd_stmt.redirect.kind),
                         (int)stmt->as.cmd_stmt.redirect.target.len, stmt->as.cmd_stmt.redirect.target.data);
             }
             break;
@@ -240,12 +230,12 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             break;
         case DS_STMT_DEFER:
             if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) fprintf(out, "DeferStmt %.*s\n", (int)stmt->as.handler_stmt.signal_text.len, stmt->as.handler_stmt.signal_text.data);
-            else fprintf(out, "DeferStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
+            else fprintf(out, "DeferStmt %s\n", ds_handler_signal_name(stmt->as.handler_stmt.signal));
             print_stmt(stmt->as.handler_stmt.body, out, level + 1);
             break;
         case DS_STMT_TRAP:
             if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) fprintf(out, "TrapStmt %.*s\n", (int)stmt->as.handler_stmt.signal_text.len, stmt->as.handler_stmt.signal_text.data);
-            else fprintf(out, "TrapStmt %s\n", handler_signal_name(stmt->as.handler_stmt.signal));
+            else fprintf(out, "TrapStmt %s\n", ds_handler_signal_name(stmt->as.handler_stmt.signal));
             print_stmt(stmt->as.handler_stmt.body, out, level + 1);
             break;
     }

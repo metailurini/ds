@@ -3,9 +3,30 @@
 #include <stdlib.h>
 #include <string.h>
 
-static DsStr ds_str_clone_view(DsStr s) {
-    DsStr out = {ds_str_dup_range(s.data ? s.data : "", s.len), s.len};
-    return out;
+const char *ds_redirect_source_op(DsRedirectKind kind) {
+    switch (kind) {
+        case DS_REDIRECT_OUT: return "|>";
+        case DS_REDIRECT_OUT_APPEND: return "|>>";
+        case DS_REDIRECT_ERR: return "!>";
+        case DS_REDIRECT_ERR_APPEND: return "!>>";
+        case DS_REDIRECT_ALL: return "&>";
+        case DS_REDIRECT_ALL_APPEND: return "&>>";
+        case DS_REDIRECT_NONE: return "";
+    }
+    return "";
+}
+
+const char *ds_redirect_shell_op(DsRedirectKind kind) {
+    switch (kind) {
+        case DS_REDIRECT_OUT: return ">";
+        case DS_REDIRECT_OUT_APPEND: return ">>";
+        case DS_REDIRECT_ERR: return "2>";
+        case DS_REDIRECT_ERR_APPEND: return "2>>";
+        case DS_REDIRECT_ALL: return "&>";
+        case DS_REDIRECT_ALL_APPEND: return "&>>";
+        case DS_REDIRECT_NONE: return NULL;
+    }
+    return NULL;
 }
 
 void ds_word_vec_init(DsWordVec *vec) {
@@ -20,7 +41,7 @@ bool ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src) {
     dst->cap = src->len;
     dst->items = (DsWord *)ds_xcalloc(dst->cap ? dst->cap : 1, sizeof(DsWord));
     for (size_t i = 0; i < src->len; i++) {
-        dst->items[i].text = ds_str_clone_view(src->items[i].text);
+        dst->items[i].text = ds_str_clone(src->items[i].text);
         dst->items[i].span = src->items[i].span;
     }
     return true;
@@ -83,7 +104,7 @@ bool ds_redirect_clone(DsRedirect *dst, const DsRedirect *src) {
     dst->kind = src->kind;
     dst->op_span = src->op_span;
     dst->target_span = src->target_span;
-    if (src->target.len > 0) dst->target = ds_str_clone_view(src->target);
+    if (src->target.len > 0) dst->target = ds_str_clone(src->target);
     return true;
 }
 

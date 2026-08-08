@@ -207,8 +207,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_RUN_CMD:
                 print_instr_command(out, ins);
                 if (ins->redirect.kind != DS_REDIRECT_NONE) {
-                    static const char *names[] = {"", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
-                    fprintf(out, " %s \"", names[ins->redirect.kind]);
+                    fprintf(out, " %s \"", ds_redirect_source_op(ins->redirect.kind));
                     print_escaped(out, ins->redirect.target.data, ins->redirect.target.len);
                     fputc('"', out);
                 }

@@ -44,17 +44,9 @@ void buf_appendf(EmitBuf *buf, const char *fmt, ...) {
 }
 
 void symbol_vec_push(SymbolVec *vec, DsStr name) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 16;
-        vec->items = (DsStr *)ds_xrealloc(vec->items, vec->cap * sizeof(DsStr));
-    }
-    vec->items[vec->len++] = name;
+    DS_VEC_PUSH(vec, name, 16);
 }
 
-bool str_eq(DsStr a, const char *b) {
-    size_t len = strlen(b);
-    return a.len == len && memcmp(a.data, b, len) == 0;
-}
 bool symbol_exists(const SymbolVec *symbols, DsStr name) {
     for (size_t i = 0; i < symbols->len; i++) {
         DsStr existing = symbols->items[i];

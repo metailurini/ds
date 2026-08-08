@@ -1,5 +1,6 @@
 #include "frontend.h"
 #include "backend.h"
+#include "ds_signal.h"
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -25,19 +26,6 @@ static void append_cstr(Formatter *fmt, const char *s) {
 
 static void indent(Formatter *fmt, int level) {
     for (int i = 0; i < level; i++) append_cstr(fmt, "  ");
-}
-
-static const char *redirect_op(DsRedirectKind kind) {
-    switch (kind) {
-        case DS_REDIRECT_OUT: return "|>";
-        case DS_REDIRECT_OUT_APPEND: return "|>>";
-        case DS_REDIRECT_ERR: return "!>";
-        case DS_REDIRECT_ERR_APPEND: return "!>>";
-        case DS_REDIRECT_ALL: return "&>";
-        case DS_REDIRECT_ALL_APPEND: return "&>>";
-        case DS_REDIRECT_NONE: return "";
-    }
-    return "";
 }
 
 static void append_quoted(Formatter *fmt, DsStr value) {
@@ -249,20 +237,10 @@ static void format_params(Formatter *fmt, const DsFnParamVec *params) {
     }
 }
 
-static const char *format_handler_signal(DsHandlerSignal signal) {
-    switch (signal) {
-        case DS_HANDLER_EXIT: return "EXIT";
-        case DS_HANDLER_INT: return "INT";
-        case DS_HANDLER_TERM: return "TERM";
-        case DS_HANDLER_INVALID: return "<invalid>";
-    }
-    return "EXIT";
-}
-
 static void format_redirect(Formatter *fmt, const DsRedirect *redirect) {
     if (redirect->kind == DS_REDIRECT_NONE) return;
     append_cstr(fmt, " ");
-    append_cstr(fmt, redirect_op(redirect->kind));
+    append_cstr(fmt, ds_redirect_source_op(redirect->kind));
     append_cstr(fmt, " ");
     append_str(fmt, redirect->target);
 }
@@ -409,7 +387,7 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             if (stmt->as.handler_stmt.signal != DS_HANDLER_EXIT) {
                 append_cstr(fmt, " on: \"");
                 if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) append_str(fmt, stmt->as.handler_stmt.signal_text);
-                else append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
+                else append_cstr(fmt, ds_handler_signal_name(stmt->as.handler_stmt.signal));
                 append_cstr(fmt, "\"");
             }
             format_block_after_header(fmt, stmt->as.handler_stmt.body, level);
@@ -418,7 +396,7 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
         case DS_STMT_TRAP:
             append_cstr(fmt, "trap \"");
             if (stmt->as.handler_stmt.signal == DS_HANDLER_INVALID) append_str(fmt, stmt->as.handler_stmt.signal_text);
-            else append_cstr(fmt, format_handler_signal(stmt->as.handler_stmt.signal));
+            else append_cstr(fmt, ds_handler_signal_name(stmt->as.handler_stmt.signal));
             append_cstr(fmt, "\"");
             format_block_after_header(fmt, stmt->as.handler_stmt.body, level);
             append_cstr(fmt, "\n");

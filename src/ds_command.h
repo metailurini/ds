@@ -35,6 +35,9 @@ typedef enum {
     DS_REDIRECT_ALL_APPEND
 } DsRedirectKind;
 
+const char *ds_redirect_source_op(DsRedirectKind kind);
+const char *ds_redirect_shell_op(DsRedirectKind kind);
+
 typedef struct {
     DsRedirectKind kind;
     DsStr target;

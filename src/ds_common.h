@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 typedef struct {
     char *data;
@@ -45,5 +46,27 @@ void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...);
 char *ds_str_dup_range(const char *data, size_t len);
 void *ds_xcalloc(size_t count, size_t size);
 void *ds_xrealloc(void *ptr, size_t size);
+
+static inline bool ds_str_eq_cstr(DsStr value, const char *text) {
+    size_t len = strlen(text);
+    return value.len == len && memcmp(value.data ? value.data : "", text, len) == 0;
+}
+
+static inline bool ds_str_eq(DsStr a, DsStr b) {
+    return a.len == b.len && memcmp(a.data ? a.data : "", b.data ? b.data : "", a.len) == 0;
+}
+
+static inline DsStr ds_str_clone(DsStr value) {
+    DsStr out = {ds_str_dup_range(value.data ? value.data : "", value.len), value.len};
+    return out;
+}
+
+#define DS_VEC_PUSH(vec, value, initial_cap) do { \
+    if ((vec)->len == (vec)->cap) { \
+        (vec)->cap = (vec)->cap ? (vec)->cap * 2 : (initial_cap); \
+        (vec)->items = ds_xrealloc((vec)->items, (vec)->cap * sizeof(*(vec)->items)); \
+    } \
+    (vec)->items[(vec)->len++] = (value); \
+} while (0)
 
 #endif

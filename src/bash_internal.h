@@ -56,7 +56,7 @@ static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const
 }
 
 void symbol_vec_push(SymbolVec *vec, DsStr name);
-bool str_eq(DsStr a, const char *b);
+static inline bool str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
 bool symbol_exists(const SymbolVec *symbols, DsStr name);
 void free_symbols(SymbolVec *symbols);
 void symbols_truncate(SymbolVec *symbols, size_t len);

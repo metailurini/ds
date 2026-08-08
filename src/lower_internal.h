@@ -56,13 +56,12 @@ typedef struct {
     size_t map_loop_cap;
 } Lower;
 
-bool lower_str_eq(DsStr a, const char *b);
-bool name_eq(DsStr a, const char *b);
+static inline bool lower_str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
 bool is_env_name_text(DsStr name);
 bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
 bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind);
 DsLowerValueKind lower_stdlib_return_value_kind(const DsStdlibHelper *helper);
-DsStr str_clone(DsStr s);
+static inline DsStr str_clone(DsStr s) { return ds_str_clone(s); }
 
 void scope_init(Scope *scope, Scope *parent);
 void scope_free(Scope *scope);

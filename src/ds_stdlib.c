@@ -2,11 +2,6 @@
 
 #include <string.h>
 
-static bool str_eq(DsStr a, const char *b) {
-    size_t len = strlen(b);
-    return a.len == len && memcmp(a.data, b, len) == 0;
-}
-
 static bool str_has_prefix(DsStr a, const char *prefix) {
     size_t len = strlen(prefix);
     return a.len >= len && memcmp(a.data, prefix, len) == 0;
@@ -56,15 +51,15 @@ static const DsStdlibHelper HELPERS[] = {
 
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
     for (size_t i = 0; i < sizeof(HELPERS) / sizeof(HELPERS[0]); i++) {
-        if (str_eq(name, HELPERS[i].name)) return &HELPERS[i];
+        if (ds_str_eq_cstr(name, HELPERS[i].name)) return &HELPERS[i];
     }
     return NULL;
 }
 
 bool ds_stdlib_is_namespace(DsStr name) {
-    return str_eq(name, "file") || str_eq(name, "dir") || str_eq(name, "path") ||
-           str_eq(name, "cmd") || str_eq(name, "env") || str_eq(name, "regex") ||
-           str_eq(name, "string");
+    return ds_str_eq_cstr(name, "file") || ds_str_eq_cstr(name, "dir") || ds_str_eq_cstr(name, "path") ||
+           ds_str_eq_cstr(name, "cmd") || ds_str_eq_cstr(name, "env") || ds_str_eq_cstr(name, "regex") ||
+           ds_str_eq_cstr(name, "string");
 }
 
 bool ds_stdlib_is_name(DsStr name) {
@@ -84,7 +79,7 @@ DsStdlibNamespace ds_stdlib_namespace(DsStr name) {
     if (str_has_prefix(name, "env.")) return DS_STDLIB_NAMESPACE_ENV;
     if (str_has_prefix(name, "regex.")) return DS_STDLIB_NAMESPACE_REGEX;
     if (str_has_prefix(name, "string.")) return DS_STDLIB_NAMESPACE_STRING;
-    if (str_eq(name, "glob") || str_eq(name, "glob!") || str_eq(name, "lines")) {
+    if (ds_str_eq_cstr(name, "glob") || ds_str_eq_cstr(name, "glob!") || ds_str_eq_cstr(name, "lines")) {
         return DS_STDLIB_NAMESPACE_TOP_LEVEL;
     }
     return DS_STDLIB_NAMESPACE_UNKNOWN;
@@ -95,21 +90,21 @@ bool ds_stdlib_is_string_helper(DsStr name) {
 }
 
 bool ds_stdlib_is_glob_helper(DsStr name) {
-    return str_eq(name, "glob") || str_eq(name, "glob!");
+    return ds_str_eq_cstr(name, "glob") || ds_str_eq_cstr(name, "glob!");
 }
 
 bool ds_stdlib_is_dir_walk_helper(DsStr name) {
-    return str_eq(name, "dir.walk") || str_eq(name, "dir.walk!") ||
-           str_eq(name, "dir.walk_ext") || str_eq(name, "dir.walk_ext!");
+    return ds_str_eq_cstr(name, "dir.walk") || ds_str_eq_cstr(name, "dir.walk!") ||
+           ds_str_eq_cstr(name, "dir.walk_ext") || ds_str_eq_cstr(name, "dir.walk_ext!");
 }
 
 bool ds_stdlib_is_dir_walk_ext_helper(DsStr name) {
-    return str_eq(name, "dir.walk_ext") || str_eq(name, "dir.walk_ext!");
+    return ds_str_eq_cstr(name, "dir.walk_ext") || ds_str_eq_cstr(name, "dir.walk_ext!");
 }
 
 bool ds_stdlib_arg_expects_int(DsStr name, size_t arg_index) {
-    if (str_eq(name, "string.char_at")) return arg_index == 1;
-    if (str_eq(name, "string.slice")) return arg_index == 1 || arg_index == 2;
+    if (ds_str_eq_cstr(name, "string.char_at")) return arg_index == 1;
+    if (ds_str_eq_cstr(name, "string.slice")) return arg_index == 1 || arg_index == 2;
     return false;
 }
 
@@ -123,20 +118,20 @@ bool ds_stdlib_arg_expects_string(DsStr name, size_t arg_index) {
 }
 
 unsigned ds_stdlib_bash_helper_mask(DsStr name) {
-    if (str_eq(name, "string.trim")) return DS_BASH_STRING_HELPER_TRIM;
-    if (str_eq(name, "string.upper")) return DS_BASH_STRING_HELPER_UPPER;
-    if (str_eq(name, "string.lower")) return DS_BASH_STRING_HELPER_LOWER;
-    if (str_eq(name, "string.replace")) return DS_BASH_STRING_HELPER_REPLACE;
-    if (str_eq(name, "string.contains")) return DS_BASH_STRING_HELPER_CONTAINS;
-    if (str_eq(name, "string.split")) return DS_BASH_STRING_HELPER_SPLIT;
-    if (str_eq(name, "string.starts_with")) return DS_BASH_STRING_HELPER_STARTS_WITH;
-    if (str_eq(name, "string.ends_with")) return DS_BASH_STRING_HELPER_ENDS_WITH;
-    if (str_eq(name, "string.len")) return DS_BASH_STRING_HELPER_LEN;
-    if (str_eq(name, "string.index_of")) return DS_BASH_STRING_HELPER_INDEX_OF;
-    if (str_eq(name, "string.last_index_of")) return DS_BASH_STRING_HELPER_LAST_INDEX_OF;
-    if (str_eq(name, "string.count")) return DS_BASH_STRING_HELPER_COUNT;
-    if (str_eq(name, "string.char_at")) return DS_BASH_STRING_HELPER_CHAR_AT;
-    if (str_eq(name, "string.slice")) return DS_BASH_STRING_HELPER_SLICE;
+    if (ds_str_eq_cstr(name, "string.trim")) return DS_BASH_STRING_HELPER_TRIM;
+    if (ds_str_eq_cstr(name, "string.upper")) return DS_BASH_STRING_HELPER_UPPER;
+    if (ds_str_eq_cstr(name, "string.lower")) return DS_BASH_STRING_HELPER_LOWER;
+    if (ds_str_eq_cstr(name, "string.replace")) return DS_BASH_STRING_HELPER_REPLACE;
+    if (ds_str_eq_cstr(name, "string.contains")) return DS_BASH_STRING_HELPER_CONTAINS;
+    if (ds_str_eq_cstr(name, "string.split")) return DS_BASH_STRING_HELPER_SPLIT;
+    if (ds_str_eq_cstr(name, "string.starts_with")) return DS_BASH_STRING_HELPER_STARTS_WITH;
+    if (ds_str_eq_cstr(name, "string.ends_with")) return DS_BASH_STRING_HELPER_ENDS_WITH;
+    if (ds_str_eq_cstr(name, "string.len")) return DS_BASH_STRING_HELPER_LEN;
+    if (ds_str_eq_cstr(name, "string.index_of")) return DS_BASH_STRING_HELPER_INDEX_OF;
+    if (ds_str_eq_cstr(name, "string.last_index_of")) return DS_BASH_STRING_HELPER_LAST_INDEX_OF;
+    if (ds_str_eq_cstr(name, "string.count")) return DS_BASH_STRING_HELPER_COUNT;
+    if (ds_str_eq_cstr(name, "string.char_at")) return DS_BASH_STRING_HELPER_CHAR_AT;
+    if (ds_str_eq_cstr(name, "string.slice")) return DS_BASH_STRING_HELPER_SLICE;
     return 0;
 }
 

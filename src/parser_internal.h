@@ -59,51 +59,27 @@ static inline DsStr parser_copy_bang_name(const DsToken *name) {
 }
 
 static inline void parser_stmt_vec_push(DsStmtVec *vec, DsStmt *stmt) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 16;
-        vec->items = (DsStmt **)ds_xrealloc(vec->items, vec->cap * sizeof(DsStmt *));
-    }
-    vec->items[vec->len++] = stmt;
+    DS_VEC_PUSH(vec, stmt, 16);
 }
 
 static inline void parser_word_vec_push(DsWordVec *vec, DsWord word) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsWord *)ds_xrealloc(vec->items, vec->cap * sizeof(DsWord));
-    }
-    vec->items[vec->len++] = word;
+    DS_VEC_PUSH(vec, word, 8);
 }
 
 static inline void parser_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsExpr **)ds_xrealloc(vec->items, vec->cap * sizeof(DsExpr *));
-    }
-    vec->items[vec->len++] = expr;
+    DS_VEC_PUSH(vec, expr, 8);
 }
 
 static inline void parser_map_entry_vec_push(DsMapEntryVec *vec, DsMapEntry entry) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsMapEntry *)ds_xrealloc(vec->items, vec->cap * sizeof(DsMapEntry));
-    }
-    vec->items[vec->len++] = entry;
+    DS_VEC_PUSH(vec, entry, 8);
 }
 
 static inline void parser_fn_param_vec_push(DsFnParamVec *vec, DsFnParam param) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsFnParam *)ds_xrealloc(vec->items, vec->cap * sizeof(DsFnParam));
-    }
-    vec->items[vec->len++] = param;
+    DS_VEC_PUSH(vec, param, 8);
 }
 
 static inline void parser_script_decl_vec_push(DsScriptDeclVec *vec, DsScriptDecl decl) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsScriptDecl *)ds_xrealloc(vec->items, vec->cap * sizeof(DsScriptDecl));
-    }
-    vec->items[vec->len++] = decl;
+    DS_VEC_PUSH(vec, decl, 8);
 }
 
 static inline DsExpr *parser_new_expr(DsExprKind kind, DsSpan span) {
@@ -148,19 +124,11 @@ static inline bool parser_is_identifier_like(DsTokenKind kind) {
 }
 
 static inline void parser_case_pattern_vec_push(DsCasePatternVec *vec, DsCasePattern pattern) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 4;
-        vec->items = (DsCasePattern *)ds_xrealloc(vec->items, vec->cap * sizeof(DsCasePattern));
-    }
-    vec->items[vec->len++] = pattern;
+    DS_VEC_PUSH(vec, pattern, 4);
 }
 
 static inline void parser_case_arm_vec_push(DsCaseArmVec *vec, DsCaseArm arm) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 4;
-        vec->items = (DsCaseArm *)ds_xrealloc(vec->items, vec->cap * sizeof(DsCaseArm));
-    }
-    vec->items[vec->len++] = arm;
+    DS_VEC_PUSH(vec, arm, 4);
 }
 
 static inline bool parser_expect_identifier_like(Parser *p, const char *message) {

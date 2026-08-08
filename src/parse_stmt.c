@@ -1,6 +1,7 @@
 #include "parser_internal.h"
 
 DsStmt *parse_stmt(Parser *p);
+static bool parse_assignment_operator(Parser *p, DsAssignOp *op);
 
 DsStmt *parse_import_stmt(Parser *p, bool top_level, bool after_executable) {
     DsToken *start = parser_previous(p);
@@ -69,18 +70,7 @@ static DsStmt *parse_assign(Parser *p) {
     DsToken *name = parser_advance(p);
     DsAssignOp op = DS_ASSIGN_SET;
     DsSpan op_span = parser_peek(p)->span;
-    if (parser_advance_if(p, DS_TOK_EQUAL)) {
-        op = DS_ASSIGN_SET;
-    } else if ((parser_at(p, DS_TOK_PLUS) || parser_at(p, DS_TOK_MINUS) || parser_at(p, DS_TOK_STAR) || parser_at(p, DS_TOK_SLASH) || parser_at(p, DS_TOK_PERCENT)) && parser_next_at(p, DS_TOK_EQUAL)) {
-        if (parser_at(p, DS_TOK_PLUS)) op = DS_ASSIGN_ADD;
-        else if (parser_at(p, DS_TOK_MINUS)) op = DS_ASSIGN_SUB;
-        else if (parser_at(p, DS_TOK_STAR)) op = DS_ASSIGN_MUL;
-        else if (parser_at(p, DS_TOK_SLASH)) op = DS_ASSIGN_DIV;
-        else op = DS_ASSIGN_MOD;
-        op_span = parser_peek(p)->span;
-        parser_advance(p);
-        parser_advance(p);
-    } else {
+    if (!parse_assignment_operator(p, &op)) {
         ds_diag_error(p->diag, op_span, "expected assignment operator");
         return NULL;
     }

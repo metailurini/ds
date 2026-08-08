@@ -1020,16 +1020,7 @@ static void trace_command_spec(Vm *vm, const VmProcessSpec *spec) {
     }
     if (spec->redirect.kind != DS_REDIRECT_NONE) {
         char *redirect_path = NULL;
-        const char *op = NULL;
-        switch (spec->redirect.kind) {
-            case DS_REDIRECT_OUT: op = ">"; break;
-            case DS_REDIRECT_OUT_APPEND: op = ">>"; break;
-            case DS_REDIRECT_ERR: op = "2>"; break;
-            case DS_REDIRECT_ERR_APPEND: op = "2>>"; break;
-            case DS_REDIRECT_ALL: op = "&>"; break;
-            case DS_REDIRECT_ALL_APPEND: op = "&>>"; break;
-            case DS_REDIRECT_NONE: break;
-        }
+        const char *op = ds_redirect_shell_op(spec->redirect.kind);
         if (op && render_redirect_target(vm, &spec->redirect, &redirect_path)) {
             fputc(' ', stderr);
             fputs(op, stderr);
