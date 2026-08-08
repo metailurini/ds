@@ -154,17 +154,6 @@ static inline bool bash_emit_user_call_to_temp(BashEmitter *e, const DsLowerExpr
     return true;
 }
 
-static inline void emit_handler_depth_return_or_exit(EmitBuf *out, int handler_depth,
-    const char *return_fmt, const char *exit_fmt, ...) {
-    if (handler_depth > 0) {
-        buf_append(out, "return ");
-        if (return_fmt) buf_append(out, return_fmt);
-    } else {
-        buf_append(out, "exit ");
-        if (exit_fmt) buf_append(out, exit_fmt);
-    }
-}
-
 static inline void bash_register_symbol(BashEmitter *e, DsStr name) {
     DsStr copy = {ds_str_dup_range(name.data, name.len), name.len};
     symbol_vec_push(&e->symbols, copy);
