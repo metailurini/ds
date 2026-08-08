@@ -141,13 +141,8 @@ static DsValue sorted_unique_string_array(VmStringVec *items) {
     return array;
 }
 
-static bool vm_string_vec_push_owned(VmStringVec *vec, char *text) {
-    DS_VEC_PUSH(vec, text, 16);
-    return true;
-}
-
-static bool vm_string_vec_push_copy(VmStringVec *vec, const char *text) {
-    return vm_string_vec_push_owned(vec, ds_str_dup_cstr(text));
+static void vm_string_vec_push_copy(VmStringVec *vec, const char *text) {
+    DS_VEC_PUSH(vec, ds_str_dup_cstr(text), 16);
 }
 
 static char *glob_escape_literal_path(const char *path) {
@@ -193,7 +188,7 @@ static bool collect_base_dirs(Vm *vm, Instr *ins, const char *base_pattern, VmSt
     if (!has_glob_meta(base_pattern)) {
         struct stat st;
         if (lstat(base_pattern, &st) == 0 && S_ISDIR(st.st_mode) && !S_ISLNK(st.st_mode)) {
-            return vm_string_vec_push_copy(bases, base_pattern);
+            vm_string_vec_push_copy(bases, base_pattern);
         }
         return true;
     }
@@ -225,7 +220,7 @@ static bool should_skip_hidden_child(const char *name) {
 }
 
 static bool collect_dirs_recursive(Vm *vm, Instr *ins, const char *dir, VmStringVec *dirs) {
-    if (!vm_string_vec_push_copy(dirs, dir)) return false;
+    vm_string_vec_push_copy(dirs, dir);
     DIR *dp = opendir(dir);
     if (!dp) {
         ds_diag_error(vm->diag, ins->span, "failed to traverse recursive glob directory `%s`: %s", dir, strerror(errno));
@@ -282,7 +277,7 @@ static bool collect_recursive_matches_for_dir(Vm *vm, Instr *ins, const char *di
         return false;
     }
     for (size_t i = 0; i < g.gl_pathc; i++) {
-        vm_string_vec_push_owned(matches, strip_leading_dot_slash_copy(g.gl_pathv[i], strip_root_dot));
+        DS_VEC_PUSH(matches, strip_leading_dot_slash_copy(g.gl_pathv[i], strip_root_dot), 16);
     }
     free(pattern);
     globfree(&g);
@@ -730,7 +725,7 @@ static bool vm_dir_walk_collect(Vm *vm, Instr *ins, const char *dir, const VmStr
             continue;
         }
         if (S_ISREG(st.st_mode) && vm_walk_ext_matches(child, exts)) {
-            vm_string_vec_push_owned(matches, child);
+            DS_VEC_PUSH(matches, child, 16);
         } else {
             free(child);
         }

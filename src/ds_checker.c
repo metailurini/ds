@@ -22,10 +22,6 @@ typedef struct {
     bool in_test;
 } Checker;
 
-static void symbol_push(Checker *c, DsStr name, DsSpan span, SymKind kind, size_t depth) {
-    DS_VEC_PUSH(c, ((Symbol){name, span, kind, depth, false}), 32);
-}
-
 static void warning_name(Checker *c, DsSpan span, const char *kind, DsStr name) {
     ds_diag_report(c->out, span.source, span, "warning", "unused %s `%.*s`", kind, (int)name.len, name.data);
     c->warnings++;
@@ -275,7 +271,7 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             check_expr(c, stmt->as.let_stmt.value);
             if (!ds_str_eq_cstr(stmt->as.let_stmt.name, "_")) {
                 warn_if_shadowing(c, stmt->as.let_stmt.name, stmt->span);
-                symbol_push(c, stmt->as.let_stmt.name, stmt->span, SYM_LET, depth);
+                DS_VEC_PUSH(c, ((Symbol){stmt->as.let_stmt.name, stmt->span, SYM_LET, depth, false}), 32);
             }
             break;
         case DS_STMT_ASSIGN:
@@ -306,7 +302,7 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
                 if (param->default_value) check_expr(c, param->default_value);
                 if (!ds_str_eq_cstr(param->name, "_")) {
                     warn_if_shadowing(c, param->name, param->span);
-                    symbol_push(c, param->name, param->span, SYM_PARAM, depth + 1);
+                    DS_VEC_PUSH(c, ((Symbol){param->name, param->span, SYM_PARAM, depth + 1, false}), 32);
                 }
             }
             check_block(c, stmt->as.fn_stmt.body, depth + 1);
@@ -320,10 +316,10 @@ static void check_stmt(Checker *c, const DsStmt *stmt, size_t depth) {
             check_expr(c, stmt->as.for_stmt.iterable);
             size_t base = c->len;
             warn_if_shadowing(c, stmt->as.for_stmt.key_name, stmt->span);
-            symbol_push(c, stmt->as.for_stmt.key_name, stmt->span, SYM_LOOP, depth + 1);
+            DS_VEC_PUSH(c, ((Symbol){stmt->as.for_stmt.key_name, stmt->span, SYM_LOOP, depth + 1, false}), 32);
             if (stmt->as.for_stmt.has_value_name) {
                 warn_if_shadowing(c, stmt->as.for_stmt.value_name, stmt->span);
-                symbol_push(c, stmt->as.for_stmt.value_name, stmt->span, SYM_LOOP, depth + 1);
+                DS_VEC_PUSH(c, ((Symbol){stmt->as.for_stmt.value_name, stmt->span, SYM_LOOP, depth + 1, false}), 32);
             }
             check_block(c, stmt->as.for_stmt.body, depth + 1);
             c->len = base;
@@ -375,7 +371,7 @@ size_t ds_check_warnings_ast(const DsAst *ast, FILE *out) {
             const DsScriptDecl *decl = &ast->script.declarations.items[i];
             if (decl->default_value) check_expr(&c, decl->default_value);
             warn_if_shadowing(&c, decl->name, decl->span);
-            symbol_push(&c, decl->name, decl->span, SYM_SCRIPT, 0);
+            DS_VEC_PUSH(&c, ((Symbol){decl->name, decl->span, SYM_SCRIPT, 0, false}), 32);
         }
     }
     for (size_t i = 0; i < ast->statements.len; i++) check_stmt(&c, ast->statements.items[i], 0);
