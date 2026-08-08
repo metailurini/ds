@@ -2,9 +2,27 @@
 
 #include <signal.h>
 
+typedef struct {
+    const char *name;
+    int default_status;
+} DsHandlerSignalInfo;
+
+static const DsHandlerSignalInfo handler_signals[] = {
+    [DS_HANDLER_EXIT] = {"EXIT", 0},
+    [DS_HANDLER_INT] = {"INT", 130},
+    [DS_HANDLER_TERM] = {"TERM", 143},
+    [DS_HANDLER_INVALID] = {"<invalid>", 0},
+};
+
 const char *ds_handler_signal_name(DsHandlerSignal signal) {
-    static const char *const names[] = {"EXIT", "INT", "TERM", "<invalid>"};
-    return (unsigned)signal < DS_ARRAY_LEN(names) ? names[signal] : "<invalid>";
+    return (unsigned)signal < DS_ARRAY_LEN(handler_signals) ? handler_signals[signal].name : "<invalid>";
+}
+
+DsHandlerSignal ds_handler_signal_parse(DsStr name) {
+    for (unsigned signal = DS_HANDLER_EXIT; signal < DS_HANDLER_INVALID; signal++) {
+        if (ds_str_eq_cstr(name, handler_signals[signal].name)) return (DsHandlerSignal)signal;
+    }
+    return DS_HANDLER_INVALID;
 }
 
 bool ds_handler_signal_is_runtime_cleanup(DsHandlerSignal signal) {
@@ -12,8 +30,7 @@ bool ds_handler_signal_is_runtime_cleanup(DsHandlerSignal signal) {
 }
 
 int ds_handler_signal_default_status(DsHandlerSignal signal) {
-    static const int statuses[] = {0, 130, 143, 0};
-    return (unsigned)signal < DS_ARRAY_LEN(statuses) ? statuses[signal] : 0;
+    return (unsigned)signal < DS_ARRAY_LEN(handler_signals) ? handler_signals[signal].default_status : 0;
 }
 
 DsHandlerSignal ds_handler_signal_from_posix(int sig) {

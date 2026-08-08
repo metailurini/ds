@@ -1,4 +1,5 @@
 #include "parser_internal.h"
+#include "ds_signal.h"
 
 DsStmt *parse_stmt(Parser *p);
 static bool parse_assignment_operator(Parser *p, DsAssignOp *op);
@@ -479,10 +480,7 @@ static bool parse_handler_signal(Parser *p, const char *form, DsHandlerSignal *s
         ds_diag_error(p->diag, tok->span, "%s signal must be a string literal", form);
         return false;
     }
-    if (ds_str_eq_cstr(decoded, "EXIT")) *signal = DS_HANDLER_EXIT;
-    else if (ds_str_eq_cstr(decoded, "INT")) *signal = DS_HANDLER_INT;
-    else if (ds_str_eq_cstr(decoded, "TERM")) *signal = DS_HANDLER_TERM;
-    else *signal = DS_HANDLER_INVALID;
+    *signal = ds_handler_signal_parse(decoded);
     *signal_text = decoded;
     return true;
 }

@@ -13,6 +13,7 @@
  * TERM status/classification policy cannot drift between backends.
  */
 const char *ds_handler_signal_name(DsHandlerSignal signal);
+DsHandlerSignal ds_handler_signal_parse(DsStr name);
 bool ds_handler_signal_is_runtime_cleanup(DsHandlerSignal signal);
 int ds_handler_signal_default_status(DsHandlerSignal signal);
 
