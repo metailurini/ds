@@ -391,7 +391,7 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
             interp_push_literal(out, decoded.data + literal_start, i - literal_start, expr->span);
             SymKind inner_kind = SYM_UNKNOWN;
             DsLowerExpr *part = lower_expr(lower, inner, &inner_kind);
-            if (inner_kind != SYM_STRING && inner_kind != SYM_INT && inner_kind != SYM_BOOL && inner_kind != SYM_UNKNOWN) {
+            if (!lower_sym_kind_is_scalar(inner_kind) && inner_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, expr->span, "interpolation expression must be scalar in v0.21.0");
             }
             lower_expr_vec_push(&out->as.interp.parts, part);

@@ -571,7 +571,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 }
                 SymKind value_kind = SYM_UNKNOWN;
                 out->as.assign_stmt.value = lower_expr(lower, stmt->as.assign_stmt.value, &value_kind);
-                if (value_kind != SYM_STRING && value_kind != SYM_INT && value_kind != SYM_BOOL && value_kind != SYM_UNKNOWN) {
+                if (!lower_sym_kind_is_scalar(value_kind) && value_kind != SYM_UNKNOWN) {
                     ds_diag_error(lower->diag, stmt->as.assign_stmt.value->span, "environment variable assignment requires a scalar value in v0.27.0");
                 }
                 return out;

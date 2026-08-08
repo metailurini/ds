@@ -196,17 +196,13 @@ SymKind sym_kind_from_lower_value_kind(DsLowerValueKind kind) {
     return SYM_UNKNOWN;
 }
 
-static bool is_scalar_sym_kind(SymKind kind) {
-    return kind == SYM_STRING || kind == SYM_INT || kind == SYM_BOOL;
-}
-
 void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExprVec *args, const SymKind *arg_kinds) {
     if (!fn || !args || !arg_kinds) return;
     size_t count = args->len < fn->params.len ? args->len : fn->params.len;
     for (size_t i = 0; i < count; i++) {
         SymKind expected = sym_kind_from_lower_value_kind(lower_fn_param_expected_kind(&fn->params.items[i]));
         SymKind actual = arg_kinds[i];
-        if (!is_scalar_sym_kind(expected)) continue;
+        if (!lower_sym_kind_is_scalar(expected)) continue;
         if (actual == SYM_UNKNOWN) {
             ds_diag_error(lower->diag, args->items[i]->span,
                           "cannot prove argument kind for inferred %s parameter `%.*s`",
@@ -214,7 +210,7 @@ void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExp
                           (int)fn->params.items[i].name.len, fn->params.items[i].name.data);
             continue;
         }
-        if (!is_scalar_sym_kind(actual) || expected == actual) continue;
+        if (!lower_sym_kind_is_scalar(actual) || expected == actual) continue;
         ds_diag_error(lower->diag, args->items[i]->span,
                       "function `%.*s` expects argument %zu `%.*s` to be %s, got %s",
                       (int)fn->name.len, fn->name.data,
@@ -282,7 +278,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         if (right && right->kind == DS_LOWER_EXPR_ARRAY && element_kind == SYM_UNKNOWN && !empty_array_literal) {
             ds_diag_error(lower->diag, expr->as.binary.right->span, "`in` over heterogeneous or unknown-element arrays is deferred in v0.23.0");
         }
-        if (right_kind == SYM_ARRAY && element_kind != SYM_UNKNOWN && !is_scalar_sym_kind(element_kind)) ds_diag_error(lower->diag, expr->span, "`in` supports only scalar arrays in v0.23.0");
+        if (right_kind == SYM_ARRAY && element_kind != SYM_UNKNOWN && !lower_sym_kind_is_scalar(element_kind)) ds_diag_error(lower->diag, expr->span, "`in` supports only scalar arrays in v0.23.0");
         out->as.binary.right_element_kind = lower_value_kind_from_sym(element_kind);
         *kind_out = SYM_BOOL;
         return out;

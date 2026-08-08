@@ -142,10 +142,6 @@ bool row_schema_equal(const DsLowerRowSchema *a, const DsLowerRowSchema *b) {
     return true;
 }
 
-static bool row_scalar_kind(DsLowerValueKind kind) {
-    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
-}
-
 bool lower_map_expr_schema(Lower *lower, const DsLowerExpr *expr, DsLowerRowSchema *schema_out) {
     if (!expr || expr->kind != DS_LOWER_EXPR_MAP) return false;
     row_schema_init(schema_out);
@@ -153,7 +149,7 @@ bool lower_map_expr_schema(Lower *lower, const DsLowerExpr *expr, DsLowerRowSche
         const DsLowerMapEntry *entry = &expr->as.map.entries.items[i];
         SymKind sym = infer_lower_expr_kind(lower, entry->value);
         DsLowerValueKind kind = lower_value_kind_from_sym(sym);
-        if (!row_scalar_kind(kind)) {
+        if (!lower_value_kind_is_scalar(kind)) {
             ds_diag_error(lower->diag, entry->span,
                           "row field `%.*s` must be a scalar string, int, or bool value in v0.37.0",
                           (int)entry->key.len, entry->key.data);

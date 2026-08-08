@@ -258,10 +258,6 @@ static InferBinding infer_param(size_t index) {
     return out;
 }
 
-static bool infer_is_scalar(DsLowerValueKind kind) {
-    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
-}
-
 static bool infer_binding_known_kind(InferCtx *ctx, InferBinding binding, DsLowerValueKind *kind_out) {
     if (binding.kind == INFER_BIND_KIND) {
         *kind_out = binding.value_kind;
@@ -317,7 +313,7 @@ static const char *infer_kind_name(DsLowerValueKind kind) {
 }
 
 static void infer_constrain_param(InferCtx *ctx, size_t param_index, DsLowerValueKind expected, DsSpan span, const char *reason) {
-    if (!infer_is_scalar(expected) || param_index >= ctx->fn->params.len) return;
+    if (!lower_value_kind_is_scalar(expected) || param_index >= ctx->fn->params.len) return;
     DsLowerFnParam *param = &ctx->fn->params.items[param_index];
     DsLowerValueKind current = lower_fn_param_expected_kind(param);
     if (current == DS_LOWER_VALUE_UNKNOWN) {
@@ -336,7 +332,7 @@ static void infer_constrain_param(InferCtx *ctx, size_t param_index, DsLowerValu
 }
 
 static void infer_constrain_binding(InferCtx *ctx, InferBinding binding, DsLowerValueKind expected, DsSpan span, const char *reason) {
-    if (!infer_is_scalar(expected)) return;
+    if (!lower_value_kind_is_scalar(expected)) return;
     if (binding.kind == INFER_BIND_PARAM) {
         infer_constrain_param(ctx, binding.param_index, expected, span, reason);
         return;
@@ -425,7 +421,7 @@ static void infer_interpolation_call_args(InferCtx *ctx, InferEnv *env, const Ds
         if (!split) continue;
         if (callee && arg_index < callee->params.len) {
             DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[arg_index]);
-            if (infer_is_scalar(expected)) {
+            if (lower_value_kind_is_scalar(expected)) {
                 DsStr arg_name = {0};
                 if (infer_extract_ident_arg(data, part_start, i, &arg_name)) {
                     InferBinding binding = infer_none();
@@ -491,7 +487,7 @@ static void infer_interpolation_expr_text(InferCtx *ctx, InferEnv *env, DsStr te
                 break;
         }
         InferBinding binding = infer_none();
-        if (infer_is_scalar(expected) && infer_env_find(env, callee_name, &binding)) {
+        if (lower_value_kind_is_scalar(expected) && infer_env_find(env, callee_name, &binding)) {
             infer_constrain_binding(ctx, binding, expected, span, "interpolation format specifier");
         }
         return;
@@ -573,8 +569,8 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             DsLowerValueKind right_kind = DS_LOWER_VALUE_UNKNOWN;
             bool left_known = infer_binding_known_kind(ctx, left, &left_kind);
             bool right_known = infer_binding_known_kind(ctx, right, &right_kind);
-            if (left_known && infer_is_scalar(left_kind)) infer_constrain_binding(ctx, right, left_kind, expr->as.binary.right->span, "comparison");
-            if (right_known && infer_is_scalar(right_kind)) infer_constrain_binding(ctx, left, right_kind, expr->as.binary.left->span, "comparison");
+            if (left_known && lower_value_kind_is_scalar(left_kind)) infer_constrain_binding(ctx, right, left_kind, expr->as.binary.right->span, "comparison");
+            if (right_known && lower_value_kind_is_scalar(right_kind)) infer_constrain_binding(ctx, left, right_kind, expr->as.binary.left->span, "comparison");
             return infer_kind(DS_LOWER_VALUE_BOOL);
         }
         case DS_EXPR_CALL: {
@@ -600,7 +596,7 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
                 size_t count = expr->as.call.args.len < callee->params.len ? expr->as.call.args.len : callee->params.len;
                 for (size_t i = 0; i < count; i++) {
                     DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[i]);
-                    if (infer_is_scalar(expected)) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], expected, "function call");
+                    if (lower_value_kind_is_scalar(expected)) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], expected, "function call");
                     else (void)infer_expr_binding(ctx, env, expr->as.call.args.items[i]);
                 }
                 return infer_kind(callee->has_return && callee->all_paths_return ? callee->return_kind : DS_LOWER_VALUE_UNKNOWN);
@@ -679,7 +675,7 @@ static void infer_stmt(InferCtx *ctx, InferEnv *env, const DsStmt *stmt) {
                 size_t count = stmt->as.call_stmt.args.len < callee->params.len ? stmt->as.call_stmt.args.len : callee->params.len;
                 for (size_t i = 0; i < count; i++) {
                     DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[i]);
-                    if (infer_is_scalar(expected)) infer_constrain_expr(ctx, env, stmt->as.call_stmt.args.items[i], expected, "function call");
+                    if (lower_value_kind_is_scalar(expected)) infer_constrain_expr(ctx, env, stmt->as.call_stmt.args.items[i], expected, "function call");
                     else (void)infer_expr_binding(ctx, env, stmt->as.call_stmt.args.items[i]);
                 }
             } else {
@@ -725,7 +721,7 @@ static void infer_stmt(InferCtx *ctx, InferEnv *env, const DsStmt *stmt) {
                     else if (pattern_kind != current) mixed = true;
                 }
             }
-            if (!mixed && infer_is_scalar(pattern_kind)) infer_constrain_expr(ctx, env, stmt->as.case_stmt.selector, pattern_kind, "case pattern");
+            if (!mixed && lower_value_kind_is_scalar(pattern_kind)) infer_constrain_expr(ctx, env, stmt->as.case_stmt.selector, pattern_kind, "case pattern");
             else (void)infer_expr_binding(ctx, env, stmt->as.case_stmt.selector);
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
                 InferEnv arm_env = infer_env_clone(env);
@@ -1065,10 +1061,6 @@ static DsLowerValueKind ast_literal_default_kind(const DsExpr *expr) {
     }
 }
 
-static bool ast_value_kind_is_row_scalar(DsLowerValueKind kind) {
-    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
-}
-
 static bool ast_expr_row_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out);
 static bool ast_expr_row_array_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out);
 
@@ -1097,7 +1089,7 @@ static bool ast_expr_row_schema_known(Lower *lower, const AstKindEnv *env, const
     for (size_t i = 0; i < expr->as.map.entries.len; i++) {
         const DsMapEntry *entry = &expr->as.map.entries.items[i];
         DsLowerValueKind kind = DS_LOWER_VALUE_UNKNOWN;
-        if (!ast_expr_kind_known(lower, env, entry->value, &kind) || !ast_value_kind_is_row_scalar(kind)) {
+        if (!ast_expr_kind_known(lower, env, entry->value, &kind) || !lower_value_kind_is_scalar(kind)) {
             row_schema_free(schema_out);
             return false;
         }
