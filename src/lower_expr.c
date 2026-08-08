@@ -720,7 +720,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         return out;
     }
     DsStr ns = {0}, member = {0};
-    if (split_member_name(expr->as.call.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
+    if (split_member_name(expr->as.call.name, &ns, &member) && ds_str_eq_cstr(ns, "string")) {
         ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
         free(arg_kinds);
         return out;
@@ -897,10 +897,6 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     return out;
 }
 
-static bool helper_returns_string_array(DsStr name) {
-    return ds_stdlib_array_element_kind(name) == DS_STDLIB_ARRAY_ELEMENT_STRING;
-}
-
 SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
     if (!expr) return SYM_UNKNOWN;
     switch (expr->kind) {
@@ -954,7 +950,7 @@ static SymKind infer_collection_element_kind(Lower *lower, const DsLowerExpr *ex
     if (expr->kind == DS_LOWER_EXPR_CALL) {
         if (!is_map) {
             if (expr->as.call.returns_row_array) return SYM_MAP;
-            if (helper_returns_string_array(expr->as.call.name)) return SYM_STRING;
+            if (ds_stdlib_array_element_kind(expr->as.call.name) == DS_STDLIB_ARRAY_ELEMENT_STRING) return SYM_STRING;
             if (expr->as.call.is_user_function) return SYM_UNKNOWN;
         } else {
             if (expr->as.call.is_user_function) {
