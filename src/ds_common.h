@@ -74,6 +74,28 @@ static inline bool ds_is_ident_continue(char c) {
     return ds_is_ident_start(c) || (c >= '0' && c <= '9');
 }
 
+static inline bool ds_parse_int_range(DsStr text, int min, int max, int *out) {
+    if (!out || text.len == 0 || min > max) return false;
+    size_t i = 0;
+    bool negative = false;
+    if (text.data[0] == '+' || text.data[0] == '-') {
+        negative = text.data[0] == '-';
+        if (++i == text.len) return false;
+    }
+    int64_t value = 0;
+    for (; i < text.len; i++) {
+        char c = text.data[i];
+        if (c < '0' || c > '9') return false;
+        int digit = c - '0';
+        if (value > (INT64_MAX - digit) / 10) return false;
+        value = value * 10 + digit;
+    }
+    if (negative) value = -value;
+    if (value < min || value > max) return false;
+    *out = (int)value;
+    return true;
+}
+
 static inline DsStr ds_str_clone(DsStr value) {
     DsStr out = {ds_str_dup_len(value), value.len};
     return out;

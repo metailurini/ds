@@ -4,16 +4,7 @@
 
 static bool parse_format_limit(DsStr spec, size_t start, size_t end, int *value) {
     if (start >= end) return false;
-    int out = 0;
-    for (size_t i = start; i < end; i++) {
-        if (spec.data[i] < '0' || spec.data[i] > '9') return false;
-        int digit = spec.data[i] - '0';
-        if (out > (1024 - digit) / 10) return false;
-        out = out * 10 + digit;
-    }
-    if (out <= 0 || out > 1024) return false;
-    *value = out;
-    return true;
+    return ds_parse_int_range((DsStr){spec.data + start, end - start}, 1, 1024, value);
 }
 
 bool ds_interp_parse_format_spec(DsStr spec, DsInterpFormatSpec *out) {

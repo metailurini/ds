@@ -842,12 +842,7 @@ static bool process_spec_from_stage(Vm *vm, Instr *ins, size_t stage_index, bool
 
 static bool parse_exit_code_arg(const char *text, int *out) {
     if (!text || !*text) return false;
-    char *end = NULL;
-    errno = 0;
-    long value = strtol(text, &end, 10);
-    if (errno != 0 || !end || *end != '\0' || value < 0 || value > 255) return false;
-    *out = (int)value;
-    return true;
+    return ds_parse_int_range((DsStr){(char *)text, strlen(text)}, 0, 255, out);
 }
 
 static void append_test_helper_message(DsString *out, const VmProcessSpec *spec, size_t first_arg) {
