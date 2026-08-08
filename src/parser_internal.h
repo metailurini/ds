@@ -3,9 +3,6 @@
 
 #include "frontend.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 typedef struct {
     const DsTokenVec *tokens;
     size_t pos;

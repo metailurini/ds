@@ -3,8 +3,6 @@
 
 #include "ds_common.h"
 
-#include <stdbool.h>
-
 typedef enum {
     DS_INTERP_VALUE_BOOL,
     DS_INTERP_VALUE_INT,

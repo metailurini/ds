@@ -5,10 +5,6 @@
 #include "ds_runtime.h"
 #include "ds_stdlib.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
 typedef enum {
     SYM_BOOL,
     SYM_INT,

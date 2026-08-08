@@ -4,11 +4,6 @@
 #include "backend.h"
 #include "ds_stdlib.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-
 static inline bool vm_i64_add_checked(int64_t lhs, int64_t rhs, int64_t *out) {
     if ((rhs > 0 && lhs > INT64_MAX - rhs) || (rhs < 0 && lhs < INT64_MIN - rhs)) return false;
     *out = lhs + rhs;

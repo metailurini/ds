@@ -3,8 +3,6 @@
 
 #include "ds_ast.h"
 
-#include <stdbool.h>
-
 /*
  * Shared trap/defer/signal runtime contract.
  *

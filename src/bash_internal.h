@@ -4,10 +4,6 @@
 #include "backend.h"
 #include "ds_stdlib.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <string.h>
-
 typedef struct {
     char *data;
     size_t len;

@@ -4,9 +4,6 @@
 #include "ds_common.h"
 #include "ds_runtime.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-
 typedef enum {
     DS_REGEX_OK,
     DS_REGEX_ERR_LITERAL_SYNTAX,
