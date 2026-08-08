@@ -224,6 +224,15 @@ static void validate_user_function_value_call(Lower *lower, const DsLowerFn *fn,
 }
 
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
+
+SymKind *lower_args_to_kinds(Lower *lower, const DsExprVec *args, DsLowerExprVec *out) {
+    if (args->len == 0) return NULL;
+    SymKind *kinds = (SymKind *)ds_xcalloc(args->len, sizeof(SymKind));
+    for (size_t i = 0; i < args->len; i++) {
+        lower_expr_vec_push(out, lower_expr(lower, args->items[i], &kinds[i]));
+    }
+    return kinds;
+}
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs);
 static void lower_validate_static_regex_pattern(Lower *lower, const DsExpr *arg, DsStr decoded);
 
@@ -594,11 +603,9 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
     out->as.call.name = str_clone(expr->as.call.name);
-    SymKind *arg_kinds = expr->as.call.args.len ? (SymKind *)ds_xcalloc(expr->as.call.args.len, sizeof(SymKind)) : NULL;
+    SymKind *arg_kinds = lower_args_to_kinds(lower, &expr->as.call.args, &out->as.call.args);
     for (size_t i = 0; i < expr->as.call.args.len; i++) {
-        SymKind arg_kind = SYM_UNKNOWN;
-        lower_expr_vec_push(&out->as.call.args, lower_expr(lower, expr->as.call.args.items[i], &arg_kind));
-        arg_kinds[i] = arg_kind;
+        SymKind arg_kind = arg_kinds[i];
         if (is_row_sort_method) {
             if (i > 0 && expr->as.call.args.len > 0 && arg_kinds[0] == SYM_ARRAY && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "row-array method `sort_by` expects string literal arguments in v0.37.0");
