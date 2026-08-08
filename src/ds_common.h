@@ -67,6 +67,10 @@ static inline DsStr ds_str_clone(DsStr value) {
     return out;
 }
 
+static inline DsSpan ds_span_zero(const DsSource *source) {
+    return (DsSpan){{0, 1, 1}, {0, 1, 1}, source};
+}
+
 #define DS_VEC_PUSH(vec, value, initial_cap) do { \
     if ((vec)->len == (vec)->cap) { \
         (vec)->cap = (vec)->cap ? (vec)->cap * 2 : (initial_cap); \

@@ -262,7 +262,7 @@ bool ds_cli_load_composed_parse(const char *path, DsCliProgram *program) {
     memset(program, 0, sizeof(*program));
     ds_diag_init(&program->diag, NULL);
     DsAst *composed = (DsAst *)ds_xcalloc(1, sizeof(DsAst));
-    bool ok = load_composed_file(program, path, (DsSpan){{0, 1, 1}, {0, 1, 1}, NULL}, true, composed);
+    bool ok = load_composed_file(program, path, ds_span_zero(NULL), true, composed);
     if (!ok || program->diag.has_error) {
         ds_ast_free(composed);
         return false;
