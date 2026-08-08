@@ -132,23 +132,8 @@ static void vm_register_handler(Vm *vm, DsHandlerSignal signal, size_t target, b
 }
 
 static const char *op_cmp_name(OpCmp e) {
-    switch (e) {
-        case OP_CMP_ADD: return "+";
-        case OP_CMP_SUB: return "-";
-        case OP_CMP_MUL: return "*";
-        case OP_CMP_DIV: return "/";
-        case OP_CMP_MOD: return "%";
-        case OP_CMP_POW: return "**";
-        case OP_CMP_EQ_EQ: return "==";
-        case OP_CMP_NE: return "!=";
-        case OP_CMP_LT: return "<";
-        case OP_CMP_LE: return "<=";
-        case OP_CMP_GT: return ">";
-        case OP_CMP_GE: return ">=";
-        case OP_CMP_EQ_EQ_EQ: return "===";
-        case OP_CMP_NE_EQ: return "!==";
-    }
-    return "?";
+    static const char *const names[] = {"+", "-", "*", "/", "%", "**", "==", "!=", "<", "<=", ">", ">=", "===", "!=="};
+    return (unsigned)e < DS_ARRAY_LEN(names) ? names[e] : "?";
 }
 
 static bool check_div_zero_and_overflow(DsDiag *diag, DsSpan span,
