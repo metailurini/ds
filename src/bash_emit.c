@@ -164,32 +164,8 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
     buf_appendf(&e->out, "[[ ${#__ds_positionals[@]} -eq %zu ]] || __ds_error 'unexpected extra positional argument `'\"${__ds_positionals[%zu]}\"'`'\n\n", arg_index, arg_index);
 }
 
-static void emit_command_result_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_command_result_helpers_source());
-}
-
-static void emit_array_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_array_helpers_source());
-}
-
-static void emit_map_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_map_helpers_source());
-}
-
-static void emit_dynamic_index_helper(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_dynamic_index_helper_source());
-}
-
-static void emit_stdlib_capture_helper(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_stdlib_capture_helper_source());
-}
-
-static void emit_stdlib_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_stdlib_helpers_source());
-}
-
-static void emit_temp_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_temp_helpers_source());
+static void emit_helper_source(BashEmitter *e, const char *source) {
+    buf_append(&e->out, source);
 }
 
 static void emit_plain_temp_cleanup_trap(BashEmitter *e) {
@@ -208,14 +184,6 @@ static void emit_regex_helpers(BashEmitter *e, bool needs_match, bool needs_repl
     buf_append(&e->out, ds_bash_regex_helpers_source());
     if (needs_match) buf_append(&e->out, ds_bash_regex_match_helpers_source());
     if (needs_replace) buf_append(&e->out, ds_bash_regex_replace_helpers_source());
-}
-
-static void emit_debug_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_debug_helpers_source());
-}
-
-static void emit_int_helpers(BashEmitter *e) {
-    buf_append(&e->out, ds_bash_int_helpers_source());
 }
 
 static void emit_function_value_helpers(BashEmitter *e) {
@@ -354,22 +322,22 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
 
     if (needs_error_helper) emit_error_helper(&e);
     emit_script_args(&e, lowered);
-    if (needs_temp_helpers) emit_temp_helpers(&e);
-    if (needs_int_helpers) emit_int_helpers(&e);
+    if (needs_temp_helpers) emit_helper_source(&e, ds_bash_temp_helpers_source());
+    if (needs_int_helpers) emit_helper_source(&e, ds_bash_int_helpers_source());
     if (needs_function_value_helpers) emit_function_value_helpers(&e);
-    if (needs_debug) emit_debug_helpers(&e);
+    if (needs_debug) emit_helper_source(&e, ds_bash_debug_helpers_source());
     if (needs_cleanup_helpers) emit_cleanup_helpers(&e);
     else {
         if (needs_temp_helpers) emit_plain_temp_cleanup_trap(&e);
         if (needs_debug) emit_plain_command_fail_helper(&e);
         if (needs_control_helpers) emit_plain_control_helpers(&e);
     }
-    if (program_uses_run(lowered)) emit_command_result_helpers(&e);
-    if (needs_array_helpers) emit_array_helpers(&e);
-    if (needs_map_helpers) emit_map_helpers(&e);
-    if (needs_dynamic_index_helper) emit_dynamic_index_helper(&e);
-    if (needs_stdlib) emit_stdlib_helpers(&e);
-    else if (needs_stdlib_capture) emit_stdlib_capture_helper(&e);
+    if (program_uses_run(lowered)) emit_helper_source(&e, ds_bash_command_result_helpers_source());
+    if (needs_array_helpers) emit_helper_source(&e, ds_bash_array_helpers_source());
+    if (needs_map_helpers) emit_helper_source(&e, ds_bash_map_helpers_source());
+    if (needs_dynamic_index_helper) emit_helper_source(&e, ds_bash_dynamic_index_helper_source());
+    if (needs_stdlib) emit_helper_source(&e, ds_bash_stdlib_helpers_source());
+    else if (needs_stdlib_capture) emit_helper_source(&e, ds_bash_stdlib_capture_helper_source());
     if (string_helper_mask) emit_string_helpers(&e, string_helper_mask);
     if (needs_glob_helpers) emit_glob_helpers(&e, needs_recursive_glob_helpers);
     if (needs_regex_helpers) emit_regex_helpers(&e, needs_regex_match_helpers, needs_regex_replace_helpers);
