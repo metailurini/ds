@@ -60,31 +60,19 @@ void ds_string_free(DsString *s) {
 }
 
 DsValue ds_value_null(void) {
-    DsValue v;
-    memset(&v, 0, sizeof(v));
-    v.kind = DS_VALUE_NULL;
-    return v;
+    return (DsValue){.kind = DS_VALUE_NULL};
 }
 
 DsValue ds_value_bool(bool value) {
-    DsValue v = ds_value_null();
-    v.kind = DS_VALUE_BOOL;
-    v.as.boolean = value;
-    return v;
+    return (DsValue){.kind = DS_VALUE_BOOL, .as.boolean = value};
 }
 
 DsValue ds_value_int(int64_t value) {
-    DsValue v = ds_value_null();
-    v.kind = DS_VALUE_INT;
-    v.as.integer = value;
-    return v;
+    return (DsValue){.kind = DS_VALUE_INT, .as.integer = value};
 }
 
 DsValue ds_value_array(void) {
-    DsValue v = ds_value_null();
-    v.kind = DS_VALUE_ARRAY;
-    ds_array_init(&v.as.array);
-    return v;
+    return (DsValue){.kind = DS_VALUE_ARRAY};
 }
 
 DsValue ds_value_map(void) {
@@ -95,27 +83,21 @@ DsValue ds_value_map(void) {
 }
 
 DsValue ds_value_string_take(DsString *string) {
-    DsValue v = ds_value_null();
-    v.kind = DS_VALUE_STRING;
-    v.as.string = *string;
-    ds_string_init(string);
+    DsValue v = {.kind = DS_VALUE_STRING, .as.string = *string};
+    *string = (DsString){0};
     return v;
 }
 
 DsValue ds_value_command_result_take(DsString *stdout_text, DsString *stderr_text, int64_t code) {
-    DsValue v = ds_value_null();
-    v.kind = DS_VALUE_COMMAND_RESULT;
-    v.as.command_result.stdout_text = *stdout_text;
-    v.as.command_result.stderr_text = *stderr_text;
-    v.as.command_result.code = code;
-    ds_string_init(stdout_text);
-    ds_string_init(stderr_text);
+    DsValue v = {.kind = DS_VALUE_COMMAND_RESULT,
+                 .as.command_result = {*stdout_text, *stderr_text, code}};
+    *stdout_text = (DsString){0};
+    *stderr_text = (DsString){0};
     return v;
 }
 
 DsValue ds_value_copy(const DsValue *value) {
-    DsValue out = ds_value_null();
-    out.kind = value->kind;
+    DsValue out = {.kind = value->kind};
     switch (value->kind) {
         case DS_VALUE_STRING:
             ds_string_from_range(&out.as.string, value->as.string.data ? value->as.string.data : "", value->as.string.len);

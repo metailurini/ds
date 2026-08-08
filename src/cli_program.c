@@ -103,9 +103,7 @@ static void move_script_block(DsAst *dest, DsAst *src, bool is_root, DsDiag *dia
         DS_VEC_PUSH(&dest->script.declarations, src->script.declarations.items[i], 8);
     }
     free(src->script.declarations.items);
-    src->script.declarations.items = NULL;
-    src->script.declarations.len = 0;
-    src->script.declarations.cap = 0;
+    src->script.declarations = (DsScriptDeclVec){0};
     src->has_script = false;
 }
 

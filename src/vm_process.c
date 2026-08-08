@@ -728,13 +728,11 @@ typedef struct {
 
 static void argv_free(VmArgv *argv) {
     ds_free_cstr_array(argv->items, argv->len);
-    argv->items = NULL;
-    argv->len = 0;
+    *argv = (VmArgv){0};
 }
 
 static bool argv_build_range(Vm *vm, Instr *ins, size_t first_word, size_t word_count, VmArgv *argv) {
-    argv->items = NULL;
-    argv->len = 0;
+    *argv = (VmArgv){0};
     if (word_count == 0) return false;
     argv->items = (char **)ds_xcalloc(word_count + 1, sizeof(char *));
     argv->len = word_count;
@@ -767,19 +765,13 @@ static bool process_status_is_signal(int status, int sig) {
 }
 
 static void process_result_init(VmProcessResult *result) {
-    ds_string_init(&result->stdout_text);
-    ds_string_init(&result->stderr_text);
-    result->code = 0;
-    result->terminated_by_sigpipe = false;
-    result->has_non_sigpipe_failure = false;
+    *result = (VmProcessResult){0};
 }
 
 static void process_result_free(VmProcessResult *result) {
     ds_string_free(&result->stdout_text);
     ds_string_free(&result->stderr_text);
-    result->code = 0;
-    result->terminated_by_sigpipe = false;
-    result->has_non_sigpipe_failure = false;
+    *result = (VmProcessResult){0};
 }
 
 static bool open_redirect_target(Vm *vm, const DsRedirect *redirect, int *out_fd) {
