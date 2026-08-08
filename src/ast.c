@@ -198,7 +198,7 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
                     fputc(' ', out);
                     if (p->kind == DS_CASE_PATTERN_DEFAULT) fputs("_", out);
                     else if (p->kind == DS_CASE_PATTERN_BOOL) fputs(p->boolean ? "true" : "false", out);
-                    else fprintf(out, "%.*s", (int)p->text.len, p->text.data);
+                    else ds_fprint_str(out, p->text);
                 }
                 fputc('\n', out);
                 print_stmt(arm->body, out, level + 2);

@@ -56,7 +56,7 @@ static void print_script_help(const DsSource *source, const DsLowerProgram *prog
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_OPTION) {
             fprintf(out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
-            if (decl->type == DS_SCRIPT_TYPE_STRING) fprintf(out, "%.*s", (int)decl->default_text.len, decl->default_text.data ? decl->default_text.data : "");
+            if (decl->type == DS_SCRIPT_TYPE_STRING) ds_fprint_str(out, decl->default_text);
             else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, "%lld", (long long)decl->default_int);
             else fprintf(out, "%s", decl->default_bool ? "true" : "false");
             fputc('\n', out);
