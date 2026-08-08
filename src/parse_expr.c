@@ -166,6 +166,25 @@ static DsStr parser_copy_dotted_bang_name(DsToken *left, DsToken *right) {
     return (DsStr){buf, len};
 }
 
+static DsExpr *parser_take_field_call(DsExpr *field_expr, const DsToken *field, const DsToken *opener, bool bang) {
+    bool stdlib = parser_expr_is_stdlib_namespace(field_expr->as.field.object);
+    DsExpr *call = parser_new_expr(DS_EXPR_CALL,
+                                   (DsSpan){field_expr->span.start, opener->span.end, field_expr->span.source});
+    DsToken left = {.text = stdlib ? field_expr->as.field.object->as.text : (DsStr){"string", 6},
+                    .span = field_expr->as.field.object->span};
+    DsToken right = {.text = field_expr->as.field.field, .span = field->span};
+    call->as.call.name = bang ? parser_copy_dotted_bang_name(&left, &right) : parser_copy_dotted_name(&left, &right);
+    if (stdlib) {
+        free(field_expr->as.field.object->as.text.data);
+        free(field_expr->as.field.object);
+    } else {
+        parser_expr_vec_push(&call->as.call.args, field_expr->as.field.object);
+    }
+    free(field_expr->as.field.field.data);
+    free(field_expr);
+    return call;
+}
+
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
     while (expr) {
@@ -223,14 +242,7 @@ static DsExpr *parse_postfix(Parser *p) {
             if (parser_expr_is_stdlib_namespace(field_expr->as.field.object) && parser_advance_if(p, DS_TOK_BANG)) {
                 DsToken *bang = parser_previous(p);
                 if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after bang standard-library helper name")) break;
-                DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, bang->span.end, dot->span.source});
-                DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
-                DsToken right = {.text = field_expr->as.field.field, .span = field->span};
-                call->as.call.name = parser_copy_dotted_bang_name(&left, &right);
-                free(field_expr->as.field.object->as.text.data);
-                free(field_expr->as.field.object);
-                free(field_expr->as.field.field.data);
-                free(field_expr);
+                DsExpr *call = parser_take_field_call(field_expr, field, bang, true);
                 parse_call_args(p, &call->as.call.args);
                 if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
                 expr = call;
@@ -238,21 +250,7 @@ static DsExpr *parse_postfix(Parser *p) {
             }
             if (parser_advance_if(p, DS_TOK_LPAREN)) {
                 DsToken *open = parser_previous(p);
-                DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){field_expr->span.start, open->span.end, dot->span.source});
-                if (parser_expr_is_stdlib_namespace(field_expr->as.field.object)) {
-                    DsToken left = {.text = field_expr->as.field.object->as.text, .span = field_expr->as.field.object->span};
-                    DsToken right = {.text = field_expr->as.field.field, .span = field->span};
-                    call->as.call.name = parser_copy_dotted_name(&left, &right);
-                    free(field_expr->as.field.object->as.text.data);
-                    free(field_expr->as.field.object);
-                } else {
-                    DsToken left = {.text = (DsStr){"string", 6}, .span = field->span};
-                    DsToken right = {.text = field_expr->as.field.field, .span = field->span};
-                    call->as.call.name = parser_copy_dotted_name(&left, &right);
-                    parser_expr_vec_push(&call->as.call.args, field_expr->as.field.object);
-                }
-                free(field_expr->as.field.field.data);
-                free(field_expr);
+                DsExpr *call = parser_take_field_call(field_expr, field, open, false);
                 parse_call_args(p, &call->as.call.args);
                 if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after method call arguments")) call->span.end = parser_previous(p)->span.end;
                 expr = call;
