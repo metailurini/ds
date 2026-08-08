@@ -103,12 +103,12 @@ static bool value_string_from_owned_cstr(DsValue *out, char *text) {
     return true;
 }
 
-static bool array_push_string(DsValue *array, const char *data, size_t len) {
+static void array_push_string(DsValue *array, const char *data, size_t len) {
     DsString s;
     ds_string_from_range(&s, data ? data : "", len);
     DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
     *item = ds_value_string_take(&s);
-    return ds_array_push(&array->as.array, item);
+    ds_array_push(&array->as.array, item);
 }
 
 static int cmp_cstr_ptr(const void *a, const void *b) {
