@@ -342,18 +342,6 @@ static void infer_constrain_binding(InferCtx *ctx, InferBinding binding, DsLower
     }
 }
 
-static bool infer_string_helper_name(DsStr name) {
-    return ds_stdlib_is_string_helper(name);
-}
-
-static bool infer_string_helper_arg_expects_int(DsStr name, size_t arg_index) {
-    return ds_stdlib_arg_expects_int(name, arg_index);
-}
-
-static DsLowerValueKind infer_string_helper_return_kind(DsStr name) {
-    return lower_stdlib_return_value_kind(ds_stdlib_lookup(name));
-}
-
 static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExpr *expr);
 static bool infer_extract_ident_arg(const char *data, size_t start, size_t end, DsStr *name_out);
 static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr word, size_t arg_start, DsStr method, DsSpan span);
@@ -449,7 +437,7 @@ static bool infer_interpolation_method(InferCtx *ctx, InferEnv *env, DsStr text,
     ds_string_append_cstr(&full, "string.");
     ds_string_append_range(&full, method.data, method.len);
     DsStr helper = {full.data, full.len};
-    bool is_helper = infer_string_helper_name(helper);
+    bool is_helper = ds_stdlib_is_string_helper(helper);
     if (is_helper) {
         InferBinding binding = infer_none();
         if (infer_env_find(env, receiver, &binding)) infer_constrain_binding(ctx, binding, DS_LOWER_VALUE_STRING, span, "interpolation string helper");
@@ -574,12 +562,12 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             return infer_kind(DS_LOWER_VALUE_BOOL);
         }
         case DS_EXPR_CALL: {
-            if (infer_string_helper_name(expr->as.call.name)) {
+            if (ds_stdlib_is_string_helper(expr->as.call.name)) {
                 for (size_t i = 0; i < expr->as.call.args.len; i++) {
-                    DsLowerValueKind expected = infer_string_helper_arg_expects_int(expr->as.call.name, i) ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
+                    DsLowerValueKind expected = ds_stdlib_arg_expects_int(expr->as.call.name, i) ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
                     infer_constrain_expr(ctx, env, expr->as.call.args.items[i], expected, "string helper");
                 }
-                return infer_kind(infer_string_helper_return_kind(expr->as.call.name));
+                return infer_kind(lower_stdlib_return_value_kind(ds_stdlib_lookup(expr->as.call.name)));
             }
             if (ds_stdlib_is_name(expr->as.call.name)) {
                 const DsStdlibHelper *helper = ds_stdlib_lookup(expr->as.call.name);
@@ -802,7 +790,7 @@ static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr w
             if (infer_extract_ident_arg(word.data, part_start, i, &arg_name)) {
                 InferBinding binding = infer_none();
                 if (infer_env_find(env, arg_name, &binding)) {
-                    DsLowerValueKind expected = infer_string_helper_arg_expects_int(method, arg_index) ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
+                    DsLowerValueKind expected = ds_stdlib_arg_expects_int(method, arg_index) ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
                     infer_constrain_binding(ctx, binding, expected, span, "command interpolation string helper");
                 }
             }
