@@ -39,10 +39,7 @@ static DsExpr *parse_array_literal(Parser *p) {
             skip_collection_newlines(p);
             if (!parser_advance_if(p, DS_TOK_COMMA)) break;
             skip_collection_newlines(p);
-            if (parser_at(p, DS_TOK_RBRACKET)) {
-                ds_diag_error(p->diag, parser_peek(p)->span, "expected array element after `,`");
-                break;
-            }
+            if (parser_reject_trailing_comma(p, DS_TOK_RBRACKET, "expected array element after `,`")) break;
         }
     }
     if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` to close array literal")) return expr;
@@ -84,10 +81,7 @@ static DsExpr *parse_map_literal(Parser *p) {
         skip_collection_newlines(p);
         if (!parser_advance_if(p, DS_TOK_COMMA)) break;
         skip_collection_newlines(p);
-        if (parser_at(p, DS_TOK_RBRACE)) {
-            ds_diag_error(p->diag, parser_peek(p)->span, "expected map entry after `,`");
-            break;
-        }
+        if (parser_reject_trailing_comma(p, DS_TOK_RBRACE, "expected map entry after `,`")) break;
     }
     if (!parser_expect(p, DS_TOK_RBRACE, "expected `}` to close map literal")) return expr;
     expr->span.end = parser_previous(p)->span.end;
@@ -324,9 +318,6 @@ void parse_call_args(Parser *p, DsExprVec *args) {
     while (!parser_at_end(p) && !parser_at(p, DS_TOK_RPAREN)) {
         parser_expr_vec_push(args, parse_expr(p));
         if (!parser_advance_if(p, DS_TOK_COMMA)) break;
-        if (parser_at(p, DS_TOK_RPAREN)) {
-            ds_diag_error(p->diag, parser_peek(p)->span, "expected function call argument after `,`");
-            break;
-        }
+        if (parser_reject_trailing_comma(p, DS_TOK_RPAREN, "expected function call argument after `,`")) break;
     }
 }

@@ -36,10 +36,7 @@ DsStmt *parse_fn(Parser *p, bool top_level) {
             }
             parser_fn_param_vec_push(&stmt->as.fn_stmt.params, param);
             if (!parser_advance_if(p, DS_TOK_COMMA)) break;
-            if (parser_at(p, DS_TOK_RPAREN)) {
-                ds_diag_error(p->diag, parser_peek(p)->span, "expected parameter name after `,`");
-                break;
-            }
+            if (parser_reject_trailing_comma(p, DS_TOK_RPAREN, "expected parameter name after `,`")) break;
         }
     }
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function parameters")) return stmt;

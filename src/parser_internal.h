@@ -128,6 +128,12 @@ static inline bool parser_expect(Parser *p, DsTokenKind kind, const char *messag
     return false;
 }
 
+static inline bool parser_reject_trailing_comma(Parser *p, DsTokenKind closing_kind, const char *message) {
+    if (!parser_at(p, closing_kind)) return false;
+    ds_diag_error(p->diag, parser_peek(p)->span, "%s", message);
+    return true;
+}
+
 static inline bool parser_is_identifier_like(DsTokenKind kind) {
     return kind == DS_TOK_IDENT || kind == DS_TOK_SCRIPT || kind == DS_TOK_IMPORT || kind == DS_TOK_ARG ||
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
