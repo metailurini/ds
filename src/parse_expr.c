@@ -30,6 +30,17 @@ void parse_call_args(Parser *p, DsExprVec *args);
 
 static void skip_collection_newlines(Parser *p) { parser_skip_newlines(p); }
 
+static bool parse_collection_next(Parser *p, DsTokenKind closing, const char *trailing_message) {
+    skip_collection_newlines(p);
+    if (!parser_advance_if(p, DS_TOK_COMMA)) return false;
+    skip_collection_newlines(p);
+    return !parser_reject_trailing_comma(p, closing, trailing_message);
+}
+
+static void parse_collection_close(Parser *p, DsExpr *expr, DsTokenKind closing, const char *message) {
+    if (parser_expect(p, closing, message)) expr->span.end = parser_previous(p)->span.end;
+}
+
 static DsExpr *parser_new_text_expr(DsExprKind kind, const DsToken *token) {
     DsExpr *expr = parser_new_expr(kind, token->span);
     expr->as.text = parser_copy_token_text(token);
@@ -43,14 +54,10 @@ static DsExpr *parse_array_literal(Parser *p) {
     if (!parser_at(p, DS_TOK_RBRACKET)) {
         while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACKET)) {
             parser_expr_vec_push(&expr->as.array.elements, parse_expr(p));
-            skip_collection_newlines(p);
-            if (!parser_advance_if(p, DS_TOK_COMMA)) break;
-            skip_collection_newlines(p);
-            if (parser_reject_trailing_comma(p, DS_TOK_RBRACKET, "expected array element after `,`")) break;
+            if (!parse_collection_next(p, DS_TOK_RBRACKET, "expected array element after `,`")) break;
         }
     }
-    if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` to close array literal")) return expr;
-    expr->span.end = parser_previous(p)->span.end;
+    parse_collection_close(p, expr, DS_TOK_RBRACKET, "expected `]` to close array literal");
     return expr;
 }
 
@@ -85,13 +92,9 @@ static DsExpr *parse_map_literal(Parser *p) {
         entry.value = parse_expr(p);
         if (entry.value) entry.span.end = entry.value->span.end;
         parser_map_entry_vec_push(&expr->as.map.entries, entry);
-        skip_collection_newlines(p);
-        if (!parser_advance_if(p, DS_TOK_COMMA)) break;
-        skip_collection_newlines(p);
-        if (parser_reject_trailing_comma(p, DS_TOK_RBRACE, "expected map entry after `,`")) break;
+        if (!parse_collection_next(p, DS_TOK_RBRACE, "expected map entry after `,`")) break;
     }
-    if (!parser_expect(p, DS_TOK_RBRACE, "expected `}` to close map literal")) return expr;
-    expr->span.end = parser_previous(p)->span.end;
+    parse_collection_close(p, expr, DS_TOK_RBRACE, "expected `}` to close map literal");
     return expr;
 }
 
