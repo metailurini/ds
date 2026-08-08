@@ -17,14 +17,6 @@ static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) 
     return true;
 }
 
-static bool interp_expr_is_stdlib_namespace(DsExpr *expr) {
-    return expr && expr->kind == DS_EXPR_IDENT && ds_stdlib_is_namespace(expr->as.text);
-}
-
-static DsStr interp_dup_dotted_name(DsStr left, DsStr right) {
-    return ds_str_join_char(left, '.', right);
-}
-
 static DsExpr *temp_ident_from_str(DsStr name, DsSpan span) {
     DsExpr *expr = ds_expr_new(DS_EXPR_IDENT, span);
     expr->as.text = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
@@ -57,11 +49,11 @@ static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i,
     if (*i >= len || s[*i] != '(') return NULL;
     (*i)++;
     DsExpr *call = ds_expr_new(DS_EXPR_CALL, span);
-    if (interp_expr_is_stdlib_namespace(receiver)) {
-        call->as.call.name = interp_dup_dotted_name(receiver->as.text, field);
+    if (receiver && receiver->kind == DS_EXPR_IDENT && ds_stdlib_is_namespace(receiver->as.text)) {
+        call->as.call.name = ds_str_join_char(receiver->as.text, '.', field);
         ds_expr_free(receiver);
     } else {
-        call->as.call.name = interp_dup_dotted_name((DsStr){"string", 6}, field);
+        call->as.call.name = ds_str_join_char((DsStr){"string", 6}, '.', field);
         DS_VEC_PUSH(&call->as.call.args, receiver, 4);
     }
     ds_skip_ascii_ws(s, len, i);
