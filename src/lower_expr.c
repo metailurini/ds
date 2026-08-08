@@ -231,10 +231,6 @@ DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out);
 DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out, bool allowed_matches_rhs);
 static void lower_validate_static_regex_pattern(Lower *lower, const DsExpr *arg, DsStr decoded);
 
-static bool helper_is_regex_match(DsStr name) { return lower_str_eq(name, "regex.match"); }
-static bool helper_is_regex_replace(DsStr name) { return lower_str_eq(name, "regex.replace"); }
-static bool helper_is_regex(DsStr name) { return helper_is_regex_match(name) || helper_is_regex_replace(name); }
-
 static bool ast_binary_op_is_comparison_like(const DsExpr *expr) {
     return expr && expr->kind == DS_EXPR_BINARY && lower_op_is_comparison_like(expr->as.binary.op);
 }
@@ -508,8 +504,8 @@ static void lower_validate_static_regex_replacement(Lower *lower, const DsExpr *
 }
 
 static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    bool is_match = helper_is_regex_match(expr->as.call.name);
-    bool is_replace = helper_is_regex_replace(expr->as.call.name);
+    bool is_match = lower_str_eq(expr->as.call.name, "regex.match");
+    bool is_replace = lower_str_eq(expr->as.call.name, "regex.replace");
     size_t min_arity = is_match ? 2 : 3;
     size_t max_arity = is_match ? 3 : 4;
     if (expr->as.call.args.len < min_arity || expr->as.call.args.len > max_arity) {
@@ -593,9 +589,11 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
 }
 
 DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    if (helper_is_regex(expr->as.call.name)) return lower_regex_helper_call_expr(lower, expr, kind_out);
-    bool is_row_sort_method = lower_str_eq(expr->as.call.name, "string.sort_by");
     const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(expr->as.call.name);
+    if (stdlib_helper && ds_stdlib_namespace(expr->as.call.name) == DS_STDLIB_NAMESPACE_REGEX) {
+        return lower_regex_helper_call_expr(lower, expr, kind_out);
+    }
+    bool is_row_sort_method = lower_str_eq(expr->as.call.name, "string.sort_by");
     bool is_string_helper = stdlib_helper && ds_stdlib_namespace(expr->as.call.name) == DS_STDLIB_NAMESPACE_STRING;
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
