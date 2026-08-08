@@ -46,10 +46,7 @@ static DsStmt *parse_let(Parser *p) {
         ds_diag_error(p->diag, name->span, "`env` is a reserved environment namespace in v0.27.0");
     }
     if (!parser_expect(p, DS_TOK_EQUAL, "expected `=` after variable name")) return NULL;
-    if (parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after `=`");
-        return NULL;
-    }
+    if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after `=`")) return NULL;
     DsExpr *value = parse_expr(p);
     DsStmt *stmt = parser_new_stmt(DS_STMT_LET, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
     stmt->as.let_stmt.name = parser_copy_token_text(name);
@@ -66,10 +63,7 @@ static DsStmt *parse_assign(Parser *p) {
         ds_diag_error(p->diag, op_span, "expected assignment operator");
         return NULL;
     }
-    if (parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after assignment operator");
-        return NULL;
-    }
+    if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after assignment operator")) return NULL;
     DsExpr *value = parse_expr(p);
     DsStmt *stmt = parser_new_stmt(DS_STMT_ASSIGN, (DsSpan){name->span.start, value ? value->span.end : name->span.end, name->span.source});
     stmt->as.assign_stmt.name = parser_copy_token_text(name);
@@ -132,8 +126,7 @@ static DsStmt *parse_index_assign_stmt(Parser *p) {
         return NULL;
     }
 
-    if (parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after assignment operator");
+    if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after assignment operator")) {
         parser_consume_statement_end(p);
         return NULL;
     }
@@ -175,10 +168,7 @@ static DsStmt *parse_env_assign(Parser *p) {
         ds_diag_error(p->diag, op_span, "environment assignment supports only `=` in v0.27.0");
         return NULL;
     }
-    if (parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected expression after environment assignment operator");
-        return NULL;
-    }
+    if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after environment assignment operator")) return NULL;
     DsExpr *value = parse_expr(p);
     DsStmt *stmt = parser_new_stmt(DS_STMT_ASSIGN, (DsSpan){env_tok->span.start, value ? value->span.end : field->span.end, env_tok->span.source});
     size_t len = 4 + field->text.len;
@@ -249,8 +239,7 @@ static bool stmt_has_bracket_before_assignment(const Parser *p) {
 
 static DsStmt *parse_return(Parser *p) {
     DsToken *start = parser_previous(p);
-    if (parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, start->span, "expected expression after `return`");
+    if (!parser_expect_expr(p, start->span, "expected expression after `return`")) {
         parser_consume_statement_end(p);
         return NULL;
     }
@@ -478,8 +467,7 @@ static DsStmt *parse_assert(Parser *p) {
     if (p->test_depth <= 0) {
         ds_diag_error(p->diag, start->span, "`assert` is only allowed inside a test block in v0.14.0");
     }
-    if (parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, start->span, "expected expression after `assert`");
+    if (!parser_expect_expr(p, start->span, "expected expression after `assert`")) {
         parser_consume_statement_end(p);
         return NULL;
     }
