@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 #include "ds_command_facts.h"
-#include "ds_command_facts.h"
 
 #include "vm_internal.h"
 #include "ds_interpolation.h"
@@ -156,49 +155,6 @@ static void arithmetic_skip_ws(VmArithmeticParser *parser) {
     }
 }
 
-static bool checked_add_i64(int64_t lhs, int64_t rhs, int64_t *out) {
-    if ((rhs > 0 && lhs > INT64_MAX - rhs) ||
-        (rhs < 0 && lhs < INT64_MIN - rhs)) {
-        return false;
-    }
-    *out = lhs + rhs;
-    return true;
-}
-
-static bool checked_sub_i64(int64_t lhs, int64_t rhs, int64_t *out) {
-    if ((rhs < 0 && lhs > INT64_MAX + rhs) ||
-        (rhs > 0 && lhs < INT64_MIN + rhs)) {
-        return false;
-    }
-    *out = lhs - rhs;
-    return true;
-}
-
-static bool checked_mul_i64(int64_t lhs, int64_t rhs, int64_t *out) {
-    if (lhs == 0 || rhs == 0) {
-        *out = 0;
-        return true;
-    }
-    if ((lhs == -1 && rhs == INT64_MIN) || (rhs == -1 && lhs == INT64_MIN)) {
-        return false;
-    }
-    if (lhs > 0) {
-        if (rhs > 0) {
-            if (lhs > INT64_MAX / rhs) return false;
-        } else if (rhs < INT64_MIN / lhs) {
-            return false;
-        }
-    } else {
-        if (rhs > 0) {
-            if (lhs < INT64_MIN / rhs) return false;
-        } else if (lhs < INT64_MAX / rhs) {
-            return false;
-        }
-    }
-    *out = lhs * rhs;
-    return true;
-}
-
 static bool arithmetic_parse_integer_literal(VmArithmeticParser *parser, int64_t *out) {
     size_t start = parser->pos++;
     while (parser->pos < parser->len && parser->data[parser->pos] >= '0' && parser->data[parser->pos] <= '9') {
@@ -319,18 +275,10 @@ static bool arithmetic_parse_power(VmArithmeticParser *parser, int64_t *out) {
         return false;
     }
 
-    int64_t result = 1;
-    int64_t factor = base;
-    while (exponent > 0) {
-        if ((exponent & 1) && !checked_mul_i64(result, factor, &result)) {
-            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `**`");
-            return false;
-        }
-        exponent >>= 1;
-        if (exponent > 0 && !checked_mul_i64(factor, factor, &factor)) {
-            ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `**`");
-            return false;
-        }
+    int64_t result = 0;
+    if (!vm_i64_pow_checked(base, exponent, &result)) {
+        ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `**`");
+        return false;
     }
     *out = result;
     return true;
@@ -360,7 +308,7 @@ static bool arithmetic_parse_mul_div(VmArithmeticParser *parser, int64_t *out) {
             return false;
         }
         if (op == '*') {
-            if (!checked_mul_i64(value, rhs, &value)) {
+            if (!vm_i64_mul_checked(value, rhs, &value)) {
                 ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `*`");
                 return false;
             }
@@ -389,11 +337,11 @@ static bool arithmetic_parse_expr(VmArithmeticParser *parser, int64_t *out) {
         int64_t rhs = 0;
         if (!arithmetic_parse_mul_div(parser, &rhs)) return false;
         if (op == '+') {
-            if (!checked_add_i64(value, rhs, &value)) {
+            if (!vm_i64_add_checked(value, rhs, &value)) {
                 ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `+`");
                 return false;
             }
-        } else if (!checked_sub_i64(value, rhs, &value)) {
+        } else if (!vm_i64_sub_checked(value, rhs, &value)) {
             ds_diag_error(parser->vm->diag, parser->span, "integer overflow in operator `-`");
             return false;
         }

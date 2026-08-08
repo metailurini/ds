@@ -6,6 +6,46 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+
+static inline bool vm_i64_add_checked(int64_t lhs, int64_t rhs, int64_t *out) {
+    if ((rhs > 0 && lhs > INT64_MAX - rhs) || (rhs < 0 && lhs < INT64_MIN - rhs)) return false;
+    *out = lhs + rhs;
+    return true;
+}
+
+static inline bool vm_i64_sub_checked(int64_t lhs, int64_t rhs, int64_t *out) {
+    if ((rhs < 0 && lhs > INT64_MAX + rhs) || (rhs > 0 && lhs < INT64_MIN + rhs)) return false;
+    *out = lhs - rhs;
+    return true;
+}
+
+static inline bool vm_i64_mul_checked(int64_t lhs, int64_t rhs, int64_t *out) {
+    if (lhs == 0 || rhs == 0) { *out = 0; return true; }
+    if ((lhs == -1 && rhs == INT64_MIN) || (rhs == -1 && lhs == INT64_MIN)) return false;
+    if (lhs > 0) {
+        if (rhs > 0) { if (lhs > INT64_MAX / rhs) return false; }
+        else if (rhs < INT64_MIN / lhs) return false;
+    } else {
+        if (rhs > 0) { if (lhs < INT64_MIN / rhs) return false; }
+        else if (lhs < INT64_MAX / rhs) return false;
+    }
+    *out = lhs * rhs;
+    return true;
+}
+
+static inline bool vm_i64_pow_checked(int64_t base, int64_t exp, int64_t *out) {
+    if (exp < 0) return false;
+    int64_t result = 1;
+    int64_t factor = base;
+    while (exp > 0) {
+        if ((exp & 1) && !vm_i64_mul_checked(result, factor, &result)) return false;
+        exp >>= 1;
+        if (exp > 0 && !vm_i64_mul_checked(factor, factor, &factor)) return false;
+    }
+    *out = result;
+    return true;
+}
 
 typedef enum {
     OP_CMP_ADD,

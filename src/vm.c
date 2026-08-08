@@ -101,48 +101,6 @@ bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, Ds
     return false;
 }
 
-static bool int_add_checked(int64_t a, int64_t b, int64_t *out) {
-    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) return false;
-    *out = a + b;
-    return true;
-}
-
-static bool int_sub_checked(int64_t a, int64_t b, int64_t *out) {
-    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) return false;
-    *out = a - b;
-    return true;
-}
-
-static bool int_mul_checked(int64_t a, int64_t b, int64_t *out) {
-    if (a == 0 || b == 0) { *out = 0; return true; }
-    if (a == -1 && b == INT64_MIN) return false;
-    if (b == -1 && a == INT64_MIN) return false;
-    if (a > 0) {
-        if (b > 0) { if (a > INT64_MAX / b) return false; }
-        else { if (b < INT64_MIN / a) return false; }
-    } else {
-        if (b > 0) { if (a < INT64_MIN / b) return false; }
-        else { if (a < INT64_MAX / b) return false; }
-    }
-    *out = a * b;
-    return true;
-}
-
-static bool int_pow_checked(int64_t base, int64_t exp, int64_t *out) {
-    if (exp < 0) return false;
-    int64_t result = 1;
-    int64_t factor = base;
-    while (exp > 0) {
-        if (exp & 1) {
-            if (!int_mul_checked(result, factor, &result)) return false;
-        }
-        exp >>= 1;
-        if (exp > 0 && !int_mul_checked(factor, factor, &factor)) return false;
-    }
-    *out = result;
-    return true;
-}
-
 static bool value_exact_equal(const DsValue *a, const DsValue *b) {
     if (a->kind != b->kind) return false;
     return ds_value_compare(a, b) == 0;
@@ -306,7 +264,7 @@ dispatch_loop:
                     case OP_CMP_ADD:
                         if (left->kind == DS_VALUE_INT && right->kind == DS_VALUE_INT) {
                             int64_t out = 0;
-                            if (!int_add_checked(left->as.integer, right->as.integer, &out)) {
+                            if (!vm_i64_add_checked(left->as.integer, right->as.integer, &out)) {
                                 ds_diag_error(diag, ins->span, "integer overflow in operator `+`");
                                 rc = 1; goto done;
                             }
@@ -329,7 +287,7 @@ dispatch_loop:
                         }
                         {
                             int64_t out = 0;
-                            if (!int_sub_checked(left->as.integer, right->as.integer, &out)) {
+                            if (!vm_i64_sub_checked(left->as.integer, right->as.integer, &out)) {
                                 ds_diag_error(diag, ins->span, "integer overflow in operator `-`");
                                 rc = 1; goto done;
                             }
@@ -343,7 +301,7 @@ dispatch_loop:
                         }
                         {
                             int64_t out = 0;
-                            if (!int_mul_checked(left->as.integer, right->as.integer, &out)) {
+                            if (!vm_i64_mul_checked(left->as.integer, right->as.integer, &out)) {
                                 ds_diag_error(diag, ins->span, "integer overflow in operator `*`");
                                 rc = 1; goto done;
                             }
@@ -379,7 +337,7 @@ dispatch_loop:
                         }
                         {
                             int64_t out = 0;
-                            if (!int_pow_checked(left->as.integer, right->as.integer, &out)) {
+                            if (!vm_i64_pow_checked(left->as.integer, right->as.integer, &out)) {
                                 ds_diag_error(diag, ins->span, "integer overflow in operator `**`");
                                 rc = 1; goto done;
                             }
