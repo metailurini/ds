@@ -95,6 +95,14 @@ static inline void ds_skip_ascii_ws(const char *data, size_t len, size_t *index)
     }
 }
 
+static inline void ds_reserve_char_buffer(char **data, size_t *cap, size_t need, size_t initial_cap) {
+    if (need <= *cap) return;
+    size_t next = *cap ? *cap : initial_cap;
+    while (next < need) next *= 2;
+    *data = (char *)ds_xrealloc(*data, next);
+    *cap = next;
+}
+
 static inline bool ds_parse_int_range(DsStr text, int min, int max, int *out) {
     if (!out || text.len == 0 || min > max) return false;
     size_t i = 0;

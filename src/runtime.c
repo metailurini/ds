@@ -15,17 +15,8 @@ void ds_string_init(DsString *s) {
     s->cap = 0;
 }
 
-static bool ds_string_reserve(DsString *s, size_t need) {
-    if (need <= s->cap) return true;
-    size_t cap = s->cap ? s->cap : 16;
-    while (cap < need) cap *= 2;
-    s->data = (char *)ds_xrealloc(s->data, cap);
-    s->cap = cap;
-    return true;
-}
-
 bool ds_string_append_range(DsString *s, const char *data, size_t len) {
-    if (!ds_string_reserve(s, s->len + len + 1)) return false;
+    ds_reserve_char_buffer(&s->data, &s->cap, s->len + len + 1, 16);
     if (len > 0) memcpy(s->data + s->len, data, len);
     s->len += len;
     s->data[s->len] = '\0';

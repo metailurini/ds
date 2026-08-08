@@ -4,11 +4,7 @@
 #include <stdarg.h>
 
 void buf_reserve(EmitBuf *buf, size_t need) {
-    if (need <= buf->cap) return;
-    size_t cap = buf->cap ? buf->cap : 256;
-    while (cap < need) cap *= 2;
-    buf->data = (char *)ds_xrealloc(buf->data, cap);
-    buf->cap = cap;
+    ds_reserve_char_buffer(&buf->data, &buf->cap, need, 256);
 }
 
 void buf_append_len(EmitBuf *buf, const char *data, size_t len) {
