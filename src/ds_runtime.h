@@ -60,6 +60,8 @@ void ds_string_free(DsString *s);
 DsValue ds_value_null(void);
 DsValue ds_value_bool(bool value);
 DsValue ds_value_int(int64_t value);
+DsValue ds_value_array(void);
+DsValue ds_value_map(void);
 DsValue ds_value_string_take(DsString *string);
 DsValue ds_value_command_result_take(DsString *stdout_text, DsString *stderr_text, int64_t code);
 DsValue ds_value_copy(const DsValue *value);

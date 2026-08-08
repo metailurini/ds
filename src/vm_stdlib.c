@@ -353,9 +353,7 @@ static bool stdlib_recursive_glob(Vm *vm, Instr *ins, const char *pattern, DsVal
 
     if (matches.len > 0) qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
 
-    DsValue array = ds_value_null();
-    array.kind = DS_VALUE_ARRAY;
-    ds_array_init(&array.as.array);
+    DsValue array = ds_value_array();
     const char *prev = NULL;
     for (size_t i = 0; i < matches.len; i++) {
         if (prev && strcmp(prev, matches.items[i]) == 0) continue;
@@ -652,9 +650,7 @@ static bool stdlib_glob(Vm *vm, Instr *ins, DsValue *out) {
     memset(&g, 0, sizeof(g));
     int grc = glob(pattern, 0, NULL, &g);
 
-    DsValue array = ds_value_null();
-    array.kind = DS_VALUE_ARRAY;
-    ds_array_init(&array.as.array);
+    DsValue array = ds_value_array();
 
     if (grc == GLOB_NOMATCH) {
         if (helper_is(ins, "glob!")) {
@@ -812,9 +808,7 @@ static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsValue *out) {
     }
     if (matches.len > 0) qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
 
-    DsValue array = ds_value_null();
-    array.kind = DS_VALUE_ARRAY;
-    ds_array_init(&array.as.array);
+    DsValue array = ds_value_array();
     const char *prev = NULL;
     for (size_t i = 0; i < matches.len; i++) {
         if (prev && strcmp(prev, matches.items[i]) == 0) continue;
@@ -842,9 +836,7 @@ static bool stdlib_lines(Vm *vm, Instr *ins, DsValue *out) {
     }
     free(path);
 
-    DsValue array = ds_value_null();
-    array.kind = DS_VALUE_ARRAY;
-    ds_array_init(&array.as.array);
+    DsValue array = ds_value_array();
 
     size_t start = 0;
     for (size_t i = 0; i < text.as.string.len; i++) {
@@ -893,9 +885,7 @@ static bool stdlib_rowarray_sort_by(Vm *vm, Instr *ins, DsValue *out) {
     bool desc = dir_len == 4 && memcmp(dir_data, "desc", 4) == 0;
     DsStr field = {(char *)field_data, field_len};
 
-    DsValue result = ds_value_null();
-    result.kind = DS_VALUE_ARRAY;
-    ds_array_init(&result.as.array);
+    DsValue result = ds_value_array();
     for (size_t i = 0; i < array->as.array.len; i++) {
         DsValue *item = (DsValue *)array->as.array.items[i];
         DsValue *copy = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
@@ -1050,7 +1040,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         const char *sep = NULL; size_t sep_len = 0;
         if (!vm_string_arg(vm, ins, 1, &sep, &sep_len)) return false;
         if (sep_len == 0) { ds_diag_error(vm->diag, ins->span, "split with an empty runtime separator is rejected in v0.19.0"); return false; }
-        DsValue array = ds_value_null(); array.kind = DS_VALUE_ARRAY; ds_array_init(&array.as.array);
+        DsValue array = ds_value_array();
         size_t part = 0, i = 0;
         while (i + sep_len <= len) {
             if (memcmp(s + i, sep, sep_len) == 0) { array_push_string(&array, s + part, i - part); i += sep_len; part = i; }
@@ -1119,9 +1109,7 @@ static bool stdlib_regex_match(Vm *vm, Instr *ins, DsValue *out) {
         return false;
     }
 
-    DsValue map = ds_value_null();
-    map.kind = DS_VALUE_MAP;
-    ds_map_init(&map.as.map);
+    DsValue map = ds_value_map();
     bool matched = rc == 0;
     if (!regex_map_set_bool(&map, "matched", matched) ||
         !regex_map_set_string(&map, "full", matched ? text + matches[0].rm_so : "", matched ? (size_t)(matches[0].rm_eo - matches[0].rm_so) : 0) ||

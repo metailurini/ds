@@ -523,9 +523,7 @@ dispatch_loop:
                 break;
             }
             case OP_ARRAY_LITERAL: {
-                DsValue array = ds_value_null();
-                array.kind = DS_VALUE_ARRAY;
-                ds_array_init(&array.as.array);
+                DsValue array = ds_value_array();
                 for (size_t i = 0; i < ins->arg_count; i++) {
                     DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
                     *item = ds_value_copy(&vm.regs[ins->args[i]]);
@@ -536,9 +534,7 @@ dispatch_loop:
                 break;
             }
             case OP_MAP_LITERAL: {
-                DsValue map = ds_value_null();
-                map.kind = DS_VALUE_MAP;
-                ds_map_init(&map.as.map);
+                DsValue map = ds_value_map();
                 for (size_t i = 0; i < ins->arg_count; i++) ds_map_set(&map.as.map, ins->words[i], ds_value_copy(&vm.regs[ins->args[i]]));
                 set_reg(&vm, ins->dst, map);
                 ip++;

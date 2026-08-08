@@ -81,6 +81,20 @@ DsValue ds_value_int(int64_t value) {
     return v;
 }
 
+DsValue ds_value_array(void) {
+    DsValue v = ds_value_null();
+    v.kind = DS_VALUE_ARRAY;
+    ds_array_init(&v.as.array);
+    return v;
+}
+
+DsValue ds_value_map(void) {
+    DsValue v = ds_value_null();
+    v.kind = DS_VALUE_MAP;
+    ds_map_init(&v.as.map);
+    return v;
+}
+
 DsValue ds_value_string_take(DsString *string) {
     DsValue v = ds_value_null();
     v.kind = DS_VALUE_STRING;
@@ -117,7 +131,7 @@ DsValue ds_value_copy(const DsValue *value) {
             out.as.command_result.code = value->as.command_result.code;
             break;
         case DS_VALUE_ARRAY:
-            ds_array_init(&out.as.array);
+            out = ds_value_array();
             for (size_t i = 0; i < value->as.array.len; i++) {
                 DsValue *item = (DsValue *)value->as.array.items[i];
                 DsValue *copy = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
@@ -126,7 +140,7 @@ DsValue ds_value_copy(const DsValue *value) {
             }
             break;
         case DS_VALUE_MAP:
-            ds_map_init(&out.as.map);
+            out = ds_value_map();
             hm_iter it;
             const char *key = NULL;
             size_t key_len = 0;
