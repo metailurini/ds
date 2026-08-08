@@ -90,14 +90,6 @@ fail:
     return false;
 }
 
-static DsExpr *parse_array_literal(Parser *p) {
-    return parse_collection_literal(p, DS_EXPR_ARRAY, parse_array_element);
-}
-
-static DsExpr *parse_map_literal(Parser *p) {
-    return parse_collection_literal(p, DS_EXPR_MAP, parse_map_entry);
-}
-
 
 static DsExpr *parse_primary(Parser *p) {
     DsToken *tok = parser_peek(p);
@@ -138,10 +130,10 @@ static DsExpr *parse_primary(Parser *p) {
         return expr;
     }
     if (parser_advance_if(p, DS_TOK_LBRACKET)) {
-        return parse_array_literal(p);
+        return parse_collection_literal(p, DS_EXPR_ARRAY, parse_array_element);
     }
     if (parser_advance_if(p, DS_TOK_LBRACE)) {
-        return parse_map_literal(p);
+        return parse_collection_literal(p, DS_EXPR_MAP, parse_map_entry);
     }
 
     ds_diag_error(p->diag, tok->span, "expected expression");

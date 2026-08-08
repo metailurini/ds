@@ -746,10 +746,6 @@ static bool argv_build_range(Vm *vm, Instr *ins, size_t first_word, size_t word_
     return true;
 }
 
-static bool argv_build(Vm *vm, Instr *ins, VmArgv *argv) {
-    return argv_build_range(vm, ins, 0, ins->word_count, argv);
-}
-
 /* -------------------------------------------------------------------------
  * Process specs, result storage, redirects, and built-in control commands
  * ------------------------------------------------------------------------- */
@@ -799,7 +795,7 @@ static bool process_spec_from_instr(Vm *vm, Instr *ins, bool capture, VmProcessS
     spec->span = ins->span;
     spec->redirect = ins->redirect;
     spec->capture = capture;
-    return argv_build(vm, ins, &spec->argv);
+    return argv_build_range(vm, ins, 0, ins->word_count, &spec->argv);
 }
 
 static bool process_spec_from_stage(Vm *vm, Instr *ins, size_t stage_index, bool capture, VmProcessSpec *spec) {

@@ -12,10 +12,6 @@ static DsInterpValueKind interp_kind_from_sym(SymKind kind) {
     }
 }
 
-static bool is_supported_format_spec(DsStr spec, SymKind kind) {
-    return ds_interp_parse_format_spec_for_kind(spec, interp_kind_from_sym(kind), NULL);
-}
-
 static bool row_schema_field_sym_kind(Lower *lower, const DsLowerRowSchema *schema, DsStr field, DsSpan span, SymKind *kind_out) {
     const DsLowerRowField *row_field = row_schema_find(schema, field);
     if (!row_field) {
@@ -302,7 +298,7 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 while (j < decoded.len && decoded.data[j] != '}') j++;
                 if (j >= decoded.len) break;
                 DsStr spec = {decoded.data + spec_start, j - spec_start};
-                if (!is_supported_format_spec(spec, value_kind)) {
+                if (!ds_interp_parse_format_spec_for_kind(spec, interp_kind_from_sym(value_kind), NULL)) {
                     ds_diag_error(lower->diag, span, "unsupported interpolation format specifier `%.*s`; supported: %s", (int)spec.len, spec.data, ds_interp_supported_format_specs());
                     free(decoded.data);
                     return false;
