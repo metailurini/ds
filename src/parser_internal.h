@@ -56,13 +56,7 @@ static inline DsStr parser_copy_token_text(const DsToken *token) {
 }
 
 static inline DsStr parser_copy_dotted_name(const DsToken *left, const DsToken *right) {
-    DsStr s;
-    s.len = left->text.len + 1 + right->text.len;
-    s.data = (char *)ds_xcalloc(s.len + 1, 1);
-    memcpy(s.data, left->text.data, left->text.len);
-    s.data[left->text.len] = '.';
-    memcpy(s.data + left->text.len + 1, right->text.data, right->text.len);
-    return s;
+    return ds_str_join_char(left->text, '.', right->text);
 }
 
 static inline DsStr parser_copy_bang_name(const DsToken *name) {

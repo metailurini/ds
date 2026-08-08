@@ -139,6 +139,16 @@ static inline DsStr ds_str_clone(DsStr value) {
     return out;
 }
 
+static inline DsStr ds_str_join_char(DsStr left, char separator, DsStr right) {
+    DsStr out = {0};
+    out.len = left.len + 1 + right.len;
+    out.data = (char *)ds_xcalloc(out.len + 1, 1);
+    if (left.len) memcpy(out.data, left.data, left.len);
+    out.data[left.len] = separator;
+    if (right.len) memcpy(out.data + left.len + 1, right.data, right.len);
+    return out;
+}
+
 static inline bool ds_decode_string_literal(DsStr literal, DsStr *out) {
     out->data = NULL;
     out->len = 0;

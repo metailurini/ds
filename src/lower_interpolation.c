@@ -22,12 +22,7 @@ static bool interp_expr_is_stdlib_namespace(DsExpr *expr) {
 }
 
 static DsStr interp_dup_dotted_name(DsStr left, DsStr right) {
-    size_t len = left.len + 1 + right.len;
-    char *data = (char *)ds_xcalloc(len + 1, 1);
-    memcpy(data, left.data, left.len);
-    data[left.len] = '.';
-    memcpy(data + left.len + 1, right.data, right.len);
-    return (DsStr){data, len};
+    return ds_str_join_char(left, '.', right);
 }
 
 static DsExpr *temp_ident_from_str(DsStr name, DsSpan span) {
