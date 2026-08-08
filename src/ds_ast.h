@@ -23,6 +23,8 @@ typedef enum {
 
 typedef struct DsExpr DsExpr;
 
+void ds_expr_free(DsExpr *expr);
+
 typedef struct {
     DsExpr **items;
     size_t len;

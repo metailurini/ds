@@ -272,7 +272,7 @@ void ds_ast_print(const DsAst *ast, FILE *out) {
     }
 }
 
-static void free_expr(DsExpr *expr) {
+void ds_expr_free(DsExpr *expr) {
     if (!expr) return;
     switch (expr->kind) {
         case DS_EXPR_IDENT:
@@ -287,39 +287,39 @@ static void free_expr(DsExpr *expr) {
             ds_command_free(&expr->as.run);
             break;
         case DS_EXPR_FIELD:
-            free_expr(expr->as.field.object);
+            ds_expr_free(expr->as.field.object);
             free(expr->as.field.field.data);
             break;
         case DS_EXPR_UNARY:
             free(expr->as.unary.op.data);
-            free_expr(expr->as.unary.right);
+            ds_expr_free(expr->as.unary.right);
             break;
         case DS_EXPR_BINARY:
-            free_expr(expr->as.binary.left);
+            ds_expr_free(expr->as.binary.left);
             free(expr->as.binary.op.data);
-            free_expr(expr->as.binary.right);
+            ds_expr_free(expr->as.binary.right);
             break;
         case DS_EXPR_CALL:
             free(expr->as.call.name.data);
-            DS_FREE_PTR_VEC(expr->as.call.args, free_expr);
+            DS_FREE_PTR_VEC(expr->as.call.args, ds_expr_free);
             break;
         case DS_EXPR_ARRAY:
-            DS_FREE_PTR_VEC(expr->as.array.elements, free_expr);
+            DS_FREE_PTR_VEC(expr->as.array.elements, ds_expr_free);
             break;
         case DS_EXPR_MAP:
             for (size_t i = 0; i < expr->as.map.entries.len; i++) {
                 free(expr->as.map.entries.items[i].key.data);
-                free_expr(expr->as.map.entries.items[i].value);
+                ds_expr_free(expr->as.map.entries.items[i].value);
             }
             free(expr->as.map.entries.items);
             break;
         case DS_EXPR_INDEX:
-            free_expr(expr->as.index.object);
-            free_expr(expr->as.index.index);
+            ds_expr_free(expr->as.index.object);
+            ds_expr_free(expr->as.index.index);
             break;
         case DS_EXPR_RANGE:
-            free_expr(expr->as.range.start);
-            free_expr(expr->as.range.end);
+            ds_expr_free(expr->as.range.start);
+            ds_expr_free(expr->as.range.end);
             break;
         case DS_EXPR_BOOL:
         case DS_EXPR_ERROR:
@@ -333,18 +333,18 @@ static void free_stmt(DsStmt *stmt) {
     switch (stmt->kind) {
         case DS_STMT_LET:
             free(stmt->as.let_stmt.name.data);
-            free_expr(stmt->as.let_stmt.value);
+            ds_expr_free(stmt->as.let_stmt.value);
             break;
         case DS_STMT_ASSIGN:
             free(stmt->as.assign_stmt.name.data);
-            free_expr(stmt->as.assign_stmt.value);
+            ds_expr_free(stmt->as.assign_stmt.value);
             break;
         case DS_STMT_INDEX_ASSIGN:
-            free_expr(stmt->as.index_assign_stmt.target);
-            free_expr(stmt->as.index_assign_stmt.value);
+            ds_expr_free(stmt->as.index_assign_stmt.target);
+            ds_expr_free(stmt->as.index_assign_stmt.value);
             break;
         case DS_STMT_IF:
-            free_expr(stmt->as.if_stmt.condition);
+            ds_expr_free(stmt->as.if_stmt.condition);
             free_stmt(stmt->as.if_stmt.then_branch);
             free_stmt(stmt->as.if_stmt.else_branch);
             break;
@@ -361,30 +361,30 @@ static void free_stmt(DsStmt *stmt) {
             free(stmt->as.fn_stmt.name.data);
             for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
                 free(stmt->as.fn_stmt.params.items[i].name.data);
-                free_expr(stmt->as.fn_stmt.params.items[i].default_value);
+                ds_expr_free(stmt->as.fn_stmt.params.items[i].default_value);
             }
             free(stmt->as.fn_stmt.params.items);
             free_stmt(stmt->as.fn_stmt.body);
             break;
         case DS_STMT_CALL:
             free(stmt->as.call_stmt.name.data);
-            DS_FREE_PTR_VEC(stmt->as.call_stmt.args, free_expr);
+            DS_FREE_PTR_VEC(stmt->as.call_stmt.args, ds_expr_free);
             break;
         case DS_STMT_FOR:
             free(stmt->as.for_stmt.key_name.data);
             free(stmt->as.for_stmt.value_name.data);
-            free_expr(stmt->as.for_stmt.iterable);
+            ds_expr_free(stmt->as.for_stmt.iterable);
             free_stmt(stmt->as.for_stmt.body);
             break;
         case DS_STMT_WHILE:
-            free_expr(stmt->as.while_stmt.condition);
+            ds_expr_free(stmt->as.while_stmt.condition);
             free_stmt(stmt->as.while_stmt.body);
             break;
         case DS_STMT_BREAK:
         case DS_STMT_CONTINUE:
             break;
         case DS_STMT_CASE:
-            free_expr(stmt->as.case_stmt.selector);
+            ds_expr_free(stmt->as.case_stmt.selector);
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
                 DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
                 for (size_t j = 0; j < arm->patterns.len; j++) free(arm->patterns.items[j].text.data);
@@ -395,17 +395,17 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);
-            free_expr(stmt->as.push_stmt.value);
+            ds_expr_free(stmt->as.push_stmt.value);
             break;
         case DS_STMT_TEST:
             free(stmt->as.test_stmt.name.data);
             free_stmt(stmt->as.test_stmt.body);
             break;
         case DS_STMT_ASSERT:
-            free_expr(stmt->as.assert_stmt.condition);
+            ds_expr_free(stmt->as.assert_stmt.condition);
             break;
         case DS_STMT_RETURN:
-            free_expr(stmt->as.return_stmt.value);
+            ds_expr_free(stmt->as.return_stmt.value);
             break;
         case DS_STMT_DEFER:
         case DS_STMT_TRAP:
@@ -420,7 +420,7 @@ void ds_ast_free(DsAst *ast) {
     if (!ast) return;
     for (size_t i = 0; i < ast->script.declarations.len; i++) {
         free(ast->script.declarations.items[i].name.data);
-        free_expr(ast->script.declarations.items[i].default_value);
+        ds_expr_free(ast->script.declarations.items[i].default_value);
     }
     free(ast->script.declarations.items);
     DS_FREE_PTR_VEC(ast->statements, free_stmt);
