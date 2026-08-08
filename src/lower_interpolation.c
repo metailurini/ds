@@ -21,10 +21,6 @@ static DsStr quoted_string_from_decoded(const char *data, size_t len) {
     return (DsStr){buf, n};
 }
 
-static void temp_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
-    DS_VEC_PUSH(vec, expr, 4);
-}
-
 static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) {
     size_t start = *i;
     if (start >= len || !ds_is_ident_start(s[start])) return false;
@@ -34,12 +30,8 @@ static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) 
     return true;
 }
 
-static bool interp_name_eq(DsStr name, const char *text) {
-    return ds_str_eq_cstr(name, text);
-}
-
 static bool interp_expr_is_ident_text(DsExpr *expr, const char *text) {
-    return expr && expr->kind == DS_EXPR_IDENT && interp_name_eq(expr->as.text, text);
+    return expr && expr->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.text, text);
 }
 
 static bool interp_expr_is_stdlib_namespace(DsExpr *expr) {
@@ -76,7 +68,7 @@ static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i
         ds_skip_ascii_ws(s, len, i);
         DsExpr *arg = parse_interp_expr_bp(s, len, i, span, 0);
         if (!arg) return call;
-        temp_expr_vec_push(&call->as.call.args, arg);
+        DS_VEC_PUSH(&call->as.call.args, arg, 4);
         ds_skip_ascii_ws(s, len, i);
         if (*i < len && s[*i] == ',') { (*i)++; continue; }
         if (*i < len && s[*i] == ')') { (*i)++; return call; }
@@ -94,7 +86,7 @@ static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i,
         ds_expr_free(receiver);
     } else {
         call->as.call.name = interp_dup_dotted_name((DsStr){"string", 6}, field);
-        temp_expr_vec_push(&call->as.call.args, receiver);
+        DS_VEC_PUSH(&call->as.call.args, receiver, 4);
     }
     ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == ')') { (*i)++; return call; }
@@ -102,7 +94,7 @@ static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i,
         ds_skip_ascii_ws(s, len, i);
         DsExpr *arg = parse_interp_expr_bp(s, len, i, span, 0);
         if (!arg) return call;
-        temp_expr_vec_push(&call->as.call.args, arg);
+        DS_VEC_PUSH(&call->as.call.args, arg, 4);
         ds_skip_ascii_ws(s, len, i);
         if (*i < len && s[*i] == ',') { (*i)++; continue; }
         if (*i < len && s[*i] == ')') { (*i)++; return call; }
@@ -163,8 +155,8 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
     }
     DsStr name = {0};
     if (!parse_interp_name(s, len, i, &name)) return NULL;
-    if (interp_name_eq(name, "true")) { DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = true; return expr; }
-    if (interp_name_eq(name, "false")) { DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
+    if (ds_str_eq_cstr(name, "true")) { DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = true; return expr; }
+    if (ds_str_eq_cstr(name, "false")) { DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
     ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == '(') return parse_interp_call_after_name(s, len, i, name, span);
     for (size_t dot = 0; dot < name.len; dot++) {
