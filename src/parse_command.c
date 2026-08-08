@@ -47,15 +47,12 @@ static void parse_stage_words(Parser *p, DsWordVec *words, DsSpan *span) {
         bool adjacent = have_current && tok->span.start.offset == prev_end;
         if (!adjacent) flush_word(words, &current, &current_cap, &have_current);
         if (!have_current) {
-            current_cap = tok->text.len + 1;
-            current.text.data = (char *)ds_xcalloc(current_cap, 1);
-            current.text.len = 0;
+            current = (DsWord){0};
             current.span = tok->span;
             have_current = true;
-        } else if (current.text.len + tok->text.len + 1 > current_cap) {
-            current_cap = (current.text.len + tok->text.len + 1) * 2;
-            current.text.data = (char *)ds_xrealloc(current.text.data, current_cap);
         }
+        ds_reserve_char_buffer(&current.text.data, &current_cap,
+                               current.text.len + tok->text.len + 1, 16);
         memcpy(current.text.data + current.text.len, tok->text.data, tok->text.len);
         current.text.len += tok->text.len;
         current.text.data[current.text.len] = '\0';
