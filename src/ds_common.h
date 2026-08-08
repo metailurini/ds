@@ -39,6 +39,7 @@ typedef struct {
 bool ds_source_read(const char *path, DsSource *out, DsDiag *diag);
 void ds_source_free(DsSource *source);
 bool ds_file_write_atomic(const char *path, const char *data, size_t len);
+bool ds_parse_i64_range(const char *data, size_t len, int64_t *out);
 
 void ds_diag_init(DsDiag *diag, const DsSource *source);
 void ds_diag_format_location(const DsSource *source, DsSpan span, char *buf, size_t buf_len);

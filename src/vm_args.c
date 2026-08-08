@@ -1,20 +1,5 @@
 #include "vm_internal.h"
 
-#include <errno.h>
-
-static bool parse_runtime_int(const char *text, int64_t *out) {
-    if (!text || text[0] == '\0') return false;
-    errno = 0;
-    char *end = NULL;
-    long long value = strtoll(text, &end, 10);
-    if (errno == ERANGE || !end || *end != '\0') return false;
-    if (text[0] == '+' || text[0] == '-') {
-        if (text[1] == '\0') return false;
-    }
-    *out = (int64_t)value;
-    return true;
-}
-
 static bool parse_runtime_bool(const char *text, bool *out) {
     if (strcmp(text, "true") == 0) { *out = true; return true; }
     if (strcmp(text, "false") == 0) { *out = false; return true; }
@@ -84,7 +69,7 @@ static bool set_var_from_decl(Vm *vm, const DsLowerScriptDecl *decl, const char 
         value = ds_value_string_take(&s);
     } else if (decl->type == DS_SCRIPT_TYPE_INT) {
         int64_t parsed = 0;
-        if (!parse_runtime_int(text, &parsed)) {
+        if (!ds_parse_i64_range(text, strlen(text), &parsed)) {
             ds_diag_error(vm->diag, span, "invalid int value `%s` for `%.*s`", text ? text : "", (int)decl->name.len, decl->name.data);
             return false;
         }

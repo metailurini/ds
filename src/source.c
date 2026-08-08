@@ -36,6 +36,18 @@ void *ds_xrealloc(void *ptr, size_t size) {
     return out;
 }
 
+bool ds_parse_i64_range(const char *data, size_t len, int64_t *out) {
+    if (!data || len == 0 || !out) return false;
+    char *text = ds_str_dup_range(data, len);
+    char *end = NULL;
+    errno = 0;
+    long long value = strtoll(text, &end, 10);
+    bool ok = errno != ERANGE && end == text + len;
+    if (ok) *out = (int64_t)value;
+    free(text);
+    return ok;
+}
+
 bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
     out->path = path;
     FILE *fp = fopen(path, "rb");

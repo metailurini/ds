@@ -1,18 +1,5 @@
 #include "lower_internal.h"
 
-#include <errno.h>
-
-bool parse_i64(DsStr text, int64_t *out) {
-    char *tmp = ds_str_dup_range(text.data, text.len);
-    char *end = NULL;
-    errno = 0;
-    long long value = strtoll(tmp, &end, 10);
-    bool ok = errno != ERANGE && end && *end == '\0';
-    if (ok) *out = (int64_t)value;
-    free(tmp);
-    return ok;
-}
-
 SymKind script_type_to_sym(DsScriptType type) {
     switch (type) {
         case DS_SCRIPT_TYPE_STRING: return SYM_STRING;
@@ -48,7 +35,8 @@ bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *p
                 }
                 break;
             case DS_SCRIPT_TYPE_INT:
-                if (decl->default_value->kind != DS_EXPR_INT || !parse_i64(decl->default_value->as.text, &out.default_int)) {
+                if (decl->default_value->kind != DS_EXPR_INT ||
+                    !ds_parse_i64_range(decl->default_value->as.text.data, decl->default_value->as.text.len, &out.default_int)) {
                     ds_diag_error(lower->diag, decl->default_value->span, "default for `%.*s` must be an int", (int)decl->name.len, decl->name.data);
                 }
                 break;
