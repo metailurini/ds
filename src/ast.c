@@ -241,6 +241,11 @@ const char *ds_assign_op_name(DsAssignOp op) {
     return (unsigned)op < DS_ARRAY_LEN(names) ? names[op] : "=";
 }
 
+const char *ds_assign_binary_op(DsAssignOp op) {
+    static const char *const names[] = {"=", "+", "-", "*", "/", "%"};
+    return (unsigned)op < DS_ARRAY_LEN(names) ? names[op] : "=";
+}
+
 static const char *decl_kind_name(DsScriptDeclKind kind) {
     static const char *const names[] = {"ArgDecl", "OptionDecl", "FlagDecl"};
     return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "Decl";

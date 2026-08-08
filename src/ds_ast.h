@@ -112,6 +112,7 @@ typedef enum {
 } DsAssignOp;
 
 const char *ds_assign_op_name(DsAssignOp op);
+const char *ds_assign_binary_op(DsAssignOp op);
 
 typedef enum {
     DS_CASE_PATTERN_STRING,

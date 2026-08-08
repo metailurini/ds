@@ -132,18 +132,6 @@ static inline const char *ds_lower_assign_op_name(DsLowerAssignOp op) {
     return ds_assign_op_name(op);
 }
 
-static inline const char *ds_lower_assign_binary_op(DsLowerAssignOp op) {
-    switch (op) {
-        case DS_ASSIGN_ADD: return "+";
-        case DS_ASSIGN_SUB: return "-";
-        case DS_ASSIGN_MUL: return "*";
-        case DS_ASSIGN_DIV: return "/";
-        case DS_ASSIGN_MOD: return "%";
-        case DS_ASSIGN_SET: return "=";
-    }
-    return "=";
-}
-
 typedef DsCasePattern DsLowerCasePattern;
 typedef DsCasePatternVec DsLowerCasePatternVec;
 

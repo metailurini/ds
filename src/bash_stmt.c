@@ -744,7 +744,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             emit_var_name(&e->out, stmt->as.assign_stmt.name);
             buf_append(&e->out, "=\"$(__ds_int_bin ");
-            const char *op = ds_lower_assign_binary_op(stmt->as.assign_stmt.op);
+            const char *op = ds_assign_binary_op(stmt->as.assign_stmt.op);
             bash_single_quote(&e->out, op, strlen(op));
             buf_append(&e->out, " \"$");
             emit_var_name(&e->out, stmt->as.assign_stmt.name);
