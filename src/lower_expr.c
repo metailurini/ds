@@ -514,25 +514,6 @@ DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
 }
 
 
-static bool is_string_helper_name(DsStr name) {
-    return ds_stdlib_is_string_helper(name);
-}
-
-static bool string_helper_arg_count_ok(DsStr name, size_t argc, size_t *expected) {
-    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
-    if (!helper) { *expected = 0; return false; }
-    *expected = helper->min_arity;
-    return ds_stdlib_arity_ok(helper, argc);
-}
-
-static bool string_helper_arg_expects_int(DsStr name, size_t arg_index) {
-    return ds_stdlib_arg_expects_int(name, arg_index);
-}
-
-static bool string_helper_arg_expects_string(DsStr name, size_t arg_index) {
-    return ds_stdlib_arg_expects_string(name, arg_index);
-}
-
 static DsLowerExpr *lower_raw_string_expr(DsStr raw, DsSpan span) {
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, span);
     DsString quoted;
@@ -662,6 +643,8 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
 DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     if (helper_is_regex(expr->as.call.name)) return lower_regex_helper_call_expr(lower, expr, kind_out);
     bool is_row_sort_method = lower_str_eq(expr->as.call.name, "string.sort_by");
+    const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(expr->as.call.name);
+    bool is_string_helper = stdlib_helper && ds_stdlib_namespace(expr->as.call.name) == DS_STDLIB_NAMESPACE_STRING;
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
     out->as.call.name = str_clone(expr->as.call.name);
@@ -674,12 +657,12 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             if (i > 0 && expr->as.call.args.len > 0 && arg_kinds[0] == SYM_ARRAY && arg_kind != SYM_STRING && arg_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "row-array method `sort_by` expects string literal arguments in v0.37.0");
             }
-        } else if (is_string_helper_name(expr->as.call.name)) {
+        } else if (is_string_helper) {
             if (i == 0 && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` requires a string receiver", (int)expr->as.call.name.len, expr->as.call.name.data);
-            } else if (i > 0 && string_helper_arg_expects_int(expr->as.call.name, i) && arg_kind != SYM_INT) {
+            } else if (i > 0 && ds_stdlib_arg_expects_int(expr->as.call.name, i) && arg_kind != SYM_INT) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects int index arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
-            } else if (i > 0 && string_helper_arg_expects_string(expr->as.call.name, i) && arg_kind != SYM_STRING) {
+            } else if (i > 0 && ds_stdlib_arg_expects_string(expr->as.call.name, i) && arg_kind != SYM_STRING) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[i]->span, "string method `%.*s` expects string arguments", (int)expr->as.call.name.len, expr->as.call.name.data);
             }
         } else if (ds_stdlib_is_dir_walk_helper(expr->as.call.name)) {
@@ -736,21 +719,18 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         free(arg_kinds);
         return out;
     }
-    const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(expr->as.call.name);
     if (stdlib_helper) {
         DsLowerValueKind ret_kind = lower_stdlib_return_value_kind(stdlib_helper);
         SymKind ret = sym_kind_from_lower_value_kind(ret_kind);
         if (!ds_stdlib_arity_ok(stdlib_helper, expr->as.call.args.len)) {
-            if (is_string_helper_name(expr->as.call.name)) {
-                size_t expected = 0;
-                string_helper_arg_count_ok(expr->as.call.name, expr->as.call.args.len, &expected);
-                ds_diag_error(lower->diag, expr->span, "string method `%.*s` expects %zu arguments including receiver but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, expected, expr->as.call.args.len);
+            if (is_string_helper) {
+                ds_diag_error(lower->diag, expr->span, "string method `%.*s` expects %zu arguments including receiver but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
             } else if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
             else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, stdlib_helper->max_arity, expr->as.call.args.len);
         } else if (stdlib_helper->statement_only) {
             ds_diag_error(lower->diag, expr->span, "helper `%.*s` is statement-only in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
         }
-        if (is_string_helper_name(expr->as.call.name)) {
+        if (is_string_helper) {
             if ((lower_str_eq(expr->as.call.name, "string.split") || lower_str_eq(expr->as.call.name, "string.replace")) && expr->as.call.args.len > 1 && expr->as.call.args.items[1]->kind == DS_EXPR_STRING) {
                 DsStr decoded = {0};
                 if (lower_decode_string_text(expr->as.call.args.items[1]->as.text, &decoded)) {
