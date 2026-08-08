@@ -437,7 +437,7 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
                     break;
                 }
             }
-            ds_diag_error(lower->diag, field_span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
+            ds_diag_error(lower->diag, field_span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
             return false;
         }
         if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {

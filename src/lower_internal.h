@@ -56,7 +56,19 @@ typedef struct {
     size_t map_loop_cap;
 } Lower;
 
+#define DS_STRING_METHODS "trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice"
+
 static inline bool lower_str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
+static inline void lower_diag_stdlib_arity_error(Lower *lower, DsSpan span, DsStr name,
+                                                  size_t min_arity, size_t max_arity, size_t actual) {
+    if (min_arity == max_arity) {
+        ds_diag_error(lower->diag, span, "helper `%.*s` expects %zu arguments but got %zu",
+                      (int)name.len, name.data, min_arity, actual);
+    } else {
+        ds_diag_error(lower->diag, span, "helper `%.*s` expects %zu to %zu arguments but got %zu",
+                      (int)name.len, name.data, min_arity, max_arity, actual);
+    }
+}
 static inline DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam *param) {
     if (!param) return DS_LOWER_VALUE_UNKNOWN;
     return param->has_default ? param->default_kind : param->inferred_kind;

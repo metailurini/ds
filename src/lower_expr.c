@@ -560,8 +560,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
     size_t min_arity = is_match ? 2 : 3;
     size_t max_arity = is_match ? 3 : 4;
     if (expr->as.call.args.len < min_arity || expr->as.call.args.len > max_arity) {
-        if (min_arity == max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, min_arity, expr->as.call.args.len);
-        else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, min_arity, max_arity, expr->as.call.args.len);
+        lower_diag_stdlib_arity_error(lower, expr->span, expr->as.call.name, min_arity, max_arity, expr->as.call.args.len);
     }
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
@@ -725,8 +724,9 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         if (!ds_stdlib_arity_ok(stdlib_helper, expr->as.call.args.len)) {
             if (is_string_helper) {
                 ds_diag_error(lower->diag, expr->span, "string method `%.*s` expects %zu arguments including receiver but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
-            } else if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, expr->as.call.args.len);
-            else ds_diag_error(lower->diag, expr->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)expr->as.call.name.len, expr->as.call.name.data, stdlib_helper->min_arity, stdlib_helper->max_arity, expr->as.call.args.len);
+            } else lower_diag_stdlib_arity_error(lower, expr->span, expr->as.call.name,
+                                                  stdlib_helper->min_arity, stdlib_helper->max_arity,
+                                                  expr->as.call.args.len);
         } else if (stdlib_helper->statement_only) {
             ds_diag_error(lower->diag, expr->span, "helper `%.*s` is statement-only in v0.11.0", (int)expr->as.call.name.len, expr->as.call.name.data);
         }
@@ -758,7 +758,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
     }
     DsStr ns = {0}, member = {0};
     if (split_member_name(expr->as.call.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
-        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
+        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
         free(arg_kinds);
         return out;
     }

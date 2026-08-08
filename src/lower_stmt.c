@@ -45,15 +45,16 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
         if (!stdlib_return_kind(stdlib_helper, &ret)) {
             ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
         } else if (!ds_stdlib_arity_ok(stdlib_helper, stmt->as.call_stmt.args.len)) {
-            if (stdlib_helper->min_arity == stdlib_helper->max_arity) ds_diag_error(lower->diag, stmt->span, "helper `%.*s` expects %zu arguments but got %zu", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data, stdlib_helper->min_arity, stmt->as.call_stmt.args.len);
-            else ds_diag_error(lower->diag, stmt->span, "helper `%.*s` expects %zu to %zu arguments but got %zu", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data, stdlib_helper->min_arity, stdlib_helper->max_arity, stmt->as.call_stmt.args.len);
+            lower_diag_stdlib_arity_error(lower, stmt->span, stmt->as.call_stmt.name,
+                                          stdlib_helper->min_arity, stdlib_helper->max_arity,
+                                          stmt->as.call_stmt.args.len);
         } else if (!stdlib_helper->statement_only) {
             ds_diag_error(lower->diag, stmt->span, "helper `%.*s` returns a value in v0.11.0; assign it with `let` or use it in an expression", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
         }
     } else if (!fn) {
         DsStr ns = {0}, member = {0};
         if (split_member_name(stmt->as.call_stmt.name, &ns, &member) && ns.len == 6 && memcmp(ns.data, "string", 6) == 0) {
-            ds_diag_error(lower->diag, stmt->span, "unknown string method `%.*s`; supported methods are trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice", (int)member.len, member.data);
+            ds_diag_error(lower->diag, stmt->span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
         } else if (split_member_name(stmt->as.call_stmt.name, &ns, &member) && ds_stdlib_is_namespace(ns)) ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
         else if (split_member_name(stmt->as.call_stmt.name, &ns, &member)) ds_diag_error(lower->diag, stmt->span, "only `push` collection method is supported in v0.10.0");
         else ds_diag_error(lower->diag, stmt->span, "unknown function `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
