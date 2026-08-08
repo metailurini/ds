@@ -25,6 +25,7 @@
  */
 
 #include "hashmap.h"
+#include "../ds_common.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -144,7 +145,7 @@ static void *hm_alloc(const hashmap *hm, size_t size) {
 }
 
 static void *hm_calloc(const hashmap *hm, size_t count, size_t size) {
-    if (size != 0 && count > ((size_t)-1) / size) return NULL;
+    if (ds_size_mul_overflows(count, size)) return NULL;
     hm_allocator a = hm_allocator_get(hm);
     return a.calloc_fn(count, size, a.ctx);
 }
@@ -155,15 +156,12 @@ static void hm_dealloc(const hashmap *hm, void *ptr) {
     a.free_fn(ptr, a.ctx);
 }
 
-static int hm_mul_overflows_size(size_t a, size_t b) { return b != 0 && a > ((size_t)-1) / b; }
-static int hm_add_overflows_size(size_t a, size_t b) { return a > ((size_t)-1) - b; }
-
 static int hm_next_pow2_checked(size_t n, size_t *out) {
     size_t p = HM_MIN_CAPACITY;
     if (!out) return 0;
     if (n <= p) { *out = p; return 1; }
     while (p < n) {
-        if (p > ((size_t)-1) / 2u) return 0;
+        if (ds_size_mul_overflows(p, 2u)) return 0;
         p <<= 1;
     }
     *out = p;
@@ -181,7 +179,7 @@ static hm_result hm_slots_for_len(const hashmap *hm, size_t live_entries, size_t
     if (!hm || !out_capacity) return HM_ERR_INVALID;
     max_load = hm->config.max_load_percent ? hm->config.max_load_percent : HM_DEFAULT_MAX_LOAD_PERCENT;
     if (max_load < 10u || max_load > 95u) return HM_ERR_INVALID;
-    if (hm_mul_overflows_size(entries, 100u)) return HM_ERR_OOM;
+    if (ds_size_mul_overflows(entries, 100u)) return HM_ERR_OOM;
     wanted = (entries * 100u + (size_t)max_load - 1u) / (size_t)max_load;
     if (wanted < HM_MIN_CAPACITY) wanted = HM_MIN_CAPACITY;
     if (!hm_next_pow2_checked(wanted, &wanted)) return HM_ERR_OOM;
@@ -564,8 +562,8 @@ static int hm_insert_needs_initial_table(const hashmap *hm) {
 static int hm_insert_would_exceed_load(const hashmap *hm) {
     size_t used;
     size_t threshold;
-    if (!hm || hm_add_overflows_size(hm->len, hm->tombstones) ||
-        hm_add_overflows_size(hm->len + hm->tombstones, 1u)) return 1;
+    if (!hm || ds_size_add_overflows(hm->len, hm->tombstones) ||
+        ds_size_add_overflows(hm->len + hm->tombstones, 1u)) return 1;
     used = hm->len + hm->tombstones + 1u;
     threshold = (hm->capacity * (size_t)hm->config.max_load_percent) / 100u;
     if (threshold == 0) threshold = 1;
@@ -579,7 +577,7 @@ static int hm_should_rehash_for_tombstones(const hashmap *hm) {
 static hm_result hm_next_growth_capacity(const hashmap *hm, size_t *out_capacity) {
     size_t new_capacity;
     if (!hm || !out_capacity) return HM_ERR_INVALID;
-    if (hm->capacity > ((size_t)-1) / 2u) return HM_ERR_OOM;
+    if (ds_size_mul_overflows(hm->capacity, 2u)) return HM_ERR_OOM;
     new_capacity = hm->capacity * 2u;
     if (!hm_capacity_allowed(hm, new_capacity)) return HM_ERR_FULL;
     *out_capacity = new_capacity;
@@ -591,7 +589,7 @@ static hm_result hm_ensure_capacity_for_insert(hashmap *hm) {
     hm_result rc;
     if (!hm) return HM_ERR_INVALID;
     if (hm_insert_needs_initial_table(hm)) return hm->config.no_growth ? HM_ERR_FULL : hm_init_with_capacity(hm, HM_MIN_CAPACITY);
-    if (hm_add_overflows_size(hm->len, hm->tombstones) || hm_add_overflows_size(hm->len + hm->tombstones, 1u)) return HM_ERR_OOM;
+    if (ds_size_add_overflows(hm->len, hm->tombstones) || ds_size_add_overflows(hm->len + hm->tombstones, 1u)) return HM_ERR_OOM;
     if (!hm_insert_would_exceed_load(hm)) return HM_OK;
     if (hm_should_rehash_for_tombstones(hm)) return hm->config.no_growth ? HM_ERR_FULL : hm_rehash(hm, hm->capacity);
     if (hm->config.no_growth) return HM_ERR_FULL;
@@ -873,7 +871,7 @@ hm_result hm_put_many_len(hashmap *hm, const hm_put_item *items, size_t count, s
     hm_result rc;
     if (processed) *processed = 0;
     if (!hm || (!items && count != 0)) return HM_ERR_INVALID;
-    if (hm_add_overflows_size(hm->len, count)) return HM_ERR_OOM;
+    if (ds_size_add_overflows(hm->len, count)) return HM_ERR_OOM;
     if (count != 0) {
         rc = hm_reserve(hm, hm->len + count);
         if (rc != HM_OK && rc != HM_ERR_FULL) return rc;

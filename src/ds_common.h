@@ -96,6 +96,14 @@ static inline bool ds_parse_int_range(DsStr text, int min, int max, int *out) {
     return true;
 }
 
+static inline bool ds_size_add_overflows(size_t a, size_t b) {
+    return a > (size_t)-1 - b;
+}
+
+static inline bool ds_size_mul_overflows(size_t a, size_t b) {
+    return b != 0 && a > (size_t)-1 / b;
+}
+
 static inline DsStr ds_str_clone(DsStr value) {
     DsStr out = {ds_str_dup_len(value), value.len};
     return out;
