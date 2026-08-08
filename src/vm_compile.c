@@ -172,6 +172,21 @@ static size_t emit_instr(Program *p, Instr ins) {
     return p->instr_len++;
 }
 
+static void emit_load_const(Program *p, DsSpan span, int dst, DsValue value) {
+    Instr ins = {0};
+    ins.op = OP_LOAD_CONST;
+    ins.span = span;
+    ins.dst = dst;
+    ins.a = add_const(p, value);
+    emit_instr(p, ins);
+}
+
+static int compile_const(Program *p, DsSpan span, DsValue value) {
+    int reg = new_reg(p);
+    emit_load_const(p, span, reg, value);
+    return reg;
+}
+
 static void loop_patch_vec_push(size_t **items, size_t *len, size_t *cap, size_t value) {
     if (*len == *cap) {
         *cap = *cap ? *cap * 2 : 4;
@@ -267,38 +282,14 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             char *tmp = ds_str_dup_range(expr->as.text.data, expr->as.text.len);
             int64_t value = strtoll(tmp, NULL, 10);
             free(tmp);
-            int c = add_const(p, ds_value_int(value));
-            int r = new_reg(p);
-            Instr ins = {0};
-            ins.op = OP_LOAD_CONST;
-            ins.span = expr->span;
-            ins.dst = r;
-            ins.a = c;
-            emit_instr(p, ins);
-            return r;
+            return compile_const(p, expr->span, ds_value_int(value));
         }
-        case DS_LOWER_EXPR_BOOL: {
-            int c = add_const(p, ds_value_bool(expr->as.boolean));
-            int r = new_reg(p);
-            Instr ins = {0};
-            ins.op = OP_LOAD_CONST;
-            ins.span = expr->span;
-            ins.dst = r;
-            ins.a = c;
-            emit_instr(p, ins);
-            return r;
-        }
+        case DS_LOWER_EXPR_BOOL:
+            return compile_const(p, expr->span, ds_value_bool(expr->as.boolean));
         case DS_LOWER_EXPR_REGEX: {
-            int r = new_reg(p);
-            Instr ins = {0};
-            ins.op = OP_LOAD_CONST;
-            ins.span = expr->span;
-            ins.dst = r;
             DsString s; ds_string_init(&s);
             ds_string_append_range(&s, expr->as.regex.data, expr->as.regex.len);
-            ins.a = add_const(p, ds_value_string_take(&s));
-            emit_instr(p, ins);
-            return r;
+            return compile_const(p, expr->span, ds_value_string_take(&s));
         }
         case DS_LOWER_EXPR_IDENT: {
             int r = new_reg(p);
@@ -337,13 +328,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             int r = new_reg(p);
             Instr ins = {0};
             if (expr->as.unary.op.len == 1 && expr->as.unary.op.data[0] == '-') {
-                int zero = new_reg(p);
-                Instr load = {0};
-                load.op = OP_LOAD_CONST;
-                load.span = expr->span;
-                load.dst = zero;
-                load.a = add_const(p, ds_value_int(0));
-                emit_instr(p, load);
+                int zero = compile_const(p, expr->span, ds_value_int(0));
                 ins.op = OP_BINARY;
                 ins.b = right;
                 ins.cmp = ds_str_dup_range("-", 1);
@@ -371,12 +356,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                 size_t left_false_pos = emit_instr(p, left_false);
 
                 if (!is_and) {
-                    Instr load_true = {0};
-                    load_true.op = OP_LOAD_CONST;
-                    load_true.span = expr->span;
-                    load_true.dst = r;
-                    load_true.a = add_const(p, ds_value_bool(true));
-                    emit_instr(p, load_true);
+                    emit_load_const(p, expr->span, r, ds_value_bool(true));
                     Instr jump_end = {0};
                     jump_end.op = OP_JUMP;
                     jump_end.span = expr->span;
@@ -388,23 +368,13 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                     right_false.span = expr->as.binary.right->span;
                     right_false.a = right;
                     size_t right_false_pos = emit_instr(p, right_false);
-                    Instr load_true_right = {0};
-                    load_true_right.op = OP_LOAD_CONST;
-                    load_true_right.span = expr->span;
-                    load_true_right.dst = r;
-                    load_true_right.a = add_const(p, ds_value_bool(true));
-                    emit_instr(p, load_true_right);
+                    emit_load_const(p, expr->span, r, ds_value_bool(true));
                     Instr jump_end_right = {0};
                     jump_end_right.op = OP_JUMP;
                     jump_end_right.span = expr->span;
                     size_t right_true_jump_pos = emit_instr(p, jump_end_right);
                     p->instrs[right_false_pos].target = (int)p->instr_len;
-                    Instr load_false = {0};
-                    load_false.op = OP_LOAD_CONST;
-                    load_false.span = expr->span;
-                    load_false.dst = r;
-                    load_false.a = add_const(p, ds_value_bool(false));
-                    emit_instr(p, load_false);
+                    emit_load_const(p, expr->span, r, ds_value_bool(false));
                     p->instrs[true_jump_pos].target = (int)p->instr_len;
                     p->instrs[right_true_jump_pos].target = (int)p->instr_len;
                     return r;
@@ -416,24 +386,14 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                 right_false.span = expr->as.binary.right->span;
                 right_false.a = right;
                 size_t right_false_pos = emit_instr(p, right_false);
-                Instr load_true = {0};
-                load_true.op = OP_LOAD_CONST;
-                load_true.span = expr->span;
-                load_true.dst = r;
-                load_true.a = add_const(p, ds_value_bool(true));
-                emit_instr(p, load_true);
+                emit_load_const(p, expr->span, r, ds_value_bool(true));
                 Instr jump_end = {0};
                 jump_end.op = OP_JUMP;
                 jump_end.span = expr->span;
                 size_t true_jump_pos = emit_instr(p, jump_end);
                 p->instrs[left_false_pos].target = (int)p->instr_len;
                 p->instrs[right_false_pos].target = (int)p->instr_len;
-                Instr load_false = {0};
-                load_false.op = OP_LOAD_CONST;
-                load_false.span = expr->span;
-                load_false.dst = r;
-                load_false.a = add_const(p, ds_value_bool(false));
-                emit_instr(p, load_false);
+                emit_load_const(p, expr->span, r, ds_value_bool(false));
                 p->instrs[true_jump_pos].target = (int)p->instr_len;
                 return r;
             }
@@ -447,14 +407,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                 if (ds_regex_literal_parts(expr->as.binary.right->as.regex, &raw_pattern, &regex_insensitive)) {
                     DsString decoded;
                     if (ds_regex_decode_literal_pattern(raw_pattern, &decoded)) {
-                        int c = add_const(p, ds_value_string_take(&decoded));
-                        right = new_reg(p);
-                        Instr load = {0};
-                        load.op = OP_LOAD_CONST;
-                        load.span = expr->as.binary.right->span;
-                        load.dst = right;
-                        load.a = c;
-                        emit_instr(p, load);
+                        right = compile_const(p, expr->as.binary.right->span, ds_value_string_take(&decoded));
                     }
                 }
             }
@@ -797,23 +750,19 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                 for (size_t j = 0; j < arm->patterns.len; j++) {
                     const DsLowerCasePattern *pat = &arm->patterns.items[j];
                     if (pat->kind == DS_LOWER_CASE_PATTERN_DEFAULT) { is_default = true; break; }
-                    int lit = new_reg(p);
-                    Instr load = {0};
-                    load.op = OP_LOAD_CONST;
-                    load.span = pat->span;
-                    load.dst = lit;
+                    DsValue value;
                     if (pat->kind == DS_LOWER_CASE_PATTERN_STRING) {
                         DsString decoded;
                         decode_string_text(pat->text, &decoded);
-                        load.a = add_const(p, ds_value_string_take(&decoded));
+                        value = ds_value_string_take(&decoded);
                     } else if (pat->kind == DS_LOWER_CASE_PATTERN_INT) {
                         char *tmp = ds_str_dup_range(pat->text.data, pat->text.len);
-                        load.a = add_const(p, ds_value_int(strtoll(tmp, NULL, 10)));
+                        value = ds_value_int(strtoll(tmp, NULL, 10));
                         free(tmp);
                     } else {
-                        load.a = add_const(p, ds_value_bool(pat->boolean));
+                        value = ds_value_bool(pat->boolean);
                     }
-                    emit_instr(p, load);
+                    int lit = compile_const(p, pat->span, value);
                     int cmp_reg = new_reg(p);
                     Instr cmp = {0};
                     cmp.op = OP_COMPARE;
