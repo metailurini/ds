@@ -355,19 +355,8 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
     DsCommandWordForm form = ds_command_word_analyze(word);
     if (word.data[0] == '$' && (form.kind == DS_COMMAND_WORD_VARIABLE || form.kind == DS_COMMAND_WORD_FIELD)) {
         DsStr name = form.name;
-        Symbol *sym = scope_find(lower->scope, name);
-        if (!sym) {
-            if (find_function(lower->program, name)) {
-                ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
-            } else {
-                ds_diag_error(lower->diag, span, "unknown command variable `%.*s`", (int)name.len, name.data);
-            }
-            return false;
-        }
-        if (sym->kind == SYM_FUNCTION) {
-            ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0", (int)name.len, name.data);
-            return false;
-        }
+        Symbol *sym = lower_resolve_value_symbol(lower, name, span, "command variable");
+        if (!sym) return false;
         lower_validate_handler_capture(lower, sym, name, span);
         if (word.data[0] == '$' && form.kind == DS_COMMAND_WORD_VARIABLE && name.len + 1 < word.len) {
             char suffix = word.data[name.len + 1];

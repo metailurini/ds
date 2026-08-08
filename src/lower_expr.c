@@ -320,18 +320,8 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
 }
 
 DsLowerExpr *lower_ident_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    Symbol *sym = scope_find(lower->scope, expr->as.text);
-    if (!sym) {
-        if (find_function(lower->program, expr->as.text)) {
-            ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a variable in v0.9.0",
-                          (int)expr->as.text.len, expr->as.text.data);
-        } else {
-            ds_diag_error(lower->diag, expr->span, "unknown variable `%.*s`", (int)expr->as.text.len, expr->as.text.data);
-        }
-    } else if (sym->kind == SYM_FUNCTION) {
-        ds_diag_error(lower->diag, expr->span, "function `%.*s` cannot be used as a variable in v0.9.0",
-                      (int)expr->as.text.len, expr->as.text.data);
-    } else {
+    Symbol *sym = lower_resolve_value_symbol(lower, expr->as.text, expr->span, "variable");
+    if (sym) {
         lower_validate_handler_capture(lower, sym, expr->as.text, expr->span);
         *kind_out = sym->kind == SYM_TOPLEVEL_PREDECLARED ? SYM_UNKNOWN : sym->kind;
     }

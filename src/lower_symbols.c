@@ -71,6 +71,25 @@ Symbol *scope_find(Scope *scope, DsStr name) {
     return NULL;
 }
 
+Symbol *lower_resolve_value_symbol(Lower *lower, DsStr name, DsSpan span, const char *unknown_kind) {
+    Symbol *sym = scope_find(lower->scope, name);
+    if (!sym) {
+        if (find_function(lower->program, name)) {
+            ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0",
+                          (int)name.len, name.data);
+        } else {
+            ds_diag_error(lower->diag, span, "unknown %s `%.*s`", unknown_kind, (int)name.len, name.data);
+        }
+        return NULL;
+    }
+    if (sym->kind == SYM_FUNCTION) {
+        ds_diag_error(lower->diag, span, "function `%.*s` cannot be used as a variable in v0.9.0",
+                      (int)name.len, name.data);
+        return NULL;
+    }
+    return sym;
+}
+
 void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span) {
     scope_define_array(lower, scope, name, kind, SYM_UNKNOWN, span);
 }

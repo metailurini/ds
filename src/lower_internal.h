@@ -112,6 +112,7 @@ void scope_init(Scope *scope, Scope *parent);
 void scope_free(Scope *scope);
 Symbol *scope_find_current(Scope *scope, DsStr name);
 Symbol *scope_find(Scope *scope, DsStr name);
+Symbol *lower_resolve_value_symbol(Lower *lower, DsStr name, DsSpan span, const char *unknown_kind);
 bool lower_validate_handler_capture(Lower *lower, const Symbol *sym, DsStr name, DsSpan span);
 void scope_define(Lower *lower, Scope *scope, DsStr name, SymKind kind, DsSpan span);
 void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, SymKind element_kind, DsSpan span);
