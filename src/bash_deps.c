@@ -145,29 +145,13 @@ static bool expr_is_glob_call(const DsLowerExpr *expr, void *context) {
     return expr->kind == DS_LOWER_EXPR_CALL && glob_call_uses_helper(expr->as.call.name, &expr->as.call.args, recursive_only);
 }
 
-static bool expr_uses_glob_helper(const DsLowerExpr *expr, bool recursive_only) {
-    return expr_uses(expr, expr_is_glob_call, &recursive_only);
-}
+#define DEFINE_GLOB_USES(expr_name, stmt_call_name, stmt_name, recursive_only) \
+    static bool expr_name(const DsLowerExpr *expr) { bool recursive = (recursive_only); return expr_uses(expr, expr_is_glob_call, &recursive); } \
+    static bool stmt_call_name(const DsLowerStmt *stmt) { return stmt->kind == DS_LOWER_STMT_CALL && glob_call_uses_helper(stmt->as.call_stmt.name, &stmt->as.call_stmt.args, (recursive_only)); } \
+    static bool stmt_name(const DsLowerStmt *stmt) { return stmt_uses_exprs(stmt, expr_name, true) || stmt_uses_nested(stmt, stmt_call_name); }
 
-static bool expr_uses_glob(const DsLowerExpr *expr) { return expr_uses_glob_helper(expr, false); }
-static bool expr_uses_recursive_glob(const DsLowerExpr *expr) { return expr_uses_glob_helper(expr, true); }
-
-static bool stmt_is_glob_call(const DsLowerStmt *stmt) {
-    return stmt->kind == DS_LOWER_STMT_CALL && glob_call_uses_helper(stmt->as.call_stmt.name, &stmt->as.call_stmt.args, false);
-}
-
-static bool stmt_is_recursive_glob_call(const DsLowerStmt *stmt) {
-    return stmt->kind == DS_LOWER_STMT_CALL && glob_call_uses_helper(stmt->as.call_stmt.name, &stmt->as.call_stmt.args, true);
-}
-
-static bool stmt_uses_glob_helper(const DsLowerStmt *stmt, bool recursive_only) {
-    return recursive_only
-        ? stmt_uses_exprs(stmt, expr_uses_recursive_glob, true) || stmt_uses_nested(stmt, stmt_is_recursive_glob_call)
-        : stmt_uses_exprs(stmt, expr_uses_glob, true) || stmt_uses_nested(stmt, stmt_is_glob_call);
-}
-
-static bool stmt_uses_glob(const DsLowerStmt *stmt) { return stmt_uses_glob_helper(stmt, false); }
-static bool stmt_uses_recursive_glob(const DsLowerStmt *stmt) { return stmt_uses_glob_helper(stmt, true); }
+DEFINE_GLOB_USES(expr_uses_glob, stmt_is_glob_call, stmt_uses_glob, false)
+DEFINE_GLOB_USES(expr_uses_recursive_glob, stmt_is_recursive_glob_call, stmt_uses_recursive_glob, true)
 
 static unsigned expr_string_helper_bit(const DsLowerExpr *expr) {
     switch (expr->kind) {
