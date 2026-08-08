@@ -9,8 +9,7 @@ typedef bool (*ExprUseQuery)(const DsLowerExpr *expr);
 typedef unsigned (*ExprMaskPredicate)(const DsLowerExpr *expr);
 typedef unsigned (*StmtMaskPredicate)(const DsLowerStmt *stmt);
 
-static bool stmt_uses_nested(const DsLowerStmt *stmt, StmtPredicate predicate);
-static bool stmt_uses_exprs(const DsLowerStmt *stmt, ExprUseQuery query, bool scan_call_args);
+static bool stmt_uses(const DsLowerStmt *stmt, StmtPredicate predicate, ExprUseQuery query, bool scan_call_args);
 static bool program_uses_stmt(const DsLowerProgram *program, StmtPredicate predicate);
 static unsigned program_mask(const DsLowerProgram *program, StmtMaskPredicate predicate);
 
@@ -138,7 +137,7 @@ static bool expr_is_glob_call(const DsLowerExpr *expr, void *context) {
 #define DEFINE_GLOB_USES(expr_name, stmt_call_name, stmt_name, recursive_only) \
     static bool expr_name(const DsLowerExpr *expr) { bool recursive = (recursive_only); return expr_uses(expr, expr_is_glob_call, &recursive); } \
     static bool stmt_call_name(const DsLowerStmt *stmt) { return stmt->kind == DS_LOWER_STMT_CALL && glob_call_uses_helper(stmt->as.call_stmt.name, &stmt->as.call_stmt.args, (recursive_only)); } \
-    static bool stmt_name(const DsLowerStmt *stmt) { return stmt_uses_exprs(stmt, expr_name, true) || stmt_uses_nested(stmt, stmt_call_name); }
+    static bool stmt_name(const DsLowerStmt *stmt) { return stmt_uses(stmt, stmt_call_name, expr_name, true); }
 
 DEFINE_GLOB_USES(expr_uses_glob, stmt_is_glob_call, stmt_uses_glob, false)
 DEFINE_GLOB_USES(expr_uses_recursive_glob, stmt_is_recursive_glob_call, stmt_uses_recursive_glob, true)
@@ -213,93 +212,66 @@ DEFINE_SIMPLE_EXPR_USES(expr_is_int_helper, expr_uses_int_helpers,
 DEFINE_SIMPLE_EXPR_USES(expr_is_user_function_call, expr_uses_function_value_helpers,
                         expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function)
 
-static bool stmt_uses_nested(const DsLowerStmt *stmt, StmtPredicate predicate) {
+static bool stmt_uses(const DsLowerStmt *stmt, StmtPredicate predicate, ExprUseQuery query, bool scan_call_args) {
     if (!stmt) return false;
-    if (predicate(stmt)) return true;
+    if (predicate && predicate(stmt)) return true;
+#define EXPR_USES(value) (query && query(value))
     switch (stmt->kind) {
-        case DS_LOWER_STMT_IF:
-            return stmt_uses_nested(stmt->as.if_stmt.then_branch, predicate) ||
-                   stmt_uses_nested(stmt->as.if_stmt.else_branch, predicate);
-        case DS_LOWER_STMT_BLOCK:
-            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
-                if (stmt_uses_nested(stmt->as.block_stmt.statements.items[i], predicate)) return true;
-            }
-            return false;
-        case DS_LOWER_STMT_FOR_ARRAY:
-        case DS_LOWER_STMT_FOR_MAP:
-        case DS_LOWER_STMT_FOR_RANGE:
-            return stmt_uses_nested(stmt->as.for_stmt.body, predicate);
-        case DS_LOWER_STMT_WHILE:
-            return stmt_uses_nested(stmt->as.while_stmt.body, predicate);
-        case DS_LOWER_STMT_CASE:
-            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
-                if (stmt_uses_nested(stmt->as.case_stmt.arms.items[i].body, predicate)) return true;
-            }
-            return false;
-        case DS_LOWER_STMT_DEFER:
-        case DS_LOWER_STMT_TRAP:
-            return stmt_uses_nested(stmt->as.handler_stmt.body, predicate);
-        default:
-            return false;
-    }
-}
-
-#define DEFINE_STMT_USES_NESTED(name, predicate) \
-    static bool name(const DsLowerStmt *stmt) { return stmt_uses_nested(stmt, predicate); }
-
-static bool stmt_uses_exprs(const DsLowerStmt *stmt, ExprUseQuery query, bool scan_call_args) {
-    if (!stmt) return false;
-    switch (stmt->kind) {
-        case DS_LOWER_STMT_LET: return query(stmt->as.let_stmt.value);
-        case DS_LOWER_STMT_ASSIGN: return query(stmt->as.assign_stmt.value);
+        case DS_LOWER_STMT_LET: return EXPR_USES(stmt->as.let_stmt.value);
+        case DS_LOWER_STMT_ASSIGN: return EXPR_USES(stmt->as.assign_stmt.value);
         case DS_LOWER_STMT_INDEX_ASSIGN:
-            return query(stmt->as.index_assign_stmt.index) || query(stmt->as.index_assign_stmt.value);
+            return EXPR_USES(stmt->as.index_assign_stmt.index) || EXPR_USES(stmt->as.index_assign_stmt.value);
         case DS_LOWER_STMT_IF:
-            return query(stmt->as.if_stmt.condition) ||
-                   stmt_uses_exprs(stmt->as.if_stmt.then_branch, query, scan_call_args) ||
-                   stmt_uses_exprs(stmt->as.if_stmt.else_branch, query, scan_call_args);
+            return EXPR_USES(stmt->as.if_stmt.condition) ||
+                   stmt_uses(stmt->as.if_stmt.then_branch, predicate, query, scan_call_args) ||
+                   stmt_uses(stmt->as.if_stmt.else_branch, predicate, query, scan_call_args);
         case DS_LOWER_STMT_BLOCK:
             for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
-                if (stmt_uses_exprs(stmt->as.block_stmt.statements.items[i], query, scan_call_args)) return true;
+                if (stmt_uses(stmt->as.block_stmt.statements.items[i], predicate, query, scan_call_args)) return true;
             }
             return false;
         case DS_LOWER_STMT_FOR_ARRAY:
         case DS_LOWER_STMT_FOR_MAP:
         case DS_LOWER_STMT_FOR_RANGE:
-            return query(stmt->as.for_stmt.iterable) || stmt_uses_exprs(stmt->as.for_stmt.body, query, scan_call_args);
+            return EXPR_USES(stmt->as.for_stmt.iterable) || stmt_uses(stmt->as.for_stmt.body, predicate, query, scan_call_args);
         case DS_LOWER_STMT_WHILE:
-            return query(stmt->as.while_stmt.condition) || stmt_uses_exprs(stmt->as.while_stmt.body, query, scan_call_args);
+            return EXPR_USES(stmt->as.while_stmt.condition) || stmt_uses(stmt->as.while_stmt.body, predicate, query, scan_call_args);
         case DS_LOWER_STMT_CASE:
-            if (query(stmt->as.case_stmt.selector)) return true;
+            if (EXPR_USES(stmt->as.case_stmt.selector)) return true;
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
-                if (stmt_uses_exprs(stmt->as.case_stmt.arms.items[i].body, query, scan_call_args)) return true;
+                if (stmt_uses(stmt->as.case_stmt.arms.items[i].body, predicate, query, scan_call_args)) return true;
             }
             return false;
-        case DS_LOWER_STMT_PUSH: return query(stmt->as.push_stmt.value);
-        case DS_LOWER_STMT_ASSERT: return query(stmt->as.assert_stmt.condition);
-        case DS_LOWER_STMT_RETURN: return query(stmt->as.return_stmt.value);
+        case DS_LOWER_STMT_PUSH: return EXPR_USES(stmt->as.push_stmt.value);
+        case DS_LOWER_STMT_ASSERT: return EXPR_USES(stmt->as.assert_stmt.condition);
+        case DS_LOWER_STMT_RETURN: return EXPR_USES(stmt->as.return_stmt.value);
         case DS_LOWER_STMT_DEFER:
         case DS_LOWER_STMT_TRAP:
-            return stmt_uses_exprs(stmt->as.handler_stmt.body, query, scan_call_args);
+            return stmt_uses(stmt->as.handler_stmt.body, predicate, query, scan_call_args);
         case DS_LOWER_STMT_CALL:
             if (!scan_call_args) return false;
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) {
-                if (query(stmt->as.call_stmt.args.items[i])) return true;
+                if (EXPR_USES(stmt->as.call_stmt.args.items[i])) return true;
             }
             return false;
         case DS_LOWER_STMT_CMD:
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE:
             return false;
+        default:
+            return false;
     }
-    return false;
+#undef EXPR_USES
 }
 
+#define DEFINE_STMT_USES_NESTED(name, predicate) \
+    static bool name(const DsLowerStmt *stmt) { return stmt_uses(stmt, predicate, NULL, false); }
+
 #define DEFINE_STMT_EXPR_USES(name, query, scan_call_args) \
-    static bool name(const DsLowerStmt *stmt) { return stmt_uses_exprs(stmt, query, (scan_call_args)); }
+    static bool name(const DsLowerStmt *stmt) { return stmt_uses(stmt, NULL, query, (scan_call_args)); }
 
 #define DEFINE_STMT_EXPR_NESTED_USES(name, query, predicate, scan_call_args) \
-    static bool name(const DsLowerStmt *stmt) { return stmt_uses_exprs(stmt, query, (scan_call_args)) || stmt_uses_nested(stmt, predicate); }
+    static bool name(const DsLowerStmt *stmt) { return stmt_uses(stmt, predicate, query, (scan_call_args)); }
 
 static unsigned stmt_mask(const DsLowerStmt *stmt, ExprMaskPredicate expr_query, StmtMaskPredicate stmt_query) {
     if (!stmt) return 0;
