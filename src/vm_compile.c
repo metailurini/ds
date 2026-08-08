@@ -595,10 +595,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                 bin.dst = src;
                 bin.a = left;
                 bin.b = right;
-                const char *op = stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_ADD ? "+" :
-                                 (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SUB ? "-" :
-                                  (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_MUL ? "*" :
-                                   (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_DIV ? "/" : "%")));
+                const char *op = ds_lower_assign_binary_op(stmt->as.assign_stmt.op);
                 bin.cmp = ds_str_dup_cstr(op);
                 bin.cmp_enum = op_cmp_from_str(op, strlen(op));
                 emit_instr(p, bin);

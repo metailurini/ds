@@ -198,15 +198,7 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.let_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_ASSIGN: {
-            const char *op = "=";
-            switch (stmt->as.assign_stmt.op) {
-                case DS_LOWER_ASSIGN_SET: op = "="; break;
-                case DS_LOWER_ASSIGN_ADD: op = "+="; break;
-                case DS_LOWER_ASSIGN_SUB: op = "-="; break;
-                case DS_LOWER_ASSIGN_MUL: op = "*="; break;
-                case DS_LOWER_ASSIGN_DIV: op = "/="; break;
-                case DS_LOWER_ASSIGN_MOD: op = "%="; break;
-            }
+            const char *op = ds_lower_assign_op_name(stmt->as.assign_stmt.op);
             fprintf(out, "Assign "); print_str(out, stmt->as.assign_stmt.name); fprintf(out, " %s", op); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.assign_stmt.value, level + 1);
             break;
