@@ -118,6 +118,10 @@ static inline void parser_skip_to_stmt_end(Parser *p) {
     while (!parser_is_stmt_end(p)) parser_advance(p);
 }
 
+static inline void parser_skip_to_stmt_end_or(Parser *p, DsTokenKind stop) {
+    while (!parser_at_end(p) && !parser_at(p, stop) && !parser_is_stmt_end(p)) parser_advance(p);
+}
+
 static inline void parser_consume_statement_end(Parser *p) {
     if (parser_at(p, DS_TOK_NEWLINE)) {
         parser_skip_newlines(p);

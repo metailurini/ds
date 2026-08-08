@@ -319,7 +319,7 @@ static DsStmt *parse_push_stmt(Parser *p) {
     }
     if (parser_advance_if(p, DS_TOK_COMMA)) {
         ds_diag_error(p->diag, parser_previous(p)->span, "`push` accepts exactly one argument in v0.10.0");
-        while (!parser_at_end(p) && !parser_at(p, DS_TOK_RPAREN) && !parser_is_stmt_end(p)) parser_advance(p);
+        parser_skip_to_stmt_end_or(p, DS_TOK_RPAREN);
     }
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after `push` argument")) return stmt;
     stmt->span.end = parser_previous(p)->span.end;
@@ -425,7 +425,7 @@ static DsStmt *parse_case(Parser *p) {
                 parser_advance(p);
             } while (!parser_at_end(p) && depth > 0);
         } else {
-            while (!parser_at_end(p) && !parser_is_stmt_end(p)) parser_advance(p);
+            parser_skip_to_stmt_end(p);
         }
         parser_consume_statement_end(p);
         return NULL;
@@ -446,7 +446,7 @@ static DsStmt *parse_case(Parser *p) {
             parser_case_pattern_vec_push(&arm.patterns, pattern);
         } while (parser_advance_if(p, DS_TOK_PIPE));
         if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after case pattern")) {
-            while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACE) && !parser_is_stmt_end(p)) parser_advance(p);
+            parser_skip_to_stmt_end_or(p, DS_TOK_RBRACE);
             parser_skip_newlines(p);
             continue;
         }
