@@ -20,7 +20,8 @@ void *ds_xmalloc(size_t size) {
 
 char *ds_str_dup_range(const char *data, size_t len) {
     char *out = (char *)ds_xmalloc(len + 1);
-    memcpy(out, data, len);
+    if (data) memcpy(out, data, len);
+    else memset(out, 0, len);
     out[len] = '\0';
     return out;
 }

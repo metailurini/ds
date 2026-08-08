@@ -64,7 +64,7 @@ static inline bool ds_str_eq(DsStr a, DsStr b) {
 }
 
 static inline char *ds_str_dup_len(DsStr value) {
-    return ds_str_dup_range(value.data ? value.data : "", value.len);
+    return ds_str_dup_range(value.data, value.len);
 }
 
 static inline bool ds_is_ident_start(char c) {

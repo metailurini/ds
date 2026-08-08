@@ -444,7 +444,7 @@ static char *path_join_parts(Vm *vm, Instr *ins) {
         ds_string_append_range(&s, part, len);
     }
 
-    char *out = ds_str_dup_range(s.data ? s.data : "", s.len);
+    char *out = ds_str_dup_range(s.data, s.len);
     ds_string_free(&s);
     return out;
 }

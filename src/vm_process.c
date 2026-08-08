@@ -653,7 +653,7 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         char *field = ds_str_dup_range(form.field.data, form.field.len);
         if (strcmp(name, "env") == 0) {
             const char *value = getenv(field);
-            *out = ds_str_dup_range(value ? value : "", value ? strlen(value) : 0);
+            *out = ds_str_dup_range(value, value ? strlen(value) : 0);
             free(name); free(field);
             return true;
         }
