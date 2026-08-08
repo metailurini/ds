@@ -256,6 +256,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     memset(&e, 0, sizeof(e));
     e.source = source;
     e.diag = diag;
+    bool ok = false;
     e.needs_case_types = program_uses_case(lowered) || program_uses_membership(lowered) || program_uses_function_param_types(lowered);
 
     buf_append(&e.out, "#!/usr/bin/env bash\n");
@@ -338,40 +339,31 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_regex_helpers) emit_regex_helpers(&e, needs_regex_match_helpers, needs_regex_replace_helpers);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {
-        if (!emit_function(&e, &lowered->functions.items[i])) {
-            free_symbols(&e.symbols);
-            free(e.out.data);
-            return false;
-        }
+        if (!emit_function(&e, &lowered->functions.items[i])) goto cleanup;
     }
 
     for (size_t i = 0; i < lowered->statements.len; i++) {
-        if (!emit_stmt(&e, lowered->statements.items[i], 0)) {
-            free_symbols(&e.symbols);
-            free(e.out.data);
-            return false;
-        }
+        if (!emit_stmt(&e, lowered->statements.items[i], 0)) goto cleanup;
     }
 
     FILE *fp = fopen(output_path, "wb");
     if (!fp) {
         DsSpan span = lowered->span;
         ds_diag_error(diag, span, "failed to open output file `%s`: %s", output_path, strerror(errno));
-        free_symbols(&e.symbols);
-        free(e.out.data);
-        return false;
+        goto cleanup;
     }
     size_t written = fwrite(e.out.data ? e.out.data : "", 1, e.out.len, fp);
-    if (written != e.out.len || fclose(fp) != 0) {
+    int close_rc = fclose(fp);
+    if (written != e.out.len || close_rc != 0) {
         ds_diag_error(diag, lowered->span, "failed to write output file `%s`: %s", output_path, strerror(errno));
-        free_symbols(&e.symbols);
-        free(e.out.data);
-        return false;
+        goto cleanup;
     }
 
+    ok = true;
+cleanup:
     free_symbols(&e.symbols);
     free(e.out.data);
-    return true;
+    return ok;
 }
 
 bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag) {
