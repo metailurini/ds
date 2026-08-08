@@ -539,7 +539,8 @@ static DsStr lower_make_temp_name(Lower *lower, const char *prefix) {
         DsStr candidate = {buf, strlen(buf)};
         if (!scope_find(lower->scope, candidate)) break;
     } while (true);
-    return (DsStr){ds_str_dup_range(buf, strlen(buf)), strlen(buf)};
+    size_t len = strlen(buf);
+    return (DsStr){ds_str_dup_range(buf, len), len};
 }
 
 static DsLowerStmt *lower_command_interpolation_temp_string_let(Lower *lower, DsStr name, DsStr quoted_text, DsSpan span) {

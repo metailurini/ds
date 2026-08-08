@@ -201,7 +201,7 @@ static DsStmt *parse_env_unset(Parser *p) {
     if (parser_invalid_hyphenated_env_name(p, field, "v0.27.0")) return NULL;
 
     DsStmt *stmt = parser_new_stmt(DS_STMT_CALL, (DsSpan){unset_tok->span.start, field->span.end, unset_tok->span.source});
-    stmt->as.call_stmt.name = (DsStr){ds_str_dup_range("env.unset", strlen("env.unset")), strlen("env.unset")};
+    stmt->as.call_stmt.name = (DsStr){ds_str_dup_cstr("env.unset"), 9};
     DsExpr *arg = parser_new_expr(DS_EXPR_STRING, field->span);
     arg->as.text = quoted_env_name_from_token(field);
     parser_expr_vec_push(&stmt->as.call_stmt.args, arg);
