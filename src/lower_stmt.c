@@ -46,10 +46,11 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
         }
     } else if (!fn) {
         DsStr ns = {0}, member = {0};
-        if (split_member_name(stmt->as.call_stmt.name, &ns, &member) && ds_str_eq_cstr(ns, "string")) {
+        bool has_member = split_member_name(stmt->as.call_stmt.name, &ns, &member);
+        if (has_member && ds_str_eq_cstr(ns, "string")) {
             ds_diag_error(lower->diag, stmt->span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
-        } else if (split_member_name(stmt->as.call_stmt.name, &ns, &member) && ds_stdlib_is_namespace(ns)) ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
-        else if (split_member_name(stmt->as.call_stmt.name, &ns, &member)) ds_diag_error(lower->diag, stmt->span, "only `push` collection method is supported in v0.10.0");
+        } else if (has_member && ds_stdlib_is_namespace(ns)) ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+        else if (has_member) ds_diag_error(lower->diag, stmt->span, "only `push` collection method is supported in v0.10.0");
         else ds_diag_error(lower->diag, stmt->span, "unknown function `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
     } else if (stmt->as.call_stmt.args.len < fn->required_count || stmt->as.call_stmt.args.len > fn->params.len) {
         if (fn->required_count == fn->params.len) {
