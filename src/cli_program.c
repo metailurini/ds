@@ -73,7 +73,7 @@ static bool string_list_contains(char **items, size_t len, const char *value) {
 
 static char *normalize_existing_path(const char *path) {
     char resolved[PATH_MAX];
-    if (realpath(path, resolved)) return ds_str_dup_range(resolved, strlen(resolved));
+    if (realpath(path, resolved)) return ds_str_dup_cstr(resolved);
     return NULL;
 }
 
@@ -85,7 +85,7 @@ static char *dir_name_dup(const char *path) {
 }
 
 static char *join_path(const char *dir, const char *rel) {
-    if (rel[0] == '/') return ds_str_dup_range(rel, strlen(rel));
+    if (rel[0] == '/') return ds_str_dup_cstr(rel);
     while (rel[0] == '.' && rel[1] == '/') rel += 2;
     size_t dlen = strlen(dir);
     size_t rlen = strlen(rel);
@@ -206,11 +206,11 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         return true;
     }
 
-    string_push(&program->loaded_paths, &program->loaded_len, &program->loaded_cap, ds_str_dup_range(normalized, strlen(normalized)));
-    string_push(&program->stack, &program->stack_len, &program->stack_cap, ds_str_dup_range(normalized, strlen(normalized)));
+    string_push(&program->loaded_paths, &program->loaded_len, &program->loaded_cap, ds_str_dup_cstr(normalized));
+    string_push(&program->stack, &program->stack_len, &program->stack_cap, ds_str_dup_cstr(normalized));
 
     LoadedUnit *unit = (LoadedUnit *)ds_xcalloc(1, sizeof(LoadedUnit));
-    char *owned_path = ds_str_dup_range(path, strlen(path));
+    char *owned_path = ds_str_dup_cstr(path);
     ds_diag_init(&program->diag, &unit->source);
     if (!ds_source_read(owned_path, &unit->source, &program->diag)) {
         if (!is_root) ds_diag_error(&program->diag, import_span, "failed to read imported file `%s`", path);

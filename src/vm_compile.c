@@ -599,7 +599,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                                  (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SUB ? "-" :
                                   (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_MUL ? "*" :
                                    (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_DIV ? "/" : "%")));
-                bin.cmp = ds_str_dup_range(op, strlen(op));
+                bin.cmp = ds_str_dup_cstr(op);
                 bin.cmp_enum = op_cmp_from_str(op, strlen(op));
                 emit_instr(p, bin);
             }

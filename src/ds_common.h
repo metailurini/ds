@@ -44,8 +44,14 @@ void ds_diag_report(FILE *out, const DsSource *source, DsSpan span, const char *
 void ds_diag_error(DsDiag *diag, DsSpan span, const char *fmt, ...);
 
 char *ds_str_dup_range(const char *data, size_t len);
+void ds_fatal_oom(void);
+void *ds_xmalloc(size_t size);
 void *ds_xcalloc(size_t count, size_t size);
 void *ds_xrealloc(void *ptr, size_t size);
+
+static inline char *ds_str_dup_cstr(const char *value) {
+    return ds_str_dup_range(value, strlen(value));
+}
 
 static inline bool ds_str_eq_cstr(DsStr value, const char *text) {
     size_t len = strlen(text);

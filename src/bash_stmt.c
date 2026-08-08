@@ -101,7 +101,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
                 if (!bash_is_user_function_call_expr(part)) continue;
                 char tmp[64];
                 bash_temp_ds_name(tmp, sizeof(tmp), "interp", e->temp_counter++);
-                temps[i] = ds_str_dup_range(tmp, strlen(tmp));
+                temps[i] = ds_str_dup_cstr(tmp);
                 if (!temps[i]) { free(temps); return false; }
                 DsStr raw = {temps[i], strlen(temps[i])};
                 emit_indent(&e->out, indent);

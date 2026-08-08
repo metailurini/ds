@@ -509,7 +509,7 @@ static bool stdlib_path_part(Vm *vm, Instr *ins, DsValue *out) {
     if (helper_is(ins, "path.basename")) {
         char *slash = strrchr(path, '/');
         const char *base = slash ? slash + 1 : path;
-        result = ds_str_dup_range(base, strlen(base));
+        result = ds_str_dup_cstr(base);
     } else if (helper_is(ins, "path.dirname")) {
         char *slash = strrchr(path, '/');
         if (!slash) result = ds_str_dup_range(".", 1);
@@ -520,7 +520,7 @@ static bool stdlib_path_part(Vm *vm, Instr *ins, DsValue *out) {
         base = base ? base + 1 : path;
         char *dot = strrchr(base, '.');
         if (!dot || dot == base) result = ds_str_dup_range("", 0);
-        else result = ds_str_dup_range(dot, strlen(dot));
+        else result = ds_str_dup_cstr(dot);
     }
 
     free(path);

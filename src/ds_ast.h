@@ -102,6 +102,8 @@ typedef enum {
     DS_ASSIGN_MOD
 } DsAssignOp;
 
+const char *ds_assign_op_name(DsAssignOp op);
+
 typedef enum {
     DS_CASE_PATTERN_STRING,
     DS_CASE_PATTERN_INT,

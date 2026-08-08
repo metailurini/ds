@@ -96,17 +96,13 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             print_expr(stmt->as.let_stmt.value, out, level + 1);
             break;
         case DS_STMT_ASSIGN: {
-            const char *op = stmt->as.assign_stmt.op == DS_ASSIGN_ADD ? "+=" : (stmt->as.assign_stmt.op == DS_ASSIGN_SUB ? "-=" : "=");
+            const char *op = ds_assign_op_name(stmt->as.assign_stmt.op);
             fprintf(out, "AssignStmt %.*s %s\n", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data, op);
             print_expr(stmt->as.assign_stmt.value, out, level + 1);
             break;
         }
         case DS_STMT_INDEX_ASSIGN: {
-            const char *op = stmt->as.index_assign_stmt.op == DS_ASSIGN_ADD ? "+=" :
-                             (stmt->as.index_assign_stmt.op == DS_ASSIGN_SUB ? "-=" :
-                              (stmt->as.index_assign_stmt.op == DS_ASSIGN_MUL ? "*=" :
-                               (stmt->as.index_assign_stmt.op == DS_ASSIGN_DIV ? "/=" :
-                                (stmt->as.index_assign_stmt.op == DS_ASSIGN_MOD ? "%=" : "="))));
+            const char *op = ds_assign_op_name(stmt->as.index_assign_stmt.op);
             fprintf(out, "IndexAssignStmt %s\n", op);
             print_expr(stmt->as.index_assign_stmt.target, out, level + 1);
             print_expr(stmt->as.index_assign_stmt.value, out, level + 1);
@@ -239,6 +235,18 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             print_stmt(stmt->as.handler_stmt.body, out, level + 1);
             break;
     }
+}
+
+const char *ds_assign_op_name(DsAssignOp op) {
+    switch (op) {
+        case DS_ASSIGN_ADD: return "+=";
+        case DS_ASSIGN_SUB: return "-=";
+        case DS_ASSIGN_MUL: return "*=";
+        case DS_ASSIGN_DIV: return "/=";
+        case DS_ASSIGN_MOD: return "%=";
+        case DS_ASSIGN_SET: return "=";
+    }
+    return "=";
 }
 
 static const char *decl_kind_name(DsScriptDeclKind kind) {

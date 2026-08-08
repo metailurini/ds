@@ -258,21 +258,17 @@ static void format_stmt(Formatter *fmt, const DsStmt *stmt, int level) {
             break;
         case DS_STMT_ASSIGN:
             append_str(fmt, stmt->as.assign_stmt.name);
-            append_cstr(fmt, stmt->as.assign_stmt.op == DS_ASSIGN_ADD ? " += " :
-                             (stmt->as.assign_stmt.op == DS_ASSIGN_SUB ? " -= " :
-                              (stmt->as.assign_stmt.op == DS_ASSIGN_MUL ? " *= " :
-                               (stmt->as.assign_stmt.op == DS_ASSIGN_DIV ? " /= " :
-                                (stmt->as.assign_stmt.op == DS_ASSIGN_MOD ? " %= " : " = ")))));
+            append_cstr(fmt, " ");
+            append_cstr(fmt, ds_assign_op_name(stmt->as.assign_stmt.op));
+            append_cstr(fmt, " ");
             format_expr(fmt, stmt->as.assign_stmt.value);
             append_cstr(fmt, "\n");
             break;
         case DS_STMT_INDEX_ASSIGN:
             format_expr(fmt, stmt->as.index_assign_stmt.target);
-            append_cstr(fmt, stmt->as.index_assign_stmt.op == DS_ASSIGN_ADD ? " += " :
-                             (stmt->as.index_assign_stmt.op == DS_ASSIGN_SUB ? " -= " :
-                              (stmt->as.index_assign_stmt.op == DS_ASSIGN_MUL ? " *= " :
-                               (stmt->as.index_assign_stmt.op == DS_ASSIGN_DIV ? " /= " :
-                                (stmt->as.index_assign_stmt.op == DS_ASSIGN_MOD ? " %= " : " = ")))));
+            append_cstr(fmt, " ");
+            append_cstr(fmt, ds_assign_op_name(stmt->as.index_assign_stmt.op));
+            append_cstr(fmt, " ");
             format_expr(fmt, stmt->as.index_assign_stmt.value);
             append_cstr(fmt, "\n");
             break;
