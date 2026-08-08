@@ -1074,6 +1074,13 @@ static bool process_capture_read(Vm *vm, DsSpan span, const char *kind, FILE *ou
     return false;
 }
 
+static void process_capture_close(FILE **out_fp, FILE **err_fp) {
+    if (*out_fp) fclose(*out_fp);
+    if (*err_fp) fclose(*err_fp);
+    *out_fp = NULL;
+    *err_fp = NULL;
+}
+
 static void process_child_exec_argv(const VmProcessSpec *spec) {
     execvp(spec->argv.items[0], spec->argv.items);
     int exec_errno = errno;
@@ -1123,8 +1130,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
 
     if (!process_exec_error_pipe(vm, spec->span, spec->argv.items[0], exec_error_pipe)) {
         if (redirect_fd >= 0) close(redirect_fd);
-        if (out_fp) fclose(out_fp);
-        if (err_fp) fclose(err_fp);
+        process_capture_close(&out_fp, &err_fp);
         return false;
     }
     spec->exec_error_fd = exec_error_pipe[1];
@@ -1133,8 +1139,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     if (pid < 0) {
         ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(errno));
         if (redirect_fd >= 0) close(redirect_fd);
-        if (out_fp) fclose(out_fp);
-        if (err_fp) fclose(err_fp);
+        process_capture_close(&out_fp, &err_fp);
         close(exec_error_pipe[0]);
         close(exec_error_pipe[1]);
         spec->exec_error_fd = -1;
@@ -1156,8 +1161,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     close(exec_error_pipe[0]);
     int status = 0;
     if (!vm_wait_foreground_child(vm, pid, pid, spec, &status)) {
-        if (out_fp) fclose(out_fp);
-        if (err_fp) fclose(err_fp);
+        process_capture_close(&out_fp, &err_fp);
         return false;
     }
     result->code = process_status_code(status);
@@ -1170,12 +1174,10 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
 
     if (spec->capture) {
         if (!process_capture_read(vm, spec->span, "command", out_fp, err_fp, result)) {
-            fclose(out_fp);
-            fclose(err_fp);
+            process_capture_close(&out_fp, &err_fp);
             return false;
         }
-        fclose(out_fp);
-        fclose(err_fp);
+        process_capture_close(&out_fp, &err_fp);
     }
     return true;
 }
@@ -1329,8 +1331,7 @@ cleanup:
     if (!ok) {
         for (size_t i = 0; i < n; i++) if (pids[i] > 0) waitpid(pids[i], NULL, 0);
     }
-    if (out_fp) fclose(out_fp);
-    if (err_fp) fclose(err_fp);
+    process_capture_close(&out_fp, &err_fp);
     for (size_t i = 0; i < n; i++) process_spec_free(&specs[i]);
     free(specs); free(pids); free(codes); free(pipes);
     return ok;
