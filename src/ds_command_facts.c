@@ -78,12 +78,8 @@ const DsCommandResultField *ds_command_result_field_at(size_t index) {
 }
 
 const char *ds_command_result_field_kind_name(DsCommandResultFieldKind kind) {
-    switch (kind) {
-        case DS_COMMAND_RESULT_FIELD_STRING: return "string";
-        case DS_COMMAND_RESULT_FIELD_INT: return "int";
-        case DS_COMMAND_RESULT_FIELD_BOOL: return "bool";
-    }
-    return "unknown";
+    static const char *const names[] = {"string", "int", "bool"};
+    return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "unknown";
 }
 
 size_t ds_command_stage_count(const DsCommand *command) {

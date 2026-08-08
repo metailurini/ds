@@ -6,29 +6,19 @@
 #include <string.h>
 
 const char *ds_regex_status_message(DsRegexStatus status) {
-    switch (status) {
-        case DS_REGEX_OK:
-            return "regex pattern is valid";
-        case DS_REGEX_ERR_LITERAL_SYNTAX:
-            return "invalid regex literal; v0.32.0 supports `/pattern/` and `/pattern/i`";
-        case DS_REGEX_ERR_UNSUPPORTED_ESCAPE:
-            return "unsupported regex escape in v0.32.0";
-        case DS_REGEX_ERR_UNSUPPORTED_GROUP:
-            return "lookaround, inline flags, named captures, and non-POSIX regex groups are deferred in v0.32.0";
-        case DS_REGEX_ERR_LAZY_QUANTIFIER:
-            return "lazy regex quantifiers are deferred in v0.32.0";
-        case DS_REGEX_ERR_INVALID_PATTERN:
-            return "invalid regex pattern in v0.32.0";
-        case DS_REGEX_ERR_TOO_MANY_CAPTURES:
-            return "regex patterns with more than nine capture groups are unsupported in v0.32.0";
-        case DS_REGEX_ERR_INVALID_FLAGS:
-            return "regex flags must be either an empty string or `i` in v0.32.0";
-        case DS_REGEX_ERR_INVALID_REPLACEMENT:
-            return "regex replacement supports only `$0` through `$9` and `$$` in v0.32.0";
-        case DS_REGEX_ERR_UNKNOWN_CAPTURE:
-            return "regex replacement references a capture group that cannot exist in v0.32.0";
-    }
-    return "invalid regex in v0.32.0";
+    static const char *const messages[] = {
+        "regex pattern is valid",
+        "invalid regex literal; v0.32.0 supports `/pattern/` and `/pattern/i`",
+        "unsupported regex escape in v0.32.0",
+        "lookaround, inline flags, named captures, and non-POSIX regex groups are deferred in v0.32.0",
+        "lazy regex quantifiers are deferred in v0.32.0",
+        "invalid regex pattern in v0.32.0",
+        "regex patterns with more than nine capture groups are unsupported in v0.32.0",
+        "regex flags must be either an empty string or `i` in v0.32.0",
+        "regex replacement supports only `$0` through `$9` and `$$` in v0.32.0",
+        "regex replacement references a capture group that cannot exist in v0.32.0",
+    };
+    return (unsigned)status < DS_ARRAY_LEN(messages) ? messages[status] : "invalid regex in v0.32.0";
 }
 
 bool ds_regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {

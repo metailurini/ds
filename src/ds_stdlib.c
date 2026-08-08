@@ -188,15 +188,11 @@ DsGlobPatternStatus ds_glob_pattern_validate(DsStr pattern, size_t *recursive_co
 }
 
 const char *ds_glob_pattern_status_message(DsGlobPatternStatus status) {
-    switch (status) {
-        case DS_GLOB_PATTERN_OK:
-            return "glob pattern is valid";
-        case DS_GLOB_PATTERN_ERR_BAD_RECURSIVE_SEGMENT:
-            return "recursive `**` glob patterns must use `**` as a complete path segment in v0.31.0";
-        case DS_GLOB_PATTERN_ERR_MULTIPLE_RECURSIVE_SEGMENTS:
-            return "multiple recursive `**` glob segments are unsupported in v0.31.0";
-        case DS_GLOB_PATTERN_ERR_PARENT_SEGMENT:
-            return "recursive `**` glob patterns with `..` path segments are unsupported in v0.31.0";
-    }
-    return "invalid recursive glob pattern";
+    static const char *const messages[] = {
+        "glob pattern is valid",
+        "recursive `**` glob patterns must use `**` as a complete path segment in v0.31.0",
+        "multiple recursive `**` glob segments are unsupported in v0.31.0",
+        "recursive `**` glob patterns with `..` path segments are unsupported in v0.31.0",
+    };
+    return (unsigned)status < DS_ARRAY_LEN(messages) ? messages[status] : "invalid recursive glob pattern";
 }
