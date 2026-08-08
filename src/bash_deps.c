@@ -323,6 +323,12 @@ static bool stmt_uses_exprs(const DsLowerStmt *stmt, ExprUseQuery query, bool sc
     return false;
 }
 
+#define DEFINE_STMT_EXPR_USES(name, query, scan_call_args) \
+    static bool name(const DsLowerStmt *stmt) { return stmt_uses_exprs(stmt, query, (scan_call_args)); }
+
+#define DEFINE_STMT_EXPR_NESTED_USES(name, query, predicate, scan_call_args) \
+    static bool name(const DsLowerStmt *stmt) { return stmt_uses_exprs(stmt, query, (scan_call_args)) || stmt_uses_nested(stmt, predicate); }
+
 static unsigned stmt_mask(const DsLowerStmt *stmt, ExprMaskPredicate expr_query, StmtMaskPredicate stmt_query) {
     if (!stmt) return 0;
     unsigned mask = stmt_query ? stmt_query(stmt) : 0;
@@ -365,13 +371,8 @@ static unsigned stmt_mask(const DsLowerStmt *stmt, ExprMaskPredicate expr_query,
     return mask;
 }
 
-static bool stmt_uses_run(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_run, false);
-}
-
-static bool stmt_uses_pipeline_run(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_pipeline_run, false);
-}
+DEFINE_STMT_EXPR_USES(stmt_uses_run, expr_uses_run, false)
+DEFINE_STMT_EXPR_USES(stmt_uses_pipeline_run, expr_uses_pipeline_run, false)
 
 static bool stmt_is_command(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
@@ -394,9 +395,7 @@ static bool stmt_is_base_stdlib_call(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_CALL && stdlib_call_uses_base_helpers(stmt->as.call_stmt.name);
 }
 
-static bool stmt_uses_stdlib(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_stdlib, true) || stmt_uses_nested(stmt, stmt_is_base_stdlib_call);
-}
+DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_stdlib, expr_uses_stdlib, stmt_is_base_stdlib_call, true)
 
 static unsigned stmt_string_helper_bit(const DsLowerStmt *stmt) {
     if (stmt->kind == DS_LOWER_STMT_CALL) return ds_stdlib_bash_helper_mask(stmt->as.call_stmt.name);
@@ -429,10 +428,7 @@ static bool stmt_needs_collection_index(const DsLowerStmt *stmt) {
            (stmt->kind == DS_LOWER_STMT_CMD && command_uses_collection_index(&stmt->as.cmd_stmt));
 }
 
-static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_collection_index, true) ||
-           stmt_uses_nested(stmt, stmt_needs_collection_index);
-}
+DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_collection_index, expr_uses_collection_index, stmt_needs_collection_index, true)
 
 static bool expr_is_array_helper(const DsLowerExpr *expr, void *context) {
     (void)context;
@@ -455,10 +451,7 @@ static bool stmt_needs_array_helper(const DsLowerStmt *stmt) {
            (stmt->kind == DS_LOWER_STMT_CMD && command_uses_collection_index(&stmt->as.cmd_stmt));
 }
 
-static bool stmt_uses_array_helper(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_array_helper, true) ||
-           stmt_uses_nested(stmt, stmt_needs_array_helper);
-}
+DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_array_helper, expr_uses_array_helper, stmt_needs_array_helper, true)
 
 static bool stmt_needs_map_helper(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_FOR_MAP ||
@@ -466,19 +459,13 @@ static bool stmt_needs_map_helper(const DsLowerStmt *stmt) {
            (stmt->kind == DS_LOWER_STMT_CMD && command_uses_collection_index(&stmt->as.cmd_stmt));
 }
 
-static bool stmt_uses_map_helper(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_map_helper, true) ||
-           stmt_uses_nested(stmt, stmt_needs_map_helper);
-}
+DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_map_helper, expr_uses_map_helper, stmt_needs_map_helper, true)
 
 static bool stmt_has_map_value(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_LET && stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_MAP;
 }
 
-static bool stmt_uses_map_literal(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_map_literal, true) ||
-           stmt_uses_nested(stmt, stmt_has_map_value);
-}
+DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_map_literal, expr_uses_map_literal, stmt_has_map_value, true)
 
 static bool program_uses_stmt(const DsLowerProgram *program, StmtPredicate predicate) {
     for (size_t i = 0; i < program->functions.len; i++) {
@@ -577,16 +564,11 @@ static bool stmt_needs_int_helpers(const DsLowerStmt *stmt) {
            (stmt->kind == DS_LOWER_STMT_CMD && command_uses_int_helpers(&stmt->as.cmd_stmt));
 }
 
-static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_int_helpers, true) ||
-           stmt_uses_nested(stmt, stmt_needs_int_helpers);
-}
+DEFINE_STMT_EXPR_NESTED_USES(stmt_uses_int_helpers, expr_uses_int_helpers, stmt_needs_int_helpers, true)
 
 DEFINE_PROGRAM_USES(program_uses_int_helpers, stmt_uses_int_helpers)
 
-static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_function_value_helpers, true);
-}
+DEFINE_STMT_EXPR_USES(stmt_uses_function_value_helpers, expr_uses_function_value_helpers, true)
 
 DEFINE_PROGRAM_USES(program_uses_function_value_helpers, stmt_uses_function_value_helpers)
 
@@ -624,9 +606,7 @@ static bool expr_is_membership(const DsLowerExpr *expr, void *context) {
 
 DEFINE_EXPR_USES(expr_uses_membership, expr_is_membership)
 
-static bool stmt_uses_membership(const DsLowerStmt *stmt) {
-    return stmt_uses_exprs(stmt, expr_uses_membership, false);
-}
+DEFINE_STMT_EXPR_USES(stmt_uses_membership, expr_uses_membership, false)
 
 DEFINE_PROGRAM_USES(program_uses_membership, stmt_uses_membership)
 
