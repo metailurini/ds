@@ -5,7 +5,7 @@ DsStmt *parse_fn(Parser *p, bool top_level) {
     if (!top_level) ds_diag_error(p->diag, start->span, "function declarations are only allowed at top level in v0.9.0");
     if (!parser_expect_identifier_like(p, "expected function name after `fn`")) return NULL;
     DsToken *name = parser_previous(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_FN, start->span);
+    DsStmt *stmt = ds_stmt_new(DS_STMT_FN, start->span);
     stmt->as.fn_stmt.name = parser_copy_token_text(name);
     if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after function name")) return stmt;
     bool seen_default = false;
@@ -67,7 +67,7 @@ DsStmt *parse_test(Parser *p, bool top_level) {
     p->test_depth++;
     DsStmt *body = parse_block(p);
     p->test_depth--;
-    DsStmt *stmt = parser_new_stmt(DS_STMT_TEST, (DsSpan){start->span.start, body ? body->span.end : parser_previous(p)->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_TEST, (DsSpan){start->span.start, body ? body->span.end : parser_previous(p)->span.end, start->span.source});
     stmt->as.test_stmt.name = decoded;
     stmt->as.test_stmt.body = body;
     parser_consume_statement_end(p);

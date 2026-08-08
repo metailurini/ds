@@ -30,7 +30,7 @@ void parse_call_args(Parser *p, DsExprVec *args);
 typedef bool (*ParseCollectionItemFn)(Parser *p, DsExpr *expr);
 
 static DsExpr *parser_new_text_expr(DsExprKind kind, const DsToken *token) {
-    DsExpr *expr = parser_new_expr(kind, token->span);
+    DsExpr *expr = ds_expr_new(kind, token->span);
     expr->as.text = parser_copy_token_text(token);
     return expr;
 }
@@ -41,7 +41,7 @@ static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, ParseCollect
     const char *trailing_message = map ? "expected map entry after `,`" : "expected array element after `,`";
     const char *closing_message = map ? "expected `}` to close map literal" : "expected `]` to close array literal";
     DsToken *open = parser_previous(p);
-    DsExpr *expr = parser_new_expr(kind, open->span);
+    DsExpr *expr = ds_expr_new(kind, open->span);
     parser_skip_newlines(p);
     if (map && parser_at(p, closing)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "empty map literals are deferred in v0.10.0");
@@ -121,7 +121,7 @@ static DsExpr *parse_primary(Parser *p) {
     }
     if (parser_advance_if(p, DS_TOK_TRUE) || parser_advance_if(p, DS_TOK_FALSE)) {
         DsToken *used = parser_previous(p);
-        DsExpr *expr = parser_new_expr(DS_EXPR_BOOL, used->span);
+        DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, used->span);
         expr->as.boolean = used->kind == DS_TOK_TRUE;
         return expr;
     }
@@ -132,7 +132,7 @@ static DsExpr *parse_primary(Parser *p) {
         DsToken *open = parser_previous(p);
         DsExpr *expr = parse_expr_prec(p, 1);
         if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after expression")) {
-            return expr ? expr : parser_new_expr(DS_EXPR_ERROR, open->span);
+            return expr ? expr : ds_expr_new(DS_EXPR_ERROR, open->span);
         }
         if (expr) expr->span.end = parser_previous(p)->span.end;
         return expr;
@@ -145,7 +145,7 @@ static DsExpr *parse_primary(Parser *p) {
     }
 
     ds_diag_error(p->diag, tok->span, "expected expression");
-    return parser_new_expr(DS_EXPR_ERROR, tok->span);
+    return ds_expr_new(DS_EXPR_ERROR, tok->span);
 }
 
 static bool parser_expr_is_stdlib_namespace(DsExpr *expr) {
@@ -164,7 +164,7 @@ static DsStr parser_copy_dotted_bang_name(DsToken *left, DsToken *right) {
 
 static DsExpr *parser_take_field_call(DsExpr *field_expr, const DsToken *field, const DsToken *opener, bool bang) {
     bool stdlib = parser_expr_is_stdlib_namespace(field_expr->as.field.object);
-    DsExpr *call = parser_new_expr(DS_EXPR_CALL,
+    DsExpr *call = ds_expr_new(DS_EXPR_CALL,
                                    (DsSpan){field_expr->span.start, opener->span.end, field_expr->span.source});
     DsToken left = {.text = stdlib ? field_expr->as.field.object->as.text : (DsStr){"string", 6},
                     .span = field_expr->as.field.object->span};
@@ -182,7 +182,7 @@ static DsExpr *parser_take_field_call(DsExpr *field_expr, const DsToken *field, 
 }
 
 static DsExpr *parser_take_ident_call(DsExpr *ident, const DsToken *opener, bool bang) {
-    DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){ident->span.start, opener->span.end, ident->span.source});
+    DsExpr *call = ds_expr_new(DS_EXPR_CALL, (DsSpan){ident->span.start, opener->span.end, ident->span.source});
     if (bang) {
         DsToken token = {.text = ident->as.text, .span = ident->span};
         call->as.call.name = parser_copy_bang_name(&token);
@@ -226,7 +226,7 @@ static DsExpr *parse_postfix(Parser *p) {
                 idx = parse_expr(p);
             }
             if (!parser_expect(p, DS_TOK_RBRACKET, "expected `]` after index expression")) break;
-            DsExpr *index_expr = parser_new_expr(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, parser_previous(p)->span.end, open->span.source});
+            DsExpr *index_expr = ds_expr_new(DS_EXPR_INDEX, (DsSpan){expr ? expr->span.start : open->span.start, parser_previous(p)->span.end, open->span.source});
             index_expr->as.index.object = expr;
             index_expr->as.index.index = idx;
             expr = index_expr;
@@ -237,7 +237,7 @@ static DsExpr *parse_postfix(Parser *p) {
             DsToken *dot = parser_previous(p);
             if (!parser_expect_identifier_like(p, "expected field name after `.`")) break;
             DsToken *field = parser_previous(p);
-            DsExpr *field_expr = parser_new_expr(DS_EXPR_FIELD, (DsSpan){expr ? expr->span.start : dot->span.start, field->span.end, dot->span.source});
+            DsExpr *field_expr = ds_expr_new(DS_EXPR_FIELD, (DsSpan){expr ? expr->span.start : dot->span.start, field->span.end, dot->span.source});
             field_expr->as.field.object = expr;
             field_expr->as.field.field = parser_copy_token_text(field);
             expr = field_expr;
@@ -269,7 +269,7 @@ static DsExpr *parse_unary(Parser *p) {
     if (parser_advance_if(p, DS_TOK_BANG) || parser_advance_if(p, DS_TOK_MINUS)) {
         DsToken *op = parser_previous(p);
         DsExpr *right = parse_unary(p);
-        DsExpr *expr = parser_new_expr(DS_EXPR_UNARY, (DsSpan){op->span.start, right ? right->span.end : op->span.end, op->span.source});
+        DsExpr *expr = ds_expr_new(DS_EXPR_UNARY, (DsSpan){op->span.start, right ? right->span.end : op->span.end, op->span.source});
         expr->as.unary.op = parser_copy_token_text(op);
         expr->as.unary.right = right;
         return expr;
@@ -289,13 +289,13 @@ static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
         DsExpr *right = parse_expr_prec(p, op_kind == DS_TOK_STAR_STAR ? prec : prec + 1);
         DsSpan span = {left ? left->span.start : op->span.start, right ? right->span.end : op->span.end, left ? left->span.source : op->span.source};
         if (op_kind == DS_TOK_DOT_DOT) {
-            DsExpr *range = parser_new_expr(DS_EXPR_RANGE, span);
+            DsExpr *range = ds_expr_new(DS_EXPR_RANGE, span);
             range->as.range.start = left;
             range->as.range.end = right;
             left = range;
             continue;
         }
-        DsExpr *binary = parser_new_expr(DS_EXPR_BINARY, span);
+        DsExpr *binary = ds_expr_new(DS_EXPR_BINARY, span);
         binary->as.binary.left = left;
         binary->as.binary.op = parser_copy_token_text(op);
         binary->as.binary.right = right;

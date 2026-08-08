@@ -14,7 +14,7 @@ DsStmt *parse_import_stmt(Parser *p, bool top_level, bool after_executable) {
     }
     if (!parser_expect(p, DS_TOK_STRING, "expected string literal import path")) return NULL;
     DsToken *path = parser_previous(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_IMPORT, (DsSpan){start->span.start, path->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_IMPORT, (DsSpan){start->span.start, path->span.end, start->span.source});
     stmt->as.import_stmt.path = parser_copy_token_text(path);
     parser_expect_stmt_end(p, "import statement");
     return stmt;
@@ -23,7 +23,7 @@ DsStmt *parse_import_stmt(Parser *p, bool top_level, bool after_executable) {
 
 DsStmt *parse_block(Parser *p) {
     DsToken *open = parser_previous(p);
-    DsStmt *block = parser_new_stmt(DS_STMT_BLOCK, open->span);
+    DsStmt *block = ds_stmt_new(DS_STMT_BLOCK, open->span);
     parser_skip_newlines(p);
 
     while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACE)) {
@@ -49,7 +49,7 @@ static DsStmt *parse_let(Parser *p) {
     if (!parser_expect(p, DS_TOK_EQUAL, "expected `=` after variable name")) return NULL;
     if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after `=`")) return NULL;
     DsExpr *value = parse_expr(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_LET, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_LET, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
     stmt->as.let_stmt.name = parser_copy_token_text(name);
     stmt->as.let_stmt.value = value;
     parser_expect_stmt_end(p, "statement");
@@ -66,7 +66,7 @@ static DsStmt *parse_assign(Parser *p) {
     }
     if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after assignment operator")) return NULL;
     DsExpr *value = parse_expr(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_ASSIGN, (DsSpan){name->span.start, value ? value->span.end : name->span.end, name->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_ASSIGN, (DsSpan){name->span.start, value ? value->span.end : name->span.end, name->span.source});
     stmt->as.assign_stmt.name = parser_copy_token_text(name);
     stmt->as.assign_stmt.op = op;
     stmt->as.assign_stmt.value = value;
@@ -132,7 +132,7 @@ static DsStmt *parse_index_assign_stmt(Parser *p) {
         return NULL;
     }
     DsExpr *value = parse_expr(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_INDEX_ASSIGN,
+    DsStmt *stmt = ds_stmt_new(DS_STMT_INDEX_ASSIGN,
                                    (DsSpan){start->span.start, value ? value->span.end : (target ? target->span.end : start->span.end), start->span.source});
     stmt->as.index_assign_stmt.target = target;
     stmt->as.index_assign_stmt.op = op;
@@ -167,7 +167,7 @@ static DsStmt *parse_env_assign(Parser *p) {
     }
     if (!parser_expect_expr(p, parser_peek(p)->span, "expected expression after environment assignment operator")) return NULL;
     DsExpr *value = parse_expr(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_ASSIGN, (DsSpan){env_tok->span.start, value ? value->span.end : field->span.end, env_tok->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_ASSIGN, (DsSpan){env_tok->span.start, value ? value->span.end : field->span.end, env_tok->span.source});
     stmt->as.assign_stmt.name = ds_str_join_char((DsStr){"env", 3}, '.', field->text);
     stmt->as.assign_stmt.op = DS_ASSIGN_SET;
     stmt->as.assign_stmt.value = value;
@@ -193,9 +193,9 @@ static DsStmt *parse_env_unset(Parser *p) {
     DsToken *field = parser_previous(p);
     if (parser_invalid_hyphenated_env_name(p, field, "v0.27.0")) return NULL;
 
-    DsStmt *stmt = parser_new_stmt(DS_STMT_CALL, (DsSpan){unset_tok->span.start, field->span.end, unset_tok->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_CALL, (DsSpan){unset_tok->span.start, field->span.end, unset_tok->span.source});
     stmt->as.call_stmt.name = (DsStr){ds_str_dup_cstr("env.unset"), 9};
-    DsExpr *arg = parser_new_expr(DS_EXPR_STRING, field->span);
+    DsExpr *arg = ds_expr_new(DS_EXPR_STRING, field->span);
     arg->as.text = quoted_env_name_from_token(field);
     DS_VEC_PUSH(&stmt->as.call_stmt.args, arg, 8);
 
@@ -237,7 +237,7 @@ static DsStmt *parse_return(Parser *p) {
         return NULL;
     }
     DsExpr *value = parse_expr(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_RETURN, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_RETURN, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
     stmt->as.return_stmt.value = value;
     parser_expect_stmt_end(p, "return statement");
     return stmt;
@@ -260,7 +260,7 @@ static DsStmt *parse_if(Parser *p) {
     }
 
     DsSpan span = {start->span.start, else_branch ? else_branch->span.end : then_branch->span.end, start->span.source};
-    DsStmt *stmt = parser_new_stmt(DS_STMT_IF, span);
+    DsStmt *stmt = ds_stmt_new(DS_STMT_IF, span);
     stmt->as.if_stmt.condition = condition;
     stmt->as.if_stmt.then_branch = then_branch;
     stmt->as.if_stmt.else_branch = else_branch;
@@ -272,7 +272,7 @@ static DsStmt *parse_call_stmt(Parser *p) {
     DsToken *open = NULL;
     if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after function name")) return NULL;
     open = parser_previous(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_CALL, (DsSpan){name->span.start, open->span.end, name->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_CALL, (DsSpan){name->span.start, open->span.end, name->span.source});
     stmt->as.call_stmt.name = parser_copy_token_text(name);
     parse_call_args(p, &stmt->as.call_stmt.args);
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) return stmt;
@@ -286,7 +286,7 @@ static DsStmt *parse_member_call_stmt(Parser *p) {
     parser_expect(p, DS_TOK_DOT, "expected `.` after namespace name");
     DsToken *member = parser_advance(p);
     if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after helper name")) return NULL;
-    DsStmt *stmt = parser_new_stmt(DS_STMT_CALL, (DsSpan){object->span.start, parser_previous(p)->span.end, object->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_CALL, (DsSpan){object->span.start, parser_previous(p)->span.end, object->span.source});
     stmt->as.call_stmt.name = parser_copy_dotted_name(object, member);
     parse_call_args(p, &stmt->as.call_stmt.args);
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) return stmt;
@@ -297,7 +297,7 @@ static DsStmt *parse_member_call_stmt(Parser *p) {
 
 static DsStmt *parse_push_stmt(Parser *p) {
     DsToken *name = parser_advance(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_PUSH, name->span);
+    DsStmt *stmt = ds_stmt_new(DS_STMT_PUSH, name->span);
     stmt->as.push_stmt.name = parser_copy_token_text(name);
     parser_expect(p, DS_TOK_DOT, "expected `.` before `push`");
     DsToken *push_name = parser_advance(p);
@@ -324,7 +324,7 @@ static DsStmt *parse_for(Parser *p) {
     DsToken *start = parser_previous(p);
     if (!parser_expect_identifier_like(p, "expected loop variable after `for`")) return NULL;
     DsToken *name = parser_previous(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_FOR, start->span);
+    DsStmt *stmt = ds_stmt_new(DS_STMT_FOR, start->span);
     stmt->as.for_stmt.key_name = parser_copy_token_text(name);
     if (parser_advance_if(p, DS_TOK_COMMA)) {
         stmt->as.for_stmt.has_value_name = true;
@@ -354,7 +354,7 @@ static DsStmt *parse_while(Parser *p) {
     DsExpr *condition = parse_expr(p);
     if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after while condition")) return NULL;
     DsStmt *body = parse_block(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_WHILE, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_WHILE, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
     stmt->as.while_stmt.condition = condition;
     stmt->as.while_stmt.body = body;
     parser_consume_statement_end(p);
@@ -363,7 +363,7 @@ static DsStmt *parse_while(Parser *p) {
 
 static DsStmt *parse_loop_control(Parser *p, DsStmtKind kind) {
     DsToken *start = parser_previous(p);
-    DsStmt *stmt = parser_new_stmt(kind, start->span);
+    DsStmt *stmt = ds_stmt_new(kind, start->span);
     if (!parser_is_stmt_end(p)) {
         ds_diag_error(p->diag, parser_peek(p)->span, kind == DS_STMT_BREAK ? "`break` does not accept arguments" : "`continue` does not accept arguments");
         parser_skip_to_stmt_end(p);
@@ -426,7 +426,7 @@ static DsStmt *parse_case(Parser *p) {
     if (parser_at(p, DS_TOK_LBRACE)) ds_diag_error(p->diag, parser_peek(p)->span, "expected selector expression after `case`");
     DsExpr *selector = parse_expr(p);
     if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after case selector")) return NULL;
-    DsStmt *stmt = parser_new_stmt(DS_STMT_CASE, start->span);
+    DsStmt *stmt = ds_stmt_new(DS_STMT_CASE, start->span);
     stmt->as.case_stmt.selector = selector;
     parser_skip_newlines(p);
     while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACE)) {
@@ -465,7 +465,7 @@ static DsStmt *parse_assert(Parser *p) {
         return NULL;
     }
     DsExpr *condition = parse_expr(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_ASSERT, (DsSpan){start->span.start, condition ? condition->span.end : start->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(DS_STMT_ASSERT, (DsSpan){start->span.start, condition ? condition->span.end : start->span.end, start->span.source});
     stmt->as.assert_stmt.condition = condition;
     parser_expect_stmt_end(p, "assert statement");
     return stmt;
@@ -508,7 +508,7 @@ static DsStmt *parse_handler(Parser *p, DsStmtKind kind) {
         return NULL;
     }
     DsStmt *body = parse_block(p);
-    DsStmt *stmt = parser_new_stmt(kind, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
+    DsStmt *stmt = ds_stmt_new(kind, (DsSpan){start->span.start, body ? body->span.end : start->span.end, start->span.source});
     stmt->as.handler_stmt.signal = signal;
     stmt->as.handler_stmt.signal_text = signal_text;
     stmt->as.handler_stmt.body = body;

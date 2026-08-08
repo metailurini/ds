@@ -151,7 +151,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
 
 DsExpr *parse_run_expr(Parser *p) {
     DsToken *run = parser_previous(p);
-    DsExpr *expr = parser_new_expr(DS_EXPR_RUN, run->span);
+    DsExpr *expr = ds_expr_new(DS_EXPR_RUN, run->span);
     ds_command_init(&expr->as.run, DS_COMMAND_CAPTURE, run->span);
     parse_command_pipeline(p, &expr->as.run, true);
     if (expr->as.run.stages.len == 0) {
@@ -164,7 +164,7 @@ DsExpr *parse_run_expr(Parser *p) {
 
 DsStmt *parse_cmd(Parser *p) {
     DsToken *start = parser_peek(p);
-    DsStmt *stmt = parser_new_stmt(DS_STMT_CMD, start->span);
+    DsStmt *stmt = ds_stmt_new(DS_STMT_CMD, start->span);
     ds_command_init(&stmt->as.cmd_stmt, DS_COMMAND_PLAIN, start->span);
     parse_command_pipeline(p, &stmt->as.cmd_stmt, false);
     stmt->span = stmt->as.cmd_stmt.span;

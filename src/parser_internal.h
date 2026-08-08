@@ -65,14 +65,6 @@ static inline DsStr parser_copy_bang_name(const DsToken *name) {
     return s;
 }
 
-static inline DsExpr *parser_new_expr(DsExprKind kind, DsSpan span) {
-    return ds_expr_new(kind, span);
-}
-
-static inline DsStmt *parser_new_stmt(DsStmtKind kind, DsSpan span) {
-    return ds_stmt_new(kind, span);
-}
-
 static inline void parser_skip_newlines(Parser *p) {
     while (parser_advance_if(p, DS_TOK_NEWLINE)) {}
 }
