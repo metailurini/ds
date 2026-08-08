@@ -76,11 +76,15 @@ static void format_logical_operand(Formatter *fmt, const DsExpr *expr, int prec)
     if (parens) append_cstr(fmt, ")");
 }
 
-static void format_expr_list(Formatter *fmt, const DsExprVec *args) {
-    for (size_t i = 0; i < args->len; i++) {
-        if (i > 0) append_cstr(fmt, ", ");
+static void format_expr_list_from(Formatter *fmt, const DsExprVec *args, size_t start) {
+    for (size_t i = start; i < args->len; i++) {
+        if (i > start) append_cstr(fmt, ", ");
         format_expr_prec(fmt, args->items[i], 0);
     }
+}
+
+static void format_expr_list(Formatter *fmt, const DsExprVec *args) {
+    format_expr_list_from(fmt, args, 0);
 }
 
 static void format_words(Formatter *fmt, const DsWordVec *words) {
@@ -145,10 +149,7 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
                 append_cstr(fmt, ".");
                 append_str(fmt, (DsStr){expr->as.call.name.data + 7, expr->as.call.name.len - 7});
                 append_cstr(fmt, "(");
-                for (size_t i = 1; i < expr->as.call.args.len; i++) {
-                    if (i > 1) append_cstr(fmt, ", ");
-                    format_expr_prec(fmt, expr->as.call.args.items[i], 0);
-                }
+                format_expr_list_from(fmt, &expr->as.call.args, 1);
                 append_cstr(fmt, ")");
             } else {
                 append_str(fmt, expr->as.call.name);
