@@ -54,6 +54,12 @@ enum {
     DS_BASH_STRING_HELPER_FORMAT_CENTER = 1u << 14,
 };
 
+enum {
+    DS_STDLIB_HELPER_GLOB = 1u << 0,
+    DS_STDLIB_HELPER_DIR_WALK = 1u << 1,
+    DS_STDLIB_HELPER_DIR_WALK_EXT = 1u << 2,
+};
+
 typedef struct {
     const char *name;
     const char *bash_name;
@@ -65,6 +71,8 @@ typedef struct {
     bool iterable;
     bool validates_env_name;
     bool validates_glob_pattern;
+    unsigned flags;
+    unsigned bash_helper_mask;
 } DsStdlibHelper;
 
 typedef enum {

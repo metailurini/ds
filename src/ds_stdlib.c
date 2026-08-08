@@ -14,10 +14,10 @@ static const DsStdlibHelper HELPERS[] = {
     {"file.write", "__ds_stdlib_file_write", 2, 2, DS_STDLIB_RETURN_STATEMENT_ONLY, true, true, false, false, false},
     {"file.append", "__ds_stdlib_file_append", 2, 2, DS_STDLIB_RETURN_STATEMENT_ONLY, true, true, false, false, false},
     {"dir.exists", "__ds_stdlib_dir_exists", 1, 1, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
-    {"dir.walk", "__ds_stdlib_dir_walk", 1, 1, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false},
-    {"dir.walk!", "__ds_stdlib_dir_walk_required", 1, 1, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false},
-    {"dir.walk_ext", "__ds_stdlib_dir_walk_ext", 2, 2, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false},
-    {"dir.walk_ext!", "__ds_stdlib_dir_walk_ext_required", 2, 2, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false},
+    {"dir.walk", "__ds_stdlib_dir_walk", 1, 1, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false, DS_STDLIB_HELPER_DIR_WALK, 0},
+    {"dir.walk!", "__ds_stdlib_dir_walk_required", 1, 1, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false, DS_STDLIB_HELPER_DIR_WALK, 0},
+    {"dir.walk_ext", "__ds_stdlib_dir_walk_ext", 2, 2, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false, DS_STDLIB_HELPER_DIR_WALK | DS_STDLIB_HELPER_DIR_WALK_EXT, 0},
+    {"dir.walk_ext!", "__ds_stdlib_dir_walk_ext_required", 2, 2, DS_STDLIB_RETURN_ARRAY, false, false, true, false, false, DS_STDLIB_HELPER_DIR_WALK | DS_STDLIB_HELPER_DIR_WALK_EXT, 0},
     {"path.cwd", "__ds_stdlib_path_cwd", 0, 0, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
     {"path.join", "__ds_stdlib_path_join", 1, (size_t)-1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
     {"path.basename", "__ds_stdlib_path_basename", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
@@ -28,25 +28,25 @@ static const DsStdlibHelper HELPERS[] = {
     {"env.get", "__ds_stdlib_env_get", 1, 2, DS_STDLIB_RETURN_STRING, false, true, false, true, false},
     {"env.set", "__ds_stdlib_env_set", 2, 2, DS_STDLIB_RETURN_STATEMENT_ONLY, true, true, false, true, false},
     {"env.unset", "__ds_stdlib_env_unset", 1, 1, DS_STDLIB_RETURN_STATEMENT_ONLY, true, true, false, true, false},
-    {"glob", "__ds_stdlib_glob", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true},
-    {"glob!", "__ds_stdlib_glob_required", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true},
+    {"glob", "__ds_stdlib_glob", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true, DS_STDLIB_HELPER_GLOB, 0},
+    {"glob!", "__ds_stdlib_glob_required", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, true, DS_STDLIB_HELPER_GLOB, 0},
     {"lines", "__ds_stdlib_lines", 1, 1, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false},
     {"regex.match", "__ds_regex_match", 2, 3, DS_STDLIB_RETURN_MAP, false, true, false, false, false},
     {"regex.replace", "__ds_regex_replace", 3, 4, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
-    {"string.trim", "__ds_string_trim", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
-    {"string.upper", "__ds_string_upper", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
-    {"string.lower", "__ds_string_lower", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
-    {"string.replace", "__ds_string_replace", 3, 3, DS_STDLIB_RETURN_STRING, false, true, false, false, false},
-    {"string.contains", "__ds_string_contains", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
-    {"string.split", "__ds_string_split", 2, 2, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false},
-    {"string.starts_with", "__ds_string_starts_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
-    {"string.ends_with", "__ds_string_ends_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false},
-    {"string.len", "__ds_string_len", 1, 1, DS_STDLIB_RETURN_INT, false, true, false, false, false},
-    {"string.index_of", "__ds_string_index_of", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false},
-    {"string.last_index_of", "__ds_string_last_index_of", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false},
-    {"string.count", "__ds_string_count", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false},
-    {"string.char_at", "__ds_string_char_at", 2, 2, DS_STDLIB_RETURN_STRING, false, false, false, false, false},
-    {"string.slice", "__ds_string_slice", 3, 3, DS_STDLIB_RETURN_STRING, false, false, false, false, false},
+    {"string.trim", "__ds_string_trim", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_TRIM},
+    {"string.upper", "__ds_string_upper", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_UPPER},
+    {"string.lower", "__ds_string_lower", 1, 1, DS_STDLIB_RETURN_STRING, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_LOWER},
+    {"string.replace", "__ds_string_replace", 3, 3, DS_STDLIB_RETURN_STRING, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_REPLACE},
+    {"string.contains", "__ds_string_contains", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_CONTAINS},
+    {"string.split", "__ds_string_split", 2, 2, DS_STDLIB_RETURN_ARRAY, false, true, true, false, false, 0, DS_BASH_STRING_HELPER_SPLIT},
+    {"string.starts_with", "__ds_string_starts_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_STARTS_WITH},
+    {"string.ends_with", "__ds_string_ends_with", 2, 2, DS_STDLIB_RETURN_BOOL, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_ENDS_WITH},
+    {"string.len", "__ds_string_len", 1, 1, DS_STDLIB_RETURN_INT, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_LEN},
+    {"string.index_of", "__ds_string_index_of", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_INDEX_OF},
+    {"string.last_index_of", "__ds_string_last_index_of", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_LAST_INDEX_OF},
+    {"string.count", "__ds_string_count", 2, 2, DS_STDLIB_RETURN_INT, false, true, false, false, false, 0, DS_BASH_STRING_HELPER_COUNT},
+    {"string.char_at", "__ds_string_char_at", 2, 2, DS_STDLIB_RETURN_STRING, false, false, false, false, false, 0, DS_BASH_STRING_HELPER_CHAR_AT},
+    {"string.slice", "__ds_string_slice", 3, 3, DS_STDLIB_RETURN_STRING, false, false, false, false, false, 0, DS_BASH_STRING_HELPER_SLICE},
 };
 
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
@@ -90,16 +90,18 @@ bool ds_stdlib_is_string_helper(DsStr name) {
 }
 
 bool ds_stdlib_is_glob_helper(DsStr name) {
-    return ds_str_eq_cstr(name, "glob") || ds_str_eq_cstr(name, "glob!");
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    return helper && (helper->flags & DS_STDLIB_HELPER_GLOB) != 0;
 }
 
 bool ds_stdlib_is_dir_walk_helper(DsStr name) {
-    return ds_str_eq_cstr(name, "dir.walk") || ds_str_eq_cstr(name, "dir.walk!") ||
-           ds_str_eq_cstr(name, "dir.walk_ext") || ds_str_eq_cstr(name, "dir.walk_ext!");
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    return helper && (helper->flags & DS_STDLIB_HELPER_DIR_WALK) != 0;
 }
 
 bool ds_stdlib_is_dir_walk_ext_helper(DsStr name) {
-    return ds_str_eq_cstr(name, "dir.walk_ext") || ds_str_eq_cstr(name, "dir.walk_ext!");
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    return helper && (helper->flags & DS_STDLIB_HELPER_DIR_WALK_EXT) != 0;
 }
 
 bool ds_stdlib_arg_expects_int(DsStr name, size_t arg_index) {
@@ -118,21 +120,8 @@ bool ds_stdlib_arg_expects_string(DsStr name, size_t arg_index) {
 }
 
 unsigned ds_stdlib_bash_helper_mask(DsStr name) {
-    if (ds_str_eq_cstr(name, "string.trim")) return DS_BASH_STRING_HELPER_TRIM;
-    if (ds_str_eq_cstr(name, "string.upper")) return DS_BASH_STRING_HELPER_UPPER;
-    if (ds_str_eq_cstr(name, "string.lower")) return DS_BASH_STRING_HELPER_LOWER;
-    if (ds_str_eq_cstr(name, "string.replace")) return DS_BASH_STRING_HELPER_REPLACE;
-    if (ds_str_eq_cstr(name, "string.contains")) return DS_BASH_STRING_HELPER_CONTAINS;
-    if (ds_str_eq_cstr(name, "string.split")) return DS_BASH_STRING_HELPER_SPLIT;
-    if (ds_str_eq_cstr(name, "string.starts_with")) return DS_BASH_STRING_HELPER_STARTS_WITH;
-    if (ds_str_eq_cstr(name, "string.ends_with")) return DS_BASH_STRING_HELPER_ENDS_WITH;
-    if (ds_str_eq_cstr(name, "string.len")) return DS_BASH_STRING_HELPER_LEN;
-    if (ds_str_eq_cstr(name, "string.index_of")) return DS_BASH_STRING_HELPER_INDEX_OF;
-    if (ds_str_eq_cstr(name, "string.last_index_of")) return DS_BASH_STRING_HELPER_LAST_INDEX_OF;
-    if (ds_str_eq_cstr(name, "string.count")) return DS_BASH_STRING_HELPER_COUNT;
-    if (ds_str_eq_cstr(name, "string.char_at")) return DS_BASH_STRING_HELPER_CHAR_AT;
-    if (ds_str_eq_cstr(name, "string.slice")) return DS_BASH_STRING_HELPER_SLICE;
-    return 0;
+    const DsStdlibHelper *helper = ds_stdlib_lookup(name);
+    return helper ? helper->bash_helper_mask : 0;
 }
 
 DsStdlibArrayTransport ds_stdlib_array_transport(DsStr name) {
