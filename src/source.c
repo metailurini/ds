@@ -38,42 +38,41 @@ bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
     out->path = path;
     FILE *fp = fopen(path, "rb");
     if (!fp) {
-        DsSpan span = ds_span_zero(out);
-        ds_diag_error(diag, span, "failed to open source file `%s`: %s", path, strerror(errno));
+        ds_diag_error(diag, ds_span_zero(out), "failed to open source file `%s`: %s", path, strerror(errno));
         return false;
     }
 
+    bool ok = false;
+    char *data = NULL;
     if (fseek(fp, 0, SEEK_END) != 0) {
-        DsSpan span = ds_span_zero(out);
-        ds_diag_error(diag, span, "failed to read source file `%s`: %s", path, strerror(errno));
-        fclose(fp);
-        return false;
+        goto read_error;
     }
     long size = ftell(fp);
     if (size < 0) {
-        DsSpan span = ds_span_zero(out);
-        ds_diag_error(diag, span, "failed to read source file `%s`: %s", path, strerror(errno));
-        fclose(fp);
-        return false;
+        goto read_error;
     }
     rewind(fp);
 
-    char *data = (char *)ds_xmalloc((size_t)size + 1);
+    data = (char *)ds_xmalloc((size_t)size + 1);
 
     size_t got = fread(data, 1, (size_t)size, fp);
     if (got < (size_t)size && ferror(fp)) {
-        DsSpan span = ds_span_zero(out);
-        ds_diag_error(diag, span, "failed to read source file `%s`: %s", path, strerror(errno));
-        free(data);
-        fclose(fp);
-        return false;
+        goto read_error;
     }
-    fclose(fp);
     data[got] = '\0';
 
     out->data = data;
     out->len = got;
-    return true;
+    data = NULL;
+    ok = true;
+    goto cleanup;
+
+read_error:
+    ds_diag_error(diag, ds_span_zero(out), "failed to read source file `%s`: %s", path, strerror(errno));
+cleanup:
+    free(data);
+    fclose(fp);
+    return ok;
 }
 
 void ds_source_free(DsSource *source) {
