@@ -40,14 +40,6 @@ void ds_cli_program_free(DsCliProgram *program) {
     free_string_list(program->stack, program->stack_len);
 }
 
-static void stmt_vec_push_cli(DsStmtVec *vec, DsStmt *stmt) {
-    DS_VEC_PUSH(vec, stmt, 16);
-}
-
-static void script_decl_vec_push_cli(DsScriptDeclVec *vec, DsScriptDecl decl) {
-    DS_VEC_PUSH(vec, decl, 8);
-}
-
 static void units_push(DsCliProgram *program, LoadedUnit *unit) {
     if (program->units_len == program->units_cap) {
         program->units_cap = program->units_cap ? program->units_cap * 2 : 8;
@@ -62,6 +54,15 @@ static void string_push(char ***items, size_t *len, size_t *cap, char *value) {
         *items = (char **)ds_xrealloc(*items, *cap * sizeof(char *));
     }
     (*items)[(*len)++] = value;
+}
+
+static void import_stack_push(DsCliProgram *program, const char *path) {
+    string_push(&program->stack, &program->stack_len, &program->stack_cap, ds_str_dup_cstr(path));
+}
+
+static void import_stack_pop(DsCliProgram *program) {
+    if (program->stack_len == 0) return;
+    free(program->stack[--program->stack_len]);
 }
 
 static bool string_list_contains(char **items, size_t len, const char *value) {
@@ -120,7 +121,9 @@ static void move_script_block(DsAst *dest, DsAst *src, bool is_root, DsDiag *dia
     }
     dest->has_script = true;
     dest->script.span = src->script.span;
-    for (size_t i = 0; i < src->script.declarations.len; i++) script_decl_vec_push_cli(&dest->script.declarations, src->script.declarations.items[i]);
+    for (size_t i = 0; i < src->script.declarations.len; i++) {
+        DS_VEC_PUSH(&dest->script.declarations, src->script.declarations.items[i], 8);
+    }
     free(src->script.declarations.items);
     src->script.declarations.items = NULL;
     src->script.declarations.len = 0;
@@ -150,7 +153,7 @@ static bool process_ast_statements(DsCliProgram *program, LoadedUnit *unit, bool
             free(dir);
             free(import_rel.data);
         } else {
-            stmt_vec_push_cli(&composed->statements, stmt);
+            DS_VEC_PUSH(&composed->statements, stmt, 16);
             unit->ast->statements.items[i] = NULL;
         }
     }
@@ -185,7 +188,7 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
     }
 
     string_push(&program->loaded_paths, &program->loaded_len, &program->loaded_cap, ds_str_dup_cstr(normalized));
-    string_push(&program->stack, &program->stack_len, &program->stack_cap, ds_str_dup_cstr(normalized));
+    import_stack_push(program, normalized);
 
     LoadedUnit *unit = (LoadedUnit *)ds_xcalloc(1, sizeof(LoadedUnit));
     char *owned_path = ds_str_dup_cstr(path);
@@ -194,7 +197,7 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         if (!is_root) ds_diag_error(&program->diag, import_span, "failed to read imported file `%s`", path);
         free(owned_path);
         free(unit);
-        free(program->stack[--program->stack_len]);
+        import_stack_pop(program);
         free(normalized);
         return false;
     }
@@ -212,7 +215,7 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
     if (ok) process_ast_statements(program, unit, is_root, composed);
     units_push(program, unit);
 
-    free(program->stack[--program->stack_len]);
+    import_stack_pop(program);
     free(normalized);
     return !program->diag.has_error;
 }
