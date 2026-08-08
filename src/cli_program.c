@@ -66,15 +66,7 @@ static char *normalize_existing_path(const char *path) {
 static char *join_path(const char *dir, const char *rel) {
     if (rel[0] == '/') return ds_str_dup_cstr(rel);
     while (rel[0] == '.' && rel[1] == '/') rel += 2;
-    size_t dlen = strlen(dir);
-    size_t rlen = strlen(rel);
-    bool need_slash = dlen > 0 && dir[dlen - 1] != '/';
-    char *out = (char *)ds_xcalloc(dlen + (need_slash ? 1 : 0) + rlen + 1, 1);
-    memcpy(out, dir, dlen);
-    size_t pos = dlen;
-    if (need_slash) out[pos++] = '/';
-    memcpy(out + pos, rel, rlen);
-    return out;
+    return ds_path_join(dir, rel);
 }
 
 static void append_import_stack(DsCliProgram *program, const char *cycle_path, DsString *out) {

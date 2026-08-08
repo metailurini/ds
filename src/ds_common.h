@@ -195,6 +195,20 @@ static inline char *ds_path_dirname_dup(const char *path) {
     return ds_str_dup_range(path, (size_t)(slash - path));
 }
 
+static inline char *ds_path_join(const char *dir, const char *name) {
+    if (!dir || !*dir) return ds_str_dup_cstr(name);
+    if (!name || !*name) return ds_str_dup_cstr(dir);
+    size_t dir_len = strlen(dir);
+    size_t name_len = strlen(name);
+    bool need_slash = dir[dir_len - 1] != '/';
+    char *out = (char *)ds_xcalloc(dir_len + (need_slash ? 1 : 0) + name_len + 1, 1);
+    memcpy(out, dir, dir_len);
+    size_t pos = dir_len;
+    if (need_slash) out[pos++] = '/';
+    memcpy(out + pos, name, name_len);
+    return out;
+}
+
 static inline bool ds_path_looks_like_script(const char *path) {
     size_t len = strlen(path);
     return strchr(path, '/') != NULL || (len >= 3 && strcmp(path + len - 3, ".ds") == 0);

@@ -151,18 +151,7 @@ static bool vm_string_vec_push_copy(VmStringVec *vec, const char *text) {
 }
 
 static char *path_join2(const char *a, const char *b) {
-    if (!a || !*a) return ds_str_dup_cstr(b);
-    if (!b || !*b) return ds_str_dup_cstr(a);
-    size_t alen = strlen(a);
-    size_t blen = strlen(b);
-    bool slash = a[alen - 1] == '/';
-    char *out = (char *)ds_xcalloc(alen + blen + (slash ? 1 : 2), 1);
-    memcpy(out, a, alen);
-    size_t pos = alen;
-    if (!slash) out[pos++] = '/';
-    memcpy(out + pos, b, blen);
-    out[pos + blen] = '\0';
-    return out;
+    return ds_path_join(a, b);
 }
 
 static char *glob_escape_literal_path(const char *path) {
