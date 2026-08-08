@@ -543,33 +543,20 @@ static unsigned program_mask(const DsLowerProgram *program, StmtMaskPredicate pr
     return mask;
 }
 
-bool program_uses_run(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_run);
-}
+#define DEFINE_PROGRAM_USES(name, predicate) \
+    bool name(const DsLowerProgram *program) { return program_uses_stmt(program, predicate); }
 
-bool program_uses_pipeline_run(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_pipeline_run);
-}
-
-bool program_uses_stdlib(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_stdlib);
-}
+DEFINE_PROGRAM_USES(program_uses_run, stmt_uses_run)
+DEFINE_PROGRAM_USES(program_uses_pipeline_run, stmt_uses_pipeline_run)
+DEFINE_PROGRAM_USES(program_uses_stdlib, stmt_uses_stdlib)
 
 unsigned program_string_helper_mask(const DsLowerProgram *program) {
     return program_mask(program, stmt_string_helper_mask);
 }
 
-bool program_uses_stdlib_capture(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_stdlib_capture);
-}
-
-bool program_uses_glob_helpers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_glob);
-}
-
-bool program_uses_recursive_glob_helpers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_recursive_glob);
-}
+DEFINE_PROGRAM_USES(program_uses_stdlib_capture, stmt_uses_stdlib_capture)
+DEFINE_PROGRAM_USES(program_uses_glob_helpers, stmt_uses_glob)
+DEFINE_PROGRAM_USES(program_uses_recursive_glob_helpers, stmt_uses_recursive_glob)
 
 enum {
     DS_BASH_REGEX_BASE_HELPER = 1 << 0,
@@ -618,17 +605,9 @@ bool program_uses_regex_replace_helpers(const DsLowerProgram *program) {
     return (program_regex_helper_mask(program) & DS_BASH_REGEX_REPLACE_HELPER) != 0;
 }
 
-bool program_uses_collection_index(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_collection_index);
-}
-
-bool program_uses_array_helpers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_array_helper);
-}
-
-bool program_uses_map_helpers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_map_helper);
-}
+DEFINE_PROGRAM_USES(program_uses_collection_index, stmt_uses_collection_index)
+DEFINE_PROGRAM_USES(program_uses_array_helpers, stmt_uses_array_helper)
+DEFINE_PROGRAM_USES(program_uses_map_helpers, stmt_uses_map_helper)
 
 static bool stmt_is_map_iteration(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_FOR_MAP;
@@ -638,9 +617,7 @@ static bool stmt_uses_map_iteration(const DsLowerStmt *stmt) {
     return stmt_uses_nested(stmt, stmt_is_map_iteration);
 }
 
-bool program_uses_map_iteration(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_map_iteration);
-}
+DEFINE_PROGRAM_USES(program_uses_map_iteration, stmt_uses_map_iteration)
 
 static bool stmt_is_map_assignment(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_INDEX_ASSIGN && stmt->as.index_assign_stmt.target_is_map;
@@ -650,13 +627,8 @@ static bool stmt_uses_map_assignment(const DsLowerStmt *stmt) {
     return stmt_uses_nested(stmt, stmt_is_map_assignment);
 }
 
-bool program_uses_map_assignment(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_map_assignment);
-}
-
-bool program_uses_map_literal(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_map_literal);
-}
+DEFINE_PROGRAM_USES(program_uses_map_assignment, stmt_uses_map_assignment)
+DEFINE_PROGRAM_USES(program_uses_map_literal, stmt_uses_map_literal)
 
 static bool stmt_is_control_command(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_CMD && bash_command_is_control(&stmt->as.cmd_stmt, NULL);
@@ -666,9 +638,7 @@ static bool stmt_uses_control_commands(const DsLowerStmt *stmt) {
     return stmt_uses_nested(stmt, stmt_is_control_command);
 }
 
-bool program_uses_control_commands(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_control_commands);
-}
+DEFINE_PROGRAM_USES(program_uses_control_commands, stmt_uses_control_commands)
 
 static bool stmt_needs_int_helpers(const DsLowerStmt *stmt) {
     return (stmt->kind == DS_LOWER_STMT_ASSIGN && stmt->as.assign_stmt.op != DS_LOWER_ASSIGN_SET) ||
@@ -680,17 +650,13 @@ static bool stmt_uses_int_helpers(const DsLowerStmt *stmt) {
            stmt_uses_nested(stmt, stmt_needs_int_helpers);
 }
 
-bool program_uses_int_helpers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_int_helpers);
-}
+DEFINE_PROGRAM_USES(program_uses_int_helpers, stmt_uses_int_helpers)
 
 static bool stmt_uses_function_value_helpers(const DsLowerStmt *stmt) {
     return stmt_uses_exprs(stmt, expr_uses_function_value_helpers, true);
 }
 
-bool program_uses_function_value_helpers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_function_value_helpers);
-}
+DEFINE_PROGRAM_USES(program_uses_function_value_helpers, stmt_uses_function_value_helpers)
 
 static bool stmt_is_handler(const DsLowerStmt *stmt) {
     return stmt->kind == DS_LOWER_STMT_DEFER || stmt->kind == DS_LOWER_STMT_TRAP;
@@ -700,9 +666,7 @@ static bool stmt_uses_handlers(const DsLowerStmt *stmt) {
     return stmt_uses_nested(stmt, stmt_is_handler);
 }
 
-bool program_uses_handlers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_handlers);
-}
+DEFINE_PROGRAM_USES(program_uses_handlers, stmt_uses_handlers)
 
 static bool stmt_is_signal_handler(const DsLowerStmt *stmt) {
     return stmt_is_handler(stmt) && ds_handler_signal_is_runtime_cleanup(stmt->as.handler_stmt.signal);
@@ -712,9 +676,7 @@ static bool stmt_uses_signal_handlers(const DsLowerStmt *stmt) {
     return stmt_uses_nested(stmt, stmt_is_signal_handler);
 }
 
-bool program_uses_signal_handlers(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_signal_handlers);
-}
+DEFINE_PROGRAM_USES(program_uses_signal_handlers, stmt_uses_signal_handlers)
 
 static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
     if (!expr) return false;
@@ -737,9 +699,7 @@ static bool stmt_uses_case(const DsLowerStmt *stmt) {
     return stmt_uses_nested(stmt, stmt_needs_case_helpers);
 }
 
-bool program_uses_case(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_case);
-}
+DEFINE_PROGRAM_USES(program_uses_case, stmt_uses_case)
 
 static bool expr_is_membership(const DsLowerExpr *expr, void *context) {
     (void)context;
@@ -754,9 +714,7 @@ static bool stmt_uses_membership(const DsLowerStmt *stmt) {
     return stmt_uses_exprs(stmt, expr_uses_membership, false);
 }
 
-bool program_uses_membership(const DsLowerProgram *program) {
-    return program_uses_stmt(program, stmt_uses_membership);
-}
+DEFINE_PROGRAM_USES(program_uses_membership, stmt_uses_membership)
 
 bool program_uses_function_param_types(const DsLowerProgram *program) {
     if (!program) return false;
