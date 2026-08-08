@@ -1032,15 +1032,12 @@ static bool vm_wait_foreground_child(Vm *vm, pid_t pid, pid_t pgid, const VmProc
     return true;
 }
 
-static bool process_exec_error_pipe(Vm *vm, const VmProcessSpec *spec, int pipe_fds[2]) {
+static bool process_exec_error_pipe(Vm *vm, DsSpan span, const char *command, int pipe_fds[2]) {
     pipe_fds[0] = -1;
     pipe_fds[1] = -1;
-    if (pipe(pipe_fds) != 0) {
-        ds_diag_error(vm->diag, spec->span, "failed to prepare command `%s`: %s", spec->argv.items[0], strerror(errno));
-        return false;
-    }
-    if (!fd_set_cloexec(pipe_fds[1])) {
-        ds_diag_error(vm->diag, spec->span, "failed to prepare command `%s`: %s", spec->argv.items[0], strerror(errno));
+    if (pipe(pipe_fds) != 0 || !fd_set_cloexec(pipe_fds[1])) {
+        if (command) ds_diag_error(vm->diag, span, "failed to prepare command `%s`: %s", command, strerror(errno));
+        else ds_diag_error(vm->diag, span, "failed to prepare pipeline exec error pipe: %s", strerror(errno));
         close(pipe_fds[0]);
         close(pipe_fds[1]);
         pipe_fds[0] = -1;
@@ -1113,7 +1110,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
         if (!process_capture_open(vm, spec->span, "command", &out_fp, &err_fp)) return false;
     }
 
-    if (!process_exec_error_pipe(vm, spec, exec_error_pipe)) {
+    if (!process_exec_error_pipe(vm, spec->span, spec->argv.items[0], exec_error_pipe)) {
         if (redirect_fd >= 0) close(redirect_fd);
         if (out_fp) fclose(out_fp);
         if (err_fp) fclose(err_fp);
@@ -1265,11 +1262,7 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
             goto cleanup;
         }
     }
-    if (pipe(exec_error_pipe) != 0 || !fd_set_cloexec(exec_error_pipe[1])) {
-        ds_diag_error(vm->diag, ins->span, "failed to prepare pipeline exec error pipe: %s", strerror(errno));
-        ok = false;
-        goto cleanup;
-    }
+    if (!process_exec_error_pipe(vm, ins->span, NULL, exec_error_pipe)) { ok = false; goto cleanup; }
     for (size_t i = 0; i < n; i++) specs[i].exec_error_fd = exec_error_pipe[1];
 
     pid_t pgid = -1;
