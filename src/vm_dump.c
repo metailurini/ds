@@ -1,4 +1,5 @@
 #include "vm_internal.h"
+#include "ds_signal.h"
 
 static void print_span_comment(FILE *out, const DsSource *fallback, DsSpan span) {
     const DsSource *source = span.source ? span.source : fallback;
