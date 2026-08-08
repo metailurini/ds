@@ -863,86 +863,57 @@ static void append_test_helper_message(DsString *out, const VmProcessSpec *spec,
     }
 }
 
-static bool run_test_helper_command(Vm *vm, const VmProcessSpec *spec, int *out_code) {
-    *out_code = 0;
-    if (!vm->options.test_mode || spec->capture || spec->argv.len == 0) return false;
-    const char *name = spec->argv.items[0];
-    if (strcmp(name, "fail") != 0 && strcmp(name, "exit") != 0) return false;
-
-    const char *test_name = vm->options.test_name.data ? vm->options.test_name.data : "<test>";
-    int test_name_len = (int)vm->options.test_name.len;
-    if (test_name_len <= 0) test_name_len = (int)strlen(test_name);
-
-    if (spec->redirect.kind != DS_REDIRECT_NONE) {
-        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `%s` does not support redirection", test_name_len, test_name, name);
-        *out_code = 1;
-        return true;
-    }
-
-    if (strcmp(name, "fail") == 0) {
-        DsString message;
-        append_test_helper_message(&message, spec, 1);
-        if (message.len > 0) {
-            ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail: %.*s", test_name_len, test_name, (int)message.len, message.data);
-        } else {
-            ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail", test_name_len, test_name);
-        }
-        ds_string_free(&message);
-        *out_code = 1;
-        return true;
-    }
-
-    if (spec->argv.len != 2) {
-        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` expects exactly one integer code", test_name_len, test_name);
-        *out_code = 1;
-        return true;
-    }
-    int code = 0;
-    if (!parse_exit_code_arg(spec->argv.items[1], &code)) {
-        ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` code must be an integer from 0 to 255", test_name_len, test_name);
-        *out_code = 1;
-        return true;
-    }
-    vm->test_done = true;
-    if (code != 0) {
-        ds_diag_error(vm->diag, spec->span, "test `%.*s`: exit %d", test_name_len, test_name, code);
-    }
-    *out_code = code;
-    return true;
-}
-
 static bool run_control_command(Vm *vm, const VmProcessSpec *spec, int *out_code) {
     *out_code = 0;
     if (spec->capture || spec->argv.len == 0) return false;
     const char *name = spec->argv.items[0];
     if (strcmp(name, "fail") != 0 && strcmp(name, "exit") != 0) return false;
-    if (vm->options.test_mode) return run_test_helper_command(vm, spec, out_code);
+
+    const bool test_mode = vm->options.test_mode;
+    const char *test_name = vm->options.test_name.data ? vm->options.test_name.data : "<test>";
+    int test_name_len = (int)vm->options.test_name.len;
+    if (test_name_len <= 0) test_name_len = (int)strlen(test_name);
+
     if (spec->redirect.kind != DS_REDIRECT_NONE) {
-        ds_diag_error(vm->diag, spec->span, "`%s` does not support redirection", name);
+        if (test_mode) ds_diag_error(vm->diag, spec->span, "test `%.*s`: `%s` does not support redirection", test_name_len, test_name, name);
+        else ds_diag_error(vm->diag, spec->span, "`%s` does not support redirection", name);
         *out_code = 1;
         return true;
     }
     if (strcmp(name, "fail") == 0) {
         DsString message;
         append_test_helper_message(&message, spec, 1);
-        if (message.len > 0) ds_diag_error(vm->diag, spec->span, "%.*s", (int)message.len, message.data);
-        else ds_diag_error(vm->diag, spec->span, "fail");
+        if (test_mode) {
+            if (message.len > 0) ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail: %.*s", test_name_len, test_name, (int)message.len, message.data);
+            else ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail", test_name_len, test_name);
+        } else if (message.len > 0) {
+            ds_diag_error(vm->diag, spec->span, "%.*s", (int)message.len, message.data);
+        } else {
+            ds_diag_error(vm->diag, spec->span, "fail");
+        }
         ds_string_free(&message);
         *out_code = 1;
         return true;
     }
     if (spec->argv.len != 2) {
-        ds_diag_error(vm->diag, spec->span, "`exit` expects exactly one integer code");
+        if (test_mode) ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` expects exactly one integer code", test_name_len, test_name);
+        else ds_diag_error(vm->diag, spec->span, "`exit` expects exactly one integer code");
         *out_code = 1;
         return true;
     }
     int code = 0;
     if (!parse_exit_code_arg(spec->argv.items[1], &code)) {
-        ds_diag_error(vm->diag, spec->span, "`exit` code must be an integer from 0 to 255");
+        if (test_mode) ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` code must be an integer from 0 to 255", test_name_len, test_name);
+        else ds_diag_error(vm->diag, spec->span, "`exit` code must be an integer from 0 to 255");
         *out_code = 1;
         return true;
     }
-    vm->control_exit_requested = true;
+    if (test_mode) {
+        vm->test_done = true;
+        if (code != 0) ds_diag_error(vm->diag, spec->span, "test `%.*s`: exit %d", test_name_len, test_name, code);
+    } else {
+        vm->control_exit_requested = true;
+    }
     *out_code = code;
     return true;
 }
