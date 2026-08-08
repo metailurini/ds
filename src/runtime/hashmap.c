@@ -64,6 +64,10 @@ static hm_allocator hm_allocator_get(const hashmap *hm) {
     return hm ? hm->config.allocator : hm_make_default_allocator();
 }
 
+static void hm_bump_version(hashmap *hm) {
+    hm->version++;
+}
+
 static uint64_t hm_default_hash(const char *key, size_t key_len, uint64_t seed, void *ctx) {
     uint64_t h = 1469598103934665603ULL ^ seed;
     size_t i;
@@ -388,7 +392,7 @@ static hm_result hm_remove_slot(hashmap *hm, size_t slot, void **old_value) {
     hm_key_release(hm, e);
     hm_backward_shift_delete(hm, slot);
     hm->len--;
-    hm->version++;
+    hm_bump_version(hm);
     return HM_OK;
 }
 
@@ -406,7 +410,7 @@ static hm_result hm_init_with_capacity(hashmap *hm, size_t capacity) {
     hm->capacity = rounded;
     hm->len = 0;
     hm->tombstones = 0;
-    hm->version++;
+    hm_bump_version(hm);
     return HM_OK;
 }
 
@@ -420,36 +424,33 @@ hm_result hm_init_with_config(hashmap *hm, const hm_config *config) {
 
 hm_result hm_init(hashmap *hm) { return hm_init_with_config(hm, NULL); }
 
-hm_result hm_init_with_allocator(hashmap *hm, const hm_allocator *allocator) {
-    hm_config cfg;
-    memset(&cfg, 0, sizeof(cfg));
-    if (allocator) cfg.allocator = *allocator;
-    return hm_init_with_config(hm, &cfg);
-}
-
-hm_result hm_init_with_seed(hashmap *hm, uint64_t seed) {
-    hm_config cfg;
-    memset(&cfg, 0, sizeof(cfg));
-    cfg.seed = seed ? seed : HM_DEFAULT_SEED;
-    return hm_init_with_config(hm, &cfg);
-}
-
-hm_result hm_init_with_allocator_and_seed(hashmap *hm, const hm_allocator *allocator, uint64_t seed) {
-    hm_config cfg;
-    memset(&cfg, 0, sizeof(cfg));
-    if (allocator) cfg.allocator = *allocator;
-    cfg.seed = seed ? seed : HM_DEFAULT_SEED;
-    return hm_init_with_config(hm, &cfg);
-}
-
-hm_result hm_init_with_key_arena(hashmap *hm, void *arena, size_t arena_capacity, int strict) {
+static hm_result hm_init_with_options(hashmap *hm, const hm_allocator *allocator, uint64_t seed,
+                                      void *arena, size_t arena_capacity, int arena_strict) {
     hm_config cfg;
     if (!arena && arena_capacity != 0) return HM_ERR_INVALID;
     memset(&cfg, 0, sizeof(cfg));
+    if (allocator) cfg.allocator = *allocator;
+    cfg.seed = seed;
     cfg.key_arena = (char *)arena;
     cfg.key_arena_capacity = arena_capacity;
-    cfg.key_arena_strict = strict ? 1 : 0;
+    cfg.key_arena_strict = arena_strict ? 1 : 0;
     return hm_init_with_config(hm, &cfg);
+}
+
+hm_result hm_init_with_allocator(hashmap *hm, const hm_allocator *allocator) {
+    return hm_init_with_options(hm, allocator, 0, NULL, 0, 0);
+}
+
+hm_result hm_init_with_seed(hashmap *hm, uint64_t seed) {
+    return hm_init_with_options(hm, NULL, seed, NULL, 0, 0);
+}
+
+hm_result hm_init_with_allocator_and_seed(hashmap *hm, const hm_allocator *allocator, uint64_t seed) {
+    return hm_init_with_options(hm, allocator, seed, NULL, 0, 0);
+}
+
+hm_result hm_init_with_key_arena(hashmap *hm, void *arena, size_t arena_capacity, int strict) {
+    return hm_init_with_options(hm, NULL, 0, arena, arena_capacity, strict);
 }
 
 hm_result hm_set_key_arena(hashmap *hm, void *arena, size_t arena_capacity, int strict) {
@@ -459,7 +460,7 @@ hm_result hm_set_key_arena(hashmap *hm, void *arena, size_t arena_capacity, int 
     hm->config.key_arena_capacity = arena_capacity;
     hm->config.key_arena_used = 0;
     hm->config.key_arena_strict = strict ? 1 : 0;
-    hm->version++;
+    hm_bump_version(hm);
     return HM_OK;
 }
 
@@ -485,7 +486,7 @@ void hm_clear_with_values(hashmap *hm, hm_value_free_fn value_free, void *value_
     hm->len = 0;
     hm->tombstones = 0;
     hm->config.key_arena_used = 0;
-    hm->version++;
+    hm_bump_version(hm);
 }
 
 void hm_clear(hashmap *hm) { if (hm) hm_clear_with_values(hm, hm->config.value_free, hm->config.value_ctx); }
@@ -498,7 +499,7 @@ void hm_free_with_values(hashmap *hm, hm_value_free_fn value_free, void *value_c
     hm_destroy_entries(hm, value_free, value_ctx);
     hm_dealloc(hm, hm->entries);
     hm_reset_empty_with_config(hm, &cfg);
-    hm->version++;
+    hm_bump_version(hm);
 }
 
 void hm_free(hashmap *hm) { if (hm) hm_free_with_values(hm, hm->config.value_free, hm->config.value_ctx); }
@@ -613,7 +614,7 @@ hm_result hm_reserve(hashmap *hm, size_t min_capacity) {
 static hm_result hm_set_frozen(hashmap *hm, int frozen) {
     if (!hm) return HM_ERR_INVALID;
     hm->config.no_growth = frozen ? 1 : 0;
-    hm->version++;
+    hm_bump_version(hm);
     return HM_OK;
 }
 
@@ -695,7 +696,7 @@ static hm_result hm_put_replace_existing(hashmap *hm, size_t slot, const char *k
     if (rc != HM_OK) return rc;
     hm_value_replace(hm, e->value, value, old_value);
     e->value = value;
-    hm->version++;
+    hm_bump_version(hm);
     return HM_OK;
 }
 
@@ -729,7 +730,7 @@ static hm_result hm_put_len_storage(hashmap *hm, const char *key, size_t key_len
         hm_put_cleanup_failed_insert(hm, &incoming, key, mode);
         return rc;
     }
-    hm->version++;
+    hm_bump_version(hm);
     return HM_OK;
 }
 
@@ -925,7 +926,7 @@ hm_result hm_set_seed(hashmap *hm, uint64_t seed) {
     if (!hm) return HM_ERR_INVALID;
     if (hm->config.no_growth && hm->entries && hm->len != 0) return HM_ERR_FULL;
     new_seed = seed ? seed : HM_DEFAULT_SEED;
-    if (!hm->entries || hm->len == 0) { hm->config.seed = new_seed; hm->version++; return HM_OK; }
+    if (!hm->entries || hm->len == 0) { hm->config.seed = new_seed; hm_bump_version(hm); return HM_OK; }
     cfg = hm->config;
     cfg.seed = new_seed;
     return hm_rebuild(hm, hm->capacity, &cfg, 1);
