@@ -3,10 +3,6 @@
 #include "ds_signal.h"
 
 #include <errno.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_type_");

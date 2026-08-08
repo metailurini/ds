@@ -1,10 +1,6 @@
 #include "lower_internal.h"
 #include "ds_interpolation.h"
 
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-
 bool expr_is_literal_default(const DsExpr *expr) {
     return expr && (expr->kind == DS_EXPR_STRING || expr->kind == DS_EXPR_INT || expr->kind == DS_EXPR_BOOL);
 }

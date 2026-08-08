@@ -1,8 +1,5 @@
 #include "vm_internal.h"
 
-#include <stdio.h>
-#include <string.h>
-
 static void print_instr_command(FILE *out, const Instr *ins) {
     size_t word = 0;
     size_t stages = ins->stage_count ? ins->stage_count : 1;

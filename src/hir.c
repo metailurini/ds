@@ -1,9 +1,6 @@
 #include "ds_hir.h"
 #include "ds_signal.h"
 
-#include <stdio.h>
-#include <string.h>
-
 static void print_span(FILE *out, DsSpan span) {
     const DsSource *source = span.source;
     fprintf(out, " @ %s:%d:%d", source && source->path ? source->path : "<source>", span.start.line, span.start.column);

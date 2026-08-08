@@ -2,9 +2,6 @@
 
 #include <errno.h>
 #include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096

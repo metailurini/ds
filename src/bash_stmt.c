@@ -2,10 +2,6 @@
 #include "ds_signal.h"
 #include "ds_command_facts.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) {
         if (!emit_stmt(e, block->as.block_stmt.statements.items[i], indent)) return false;

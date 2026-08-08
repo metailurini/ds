@@ -2,9 +2,6 @@
 #include "ds_regex.h"
 
 #include <regex.h>
-#include <stdlib.h>
-#include <string.h>
-
 const char *ds_regex_status_message(DsRegexStatus status) {
     static const char *const messages[] = {
         "regex pattern is valid",

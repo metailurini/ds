@@ -1,7 +1,5 @@
 #include "ds_interpolation.h"
 
-#include <string.h>
-
 static bool parse_format_limit(DsStr spec, size_t start, size_t end, int *value) {
     if (start >= end) return false;
     return ds_parse_int_range((DsStr){spec.data + start, end - start}, 1, 1024, value);

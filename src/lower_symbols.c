@@ -1,7 +1,5 @@
 #include "lower_internal.h"
 
-#include <stdlib.h>
-
 bool is_env_name_text(DsStr name) {
     if (name.len == 0 || !ds_is_ident_start(name.data[0])) return false;
     for (size_t i = 1; i < name.len; i++) if (!ds_is_ident_continue(name.data[i])) return false;

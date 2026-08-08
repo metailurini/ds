@@ -1,10 +1,6 @@
 #include "ds_runtime.h"
 #include "runtime/hashmap.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 static hashmap *ds_map_impl(DsMap *map) {
     return (hashmap *)map->impl;
 }

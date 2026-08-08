@@ -3,8 +3,6 @@
 #include "bash_internal.h"
 #include "ds_common.h"
 
-#include <string.h>
-
 const char *ds_bash_temp_helpers_source(void) {
     return
         "__ds_tmp_paths=()\n"

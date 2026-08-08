@@ -2,9 +2,6 @@
 #include "frontend.h"
 
 #include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 typedef enum { SYM_LET, SYM_PARAM, SYM_LOOP, SYM_SCRIPT } SymKind;
 

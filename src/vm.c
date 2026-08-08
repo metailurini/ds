@@ -4,12 +4,8 @@
 #include "ds_signal.h"
 #include "vm_internal.h"
 
-#include <stdbool.h>
 #include <signal.h>
 #include <regex.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 static inline const char *str_data(const DsString *s) { return s->data ? s->data : ""; }
 #define STR_DATA(s) ((s).data ? (s).data : "")

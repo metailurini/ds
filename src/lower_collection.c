@@ -1,9 +1,5 @@
 #include "lower_internal.h"
 
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-
 /*
  * Collection portability policy lives in lowering because it decides which
  * VM-capable collection shapes are also representable by standalone Bash.

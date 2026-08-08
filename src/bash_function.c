@@ -1,9 +1,5 @@
 #include "bash_internal.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 typedef struct {
     bool active;
     char raw_name[64];

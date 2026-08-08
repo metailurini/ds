@@ -1,8 +1,6 @@
 #include "lower_internal.h"
 
 #include <errno.h>
-#include <stdlib.h>
-#include <string.h>
 
 bool parse_i64(DsStr text, int64_t *out) {
     char *tmp = ds_str_dup_range(text.data, text.len);

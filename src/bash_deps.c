@@ -3,9 +3,6 @@
 #include "ds_signal.h"
 #include "ds_command_facts.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 typedef bool (*ExprUsePredicate)(const DsLowerExpr *expr, void *context);
 typedef bool (*StmtPredicate)(const DsLowerStmt *stmt);
 typedef bool (*ExprUseQuery)(const DsLowerExpr *expr);

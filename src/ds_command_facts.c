@@ -1,7 +1,5 @@
 #include "ds_command_facts.h"
 
-#include <string.h>
-
 bool ds_command_name_char(char c) {
     return ds_is_ident_continue(c);
 }

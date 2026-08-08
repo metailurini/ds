@@ -1,8 +1,5 @@
 #include "ds_command.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 const char *ds_redirect_source_op(DsRedirectKind kind) {
     static const char *const ops[] = {"", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
     return (unsigned)kind < DS_ARRAY_LEN(ops) ? ops[kind] : "";

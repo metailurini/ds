@@ -2,10 +2,6 @@
 #include "ds_command_facts.h"
 #include "ds_regex.h"
 
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-
 static bool int_literal_in_range(DsStr text) {
     static const char max_text[] = "9223372036854775807";
     size_t start = 0;

@@ -1,10 +1,6 @@
 #include "vm_internal.h"
 
 #include <errno.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 static bool parse_runtime_int(const char *text, int64_t *out) {
     if (!text || text[0] == '\0') return false;

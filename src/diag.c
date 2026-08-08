@@ -1,7 +1,6 @@
 #include "ds_common.h"
 
 #include <stdarg.h>
-#include <string.h>
 
 void ds_diag_init(DsDiag *diag, const DsSource *source) {
     diag->source = source;

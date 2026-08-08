@@ -1,7 +1,5 @@
 #include "lower_internal.h"
 
-#include <stdlib.h>
-
 void lower_expr_free(DsLowerExpr *expr) {
     if (!expr) return;
     switch (expr->kind) {

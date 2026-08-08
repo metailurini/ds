@@ -2,11 +2,6 @@
 #include "ds_interpolation.h"
 #include "ds_command_facts.h"
 
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 static DsInterpValueKind interp_kind_from_sym(SymKind kind) {
     switch (kind) {
         case SYM_BOOL: return DS_INTERP_VALUE_BOOL;

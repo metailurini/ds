@@ -1,9 +1,5 @@
 #include "vm_internal.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 VmScope *scope_new(VmScope *parent) {
     VmScope *scope = (VmScope *)ds_xcalloc(1, sizeof(VmScope));
     ds_map_init(&scope->vars);

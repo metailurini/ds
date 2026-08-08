@@ -1,9 +1,5 @@
 #include "lower_internal.h"
 
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-
 static DsStr quoted_string_from_decoded(const char *data, size_t len) {
     size_t cap = len * 2 + 3;
     char *buf = (char *)ds_xcalloc(cap, 1);

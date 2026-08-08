@@ -2,9 +2,6 @@
 #include "ds_interpolation.h"
 
 #include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 void buf_reserve(EmitBuf *buf, size_t need) {
     if (need <= buf->cap) return;

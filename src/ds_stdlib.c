@@ -1,7 +1,5 @@
 #include "ds_stdlib.h"
 
-#include <string.h>
-
 static bool str_has_prefix(DsStr a, const char *prefix) {
     size_t len = strlen(prefix);
     return a.len >= len && memcmp(a.data, prefix, len) == 0;

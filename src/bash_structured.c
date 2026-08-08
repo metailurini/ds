@@ -1,9 +1,6 @@
 #include "bash_internal.h"
 #include "ds_command_facts.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 /*
  * Bash-specific structured-value ABI helpers.
  *

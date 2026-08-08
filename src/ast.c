@@ -1,8 +1,6 @@
 #include "ds_ast.h"
 #include "ds_signal.h"
 
-#include <stdlib.h>
-
 void ds_case_pattern_fprint(FILE *out, const DsCasePattern *pattern) {
     if (pattern->kind == DS_CASE_PATTERN_DEFAULT) fputs("_", out);
     else if (pattern->kind == DS_CASE_PATTERN_BOOL) fputs(pattern->boolean ? "true" : "false", out);

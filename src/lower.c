@@ -1,8 +1,5 @@
 #include "lower_internal.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 static void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
     if (stmt->kind != DS_STMT_TEST) return;
     for (size_t i = 0; i < program->tests.len; i++) {

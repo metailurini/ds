@@ -1,9 +1,5 @@
 #include "bash_internal.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
 static bool emit_condition_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr *expr, const DsStr *raw_temp, EmitBuf *out) {
     if (raw_temp) {
         buf_append(out, "\"$");

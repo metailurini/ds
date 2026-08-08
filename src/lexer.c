@@ -1,8 +1,6 @@
 #include "frontend.h"
 
 #include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
 
 static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 3 && strncmp(text, "let", 3) == 0) return DS_TOK_LET;
