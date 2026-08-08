@@ -21,6 +21,18 @@ static inline bool parser_next_at(Parser *p, DsTokenKind kind) { return p->pos +
 static inline bool parser_peek2_at(Parser *p, DsTokenKind kind) { return p->pos + 2 < p->tokens->len && p->tokens->items[p->pos + 2].kind == kind; }
 static inline bool parser_at_end(Parser *p) { return parser_at(p, DS_TOK_EOF); }
 
+static inline bool parser_at_ident_text(Parser *p, const char *text) {
+    return parser_at(p, DS_TOK_IDENT) && ds_str_eq_cstr(parser_peek(p)->text, text);
+}
+
+static inline bool parser_next_ident_text(Parser *p, const char *text) {
+    return parser_next_at(p, DS_TOK_IDENT) && ds_str_eq_cstr(p->tokens->items[p->pos + 1].text, text);
+}
+
+static inline bool parser_at_env_dot(Parser *p) {
+    return parser_at_ident_text(p, "env") && parser_next_at(p, DS_TOK_DOT);
+}
+
 static inline bool parser_advance_if(Parser *p, DsTokenKind kind) {
     if (!parser_at(p, kind)) return false;
     p->pos++;
