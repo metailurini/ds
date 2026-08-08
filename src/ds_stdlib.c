@@ -42,6 +42,13 @@ static const DsStdlibHelper HELPERS[] = {
     {"string.slice", "__ds_string_slice", 3, 3, DS_STDLIB_RETURN_STRING, false, false, false, false, false, 0, DS_BASH_STRING_HELPER_SLICE},
 };
 
+static const char *const NAMESPACES[] = {"file", "dir", "path", "cmd", "env", "regex", "string"};
+
+static bool name_has_namespace(DsStr name, const char *namespace_name) {
+    size_t len = strlen(namespace_name);
+    return name.len > len && name.data[len] == '.' && memcmp(name.data, namespace_name, len) == 0;
+}
+
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
     for (size_t i = 0; i < DS_ARRAY_LEN(HELPERS); i++) {
         if (ds_str_eq_cstr(name, HELPERS[i].name)) return &HELPERS[i];
@@ -50,9 +57,10 @@ const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
 }
 
 bool ds_stdlib_is_namespace(DsStr name) {
-    return ds_str_eq_cstr(name, "file") || ds_str_eq_cstr(name, "dir") || ds_str_eq_cstr(name, "path") ||
-           ds_str_eq_cstr(name, "cmd") || ds_str_eq_cstr(name, "env") || ds_str_eq_cstr(name, "regex") ||
-           ds_str_eq_cstr(name, "string");
+    for (size_t i = 0; i < DS_ARRAY_LEN(NAMESPACES); i++) {
+        if (ds_str_eq_cstr(name, NAMESPACES[i])) return true;
+    }
+    return false;
 }
 
 bool ds_stdlib_is_name(DsStr name) {
@@ -65,13 +73,9 @@ bool ds_stdlib_arity_ok(const DsStdlibHelper *helper, size_t argc) {
 }
 
 DsStdlibNamespace ds_stdlib_namespace(DsStr name) {
-    if (ds_str_has_prefix_cstr(name, "file.")) return DS_STDLIB_NAMESPACE_FILE;
-    if (ds_str_has_prefix_cstr(name, "dir.")) return DS_STDLIB_NAMESPACE_DIR;
-    if (ds_str_has_prefix_cstr(name, "path.")) return DS_STDLIB_NAMESPACE_PATH;
-    if (ds_str_has_prefix_cstr(name, "cmd.")) return DS_STDLIB_NAMESPACE_CMD;
-    if (ds_str_has_prefix_cstr(name, "env.")) return DS_STDLIB_NAMESPACE_ENV;
-    if (ds_str_has_prefix_cstr(name, "regex.")) return DS_STDLIB_NAMESPACE_REGEX;
-    if (ds_str_has_prefix_cstr(name, "string.")) return DS_STDLIB_NAMESPACE_STRING;
+    for (size_t i = 0; i < DS_ARRAY_LEN(NAMESPACES); i++) {
+        if (name_has_namespace(name, NAMESPACES[i])) return (DsStdlibNamespace)(DS_STDLIB_NAMESPACE_FILE + i);
+    }
     if (ds_str_eq_cstr(name, "glob") || ds_str_eq_cstr(name, "glob!") || ds_str_eq_cstr(name, "lines")) {
         return DS_STDLIB_NAMESPACE_TOP_LEVEL;
     }
