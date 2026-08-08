@@ -308,11 +308,6 @@ static bool expr_uses_map_literal(const DsLowerExpr *expr) {
     }
 }
 
-static bool int_binary_op(DsStr op) {
-    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
-           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
-}
-
 static bool word_has_arith_interp(DsStr word) {
     if (word.len < 4 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
     for (size_t i = 1; i + 1 < word.len; i++) {
@@ -341,7 +336,7 @@ static bool expr_uses_int_helpers(const DsLowerExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {
         case DS_LOWER_EXPR_BINARY:
-            return int_binary_op(expr->as.binary.op) || expr_uses_int_helpers(expr->as.binary.left) || expr_uses_int_helpers(expr->as.binary.right);
+            return bash_is_int_binary_op(expr->as.binary.op) || expr_uses_int_helpers(expr->as.binary.left) || expr_uses_int_helpers(expr->as.binary.right);
         case DS_LOWER_EXPR_UNARY:
             return str_eq(expr->as.unary.op, "-") || expr_uses_int_helpers(expr->as.unary.right);
         case DS_LOWER_EXPR_CALL:
@@ -1091,19 +1086,11 @@ bool program_uses_map_literal(const DsLowerProgram *program) {
     return false;
 }
 
-static bool command_is_control(const DsCommand *command) {
-    if (!command || ds_command_is_pipeline(command) || command->redirect.kind != DS_REDIRECT_NONE) return false;
-    if (command->stages.len == 0 || command->stages.items[0].words.len == 0) return false;
-    DsStr first = command->stages.items[0].words.items[0].text;
-    return (first.len == 4 && memcmp(first.data, "fail", 4) == 0) ||
-           (first.len == 4 && memcmp(first.data, "exit", 4) == 0);
-}
-
 static bool stmt_uses_control_commands(const DsLowerStmt *stmt) {
     if (!stmt) return false;
     switch (stmt->kind) {
         case DS_LOWER_STMT_CMD:
-            return command_is_control(&stmt->as.cmd_stmt);
+            return bash_command_is_control(&stmt->as.cmd_stmt, NULL);
         case DS_LOWER_STMT_IF:
             return stmt_uses_control_commands(stmt->as.if_stmt.then_branch) || stmt_uses_control_commands(stmt->as.if_stmt.else_branch);
         case DS_LOWER_STMT_BLOCK:

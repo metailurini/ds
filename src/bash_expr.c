@@ -4,35 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static bool is_int_binary_op(DsStr op) {
-    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
-           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
-}
-
-static bool is_user_function_call_expr(const DsLowerExpr *expr) {
-    return expr && expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
-}
-
-static void temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id) {
-    snprintf(buf, cap, "__%s_%zu", prefix, id);
-}
-
-static void emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
-    buf_append(out, "__ds_row_");
-    buf_append_len(out, array_name.data, array_name.len);
-    buf_append(out, "_");
-    static const char hex[] = "0123456789abcdef";
-    for (size_t i = 0; i < field.len; i++) {
-        unsigned char c = (unsigned char)field.data[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-            buf_append_len(out, (const char *)&field.data[i], 1);
-        } else {
-            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
-            buf_append(out, esc);
-        }
-    }
-}
-
 static bool emit_condition_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr *expr, const DsStr *raw_temp, EmitBuf *out) {
     if (raw_temp) {
         buf_append(out, "\"$");
@@ -172,7 +143,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     DsStr left_temp = {0};
     const DsStr *left_temp_ptr = NULL;
     buf_append(out, "{ ");
-    if (is_user_function_call_expr(left)) {
+    if (bash_is_user_function_call_expr(left)) {
         if (!bash_emit_user_call_to_temp(e, left, "in_left", out, left_temp_buf, sizeof(left_temp_buf), &left_temp, &left_temp_ptr)) return false;
     }
     buf_append(out, "__ds_needle=");
@@ -311,7 +282,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 expr->as.index.object->as.index.object && expr->as.index.object->as.index.object->kind == DS_LOWER_EXPR_IDENT) {
                 buf_append(out, "\"$(");
                 buf_append(out, "__ds_array_get ");
-                emit_row_field_array_name(out, expr->as.index.object->as.index.object->as.text, expr->as.index.map_key);
+                bash_emit_row_field_array_name(out, expr->as.index.object->as.index.object->as.text, expr->as.index.map_key);
                 buf_append(out, " ");
                 if (!emit_index_argument(e, expr->as.index.object->as.index.index, false, false, out)) return false;
                 buf_append(out, ")\"");
@@ -328,7 +299,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             }
             if (expr->as.index.object_is_array && expr_is_stdlib_array_call(expr->as.index.object)) {
                 char temp_buf[64];
-                temp_ds_name(temp_buf, sizeof(temp_buf), "index_array", e->temp_counter++);
+                bash_temp_ds_name(temp_buf, sizeof(temp_buf), "index_array", e->temp_counter++);
                 DsStr temp = {temp_buf, strlen(temp_buf)};
                 buf_append(out, "\"$({ ");
                 emit_var_name(out, temp);
@@ -366,7 +337,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_BINARY:
-            if (is_int_binary_op(expr->as.binary.op)) {
+            if (bash_is_int_binary_op(expr->as.binary.op)) {
                 buf_append(out, "\"$(__ds_int_bin ");
                 bash_single_quote(out, expr->as.binary.op.data, expr->as.binary.op.len);
                 buf_append(out, " ");
@@ -676,10 +647,10 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 const DsStr *left_temp_ptr = NULL;
                 const DsStr *right_temp_ptr = NULL;
                 buf_append(out, "{ ");
-                if (is_user_function_call_expr(expr->as.binary.left)) {
+                if (bash_is_user_function_call_expr(expr->as.binary.left)) {
                     if (!bash_emit_user_call_to_temp(e, expr->as.binary.left, "match_left", out, left_temp_buf, sizeof(left_temp_buf), &left_temp, &left_temp_ptr)) return false;
                 }
-                if (is_user_function_call_expr(expr->as.binary.right)) {
+                if (bash_is_user_function_call_expr(expr->as.binary.right)) {
                     if (!bash_emit_user_call_to_temp(e, expr->as.binary.right, "match_pattern", out, right_temp_buf, sizeof(right_temp_buf), &right_temp, &right_temp_ptr)) return false;
                 }
                 if (expr->as.binary.right->kind == DS_LOWER_EXPR_REGEX) {
@@ -709,7 +680,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return false;
         }
         if (negate) buf_append(out, "! ");
-        if (is_user_function_call_expr(expr->as.binary.left) || is_user_function_call_expr(expr->as.binary.right)) {
+        if (bash_is_user_function_call_expr(expr->as.binary.left) || bash_is_user_function_call_expr(expr->as.binary.right)) {
             char left_temp_buf[64];
             char right_temp_buf[64];
             DsStr left_temp = {0};
@@ -717,10 +688,10 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             const DsStr *left_temp_ptr = NULL;
             const DsStr *right_temp_ptr = NULL;
             buf_append(out, "{ ");
-            if (is_user_function_call_expr(expr->as.binary.left)) {
+            if (bash_is_user_function_call_expr(expr->as.binary.left)) {
                 if (!bash_emit_user_call_to_temp(e, expr->as.binary.left, "cmp_left", out, left_temp_buf, sizeof(left_temp_buf), &left_temp, &left_temp_ptr)) return false;
             }
-            if (is_user_function_call_expr(expr->as.binary.right)) {
+            if (bash_is_user_function_call_expr(expr->as.binary.right)) {
                 if (!bash_emit_user_call_to_temp(e, expr->as.binary.right, "cmp_right", out, right_temp_buf, sizeof(right_temp_buf), &right_temp, &right_temp_ptr)) return false;
             }
             if (int_compare) {

@@ -1,9 +1,16 @@
 #include "bash_internal.h"
 #include "ds_command_facts.h"
-#include "ds_command_facts.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+bool bash_command_is_control(const DsCommand *command, const char *name) {
+    if (!command || ds_command_is_pipeline(command) || command->redirect.kind != DS_REDIRECT_NONE) return false;
+    if (command->stages.len == 0 || command->stages.items[0].words.len == 0) return false;
+    DsStr first = command->stages.items[0].words.items[0].text;
+    if (name) return str_eq(first, name);
+    return str_eq(first, "fail") || str_eq(first, "exit");
+}
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
     /*

@@ -13,14 +13,6 @@ bool emit_block_body(BashEmitter *e, const DsLowerStmt *block, int indent) {
     return true;
 }
 
-static bool is_control_command(const DsCommand *command, const char *name) {
-    if (!command || ds_command_is_pipeline(command)) return false;
-    if (command->redirect.kind != DS_REDIRECT_NONE) return false;
-    if (command->stages.items[0].words.len == 0) return false;
-    DsStr first = command->stages.items[0].words.items[0].text;
-    return str_eq(first, name);
-}
-
 static bool can_emit_direct_signal_command(const DsCommand *command) {
     return command && !ds_command_is_pipeline(command) && command->redirect.kind == DS_REDIRECT_NONE && command->stages.items[0].words.len > 0;
 }
@@ -81,7 +73,7 @@ static bool emit_signal_pipeline(BashEmitter *e, const DsCommand *command, DsSpa
 }
 
 static bool emit_control_command(BashEmitter *e, const DsCommand *command, DsSpan span, int indent) {
-    const char *helper = is_control_command(command, "exit") ? "__ds_control_exit" : "__ds_control_fail";
+    const char *helper = bash_command_is_control(command, "exit") ? "__ds_control_exit" : "__ds_control_fail";
     emit_indent(&e->out, indent);
     buf_append(&e->out, helper);
     buf_append(&e->out, " ");
@@ -784,7 +776,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             if (!emit_trace_redirect_args(e, &stmt->as.cmd_stmt.redirect, &e->out)) return false;
             buf_append(&e->out, "\n");
-            if (is_control_command(&stmt->as.cmd_stmt, "fail") || is_control_command(&stmt->as.cmd_stmt, "exit")) {
+            if (bash_command_is_control(&stmt->as.cmd_stmt, NULL)) {
                 return emit_control_command(e, &stmt->as.cmd_stmt, stmt->span, indent);
             }
             if (e->has_signal_handlers && can_emit_direct_signal_command(&stmt->as.cmd_stmt)) {

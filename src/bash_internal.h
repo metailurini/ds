@@ -57,6 +57,10 @@ static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const
 
 void symbol_vec_push(SymbolVec *vec, DsStr name);
 static inline bool str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
+static inline bool bash_is_int_binary_op(DsStr op) {
+    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
+           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
+}
 bool symbol_exists(const SymbolVec *symbols, DsStr name);
 void free_symbols(SymbolVec *symbols);
 void symbols_truncate(SymbolVec *symbols, size_t len);
@@ -90,6 +94,7 @@ void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent);
 bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
 bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
 void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field);
+void bash_emit_return_row_field_array_name(EmitBuf *out, DsStr field);
 const DsLowerMapEntry *bash_row_map_entry(const DsLowerExpr *row, DsStr field);
 bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent);
@@ -115,6 +120,7 @@ bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out
 
 bool bash_is_user_function_call_expr(const DsLowerExpr *expr);
 void bash_temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id);
+bool bash_command_is_control(const DsCommand *command, const char *name);
 bool bash_emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, int indent);
 bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent);
 bool bash_emit_user_call_statement(BashEmitter *e, DsStr name, const DsLowerExprVec *args, int indent);

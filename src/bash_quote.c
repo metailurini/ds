@@ -229,22 +229,6 @@ static bool interp_ident_char(char c) {
     return interp_ident_start(c) || (c >= '0' && c <= '9');
 }
 
-static void emit_row_field_array_name_interp(EmitBuf *out, DsStr array_name, DsStr field) {
-    buf_append(out, "__ds_row_");
-    buf_append_len(out, array_name.data, array_name.len);
-    buf_append(out, "_");
-    static const char hex[] = "0123456789abcdef";
-    for (size_t i = 0; i < field.len; i++) {
-        unsigned char c = (unsigned char)field.data[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-            buf_append_len(out, (const char *)&field.data[i], 1);
-        } else {
-            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
-            buf_append(out, esc);
-        }
-    }
-}
-
 static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsSpan span, EmitBuf *arg) {
     (*j)++;
     interp_skip_ws(decoded, len, j);
@@ -295,7 +279,7 @@ static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const 
     }
     DsStr field = {(char *)decoded + field_start, pos - field_start};
     buf_append(out, "$( __ds_array_get ");
-    emit_row_field_array_name_interp(out, name, field);
+    bash_emit_row_field_array_name(out, name, field);
     buf_append(out, " ");
     buf_append(out, index_arg.data ? index_arg.data : "");
     buf_append(out, " )");

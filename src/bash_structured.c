@@ -11,11 +11,6 @@
  * sidecars. It does not decide source-language validity or semantic value
  * kinds; those are lowerer/HIR responsibilities.
  */
-static bool bash_int_binary_op(DsStr op) {
-    return str_eq(op, "+") || str_eq(op, "-") || str_eq(op, "*") ||
-           str_eq(op, "/") || str_eq(op, "%") || str_eq(op, "**");
-}
-
 const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING:
@@ -32,7 +27,7 @@ const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_RUN:
             return ds_lower_value_kind_name(DS_LOWER_VALUE_COMMAND_RESULT);
         case DS_LOWER_EXPR_BINARY:
-            return bash_int_binary_op(expr->as.binary.op)
+            return bash_is_int_binary_op(expr->as.binary.op)
                 ? ds_lower_value_kind_name(DS_LOWER_VALUE_INT)
                 : ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
         case DS_LOWER_EXPR_UNARY:
@@ -421,7 +416,7 @@ void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field)
     }
 }
 
-static void emit_return_row_field_array_name(EmitBuf *out, DsStr field) {
+void bash_emit_return_row_field_array_name(EmitBuf *out, DsStr field) {
     buf_append(out, "__ds_return_row_");
     static const char hex[] = "0123456789abcdef";
     for (size_t i = 0; i < field.len; i++) {
@@ -470,7 +465,7 @@ bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value
     for (size_t i = 0; schema && i < schema->len; i++) {
         emit_indent(&e->out, indent);
         buf_append(&e->out, "declare -ga ");
-        emit_return_row_field_array_name(&e->out, schema->items[i].name);
+        bash_emit_return_row_field_array_name(&e->out, schema->items[i].name);
         buf_append(&e->out, "=(\"${");
         bash_emit_row_field_array_name(&e->out, source, schema->items[i].name);
         buf_append(&e->out, "[@]}\")\n");
