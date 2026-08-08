@@ -36,7 +36,7 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     if (stdlib_helper) {
         SymKind ret = SYM_UNKNOWN;
         if (!stdlib_return_kind(stdlib_helper, &ret)) {
-            ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+            lower_diag_unknown_stdlib_helper(lower, stmt->span, stmt->as.call_stmt.name);
         } else if (!ds_stdlib_arity_ok(stdlib_helper, stmt->as.call_stmt.args.len)) {
             lower_diag_stdlib_arity_error(lower, stmt->span, stmt->as.call_stmt.name,
                                           stdlib_helper->min_arity, stdlib_helper->max_arity,
@@ -48,10 +48,10 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
         DsStr ns = {0}, member = {0};
         bool has_member = split_member_name(stmt->as.call_stmt.name, &ns, &member);
         if (has_member && ds_str_eq_cstr(ns, "string")) {
-            ds_diag_error(lower->diag, stmt->span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
-        } else if (has_member && ds_stdlib_is_namespace(ns)) ds_diag_error(lower->diag, stmt->span, "unknown standard-library helper `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+            lower_diag_unknown_string_method(lower, stmt->span, member);
+        } else if (has_member && ds_stdlib_is_namespace(ns)) lower_diag_unknown_stdlib_helper(lower, stmt->span, stmt->as.call_stmt.name);
         else if (has_member) ds_diag_error(lower->diag, stmt->span, "only `push` collection method is supported in v0.10.0");
-        else ds_diag_error(lower->diag, stmt->span, "unknown function `%.*s`", (int)stmt->as.call_stmt.name.len, stmt->as.call_stmt.name.data);
+        else lower_diag_unknown_function(lower, stmt->span, stmt->as.call_stmt.name);
     } else if (stmt->as.call_stmt.args.len < fn->required_count || stmt->as.call_stmt.args.len > fn->params.len) {
         if (fn->required_count == fn->params.len) {
             ds_diag_error(lower->diag, stmt->span, "function `%.*s` expects %zu arguments but got %zu",

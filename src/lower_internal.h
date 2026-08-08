@@ -92,6 +92,16 @@ static inline void lower_diag_stdlib_arity_error(Lower *lower, DsSpan span, DsSt
                       (int)name.len, name.data, min_arity, max_arity, actual);
     }
 }
+static inline void lower_diag_unknown_function(Lower *lower, DsSpan span, DsStr name) {
+    ds_diag_error(lower->diag, span, "unknown function `%.*s`", (int)name.len, name.data);
+}
+static inline void lower_diag_unknown_stdlib_helper(Lower *lower, DsSpan span, DsStr name) {
+    ds_diag_error(lower->diag, span, "unknown standard-library helper `%.*s`", (int)name.len, name.data);
+}
+static inline void lower_diag_unknown_string_method(Lower *lower, DsSpan span, DsStr member) {
+    ds_diag_error(lower->diag, span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS,
+                  (int)member.len, member.data);
+}
 static inline DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam *param) {
     if (!param) return DS_LOWER_VALUE_UNKNOWN;
     return param->has_default ? param->default_kind : param->inferred_kind;

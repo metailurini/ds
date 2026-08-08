@@ -710,12 +710,12 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
     DsStr ns = {0}, member = {0};
     bool has_member = split_member_name(expr->as.call.name, &ns, &member);
     if (has_member && ds_str_eq_cstr(ns, "string")) {
-        ds_diag_error(lower->diag, expr->span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS, (int)member.len, member.data);
+        lower_diag_unknown_string_method(lower, expr->span, member);
         free(arg_kinds);
         return out;
     }
     if (has_member && ds_stdlib_is_namespace(ns)) {
-        ds_diag_error(lower->diag, expr->span, "unknown standard-library helper `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
+        lower_diag_unknown_stdlib_helper(lower, expr->span, expr->as.call.name);
         free(arg_kinds);
         return out;
     }
@@ -740,7 +740,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         free(arg_kinds);
         return out;
     }
-    ds_diag_error(lower->diag, expr->span, "unknown function `%.*s`", (int)expr->as.call.name.len, expr->as.call.name.data);
+    lower_diag_unknown_function(lower, expr->span, expr->as.call.name);
     free(arg_kinds);
     return out;
 }
