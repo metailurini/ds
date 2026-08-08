@@ -14,6 +14,8 @@ typedef unsigned (*StmtMaskPredicate)(const DsLowerStmt *stmt);
 
 static bool stmt_uses_nested(const DsLowerStmt *stmt, StmtPredicate predicate);
 static bool stmt_uses_exprs(const DsLowerStmt *stmt, ExprUseQuery query, bool scan_call_args);
+static bool program_uses_stmt(const DsLowerProgram *program, StmtPredicate predicate);
+static unsigned program_mask(const DsLowerProgram *program, StmtMaskPredicate predicate);
 
 static bool expr_uses(const DsLowerExpr *expr, ExprUsePredicate predicate, void *context) {
     if (!expr) return false;
@@ -180,6 +182,9 @@ static bool stmt_uses_glob_helper(const DsLowerStmt *stmt, bool recursive_only) 
         ? stmt_uses_exprs(stmt, expr_uses_recursive_glob, true) || stmt_uses_nested(stmt, stmt_is_recursive_glob_call)
         : stmt_uses_exprs(stmt, expr_uses_glob, true) || stmt_uses_nested(stmt, stmt_is_glob_call);
 }
+
+static bool stmt_uses_glob(const DsLowerStmt *stmt) { return stmt_uses_glob_helper(stmt, false); }
+static bool stmt_uses_recursive_glob(const DsLowerStmt *stmt) { return stmt_uses_glob_helper(stmt, true); }
 
 static unsigned expr_string_helper_bit(const DsLowerExpr *expr) {
     switch (expr->kind) {
@@ -422,9 +427,7 @@ static bool stmt_has_command(const DsLowerStmt *stmt) {
 }
 
 bool program_has_command(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (stmt_has_command(program->functions.items[i].body)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_has_command(program->statements.items[i])) return true;
-    return false;
+    return program_uses_stmt(program, stmt_has_command);
 }
 
 static bool stmt_is_base_stdlib_call(const DsLowerStmt *stmt) {
@@ -450,37 +453,17 @@ static bool scalar_stdlib_call_needs_capture(const DsLowerExpr *expr) {
            !stdlib_returns_array(expr->as.call.name) && expr->as.call.return_kind != DS_LOWER_VALUE_MAP;
 }
 
-static bool stmt_uses_stdlib_capture(const DsLowerStmt *stmt) {
+static bool stmt_has_stdlib_capture(const DsLowerStmt *stmt) {
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET: return scalar_stdlib_call_needs_capture(stmt->as.let_stmt.value);
         case DS_LOWER_STMT_ASSIGN: return scalar_stdlib_call_needs_capture(stmt->as.assign_stmt.value);
-        case DS_LOWER_STMT_INDEX_ASSIGN:
-            return scalar_stdlib_call_needs_capture(stmt->as.index_assign_stmt.value);
-        case DS_LOWER_STMT_IF:
-            return stmt_uses_stdlib_capture(stmt->as.if_stmt.then_branch) ||
-                   (stmt->as.if_stmt.else_branch && stmt_uses_stdlib_capture(stmt->as.if_stmt.else_branch));
-        case DS_LOWER_STMT_BLOCK:
-            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) if (stmt_uses_stdlib_capture(stmt->as.block_stmt.statements.items[i])) return true;
-            return false;
-        case DS_LOWER_STMT_FOR_ARRAY:
-        case DS_LOWER_STMT_FOR_MAP:
-        case DS_LOWER_STMT_FOR_RANGE: return stmt_uses_stdlib_capture(stmt->as.for_stmt.body);
-        case DS_LOWER_STMT_WHILE: return stmt_uses_stdlib_capture(stmt->as.while_stmt.body);
-        case DS_LOWER_STMT_CASE:
-            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) if (stmt_uses_stdlib_capture(stmt->as.case_stmt.arms.items[i].body)) return true;
-            return false;
-        case DS_LOWER_STMT_DEFER:
-        case DS_LOWER_STMT_TRAP: return stmt_uses_stdlib_capture(stmt->as.handler_stmt.body);
-        case DS_LOWER_STMT_CALL:
-        case DS_LOWER_STMT_CMD:
-        case DS_LOWER_STMT_PUSH:
-        case DS_LOWER_STMT_ASSERT:
-        case DS_LOWER_STMT_RETURN:
-        case DS_LOWER_STMT_BREAK:
-        case DS_LOWER_STMT_CONTINUE:
-            return false;
+        case DS_LOWER_STMT_INDEX_ASSIGN: return scalar_stdlib_call_needs_capture(stmt->as.index_assign_stmt.value);
+        default: return false;
     }
-    return false;
+}
+
+static bool stmt_uses_stdlib_capture(const DsLowerStmt *stmt) {
+    return stmt_uses_nested(stmt, stmt_has_stdlib_capture);
 }
 
 static bool stmt_needs_collection_index(const DsLowerStmt *stmt) {
@@ -553,6 +536,13 @@ static bool program_uses_stmt(const DsLowerProgram *program, StmtPredicate predi
     return false;
 }
 
+static unsigned program_mask(const DsLowerProgram *program, StmtMaskPredicate predicate) {
+    unsigned mask = 0;
+    for (size_t i = 0; i < program->functions.len; i++) mask |= predicate(program->functions.items[i].body);
+    for (size_t i = 0; i < program->statements.len; i++) mask |= predicate(program->statements.items[i]);
+    return mask;
+}
+
 bool program_uses_run(const DsLowerProgram *program) {
     return program_uses_stmt(program, stmt_uses_run);
 }
@@ -566,12 +556,7 @@ bool program_uses_stdlib(const DsLowerProgram *program) {
 }
 
 unsigned program_string_helper_mask(const DsLowerProgram *program) {
-    unsigned mask = 0;
-    for (size_t i = 0; i < program->functions.len; i++) {
-        if (program->functions.items[i].body) mask |= stmt_string_helper_mask(program->functions.items[i].body);
-    }
-    for (size_t i = 0; i < program->statements.len; i++) mask |= stmt_string_helper_mask(program->statements.items[i]);
-    return mask;
+    return program_mask(program, stmt_string_helper_mask);
 }
 
 bool program_uses_stdlib_capture(const DsLowerProgram *program) {
@@ -579,15 +564,11 @@ bool program_uses_stdlib_capture(const DsLowerProgram *program) {
 }
 
 bool program_uses_glob_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_glob_helper(program->functions.items[i].body, false)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_glob_helper(program->statements.items[i], false)) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_glob);
 }
 
 bool program_uses_recursive_glob_helpers(const DsLowerProgram *program) {
-    for (size_t i = 0; i < program->functions.len; i++) if (program->functions.items[i].body && stmt_uses_glob_helper(program->functions.items[i].body, true)) return true;
-    for (size_t i = 0; i < program->statements.len; i++) if (stmt_uses_glob_helper(program->statements.items[i], true)) return true;
-    return false;
+    return program_uses_stmt(program, stmt_uses_recursive_glob);
 }
 
 enum {
@@ -622,10 +603,7 @@ static unsigned stmt_regex_helper_mask(const DsLowerStmt *stmt) {
 }
 
 static unsigned program_regex_helper_mask(const DsLowerProgram *program) {
-    unsigned mask = 0;
-    for (size_t i = 0; i < program->functions.len; i++) mask |= stmt_regex_helper_mask(program->functions.items[i].body);
-    for (size_t i = 0; i < program->statements.len; i++) mask |= stmt_regex_helper_mask(program->statements.items[i]);
-    return mask;
+    return program_mask(program, stmt_regex_helper_mask);
 }
 
 bool program_uses_regex_base_helpers(const DsLowerProgram *program) {
