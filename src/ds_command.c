@@ -23,7 +23,7 @@ bool ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src) {
     ds_word_vec_init(dst);
     dst->len = src->len;
     dst->cap = src->len;
-    dst->items = (DsWord *)ds_xcalloc(dst->cap ? dst->cap : 1, sizeof(DsWord));
+    dst->items = (DsWord *)ds_xcalloc(dst->cap, sizeof(DsWord));
     for (size_t i = 0; i < src->len; i++) {
         dst->items[i].text = ds_str_clone(src->items[i].text);
         dst->items[i].span = src->items[i].span;
@@ -66,7 +66,7 @@ bool ds_command_stage_vec_clone(DsCommandStageVec *dst, const DsCommandStageVec 
     ds_command_stage_vec_init(dst);
     dst->len = src->len;
     dst->cap = src->len;
-    dst->items = (DsCommandStage *)ds_xcalloc(dst->cap ? dst->cap : 1, sizeof(DsCommandStage));
+    dst->items = (DsCommandStage *)ds_xcalloc(dst->cap, sizeof(DsCommandStage));
     for (size_t i = 0; i < src->len; i++) ds_command_stage_clone(&dst->items[i], &src->items[i]);
     return true;
 }

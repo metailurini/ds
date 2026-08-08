@@ -27,7 +27,7 @@ char *ds_str_dup_range(const char *data, size_t len) {
 }
 
 void *ds_xcalloc(size_t count, size_t size) {
-    void *ptr = calloc(count, size);
+    void *ptr = calloc(count ? count : 1, size ? size : 1);
     if (!ptr) ds_fatal_oom();
     return ptr;
 }

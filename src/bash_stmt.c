@@ -94,7 +94,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
             if (bash_is_user_function_call_expr(value->as.interp.parts.items[i])) { has_user_call = true; break; }
         }
         if (has_user_call) {
-            char **temps = ds_xcalloc(value->as.interp.parts.len ? value->as.interp.parts.len : 1, sizeof(char *));
+            char **temps = ds_xcalloc(value->as.interp.parts.len, sizeof(char *));
             for (size_t i = 0; i < value->as.interp.parts.len; i++) {
                 const DsLowerExpr *part = value->as.interp.parts.items[i];
                 if (!bash_is_user_function_call_expr(part)) continue;

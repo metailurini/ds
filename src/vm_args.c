@@ -129,7 +129,7 @@ int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **arg
         return 0;
     }
 
-    bool *seen = (bool *)ds_xcalloc(program->script_decls.len ? program->script_decls.len : 1, sizeof(bool));
+    bool *seen = (bool *)ds_xcalloc(program->script_decls.len, sizeof(bool));
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind != DS_SCRIPT_DECL_ARG) set_default_from_decl(vm, decl);

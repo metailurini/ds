@@ -54,13 +54,13 @@ static void instr_free(Instr *ins) {
 
 static void copy_command_to_instr(Instr *ins, const DsCommand *command) {
     ins->stage_count = command->stages.len;
-    ins->stage_word_counts = (size_t *)ds_xcalloc(ins->stage_count ? ins->stage_count : 1, sizeof(size_t));
+    ins->stage_word_counts = (size_t *)ds_xcalloc(ins->stage_count, sizeof(size_t));
     ins->word_count = 0;
     for (size_t s = 0; s < command->stages.len; s++) {
         ins->stage_word_counts[s] = command->stages.items[s].words.len;
         ins->word_count += command->stages.items[s].words.len;
     }
-    ins->words = (DsStr *)ds_xcalloc(ins->word_count ? ins->word_count : 1, sizeof(DsStr));
+    ins->words = (DsStr *)ds_xcalloc(ins->word_count, sizeof(DsStr));
     size_t idx = 0;
     for (size_t s = 0; s < command->stages.len; s++) {
         const DsWordVec *words = &command->stages.items[s].words;
@@ -139,7 +139,7 @@ static int add_function_meta(Program *p, const DsLowerFn *fn) {
     meta->name = ds_str_dup_range(fn->name.data, fn->name.len);
     meta->param_count = fn->params.len;
     meta->required_count = fn->required_count;
-    meta->params = (FnParamMeta *)ds_xcalloc(meta->param_count ? meta->param_count : 1, sizeof(FnParamMeta));
+    meta->params = (FnParamMeta *)ds_xcalloc(meta->param_count, sizeof(FnParamMeta));
     for (size_t i = 0; i < fn->params.len; i++) {
         meta->params[i].name = ds_str_dup_range(fn->params.items[i].name.data, fn->params.items[i].name.len);
         meta->params[i].has_default = fn->params.items[i].has_default;
@@ -250,7 +250,7 @@ static int compile_interp_expr(Program *p, const DsLowerExpr *expr) {
     ins.span = expr->span;
     ins.dst = r;
     ins.arg_count = expr->as.interp.parts.len;
-    ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+    ins.args = (int *)ds_xcalloc(ins.arg_count, sizeof(int));
     for (size_t i = 0; i < expr->as.interp.parts.len; i++) ins.args[i] = compile_expr(p, expr->as.interp.parts.items[i]);
     emit_instr(p, ins);
     return r;
@@ -419,7 +419,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.span = expr->span;
             ins.dst = r;
             ins.arg_count = expr->as.array.elements.len;
-            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            ins.args = (int *)ds_xcalloc(ins.arg_count, sizeof(int));
             for (size_t i = 0; i < expr->as.array.elements.len; i++) ins.args[i] = compile_expr(p, expr->as.array.elements.items[i]);
             emit_instr(p, ins);
             return r;
@@ -431,9 +431,9 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.span = expr->span;
             ins.dst = r;
             ins.arg_count = expr->as.map.entries.len;
-            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            ins.args = (int *)ds_xcalloc(ins.arg_count, sizeof(int));
             ins.word_count = expr->as.map.entries.len;
-            ins.words = (DsStr *)ds_xcalloc(ins.word_count ? ins.word_count : 1, sizeof(DsStr));
+            ins.words = (DsStr *)ds_xcalloc(ins.word_count, sizeof(DsStr));
             for (size_t i = 0; i < expr->as.map.entries.len; i++) {
                 ins.args[i] = compile_expr(p, expr->as.map.entries.items[i].value);
                 ins.words[i].data = ds_str_dup_range(expr->as.map.entries.items[i].key.data, expr->as.map.entries.items[i].key.len);
@@ -468,7 +468,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.target = fn_index;
             if (fn_index < 0) ins.name = ds_str_dup_range(expr->as.call.name.data, expr->as.call.name.len);
             ins.arg_count = expr->as.call.args.len;
-            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            ins.args = (int *)ds_xcalloc(ins.arg_count, sizeof(int));
             for (size_t i = 0; i < expr->as.call.args.len; i++) ins.args[i] = compile_expr(p, expr->as.call.args.items[i]);
             emit_instr(p, ins);
             return r;
@@ -596,7 +596,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             ins.target = find_function_meta(p, stmt->as.call_stmt.name);
             if (ins.op == OP_STDLIB_CALL) ins.name = ds_str_dup_range(stmt->as.call_stmt.name.data, stmt->as.call_stmt.name.len);
             ins.arg_count = stmt->as.call_stmt.args.len;
-            ins.args = (int *)ds_xcalloc(ins.arg_count ? ins.arg_count : 1, sizeof(int));
+            ins.args = (int *)ds_xcalloc(ins.arg_count, sizeof(int));
             for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) ins.args[i] = compile_expr(p, stmt->as.call_stmt.args.items[i]);
             emit_instr(p, ins);
             break;
