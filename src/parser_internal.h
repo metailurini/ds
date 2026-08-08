@@ -104,10 +104,22 @@ static inline bool parser_is_stmt_end(Parser *p) {
     return parser_at(p, DS_TOK_NEWLINE) || parser_at(p, DS_TOK_EOF) || parser_at(p, DS_TOK_RBRACE);
 }
 
+static inline void parser_skip_to_stmt_end(Parser *p) {
+    while (!parser_is_stmt_end(p)) parser_advance(p);
+}
+
 static inline void parser_consume_statement_end(Parser *p) {
     if (parser_at(p, DS_TOK_NEWLINE)) {
         parser_skip_newlines(p);
     }
+}
+
+static inline void parser_expect_stmt_end(Parser *p, const char *description) {
+    if (!parser_is_stmt_end(p)) {
+        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of %s", description);
+        parser_skip_to_stmt_end(p);
+    }
+    parser_consume_statement_end(p);
 }
 
 static inline bool parser_expect(Parser *p, DsTokenKind kind, const char *message) {

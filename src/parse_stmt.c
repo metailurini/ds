@@ -15,11 +15,7 @@ DsStmt *parse_import_stmt(Parser *p, bool top_level, bool after_executable) {
     DsToken *path = parser_previous(p);
     DsStmt *stmt = parser_new_stmt(DS_STMT_IMPORT, (DsSpan){start->span.start, path->span.end, start->span.source});
     stmt->as.import_stmt.path = parser_copy_token_text(path);
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of import statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "import statement");
     return stmt;
 }
 
@@ -58,11 +54,7 @@ static DsStmt *parse_let(Parser *p) {
     DsStmt *stmt = parser_new_stmt(DS_STMT_LET, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
     stmt->as.let_stmt.name = parser_copy_token_text(name);
     stmt->as.let_stmt.value = value;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "statement");
     return stmt;
 }
 
@@ -83,11 +75,7 @@ static DsStmt *parse_assign(Parser *p) {
     stmt->as.assign_stmt.name = parser_copy_token_text(name);
     stmt->as.assign_stmt.op = op;
     stmt->as.assign_stmt.value = value;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of assignment statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "assignment statement");
     return stmt;
 }
 
@@ -128,7 +116,7 @@ static DsStmt *parse_index_assign_stmt(Parser *p) {
             if (kind != DS_TOK_EQUAL) {
                 ds_diag_error(p->diag, p->tokens->items[i].span,
                               "compound index assignment is unsupported in v0.30.0; use `target[index] = value`");
-                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_skip_to_stmt_end(p);
                 parser_consume_statement_end(p);
                 return NULL;
             }
@@ -139,7 +127,7 @@ static DsStmt *parse_index_assign_stmt(Parser *p) {
     DsAssignOp op = DS_ASSIGN_SET;
     if (!parse_assignment_operator(p, &op)) {
         ds_diag_error(p->diag, parser_peek(p)->span, "expected assignment operator");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
+        parser_skip_to_stmt_end(p);
         parser_consume_statement_end(p);
         return NULL;
     }
@@ -155,11 +143,7 @@ static DsStmt *parse_index_assign_stmt(Parser *p) {
     stmt->as.index_assign_stmt.target = target;
     stmt->as.index_assign_stmt.op = op;
     stmt->as.index_assign_stmt.value = value;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of index assignment statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "index assignment statement");
     return stmt;
 }
 
@@ -175,7 +159,7 @@ static bool parser_invalid_hyphenated_env_name(Parser *p, const DsToken *field, 
     memcpy(name + field->text.len + 1, suffix->text.data, suffix->text.len);
     ds_diag_error(p->diag, dash->span, "invalid environment variable name `%.*s` in %s", (int)len, name, version);
     free(name);
-    while (!parser_is_stmt_end(p)) parser_advance(p);
+    parser_skip_to_stmt_end(p);
     parser_consume_statement_end(p);
     return true;
 }
@@ -204,11 +188,7 @@ static DsStmt *parse_env_assign(Parser *p) {
     stmt->as.assign_stmt.name = (DsStr){name, len};
     stmt->as.assign_stmt.op = DS_ASSIGN_SET;
     stmt->as.assign_stmt.value = value;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of environment assignment statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "environment assignment statement");
     return stmt;
 }
 
@@ -236,18 +216,14 @@ static DsStmt *parse_env_unset(Parser *p) {
     arg->as.text = quoted_env_name_from_token(field);
     parser_expr_vec_push(&stmt->as.call_stmt.args, arg);
 
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of environment unset statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "environment unset statement");
     return stmt;
 }
 
 static DsStmt *parse_bad_unset(Parser *p) {
     DsToken *unset_tok = parser_advance(p);
     ds_diag_error(p->diag, unset_tok->span, "unset requires an environment target like `unset env.NAME` in v0.27.0");
-    while (!parser_is_stmt_end(p)) parser_advance(p);
+    parser_skip_to_stmt_end(p);
     parser_consume_statement_end(p);
     return NULL;
 }
@@ -281,11 +257,7 @@ static DsStmt *parse_return(Parser *p) {
     DsExpr *value = parse_expr(p);
     DsStmt *stmt = parser_new_stmt(DS_STMT_RETURN, (DsSpan){start->span.start, value ? value->span.end : start->span.end, start->span.source});
     stmt->as.return_stmt.value = value;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of return statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "return statement");
     return stmt;
 }
 
@@ -323,11 +295,7 @@ static DsStmt *parse_call_stmt(Parser *p) {
     parse_call_args(p, &stmt->as.call_stmt.args);
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) return stmt;
     stmt->span.end = parser_previous(p)->span.end;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of function call statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "function call statement");
     return stmt;
 }
 
@@ -341,11 +309,7 @@ static DsStmt *parse_member_call_stmt(Parser *p) {
     parse_call_args(p, &stmt->as.call_stmt.args);
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) return stmt;
     stmt->span.end = parser_previous(p)->span.end;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of helper call statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "helper call statement");
     return stmt;
 }
 
@@ -370,11 +334,7 @@ static DsStmt *parse_push_stmt(Parser *p) {
     }
     if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after `push` argument")) return stmt;
     stmt->span.end = parser_previous(p)->span.end;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of push statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "push statement");
     return stmt;
 }
 
@@ -424,7 +384,7 @@ static DsStmt *parse_loop_control(Parser *p, DsStmtKind kind) {
     DsStmt *stmt = parser_new_stmt(kind, start->span);
     if (!parser_is_stmt_end(p)) {
         ds_diag_error(p->diag, parser_peek(p)->span, kind == DS_STMT_BREAK ? "`break` does not accept arguments" : "`continue` does not accept arguments");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
+        parser_skip_to_stmt_end(p);
     }
     parser_consume_statement_end(p);
     return stmt;
@@ -526,11 +486,7 @@ static DsStmt *parse_assert(Parser *p) {
     DsExpr *condition = parse_expr(p);
     DsStmt *stmt = parser_new_stmt(DS_STMT_ASSERT, (DsSpan){start->span.start, condition ? condition->span.end : start->span.end, start->span.source});
     stmt->as.assert_stmt.condition = condition;
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of assert statement");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "assert statement");
     return stmt;
 }
 

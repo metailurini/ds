@@ -21,7 +21,7 @@ static bool parse_script_decl(Parser *p, DsScriptBlock *script) {
         decl.kind = DS_SCRIPT_DECL_FLAG;
     } else {
         ds_diag_error(p->diag, parser_peek(p)->span, "expected `arg`, `option`, or `flag` declaration");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
+        parser_skip_to_stmt_end(p);
         parser_consume_statement_end(p);
         return false;
     }
@@ -48,11 +48,7 @@ static bool parse_script_decl(Parser *p, DsScriptBlock *script) {
     }
 
     decl.span = (DsSpan){start->span.start, (decl.default_value ? decl.default_value->span.end : parser_previous(p)->span.end), start->span.source};
-    if (!parser_is_stmt_end(p)) {
-        ds_diag_error(p->diag, parser_peek(p)->span, "expected end of declaration");
-        while (!parser_is_stmt_end(p)) parser_advance(p);
-    }
-    parser_consume_statement_end(p);
+    parser_expect_stmt_end(p, "declaration");
     parser_script_decl_vec_push(&script->declarations, decl);
     return true;
 }

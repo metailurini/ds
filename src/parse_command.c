@@ -44,7 +44,7 @@ static void parse_stage_words(Parser *p, DsWordVec *words, DsSpan *span) {
         if (is_unsupported_command_operator(parser_peek(p))) {
             flush_word(words, &current, &current_cap, &have_current);
             report_unsupported_command_operator(p, parser_peek(p));
-            while (!parser_is_stmt_end(p)) parser_advance(p);
+            parser_skip_to_stmt_end(p);
             break;
         }
         DsToken *tok = parser_advance(p);
@@ -107,7 +107,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
                 } else {
                     ds_diag_error(p->diag, next_pipe->span, "missing command between pipeline separators");
                 }
-                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_skip_to_stmt_end(p);
                 break;
             }
             if (parser_is_stmt_end(p)) {
@@ -116,7 +116,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
             }
             if (parser_is_redirect_token(parser_peek(p)->kind)) {
                 ds_diag_error(p->diag, parser_peek(p)->span, "redirection cannot appear as a pipeline stage");
-                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_skip_to_stmt_end(p);
                 break;
             }
             expect_stage = true;
@@ -126,7 +126,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
             DsToken *op = parser_advance(p);
             if (reject_redirection) {
                 ds_diag_error(p->diag, op->span, "captured `run` commands do not support redirection");
-                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_skip_to_stmt_end(p);
                 break;
             }
             if (command->redirect.kind != DS_REDIRECT_NONE) ds_diag_error(p->diag, op->span, "duplicate redirection suffix");
@@ -138,7 +138,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
             }
             if (!parser_advance_if(p, DS_TOK_STRING)) {
                 ds_diag_error(p->diag, parser_peek(p)->span, "redirection target must be a string literal in v0.18.0");
-                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_skip_to_stmt_end(p);
                 break;
             }
             DsToken *target = parser_previous(p);
@@ -149,7 +149,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
                 if (parser_at(p, DS_TOK_PIPE)) ds_diag_error(p->diag, parser_peek(p)->span, "redirection must apply to the whole pipeline and cannot appear before another stage");
                 else if (parser_is_redirect_token(parser_peek(p)->kind)) ds_diag_error(p->diag, parser_peek(p)->span, "duplicate redirection suffix");
                 else ds_diag_error(p->diag, parser_peek(p)->span, "expected end of redirected command");
-                while (!parser_is_stmt_end(p)) parser_advance(p);
+                parser_skip_to_stmt_end(p);
             }
             break;
         }
