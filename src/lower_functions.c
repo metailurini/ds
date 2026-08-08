@@ -794,10 +794,6 @@ static void infer_command_word_method_args(InferCtx *ctx, InferEnv *env, DsStr w
 static void infer_command_word(InferCtx *ctx, InferEnv *env, DsWord word) {
     if (!memchr(word.text.data, '{', word.text.len)) return;
     infer_interpolated_text(ctx, env, word.text, word.span);
-    static const char *methods[] = {
-        "trim", "upper", "lower", "replace", "contains", "split", "starts_with", "ends_with",
-        "len", "index_of", "last_index_of", "count", "char_at", "slice"
-    };
     for (size_t n = 0; n < env->len; n++) {
         InferBinding binding = env->items[n].binding;
         if (binding.kind == INFER_BIND_NONE) continue;
@@ -806,19 +802,20 @@ static void infer_command_word(InferCtx *ctx, InferEnv *env, DsWord word) {
             if (memcmp(word.text.data + pos, name.data, name.len) != 0 || !infer_name_boundary(word.text.data, word.text.len, pos, name.len)) continue;
             size_t dot = pos + name.len;
             if (dot >= word.text.len || word.text.data[dot] != '.') continue;
-            for (size_t m = 0; m < DS_ARRAY_LEN(methods); m++) {
-                size_t method_pos = dot + 1;
-                size_t method_len = strlen(methods[m]);
-                if (method_pos + method_len + 1 > word.text.len) continue;
-                if (memcmp(word.text.data + method_pos, methods[m], method_len) != 0 || word.text.data[method_pos + method_len] != '(') continue;
-                DsString full;
-                ds_string_init(&full);
-                ds_string_append_cstr(&full, "string.");
-                ds_string_append_range(&full, methods[m], method_len);
+            size_t method_pos = dot + 1;
+            size_t method_end = method_pos;
+            while (method_end < word.text.len && ds_is_ident_continue(word.text.data[method_end])) method_end++;
+            if (method_end == method_pos || method_end >= word.text.len || word.text.data[method_end] != '(') continue;
+            DsString full;
+            ds_string_init(&full);
+            ds_string_append_cstr(&full, "string.");
+            ds_string_append_range(&full, word.text.data + method_pos, method_end - method_pos);
+            DsStr method = {full.data, full.len};
+            if (ds_stdlib_is_string_helper(method)) {
                 infer_constrain_binding(ctx, binding, DS_LOWER_VALUE_STRING, word.span, "command interpolation string helper");
-                infer_command_word_method_args(ctx, env, word.text, method_pos + method_len + 1, (DsStr){full.data, full.len}, word.span);
-                ds_string_free(&full);
+                infer_command_word_method_args(ctx, env, word.text, method_end + 1, method, word.span);
             }
+            ds_string_free(&full);
         }
     }
 }
