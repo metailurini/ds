@@ -501,6 +501,28 @@ static void compile_block(Program *p, const DsLowerStmt *block) {
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) compile_stmt(p, block->as.block_stmt.statements.items[i]);
 }
 
+static void compile_loop_body(Program *p, const DsLowerStmt *body, DsSpan span,
+                              size_t begin_pos, size_t exit_patch_pos) {
+    push_loop(p, begin_pos, p->scope_depth);
+    p->scope_depth++;
+    compile_block(p, body);
+
+    Instr pop = {0};
+    pop.op = OP_POP_SCOPE;
+    pop.span = span;
+    emit_instr(p, pop);
+    p->scope_depth--;
+
+    Instr jump = {0};
+    jump.op = OP_JUMP;
+    jump.span = span;
+    jump.target = (int)begin_pos;
+    emit_instr(p, jump);
+
+    p->instrs[exit_patch_pos].target = (int)p->instr_len;
+    pop_loop(p, p->instr_len);
+}
+
 static void compile_scoped_block(Program *p, const DsLowerStmt *block) {
     Instr push = {0};
     push.op = OP_PUSH_SCOPE;
@@ -613,22 +635,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             begin.a = iterable;
             begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
             size_t begin_pos = emit_instr(p, begin);
-            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
-            p->scope_depth++;
-            compile_block(p, stmt->as.for_stmt.body);
-            Instr pop = {0};
-            pop.op = OP_POP_SCOPE;
-            pop.span = stmt->span;
-            emit_instr(p, pop);
-            p->scope_depth--;
-            Instr jump = {0};
-            jump.op = OP_JUMP;
-            jump.span = stmt->span;
-            jump.target = (int)begin_pos;
-            emit_instr(p, jump);
-            p->instrs[begin_pos].target = (int)p->instr_len;
-            (void)loop;
-            pop_loop(p, p->instr_len);
+            compile_loop_body(p, stmt->as.for_stmt.body, stmt->span, begin_pos, begin_pos);
             break;
         }
         case DS_LOWER_STMT_FOR_MAP: {
@@ -640,22 +647,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
             begin.value_name = ds_str_dup_range(stmt->as.for_stmt.value_name.data, stmt->as.for_stmt.value_name.len);
             size_t begin_pos = emit_instr(p, begin);
-            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
-            p->scope_depth++;
-            compile_block(p, stmt->as.for_stmt.body);
-            Instr pop = {0};
-            pop.op = OP_POP_SCOPE;
-            pop.span = stmt->span;
-            emit_instr(p, pop);
-            p->scope_depth--;
-            Instr jump = {0};
-            jump.op = OP_JUMP;
-            jump.span = stmt->span;
-            jump.target = (int)begin_pos;
-            emit_instr(p, jump);
-            p->instrs[begin_pos].target = (int)p->instr_len;
-            (void)loop;
-            pop_loop(p, p->instr_len);
+            compile_loop_body(p, stmt->as.for_stmt.body, stmt->span, begin_pos, begin_pos);
             break;
         }
         case DS_LOWER_STMT_FOR_RANGE: {
@@ -668,22 +660,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             begin.b = end;
             begin.name = ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len);
             size_t begin_pos = emit_instr(p, begin);
-            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
-            p->scope_depth++;
-            compile_block(p, stmt->as.for_stmt.body);
-            Instr pop = {0};
-            pop.op = OP_POP_SCOPE;
-            pop.span = stmt->span;
-            emit_instr(p, pop);
-            p->scope_depth--;
-            Instr jump = {0};
-            jump.op = OP_JUMP;
-            jump.span = stmt->span;
-            jump.target = (int)begin_pos;
-            emit_instr(p, jump);
-            p->instrs[begin_pos].target = (int)p->instr_len;
-            (void)loop;
-            pop_loop(p, p->instr_len);
+            compile_loop_body(p, stmt->as.for_stmt.body, stmt->span, begin_pos, begin_pos);
             break;
         }
         case DS_LOWER_STMT_WHILE: {
@@ -698,22 +675,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             push.op = OP_PUSH_SCOPE;
             push.span = stmt->span;
             emit_instr(p, push);
-            LoopPatch *loop = push_loop(p, begin_pos, p->scope_depth);
-            p->scope_depth++;
-            compile_block(p, stmt->as.while_stmt.body);
-            Instr pop = {0};
-            pop.op = OP_POP_SCOPE;
-            pop.span = stmt->span;
-            emit_instr(p, pop);
-            p->scope_depth--;
-            Instr jump = {0};
-            jump.op = OP_JUMP;
-            jump.span = stmt->span;
-            jump.target = (int)begin_pos;
-            emit_instr(p, jump);
-            p->instrs[jif_pos].target = (int)p->instr_len;
-            (void)loop;
-            pop_loop(p, p->instr_len);
+            compile_loop_body(p, stmt->as.while_stmt.body, stmt->span, begin_pos, jif_pos);
             break;
         }
         case DS_LOWER_STMT_BREAK:
