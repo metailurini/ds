@@ -37,17 +37,9 @@ void vm_pop_scope(Vm *vm) {
     scope_free_one(old);
 }
 
-static void vm_push_return(Vm *vm, size_t ip, VmScope *caller_scope) {
-    if (vm->return_len == vm->return_cap) {
-        vm->return_cap = vm->return_cap ? vm->return_cap * 2 : 8;
-        vm->return_ips = (size_t *)ds_xrealloc(vm->return_ips, vm->return_cap * sizeof(size_t));
-        vm->return_dsts = (int *)ds_xrealloc(vm->return_dsts, vm->return_cap * sizeof(int));
-        vm->return_scopes = (VmScope **)ds_xrealloc(vm->return_scopes, vm->return_cap * sizeof(VmScope *));
-    }
-    vm->return_ips[vm->return_len] = ip;
-    vm->return_dsts[vm->return_len] = -1;
-    vm->return_scopes[vm->return_len] = caller_scope;
-    vm->return_len++;
+static void vm_push_return(Vm *vm, size_t ip, int dst, VmScope *caller_scope) {
+    DS_GROW_ARRAY(vm->returns, vm->return_len, vm->return_cap, 8);
+    vm->returns[vm->return_len++] = (VmReturnFrame){ip, dst, caller_scope};
 }
 
 static DsLowerValueKind vm_value_lower_kind(const DsValue *value) {
@@ -73,9 +65,9 @@ void vm_pop_to_scope(Vm *vm, VmScope *target) {
     while (vm->scope && vm->scope != target) vm_pop_scope(vm);
 }
 
-bool vm_pop_return(Vm *vm, size_t *out) {
+bool vm_pop_return(Vm *vm, VmReturnFrame *out) {
     if (vm->return_len == 0) return false;
-    *out = vm->return_ips[--vm->return_len];
+    *out = vm->returns[--vm->return_len];
     return true;
 }
 
@@ -111,8 +103,7 @@ bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
         ds_map_set(&scope->vars, key, value);
     }
     vm->scope = scope;
-    vm_push_return(vm, next_ip, caller_scope);
-    vm->return_dsts[vm->return_len - 1] = ins->dst;
+    vm_push_return(vm, next_ip, ins->dst, caller_scope);
     *target_ip = fn->target;
     return true;
 }

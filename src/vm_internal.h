@@ -221,6 +221,12 @@ typedef struct {
 } VmHandler;
 
 typedef struct {
+    size_t ip;
+    int dst;
+    VmScope *scope;
+} VmReturnFrame;
+
+typedef struct {
     Program *program;
     DsValue *regs;
     VmScope *scope;
@@ -228,11 +234,9 @@ typedef struct {
     const DsSource *source;
     DsVmOptions options;
     bool test_done;
-    size_t *return_ips;
+    VmReturnFrame *returns;
     size_t return_len;
     size_t return_cap;
-    int *return_dsts;
-    VmScope **return_scopes;
     VmHandler *handlers;
     size_t handler_len;
     size_t handler_cap;
@@ -255,7 +259,7 @@ VmScope *scope_new(VmScope *parent);
 void scope_free_chain(VmScope *scope);
 void vm_push_scope(Vm *vm);
 void vm_pop_scope(Vm *vm);
-bool vm_pop_return(Vm *vm, size_t *out);
+bool vm_pop_return(Vm *vm, VmReturnFrame *out);
 void vm_pop_to_scope(Vm *vm, VmScope *target);
 bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip);
 bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span);

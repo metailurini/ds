@@ -624,7 +624,7 @@ dispatch_loop:
                 break;
             }
             case OP_RETURN_VALUE: {
-                size_t return_ip = 0;
+                VmReturnFrame frame = {0};
                 if (vm.return_len == 0) {
                     /*
                      * Lowering only emits OP_RETURN_VALUE inside lowered
@@ -635,22 +635,19 @@ dispatch_loop:
                     rc = 1;
                     goto done;
                 }
-                int dst = vm.return_dsts[vm.return_len - 1];
-                VmScope *caller_scope = vm.return_scopes[vm.return_len - 1];
                 DsValue value = ds_value_copy(&vm.regs[ins->a]);
-                vm_pop_to_scope(&vm, caller_scope);
-                if (!vm_pop_return(&vm, &return_ip)) { ds_value_free(&value); rc = 1; goto done; }
-                if (dst >= 0) set_reg(&vm, dst, value);
+                if (!vm_pop_return(&vm, &frame)) { ds_value_free(&value); rc = 1; goto done; }
+                vm_pop_to_scope(&vm, frame.scope);
+                if (frame.dst >= 0) set_reg(&vm, frame.dst, value);
                 else ds_value_free(&value);
-                ip = return_ip;
+                ip = frame.ip;
                 break;
             }
             case OP_RETURN_FUNC: {
-                size_t return_ip = 0;
-                VmScope *caller_scope = vm.return_len ? vm.return_scopes[vm.return_len - 1] : NULL;
-                vm_pop_to_scope(&vm, caller_scope);
-                if (!vm_pop_return(&vm, &return_ip)) { rc = 1; goto done; }
-                ip = return_ip;
+                VmReturnFrame frame = {0};
+                if (!vm_pop_return(&vm, &frame)) { rc = 1; goto done; }
+                vm_pop_to_scope(&vm, frame.scope);
+                ip = frame.ip;
                 break;
             }
             case OP_REGISTER_HANDLER:
@@ -724,9 +721,7 @@ cleanup_done:
     if (term_installed) sigaction(SIGTERM, &old_term, NULL);
     for (int i = 0; i < p.next_reg; i++) ds_value_free(&vm.regs[i]);
     free(vm.regs);
-    free(vm.return_ips);
-    free(vm.return_dsts);
-    free(vm.return_scopes);
+    free(vm.returns);
     free(vm.handlers);
     scope_free_chain(vm.scope);
     program_free(&p);
