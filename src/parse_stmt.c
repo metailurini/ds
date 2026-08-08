@@ -541,14 +541,11 @@ DsStmt *parse_stmt(Parser *p) {
         return NULL;
     }
     if (parser_advance_if(p, DS_TOK_LET)) return parse_let(p);
-    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 5 && memcmp(parser_peek(p)->text.data, "unset", 5) == 0 &&
-        parser_next_at(p, DS_TOK_IDENT) && p->tokens->items[p->pos + 1].text.len == 3 && memcmp(p->tokens->items[p->pos + 1].text.data, "env", 3) == 0 &&
+    if (parser_at_ident_text(p, "unset") && parser_next_ident_text(p, "env") &&
         parser_peek2_at(p, DS_TOK_DOT)) return parse_env_unset(p);
-    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 5 && memcmp(parser_peek(p)->text.data, "unset", 5) == 0) return parse_bad_unset(p);
-    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 3 && memcmp(parser_peek(p)->text.data, "env", 3) == 0 &&
-        parser_next_at(p, DS_TOK_DOT) && stmt_contains_assignment_operator(p) && stmt_has_bracket_before_assignment(p)) return parse_index_assign_stmt(p);
-    if (parser_at(p, DS_TOK_IDENT) && parser_peek(p)->text.len == 3 && memcmp(parser_peek(p)->text.data, "env", 3) == 0 &&
-        parser_next_at(p, DS_TOK_DOT) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
+    if (parser_at_ident_text(p, "unset")) return parse_bad_unset(p);
+    if (parser_at_env_dot(p) && stmt_contains_assignment_operator(p) && stmt_has_bracket_before_assignment(p)) return parse_index_assign_stmt(p);
+    if (parser_at_env_dot(p) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
     if (((parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT) || parser_next_at(p, DS_TOK_LPAREN))) ||
          parser_at(p, DS_TOK_LBRACKET)) && stmt_contains_assignment_operator(p)) return parse_index_assign_stmt(p);
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||

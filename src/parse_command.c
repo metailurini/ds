@@ -22,10 +22,6 @@ static void report_unsupported_command_operator(Parser *p, const DsToken *tok) {
     }
 }
 
-static void command_stage_vec_push(DsCommandStageVec *vec, DsCommandStage stage) {
-    DS_VEC_PUSH(vec, stage, 4);
-}
-
 static void flush_word(DsWordVec *words, DsWord *current, size_t *cap, bool *have_current) {
     if (!*have_current) return;
     parser_word_vec_push(words, *current);
@@ -94,7 +90,7 @@ void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirecti
         }
         if (command->stages.len == 0) command->span.start = stage.span.start;
         command->span.end = stage.span.end;
-        command_stage_vec_push(&command->stages, stage);
+        DS_VEC_PUSH(&command->stages, stage, 4);
         expect_stage = false;
 
         if (parser_at(p, DS_TOK_PIPE)) {
