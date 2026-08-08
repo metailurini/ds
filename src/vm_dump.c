@@ -10,7 +10,7 @@ static void print_instr_command(FILE *out, const Instr *ins) {
         for (size_t j = 0; j < count; j++, word++) {
             if (j || s) fputs(", ", out);
             fputc('"', out);
-            ds_fprint_escaped(out, ins->words[word].data, ins->words[word].len, false);
+            ds_fprint_escaped(out, ins->words[word].data, ins->words[word].len, DS_ESCAPE_BASIC);
             fputc('"', out);
         }
     }
@@ -87,7 +87,7 @@ static void print_value_literal(FILE *out, const DsValue *v) {
             break;
         case DS_VALUE_STRING:
             fputs("string \"", out);
-            ds_fprint_escaped(out, ds_string_data(&v->as.string), v->as.string.len, false);
+            ds_fprint_escaped(out, ds_string_data(&v->as.string), v->as.string.len, DS_ESCAPE_BASIC);
             fputc('"', out);
             break;
         case DS_VALUE_COMMAND_RESULT:
@@ -120,7 +120,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             if (decl->has_default) {
                 if (decl->type == DS_SCRIPT_TYPE_STRING) {
                     fputs(" = \"", out);
-                    ds_fprint_escaped(out, ds_str_data(decl->default_text), decl->default_text.len, false);
+                    ds_fprint_escaped(out, ds_str_data(decl->default_text), decl->default_text.len, DS_ESCAPE_BASIC);
                     fputc('"', out);
                 } else if (decl->type == DS_SCRIPT_TYPE_INT) {
                     fprintf(out, " = %lld", (long long)decl->default_int);
@@ -192,7 +192,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
                 print_instr_command(out, ins);
                 if (ins->redirect.kind != DS_REDIRECT_NONE) {
                     fprintf(out, " %s \"", ds_redirect_source_op(ins->redirect.kind));
-                    ds_fprint_escaped(out, ins->redirect.target.data, ins->redirect.target.len, false);
+                    ds_fprint_escaped(out, ins->redirect.target.data, ins->redirect.target.len, DS_ESCAPE_BASIC);
                     fputc('"', out);
                 }
                 break;

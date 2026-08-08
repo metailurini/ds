@@ -58,7 +58,7 @@ static void dump_word_vec(FILE *out, const DsWordVec *words) {
     for (size_t i = 0; i < words->len; i++) {
         if (i) fputs(", ", out);
         fputc('"', out);
-        ds_fprint_escaped(out, words->items[i].text.data, words->items[i].text.len, true);
+        ds_fprint_escaped(out, words->items[i].text.data, words->items[i].text.len, DS_ESCAPE_HEX_CONTROLS);
         fputc('"', out);
     }
     fputc(']', out);
@@ -79,7 +79,7 @@ static void dump_redirect(FILE *out, const DsRedirect *redirect) {
     if (!op) return;
     fprintf(out, " Redirect %s ", op);
     fputc('"', out);
-    ds_fprint_escaped(out, ds_str_data(redirect->target), redirect->target.len, true);
+    ds_fprint_escaped(out, ds_str_data(redirect->target), redirect->target.len, DS_ESCAPE_HEX_CONTROLS);
     fputc('"', out);
     print_span(out, redirect->target_span);
 }
@@ -99,7 +99,7 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
         case DS_LOWER_EXPR_IDENT:
             fputs("Ident ", out); ds_fprint_str(out, expr->as.text); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_STRING:
-            fputs("String \"", out); ds_fprint_escaped(out, expr->as.text.data, expr->as.text.len, true); fputs("\"", out); print_span(out, expr->span); fputc('\n', out); break;
+            fputs("String \"", out); ds_fprint_escaped(out, expr->as.text.data, expr->as.text.len, DS_ESCAPE_HEX_CONTROLS); fputs("\"", out); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_INT:
             fputs("Int ", out); ds_fprint_str(out, expr->as.text); print_span(out, expr->span); fputc('\n', out); break;
         case DS_LOWER_EXPR_BOOL:
@@ -278,7 +278,7 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
             ds_fprint_str(out, decl->name);
             fprintf(out, ": %s", ds_script_type_name(decl->type));
             if (decl->has_default) {
-                if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); ds_fprint_escaped(out, ds_str_data(decl->default_text), decl->default_text.len, true); fputc('"', out); }
+                if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); ds_fprint_escaped(out, ds_str_data(decl->default_text), decl->default_text.len, DS_ESCAPE_HEX_CONTROLS); fputc('"', out); }
                 else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, " = %lld", (long long)decl->default_int);
                 else fprintf(out, " = %s", decl->default_bool ? "true" : "false");
             }

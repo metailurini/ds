@@ -434,15 +434,7 @@ void ds_tokens_print(const DsTokenVec *tokens, FILE *out) {
         const DsToken *t = &tokens->items[i];
         fprintf(out, "%d:%d  %-14s \"", t->span.start.line, t->span.start.column,
                 ds_token_kind_name(t->kind));
-        for (size_t j = 0; j < t->text.len; j++) {
-            unsigned char ch = (unsigned char)t->text.data[j];
-            if (ch == '\\') fputs("\\\\", out);
-            else if (ch == '"') fputs("\\\"", out);
-            else if (ch == '\n') fputs("\\n", out);
-            else if (ch == '\r') fputs("\\r", out);
-            else if (ch == '\t') fputs("\\t", out);
-            else fputc(ch, out);
-        }
+        ds_fprint_escaped(out, t->text.data, t->text.len, DS_ESCAPE_NAMED_CONTROLS);
         fputs("\"\n", out);
     }
 }

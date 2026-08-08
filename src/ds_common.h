@@ -226,14 +226,21 @@ static inline void ds_fprint_str(FILE *out, DsStr value) {
     fprintf(out, "%.*s", (int)value.len, ds_str_data(value));
 }
 
-static inline void ds_fprint_escaped(FILE *out, const char *data, size_t len, bool hex_controls) {
+typedef enum {
+    DS_ESCAPE_BASIC,
+    DS_ESCAPE_HEX_CONTROLS,
+    DS_ESCAPE_NAMED_CONTROLS
+} DsEscapeMode;
+
+static inline void ds_fprint_escaped(FILE *out, const char *data, size_t len, DsEscapeMode mode) {
     for (size_t i = 0; i < len; i++) {
         unsigned char c = (unsigned char)data[i];
         if (c == '\\') fputs("\\\\", out);
         else if (c == '"') fputs("\\\"", out);
         else if (c == '\n') fputs("\\n", out);
         else if (c == '\t') fputs("\\t", out);
-        else if (hex_controls && (c < 32 || c == 127)) fprintf(out, "\\x%02x", c);
+        else if (c == '\r' && mode == DS_ESCAPE_NAMED_CONTROLS) fputs("\\r", out);
+        else if (mode == DS_ESCAPE_HEX_CONTROLS && (c < 32 || c == 127)) fprintf(out, "\\x%02x", c);
         else fputc((int)c, out);
     }
 }
