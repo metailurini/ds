@@ -204,13 +204,9 @@ static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char 
     return true;
 }
 
-static void interp_skip_ws(const char *data, size_t len, size_t *i) {
-    while (*i < len && (data[*i] == ' ' || data[*i] == '\t' || data[*i] == '\n' || data[*i] == '\r')) (*i)++;
-}
-
 static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsSpan span, EmitBuf *arg) {
     (*j)++;
-    interp_skip_ws(decoded, len, j);
+    ds_skip_ascii_ws(decoded, len, j);
     if (*j < len && ((decoded[*j] == '-' && *j + 1 < len && decoded[*j + 1] >= '0' && decoded[*j + 1] <= '9') ||
                      (decoded[*j] >= '0' && decoded[*j] <= '9'))) {
         size_t index_start = *j;
@@ -232,7 +228,7 @@ static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *deco
     } else {
         return false;
     }
-    interp_skip_ws(decoded, len, j);
+    ds_skip_ascii_ws(decoded, len, j);
     if (*j >= len || decoded[*j] != ']') return false;
     (*j)++;
     return true;
@@ -270,7 +266,7 @@ static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const 
 
 static bool emit_interpolation_index(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsStr name, DsSpan span, EmitBuf *out) {
     (*j)++;
-    interp_skip_ws(decoded, len, j);
+    ds_skip_ascii_ws(decoded, len, j);
     buf_append(out, "$(");
     if (*j < len && decoded[*j] == '"') {
         size_t literal_start = *j;
@@ -320,7 +316,7 @@ static bool emit_interpolation_index(BashEmitter *e, const char *decoded, size_t
         ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unsupported index interpolation shape");
         return false;
     }
-    interp_skip_ws(decoded, len, j);
+    ds_skip_ascii_ws(decoded, len, j);
     if (*j >= len || decoded[*j] != ']') {
         ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unsupported index interpolation shape");
         return false;

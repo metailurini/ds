@@ -363,10 +363,6 @@ static bool append_arithmetic_interpolation(Vm *vm, const char *data, size_t len
     return ds_string_append_cstr(out, buf);
 }
 
-static void interp_skip_ws(const char *data, size_t len, size_t *i) {
-    while (*i < len && (data[*i] == ' ' || data[*i] == '\t' || data[*i] == '\n' || data[*i] == '\r')) (*i)++;
-}
-
 static bool interp_parse_int_literal(const char *data, size_t len, size_t *i, int64_t *out) {
     bool neg = false;
     if (*i < len && data[*i] == '-') { neg = true; (*i)++; }
@@ -397,7 +393,7 @@ static bool interp_parse_string_literal(const char *data, size_t len, size_t *i,
 
 static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data, size_t len, size_t *j, DsSpan span) {
     (*j)++;
-    interp_skip_ws(data, len, j);
+    ds_skip_ascii_ws(data, len, j);
     DsValue indexed = ds_value_null();
 
     if (value->kind == DS_VALUE_ARRAY) {
@@ -427,7 +423,7 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
             ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported array index interpolation shape");
             return false;
         }
-        interp_skip_ws(data, len, j);
+        ds_skip_ascii_ws(data, len, j);
         if (*j >= len || data[*j] != ']') {
             ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported array index interpolation shape");
             return false;
@@ -467,7 +463,7 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
             ds_string_free(&key);
             return false;
         }
-        interp_skip_ws(data, len, j);
+        ds_skip_ascii_ws(data, len, j);
         if (*j >= len || data[*j] != ']') {
             ds_diag_error(vm->diag, span, "internal VM interpolation invariant failed: unsupported map index interpolation shape");
             ds_string_free(&key);

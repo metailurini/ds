@@ -74,6 +74,14 @@ static inline bool ds_is_ident_continue(char c) {
     return ds_is_ident_start(c) || (c >= '0' && c <= '9');
 }
 
+static inline void ds_skip_ascii_ws(const char *data, size_t len, size_t *index) {
+    while (*index < len) {
+        char c = data[*index];
+        if (c != ' ' && c != '\t' && c != '\n' && c != '\r') break;
+        (*index)++;
+    }
+}
+
 static inline bool ds_parse_int_range(DsStr text, int min, int max, int *out) {
     if (!out || text.len == 0 || min > max) return false;
     size_t i = 0;

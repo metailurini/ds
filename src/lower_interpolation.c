@@ -90,10 +90,6 @@ static void temp_expr_free(DsExpr *expr) {
     free(expr);
 }
 
-static void interp_skip_ws(const char *s, size_t len, size_t *i) {
-    while (*i < len && (s[*i] == ' ' || s[*i] == '\t' || s[*i] == '\n' || s[*i] == '\r')) (*i)++;
-}
-
 static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) {
     size_t start = *i;
     if (start >= len || !ds_is_ident_start(s[start])) return false;
@@ -104,8 +100,7 @@ static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) 
 }
 
 static bool interp_name_eq(DsStr name, const char *text) {
-    size_t len = strlen(text);
-    return name.len == len && memcmp(name.data, text, len) == 0;
+    return ds_str_eq_cstr(name, text);
 }
 
 static bool interp_expr_is_ident_text(DsExpr *expr, const char *text) {
@@ -140,14 +135,14 @@ static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i
     (*i)++;
     DsExpr *call = temp_expr_new(DS_EXPR_CALL, span);
     call->as.call.name = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
-    interp_skip_ws(s, len, i);
+    ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == ')') { (*i)++; return call; }
     while (*i < len) {
-        interp_skip_ws(s, len, i);
+        ds_skip_ascii_ws(s, len, i);
         DsExpr *arg = parse_interp_expr_bp(s, len, i, span, 0);
         if (!arg) return call;
         temp_expr_vec_push(&call->as.call.args, arg);
-        interp_skip_ws(s, len, i);
+        ds_skip_ascii_ws(s, len, i);
         if (*i < len && s[*i] == ',') { (*i)++; continue; }
         if (*i < len && s[*i] == ')') { (*i)++; return call; }
         return call;
@@ -166,14 +161,14 @@ static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i,
         call->as.call.name = interp_dup_dotted_name((DsStr){"string", 6}, field);
         temp_expr_vec_push(&call->as.call.args, receiver);
     }
-    interp_skip_ws(s, len, i);
+    ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == ')') { (*i)++; return call; }
     while (*i < len) {
-        interp_skip_ws(s, len, i);
+        ds_skip_ascii_ws(s, len, i);
         DsExpr *arg = parse_interp_expr_bp(s, len, i, span, 0);
         if (!arg) return call;
         temp_expr_vec_push(&call->as.call.args, arg);
-        interp_skip_ws(s, len, i);
+        ds_skip_ascii_ws(s, len, i);
         if (*i < len && s[*i] == ',') { (*i)++; continue; }
         if (*i < len && s[*i] == ')') { (*i)++; return call; }
         return call;
@@ -182,13 +177,13 @@ static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i,
 }
 
 static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan span) {
-    interp_skip_ws(s, len, i);
+    ds_skip_ascii_ws(s, len, i);
     if (*i >= len) return NULL;
     size_t start = *i;
     if (s[*i] == '(') {
         (*i)++;
         DsExpr *inner = parse_interp_expr_bp(s, len, i, span, 0);
-        interp_skip_ws(s, len, i);
+        ds_skip_ascii_ws(s, len, i);
         if (*i < len && s[*i] == ')') (*i)++;
         return inner;
     }
@@ -235,7 +230,7 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
     if (!parse_interp_name(s, len, i, &name)) return NULL;
     if (name.len == 4 && memcmp(name.data, "true", 4) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = true; return expr; }
     if (name.len == 5 && memcmp(name.data, "false", 5) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
-    interp_skip_ws(s, len, i);
+    ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == '(') return parse_interp_call_after_name(s, len, i, name, span);
     for (size_t dot = 0; dot < name.len; dot++) {
         if (name.data[dot] == '.') {
@@ -254,11 +249,11 @@ static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan
     DsExpr *left = parse_interp_primary(s, len, i, span);
     if (!left) return NULL;
     for (;;) {
-        interp_skip_ws(s, len, i);
+        ds_skip_ascii_ws(s, len, i);
         if (*i < len && s[*i] == '[') {
             (*i)++;
             DsExpr *idx = parse_interp_expr_bp(s, len, i, span, 0);
-            interp_skip_ws(s, len, i);
+            ds_skip_ascii_ws(s, len, i);
             if (*i < len && s[*i] == ']') (*i)++;
             DsExpr *index_expr = temp_expr_new(DS_EXPR_INDEX, span);
             index_expr->as.index.object = left;
@@ -270,7 +265,7 @@ static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan
             (*i)++;
             DsStr field = {0};
             if (!parse_interp_name(s, len, i, &field)) return left;
-            interp_skip_ws(s, len, i);
+            ds_skip_ascii_ws(s, len, i);
             if (*i < len && s[*i] == '(') {
                 left = parse_interp_call_after_dot(s, len, i, left, field, span);
                 continue;
@@ -287,7 +282,7 @@ static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan
 }
 
 static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *left_bp, int *right_bp) {
-    interp_skip_ws(s, len, &i);
+    ds_skip_ascii_ws(s, len, &i);
     if (i >= len) return false;
     if (i + 1 < len) {
         if (s[i] == '|' && s[i + 1] == '|') { *op = (DsStr){"||", 2}; *left_bp = 1; *right_bp = 2; return true; }
@@ -311,7 +306,7 @@ static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *
 }
 
 static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan span, int min_bp) {
-    interp_skip_ws(s, len, i);
+    ds_skip_ascii_ws(s, len, i);
     DsExpr *left = NULL;
     if (*i < len && s[*i] == '-' && !(*i + 1 < len && s[*i + 1] >= '0' && s[*i + 1] <= '9')) {
         (*i)++;
@@ -328,7 +323,7 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
         DsStr op = {0};
         int left_bp = 0, right_bp = 0;
         if (!interp_peek_op(s, len, op_i, &op, &left_bp, &right_bp) || left_bp < min_bp) break;
-        interp_skip_ws(s, len, &op_i);
+        ds_skip_ascii_ws(s, len, &op_i);
         op_i += op.len;
         *i = op_i;
         DsExpr *right = parse_interp_expr_bp(s, len, i, span, right_bp);
@@ -347,11 +342,11 @@ static bool decoded_needs_expr_interpolation(DsStr decoded) {
         if (decoded.data[i] != '{') continue;
         if (i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
         size_t j = i + 1;
-        interp_skip_ws(decoded.data, decoded.len, &j);
+        ds_skip_ascii_ws(decoded.data, decoded.len, &j);
         if (j < decoded.len && (decoded.data[j] == '(' || decoded.data[j] == '-' || (decoded.data[j] >= '0' && decoded.data[j] <= '9'))) return true;
         DsStr name = {0};
         if (!parse_interp_name(decoded.data, decoded.len, &j, &name)) continue;
-        interp_skip_ws(decoded.data, decoded.len, &j);
+        ds_skip_ascii_ws(decoded.data, decoded.len, &j);
         if (j < decoded.len && decoded.data[j] == '.') return true;
         if (j < decoded.len && decoded.data[j] == '(') return true;
         if (j < decoded.len && decoded.data[j] == '[') return true;
@@ -384,9 +379,9 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
         }
         if (decoded.data[i] != '{') continue;
         size_t j = i + 1;
-        interp_skip_ws(decoded.data, decoded.len, &j);
+        ds_skip_ascii_ws(decoded.data, decoded.len, &j);
         DsExpr *inner = parse_interp_expr_bp(decoded.data, decoded.len, &j, expr->span, 0);
-        interp_skip_ws(decoded.data, decoded.len, &j);
+        ds_skip_ascii_ws(decoded.data, decoded.len, &j);
         if (inner && j < decoded.len && decoded.data[j] == '}') {
             interp_push_literal(out, decoded.data + literal_start, i - literal_start, expr->span);
             SymKind inner_kind = SYM_UNKNOWN;

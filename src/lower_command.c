@@ -110,10 +110,6 @@ static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr bod
     return !expect_operand && depth == 0;
 }
 
-static void word_interp_skip_ws(DsStr text, size_t *i) {
-    while (*i < text.len && (text.data[*i] == ' ' || text.data[*i] == '\t' || text.data[*i] == '\n' || text.data[*i] == '\r')) (*i)++;
-}
-
 static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded, size_t *j, DsStr name, Symbol *sym, DsSpan span, SymKind *value_kind) {
     if (!sym) {
         ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
@@ -125,7 +121,7 @@ static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded,
     }
 
     (*j)++;
-    word_interp_skip_ws(decoded, j);
+    ds_skip_ascii_ws(decoded.data, decoded.len, j);
     bool index_is_int = false;
     bool index_is_string = false;
     bool negative_int = false;
@@ -170,7 +166,7 @@ static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded,
         return false;
     }
 
-    word_interp_skip_ws(decoded, j);
+    ds_skip_ascii_ws(decoded.data, decoded.len, j);
     if (*j >= decoded.len || decoded.data[*j] != ']') {
         ds_diag_error(lower->diag, span, "unsupported index interpolation; expected `]` after index expression in v0.30.0");
         return false;
