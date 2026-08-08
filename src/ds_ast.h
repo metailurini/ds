@@ -137,6 +137,14 @@ typedef struct {
 void ds_case_pattern_fprint(FILE *out, const DsCasePattern *pattern);
 void ds_case_pattern_vec_free(DsCasePatternVec *patterns);
 
+#define DS_FREE_CASE_ARM_VEC(vec, free_body_fn) do { \
+    for (size_t ds_arm_i = 0; ds_arm_i < (vec).len; ds_arm_i++) { \
+        ds_case_pattern_vec_free(&(vec).items[ds_arm_i].patterns); \
+        free_body_fn((vec).items[ds_arm_i].body); \
+    } \
+    free((vec).items); \
+} while (0)
+
 typedef struct {
     DsCasePatternVec patterns;
     DsStmt *body;

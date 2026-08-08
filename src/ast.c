@@ -319,11 +319,7 @@ void ds_expr_free(DsExpr *expr) {
             DS_FREE_PTR_VEC(expr->as.array.elements, ds_expr_free);
             break;
         case DS_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
-                free(expr->as.map.entries.items[i].key.data);
-                ds_expr_free(expr->as.map.entries.items[i].value);
-            }
-            free(expr->as.map.entries.items);
+            DS_FREE_KEYED_PTR_VEC(expr->as.map.entries, ds_expr_free);
             break;
         case DS_EXPR_INDEX:
             ds_expr_free(expr->as.index.object);
@@ -397,12 +393,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_CASE:
             ds_expr_free(stmt->as.case_stmt.selector);
-            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
-                DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
-                ds_case_pattern_vec_free(&arm->patterns);
-                free_stmt(arm->body);
-            }
-            free(stmt->as.case_stmt.arms.items);
+            DS_FREE_CASE_ARM_VEC(stmt->as.case_stmt.arms, free_stmt);
             break;
         case DS_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);

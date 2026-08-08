@@ -42,11 +42,7 @@ void lower_expr_free(DsLowerExpr *expr) {
             row_schema_free(&expr->as.array.row_schema);
             break;
         case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) {
-                free(expr->as.map.entries.items[i].key.data);
-                lower_expr_free(expr->as.map.entries.items[i].value);
-            }
-            free(expr->as.map.entries.items);
+            DS_FREE_KEYED_PTR_VEC(expr->as.map.entries, lower_expr_free);
             row_schema_free(&expr->as.map.row_schema);
             break;
         case DS_LOWER_EXPR_INDEX:
@@ -116,12 +112,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             break;
         case DS_LOWER_STMT_CASE:
             lower_expr_free(stmt->as.case_stmt.selector);
-            for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
-                DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
-                ds_case_pattern_vec_free(&arm->patterns);
-                lower_stmt_free(arm->body);
-            }
-            free(stmt->as.case_stmt.arms.items);
+            DS_FREE_CASE_ARM_VEC(stmt->as.case_stmt.arms, lower_stmt_free);
             break;
         case DS_LOWER_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);

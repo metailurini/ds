@@ -210,4 +210,12 @@ static inline void ds_fprint_indent(FILE *out, int level) {
     free((vec).items); \
 } while (0)
 
+#define DS_FREE_KEYED_PTR_VEC(vec, free_fn) do { \
+    for (size_t ds_vec_i = 0; ds_vec_i < (vec).len; ds_vec_i++) { \
+        free((vec).items[ds_vec_i].key.data); \
+        free_fn((vec).items[ds_vec_i].value); \
+    } \
+    free((vec).items); \
+} while (0)
+
 #endif
