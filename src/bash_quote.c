@@ -49,8 +49,7 @@ bool symbol_exists(const SymbolVec *symbols, DsStr name) {
 }
 
 void free_symbols(SymbolVec *symbols) {
-    for (size_t i = 0; i < symbols->len; i++) free(symbols->items[i].data);
-    free(symbols->items);
+    ds_free_str_array(symbols->items, symbols->len);
 }
 
 void symbols_truncate(SymbolVec *symbols, size_t len) {

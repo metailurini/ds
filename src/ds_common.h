@@ -143,6 +143,11 @@ static inline DsStr ds_str_clone(DsStr value) {
     return out;
 }
 
+static inline void ds_free_str_array(DsStr *items, size_t len) {
+    for (size_t i = 0; i < len; i++) free(items[i].data);
+    free(items);
+}
+
 static inline DsStr ds_str_join_char(DsStr left, char separator, DsStr right) {
     DsStr out = {0};
     out.len = left.len + 1 + right.len;

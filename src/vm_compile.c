@@ -16,8 +16,7 @@ static void instr_free(Instr *ins) {
     free(ins->cmp);
     free(ins->field);
     free(ins->args);
-    for (size_t i = 0; i < ins->word_count; i++) free(ins->words[i].data);
-    free(ins->words);
+    ds_free_str_array(ins->words, ins->word_count);
     free(ins->stage_word_counts);
     free(ins->redirect.target.data);
     ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);

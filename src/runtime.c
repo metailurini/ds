@@ -354,9 +354,7 @@ bool ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len) {
 }
 
 void ds_map_sorted_keys_free(DsStr *keys, size_t len) {
-    if (!keys) return;
-    for (size_t i = 0; i < len; i++) free(keys[i].data);
-    free(keys);
+    ds_free_str_array(keys, len);
 }
 
 void ds_map_clear(DsMap *map) {
