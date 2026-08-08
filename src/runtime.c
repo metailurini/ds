@@ -9,6 +9,12 @@ static const hashmap *ds_map_impl_const(const DsMap *map) {
     return (const hashmap *)map->impl;
 }
 
+#define DS_MAP_FOREACH(map, iter, key, key_len, value) \
+    for (hm_iter iter, *iter##_active = \
+             hm_iter_init(ds_map_impl_const(map), &iter) == HM_OK ? &iter : NULL; \
+         iter##_active; iter##_active = NULL) \
+        while (hm_iter_next_len(ds_map_impl_const(map), &iter, &(key), &(key_len), &(value)) == HM_OK)
+
 void ds_string_init(DsString *s) {
     *s = (DsString){0};
 }
@@ -126,15 +132,12 @@ DsValue ds_value_copy(const DsValue *value) {
             break;
         case DS_VALUE_MAP:
             out = ds_value_map();
-            hm_iter it;
             const char *key = NULL;
             size_t key_len = 0;
             void *raw = NULL;
-            if (hm_iter_init(ds_map_impl_const(&value->as.map), &it) == HM_OK) {
-                while (hm_iter_next_len(ds_map_impl_const(&value->as.map), &it, &key, &key_len, &raw) == HM_OK) {
-                    DsStr key_view = {(char *)key, key_len};
-                    ds_map_set(&out.as.map, key_view, ds_value_copy((const DsValue *)raw));
-                }
+            DS_MAP_FOREACH(&value->as.map, it, key, key_len, raw) {
+                DsStr key_view = {(char *)key, key_len};
+                ds_map_set(&out.as.map, key_view, ds_value_copy((const DsValue *)raw));
             }
             break;
         case DS_VALUE_BOOL:
@@ -330,18 +333,16 @@ bool ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len) {
     size_t len = ds_map_len(map);
     if (len == 0) return true;
     DsStr *keys = (DsStr *)ds_xcalloc(len, sizeof(DsStr));
-    hm_iter it;
     const char *key = NULL;
     size_t key_len = 0;
     void *raw = NULL;
     size_t i = 0;
-    if (hm_iter_init(ds_map_impl_const(map), &it) == HM_OK) {
-        while (i < len && hm_iter_next_len(ds_map_impl_const(map), &it, &key, &key_len, &raw) == HM_OK) {
-            (void)raw;
-            keys[i].data = ds_str_dup_range(key, key_len);
-            keys[i].len = key_len;
-            i++;
-        }
+    DS_MAP_FOREACH(map, it, key, key_len, raw) {
+        if (i >= len) break;
+        (void)raw;
+        keys[i].data = ds_str_dup_range(key, key_len);
+        keys[i].len = key_len;
+        i++;
     }
     *out_len = i;
     qsort(keys, i, sizeof(DsStr), ds_str_key_cmp);

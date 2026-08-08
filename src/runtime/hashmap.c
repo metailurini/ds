@@ -27,10 +27,6 @@
 #include "hashmap.h"
 #include "../ds_common.h"
 
-#include <stdlib.h>
-#include <string.h>
-
-
 typedef struct hm_lookup {
     size_t slot;
     int found;
