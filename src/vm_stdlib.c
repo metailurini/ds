@@ -149,6 +149,19 @@ static void vm_string_vec_free(VmStringVec *vec) {
     vec->cap = 0;
 }
 
+static DsValue sorted_unique_string_array(VmStringVec *items) {
+    if (items->len > 0) qsort(items->items, items->len, sizeof(char *), cmp_cstr_ptr);
+    DsValue array = ds_value_array();
+    const char *prev = NULL;
+    for (size_t i = 0; i < items->len; i++) {
+        if (prev && strcmp(prev, items->items[i]) == 0) continue;
+        array_push_string(&array, items->items[i], strlen(items->items[i]));
+        prev = items->items[i];
+    }
+    vm_string_vec_free(items);
+    return array;
+}
+
 static bool vm_string_vec_push_owned(VmStringVec *vec, char *text) {
     DS_VEC_PUSH(vec, text, 16);
     return true;
@@ -351,17 +364,7 @@ static bool stdlib_recursive_glob(Vm *vm, Instr *ins, const char *pattern, DsVal
         return false;
     }
 
-    if (matches.len > 0) qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
-
-    DsValue array = ds_value_array();
-    const char *prev = NULL;
-    for (size_t i = 0; i < matches.len; i++) {
-        if (prev && strcmp(prev, matches.items[i]) == 0) continue;
-        array_push_string(&array, matches.items[i], strlen(matches.items[i]));
-        prev = matches.items[i];
-    }
-    vm_string_vec_free(&matches);
-    *out = array;
+    *out = sorted_unique_string_array(&matches);
     return true;
 }
 
@@ -806,16 +809,7 @@ static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsValue *out) {
         vm_string_vec_free(&matches);
         return false;
     }
-    if (matches.len > 0) qsort(matches.items, matches.len, sizeof(char *), cmp_cstr_ptr);
-
-    DsValue array = ds_value_array();
-    const char *prev = NULL;
-    for (size_t i = 0; i < matches.len; i++) {
-        if (prev && strcmp(prev, matches.items[i]) == 0) continue;
-        array_push_string(&array, matches.items[i], strlen(matches.items[i]));
-        prev = matches.items[i];
-    }
-    vm_string_vec_free(&matches);
+    DsValue array = sorted_unique_string_array(&matches);
     if (required && array.as.array.len == 0) {
         ds_diag_error(vm->diag, ins->span, "%s matched no files", ins->name ? ins->name : "dir.walk!");
         ds_value_free(&array);
