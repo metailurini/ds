@@ -31,46 +31,12 @@ static void print_instr_command(FILE *out, const Instr *ins) {
 }
 
 const char *op_name(OpCode op) {
-    switch (op) {
-        case OP_LOAD_CONST: return "LOAD_CONST";
-        case OP_LOAD_VAR: return "LOAD_VAR";
-        case OP_STORE_VAR: return "STORE_VAR";
-        case OP_SET_ENV: return "SET_ENV";
-        case OP_NOT: return "NOT";
-        case OP_BINARY: return "BINARY";
-        case OP_COMPARE: return "COMPARE";
-        case OP_MEMBERSHIP: return "MEMBERSHIP";
-        case OP_REGEX_MATCH: return "REGEX_MATCH";
-        case OP_INTERPOLATE: return "INTERPOLATE";
-        case OP_INTERP_JOIN: return "INTERP_JOIN";
-        case OP_RUN_CAPTURE: return "RUN_CAPTURE";
-        case OP_GET_FIELD: return "GET_FIELD";
-        case OP_JUMP: return "JUMP";
-        case OP_JUMP_POP: return "JUMP_POP";
-        case OP_JUMP_IF_FALSE: return "JUMP_IF_FALSE";
-        case OP_PUSH_SCOPE: return "PUSH_SCOPE";
-        case OP_POP_SCOPE: return "POP_SCOPE";
-        case OP_RUN_CMD: return "RUN_CMD";
-        case OP_CALL: return "CALL";
-        case OP_STDLIB_CALL: return "STDLIB_CALL";
-        case OP_ARRAY_LITERAL: return "ARRAY_LITERAL";
-        case OP_MAP_LITERAL: return "MAP_LITERAL";
-        case OP_GET_INDEX: return "GET_INDEX";
-        case OP_SET_INDEX: return "SET_INDEX";
-        case OP_PUSH_ARRAY: return "PUSH_ARRAY";
-        case OP_FOR_ARRAY: return "FOR_ARRAY";
-        case OP_FOR_MAP: return "FOR_MAP";
-        case OP_FOR_RANGE: return "FOR_RANGE";
-        case OP_RESET_FOR: return "RESET_FOR";
-        case OP_ASSERT: return "ASSERT";
-        case OP_RETURN_VALUE: return "RETURN_VALUE";
-        case OP_RETURN_FUNC: return "RETURN_FUNC";
-        case OP_REGISTER_HANDLER: return "REGISTER_HANDLER";
-        case OP_END_HANDLER: return "END_HANDLER";
-        case OP_RETURN: return "RETURN";
-        case OP_NOP: return "NOP";
-    }
-    return "NOP";
+    static const char *const names[] = {
+#define DS_VM_OPCODE_NAME(name) #name,
+        DS_VM_OPCODE_LIST(DS_VM_OPCODE_NAME)
+#undef DS_VM_OPCODE_NAME
+    };
+    return (unsigned)op < DS_ARRAY_LEN(names) ? names[op] : "NOP";
 }
 
 const char *span_path(const DsSource *fallback, DsSpan span) {
