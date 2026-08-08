@@ -31,17 +31,14 @@ void lower_expr_free(DsLowerExpr *expr) {
             break;
         case DS_LOWER_EXPR_CALL:
             free(expr->as.call.name.data);
-            for (size_t i = 0; i < expr->as.call.args.len; i++) lower_expr_free(expr->as.call.args.items[i]);
-            free(expr->as.call.args.items);
+            DS_FREE_PTR_VEC(expr->as.call.args, lower_expr_free);
             row_schema_free(&expr->as.call.row_schema);
             break;
         case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) lower_expr_free(expr->as.interp.parts.items[i]);
-            free(expr->as.interp.parts.items);
+            DS_FREE_PTR_VEC(expr->as.interp.parts, lower_expr_free);
             break;
         case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) lower_expr_free(expr->as.array.elements.items[i]);
-            free(expr->as.array.elements.items);
+            DS_FREE_PTR_VEC(expr->as.array.elements, lower_expr_free);
             row_schema_free(&expr->as.array.row_schema);
             break;
         case DS_LOWER_EXPR_MAP:
@@ -92,16 +89,14 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             lower_stmt_free(stmt->as.if_stmt.else_branch);
             break;
         case DS_LOWER_STMT_BLOCK:
-            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) lower_stmt_free(stmt->as.block_stmt.statements.items[i]);
-            free(stmt->as.block_stmt.statements.items);
+            DS_FREE_PTR_VEC(stmt->as.block_stmt.statements, lower_stmt_free);
             break;
         case DS_LOWER_STMT_CMD:
             ds_command_free(&stmt->as.cmd_stmt);
             break;
         case DS_LOWER_STMT_CALL:
             free(stmt->as.call_stmt.name.data);
-            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) lower_expr_free(stmt->as.call_stmt.args.items[i]);
-            free(stmt->as.call_stmt.args.items);
+            DS_FREE_PTR_VEC(stmt->as.call_stmt.args, lower_expr_free);
             break;
         case DS_LOWER_STMT_FOR_ARRAY:
         case DS_LOWER_STMT_FOR_MAP:
@@ -172,7 +167,6 @@ void ds_lower_program_free(DsLowerProgram *program) {
         lower_stmt_free(program->tests.items[i].body);
     }
     free(program->tests.items);
-    for (size_t i = 0; i < program->statements.len; i++) lower_stmt_free(program->statements.items[i]);
-    free(program->statements.items);
+    DS_FREE_PTR_VEC(program->statements, lower_stmt_free);
     free(program);
 }

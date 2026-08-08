@@ -313,12 +313,10 @@ static void free_expr(DsExpr *expr) {
             break;
         case DS_EXPR_CALL:
             free(expr->as.call.name.data);
-            for (size_t i = 0; i < expr->as.call.args.len; i++) free_expr(expr->as.call.args.items[i]);
-            free(expr->as.call.args.items);
+            DS_FREE_PTR_VEC(expr->as.call.args, free_expr);
             break;
         case DS_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) free_expr(expr->as.array.elements.items[i]);
-            free(expr->as.array.elements.items);
+            DS_FREE_PTR_VEC(expr->as.array.elements, free_expr);
             break;
         case DS_EXPR_MAP:
             for (size_t i = 0; i < expr->as.map.entries.len; i++) {
@@ -363,10 +361,7 @@ static void free_stmt(DsStmt *stmt) {
             free_stmt(stmt->as.if_stmt.else_branch);
             break;
         case DS_STMT_BLOCK:
-            for (size_t i = 0; i < stmt->as.block_stmt.statements.len; i++) {
-                free_stmt(stmt->as.block_stmt.statements.items[i]);
-            }
-            free(stmt->as.block_stmt.statements.items);
+            DS_FREE_PTR_VEC(stmt->as.block_stmt.statements, free_stmt);
             break;
         case DS_STMT_IMPORT:
             free(stmt->as.import_stmt.path.data);
@@ -385,8 +380,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_CALL:
             free(stmt->as.call_stmt.name.data);
-            for (size_t i = 0; i < stmt->as.call_stmt.args.len; i++) free_expr(stmt->as.call_stmt.args.items[i]);
-            free(stmt->as.call_stmt.args.items);
+            DS_FREE_PTR_VEC(stmt->as.call_stmt.args, free_expr);
             break;
         case DS_STMT_FOR:
             free(stmt->as.for_stmt.key_name.data);
@@ -441,9 +435,6 @@ void ds_ast_free(DsAst *ast) {
         free_expr(ast->script.declarations.items[i].default_value);
     }
     free(ast->script.declarations.items);
-    for (size_t i = 0; i < ast->statements.len; i++) {
-        free_stmt(ast->statements.items[i]);
-    }
-    free(ast->statements.items);
+    DS_FREE_PTR_VEC(ast->statements, free_stmt);
     free(ast);
 }
