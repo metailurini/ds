@@ -99,17 +99,11 @@ static inline void parser_script_decl_vec_push(DsScriptDeclVec *vec, DsScriptDec
 }
 
 static inline DsExpr *parser_new_expr(DsExprKind kind, DsSpan span) {
-    DsExpr *expr = (DsExpr *)ds_xcalloc(1, sizeof(DsExpr));
-    expr->kind = kind;
-    expr->span = span;
-    return expr;
+    return ds_expr_new(kind, span);
 }
 
 static inline DsStmt *parser_new_stmt(DsStmtKind kind, DsSpan span) {
-    DsStmt *stmt = (DsStmt *)ds_xcalloc(1, sizeof(DsStmt));
-    stmt->kind = kind;
-    stmt->span = span;
-    return stmt;
+    return ds_stmt_new(kind, span);
 }
 
 static inline void parser_skip_newlines(Parser *p) {

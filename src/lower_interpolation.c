@@ -21,13 +21,6 @@ static DsStr quoted_string_from_decoded(const char *data, size_t len) {
     return (DsStr){buf, n};
 }
 
-static DsExpr *temp_expr_new(DsExprKind kind, DsSpan span) {
-    DsExpr *expr = (DsExpr *)ds_xcalloc(1, sizeof(DsExpr));
-    expr->kind = kind;
-    expr->span = span;
-    return expr;
-}
-
 static void temp_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
     DS_VEC_PUSH(vec, expr, 4);
 }
@@ -65,7 +58,7 @@ static DsStr interp_dup_dotted_name(DsStr left, DsStr right) {
 }
 
 static DsExpr *temp_ident_from_str(DsStr name, DsSpan span) {
-    DsExpr *expr = temp_expr_new(DS_EXPR_IDENT, span);
+    DsExpr *expr = ds_expr_new(DS_EXPR_IDENT, span);
     expr->as.text = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
     return expr;
 }
@@ -75,7 +68,7 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
 static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i, DsStr name, DsSpan span) {
     if (*i >= len || s[*i] != '(') return NULL;
     (*i)++;
-    DsExpr *call = temp_expr_new(DS_EXPR_CALL, span);
+    DsExpr *call = ds_expr_new(DS_EXPR_CALL, span);
     call->as.call.name = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
     ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == ')') { (*i)++; return call; }
@@ -95,7 +88,7 @@ static DsExpr *parse_interp_call_after_name(const char *s, size_t len, size_t *i
 static DsExpr *parse_interp_call_after_dot(const char *s, size_t len, size_t *i, DsExpr *receiver, DsStr field, DsSpan span) {
     if (*i >= len || s[*i] != '(') return NULL;
     (*i)++;
-    DsExpr *call = temp_expr_new(DS_EXPR_CALL, span);
+    DsExpr *call = ds_expr_new(DS_EXPR_CALL, span);
     if (interp_expr_is_stdlib_namespace(receiver)) {
         call->as.call.name = interp_dup_dotted_name(receiver->as.text, field);
         ds_expr_free(receiver);
@@ -136,7 +129,7 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
             if (s[*i] == '"') { (*i)++; break; }
             (*i)++;
         }
-        DsExpr *expr = temp_expr_new(DS_EXPR_STRING, span);
+        DsExpr *expr = ds_expr_new(DS_EXPR_STRING, span);
         expr->as.text = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
         return expr;
     }
@@ -152,7 +145,7 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
         if (terminated) {
             while (*i < len && ((s[*i] >= 'A' && s[*i] <= 'Z') || (s[*i] >= 'a' && s[*i] <= 'z'))) (*i)++;
         }
-        DsExpr *expr = temp_expr_new(DS_EXPR_REGEX, span);
+        DsExpr *expr = ds_expr_new(DS_EXPR_REGEX, span);
         expr->as.regex = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
         return expr;
     }
@@ -160,29 +153,29 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
         bool neg = false;
         if (s[*i] == '-') { neg = true; (*i)++; start = *i; }
         while (*i < len && s[*i] >= '0' && s[*i] <= '9') (*i)++;
-        DsExpr *int_expr = temp_expr_new(DS_EXPR_INT, span);
+        DsExpr *int_expr = ds_expr_new(DS_EXPR_INT, span);
         int_expr->as.text = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
         if (!neg) return int_expr;
-        DsExpr *unary = temp_expr_new(DS_EXPR_UNARY, span);
+        DsExpr *unary = ds_expr_new(DS_EXPR_UNARY, span);
         unary->as.unary.op = (DsStr){ds_str_dup_range("-", 1), 1};
         unary->as.unary.right = int_expr;
         return unary;
     }
     DsStr name = {0};
     if (!parse_interp_name(s, len, i, &name)) return NULL;
-    if (name.len == 4 && memcmp(name.data, "true", 4) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = true; return expr; }
-    if (name.len == 5 && memcmp(name.data, "false", 5) == 0) { DsExpr *expr = temp_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
+    if (interp_name_eq(name, "true")) { DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = true; return expr; }
+    if (interp_name_eq(name, "false")) { DsExpr *expr = ds_expr_new(DS_EXPR_BOOL, span); expr->as.boolean = false; return expr; }
     ds_skip_ascii_ws(s, len, i);
     if (*i < len && s[*i] == '(') return parse_interp_call_after_name(s, len, i, name, span);
     for (size_t dot = 0; dot < name.len; dot++) {
         if (name.data[dot] == '.') {
-            DsExpr *field = temp_expr_new(DS_EXPR_FIELD, span);
+            DsExpr *field = ds_expr_new(DS_EXPR_FIELD, span);
             field->as.field.object = temp_ident_from_str((DsStr){name.data, dot}, span);
             field->as.field.field = (DsStr){ds_str_dup_range(name.data + dot + 1, name.len - dot - 1), name.len - dot - 1};
             return field;
         }
     }
-    DsExpr *expr = temp_expr_new(DS_EXPR_IDENT, span);
+    DsExpr *expr = ds_expr_new(DS_EXPR_IDENT, span);
     expr->as.text = (DsStr){ds_str_dup_range(name.data, name.len), name.len};
     return expr;
 }
@@ -197,7 +190,7 @@ static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan
             DsExpr *idx = parse_interp_expr_bp(s, len, i, span, 0);
             ds_skip_ascii_ws(s, len, i);
             if (*i < len && s[*i] == ']') (*i)++;
-            DsExpr *index_expr = temp_expr_new(DS_EXPR_INDEX, span);
+            DsExpr *index_expr = ds_expr_new(DS_EXPR_INDEX, span);
             index_expr->as.index.object = left;
             index_expr->as.index.index = idx;
             left = index_expr;
@@ -212,7 +205,7 @@ static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan
                 left = parse_interp_call_after_dot(s, len, i, left, field, span);
                 continue;
             }
-            DsExpr *field_expr = temp_expr_new(DS_EXPR_FIELD, span);
+            DsExpr *field_expr = ds_expr_new(DS_EXPR_FIELD, span);
             field_expr->as.field.object = left;
             field_expr->as.field.field = (DsStr){ds_str_dup_range(field.data, field.len), field.len};
             left = field_expr;
@@ -253,7 +246,7 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
     if (*i < len && s[*i] == '-' && !(*i + 1 < len && s[*i + 1] >= '0' && s[*i + 1] <= '9')) {
         (*i)++;
         DsExpr *right = parse_interp_expr_bp(s, len, i, span, 8);
-        left = temp_expr_new(DS_EXPR_UNARY, span);
+        left = ds_expr_new(DS_EXPR_UNARY, span);
         left->as.unary.op = (DsStr){ds_str_dup_range("-", 1), 1};
         left->as.unary.right = right;
     } else {
@@ -270,7 +263,7 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
         *i = op_i;
         DsExpr *right = parse_interp_expr_bp(s, len, i, span, right_bp);
         if (!right) break;
-        DsExpr *bin = temp_expr_new(DS_EXPR_BINARY, span);
+        DsExpr *bin = ds_expr_new(DS_EXPR_BINARY, span);
         bin->as.binary.left = left;
         bin->as.binary.op = (DsStr){ds_str_dup_range(op.data, op.len), op.len};
         bin->as.binary.right = right;

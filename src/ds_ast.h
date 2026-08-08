@@ -63,6 +63,13 @@ struct DsExpr {
     } as;
 };
 
+static inline DsExpr *ds_expr_new(DsExprKind kind, DsSpan span) {
+    DsExpr *expr = (DsExpr *)ds_xcalloc(1, sizeof(*expr));
+    expr->kind = kind;
+    expr->span = span;
+    return expr;
+}
+
 typedef enum {
     DS_STMT_LET,
     DS_STMT_ASSIGN,
@@ -216,6 +223,13 @@ struct DsStmt {
         struct { DsHandlerSignal signal; DsStr signal_text; DsStmt *body; } handler_stmt;
     } as;
 };
+
+static inline DsStmt *ds_stmt_new(DsStmtKind kind, DsSpan span) {
+    DsStmt *stmt = (DsStmt *)ds_xcalloc(1, sizeof(*stmt));
+    stmt->kind = kind;
+    stmt->span = span;
+    return stmt;
+}
 
 typedef struct {
     bool has_script;
