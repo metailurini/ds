@@ -31,11 +31,11 @@ static bool is_regex_match_call(const DsLowerExpr *value) {
 
 static bool emit_regex_match_map_call(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl, bool declare_target) {
     emit_indent(&e->out, indent);
-    if (declare_target) buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+    if (declare_target) emit_bash_decl_prefix(&e->out, local_decl, "-A");
     emit_var_name(&e->out, name);
     buf_append(&e->out, "=()\n");
     emit_indent(&e->out, indent);
-    if (declare_target) buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+    if (declare_target) emit_bash_decl_prefix(&e->out, local_decl, "-A");
     bash_emit_map_value_type_var_name(&e->out, name);
     buf_append(&e->out, "=()\n");
     emit_indent(&e->out, indent);
@@ -113,7 +113,7 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
                 if (!temps[i]) { free(temps); return false; }
                 DsStr raw = {temps[i], strlen(temps[i])};
                 emit_indent(&e->out, indent);
-                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "");
                 emit_var_name(&e->out, raw);
                 buf_append(&e->out, "=\"\"\n");
                 if (!bash_emit_user_call_into_raw_var(e, part, raw, indent)) {
@@ -207,14 +207,14 @@ static bool emit_collection_ident_copy(BashEmitter *e, DsStr dest, const DsLower
     bool local_decl = e->function_depth > 0;
     if (kind == DS_LOWER_VALUE_ARRAY) {
         emit_indent(&e->out, indent);
-        buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
+        emit_bash_decl_prefix(&e->out, local_decl, "-a");
         emit_var_name(&e->out, dest);
         buf_append(&e->out, "=(\"${");
         emit_var_name(&e->out, source->as.text);
         buf_append(&e->out, "[@]}\")\n");
 
         emit_indent(&e->out, indent);
-        buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
+        emit_bash_decl_prefix(&e->out, local_decl, "-a");
         bash_emit_elem_type_var_name(&e->out, dest);
         buf_append(&e->out, "=()\n");
         emit_indent(&e->out, indent);
@@ -233,12 +233,12 @@ static bool emit_collection_ident_copy(BashEmitter *e, DsStr dest, const DsLower
         DsStr key_tmp = {key_buf, strlen(key_buf)};
 
         emit_indent(&e->out, indent);
-        buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+        emit_bash_decl_prefix(&e->out, local_decl, "-A");
         emit_var_name(&e->out, dest);
         buf_append(&e->out, "=()\n");
         emit_indent(&e->out, indent);
         if (local_decl) {
-            buf_append(&e->out, "local ");
+            emit_bash_decl_prefix(&e->out, 1, "");
             emit_var_name(&e->out, key_tmp);
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
@@ -258,7 +258,7 @@ static bool emit_collection_ident_copy(BashEmitter *e, DsStr dest, const DsLower
         buf_append(&e->out, "]}\"; done\n");
 
         emit_indent(&e->out, indent);
-        buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
+        emit_bash_decl_prefix(&e->out, local_decl, "-A");
         bash_emit_map_value_type_var_name(&e->out, dest);
         buf_append(&e->out, "=()\n");
         emit_indent(&e->out, indent);
@@ -295,14 +295,14 @@ static bool emit_index_assignment(BashEmitter *e, const DsLowerStmt *stmt, int i
     DsStr value_tmp = {value_buf, strlen(value_buf)};
 
     emit_indent(&e->out, indent);
-    if (e->function_depth > 0) buf_append(&e->out, "local ");
+    emit_bash_decl_prefix(&e->out, e->function_depth, "");
     emit_var_name(&e->out, index_tmp);
     buf_append(&e->out, "=");
     if (!emit_value_expr(e, stmt->as.index_assign_stmt.index, &e->out)) return false;
     buf_append(&e->out, "\n");
 
     emit_indent(&e->out, indent);
-    if (e->function_depth > 0) buf_append(&e->out, "local ");
+    emit_bash_decl_prefix(&e->out, e->function_depth, "");
     emit_var_name(&e->out, value_tmp);
     buf_append(&e->out, "=\"\"\n");
     if (!emit_assignment_rhs(e, value_tmp, stmt->as.index_assign_stmt.value, indent)) return false;
@@ -606,8 +606,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 }
                 if (!emit_assignment_rhs(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
                 if (!symbol_exists(&e->symbols, stmt->as.let_stmt.name)) {
-                    DsStr copy = {ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len), stmt->as.let_stmt.name.len};
-                    symbol_vec_push(&e->symbols, copy);
+                    bash_register_symbol(e, stmt->as.let_stmt.name);
                 }
                 return true;
             }
@@ -637,21 +636,18 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_INDEX && stmt->as.let_stmt.value->as.index.returns_row) {
                 if (!bash_emit_row_from_index(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
-                if (e->function_depth > 0) buf_append(&e->out, "local -a ");
-                else buf_append(&e->out, "declare -a ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "-a");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=");
                 if (!emit_array_elements(e, &stmt->as.let_stmt.value->as.array.elements, &e->out)) return false;
             } else if (is_regex_match_call(stmt->as.let_stmt.value)) {
                 if (!emit_regex_match_map_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent, e->function_depth > 0, true)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.let_stmt.value->as.call.name)) {
-                if (e->function_depth > 0) buf_append(&e->out, "local -a ");
-                else buf_append(&e->out, "declare -a ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "-a");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent);
-                if (e->function_depth > 0) buf_append(&e->out, "local -a ");
-                else buf_append(&e->out, "declare -a ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "-a");
                 bash_emit_elem_type_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent);
@@ -672,7 +668,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && str_eq(stmt->as.let_stmt.value->as.call.name, "rowarray.sort_by")) {
                 if (!bash_emit_row_array_sort_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(stmt->as.let_stmt.value->as.call.name)) {
-                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=\"\"\n");
                 emit_indent(&e->out, indent);
@@ -691,8 +687,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (!bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.call.return_kind, indent, e->function_depth > 0)) return false;
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
-                if (e->function_depth > 0) buf_append(&e->out, "local -A ");
-                else buf_append(&e->out, "declare -A ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "-A");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=");
                 if (!emit_map_entries(e, &stmt->as.let_stmt.value->as.map.entries, &e->out)) return false;
@@ -713,7 +708,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     emit_indent(&e->out, indent);
                 }
             } else {
-                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=");
                 if (!emit_value_expr(e, stmt->as.let_stmt.value, &e->out)) return false;
@@ -721,10 +716,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             buf_append(&e->out, "\n");
             bash_emit_type_assignment_for_expr(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent, e->function_depth > 0);
             buf_append(&e->out, "\n");
-            if (!symbol_exists(&e->symbols, stmt->as.let_stmt.name)) {
-                DsStr copy = {ds_str_dup_range(stmt->as.let_stmt.name.data, stmt->as.let_stmt.name.len), stmt->as.let_stmt.name.len};
-                symbol_vec_push(&e->symbols, copy);
-            }
+            bash_register_symbol(e, stmt->as.let_stmt.name);
             return true;
 
         case DS_LOWER_STMT_ASSIGN:
@@ -810,13 +802,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, " ) || { __ds_code=$?; if __ds_is_quiet_broken_pipe \"$__ds_code\" ");
                 buf_append(&e->out, stmt->as.cmd_stmt.redirect.kind == DS_REDIRECT_NONE ? "1" : "0");
                 buf_append(&e->out, "; then ");
-                if (e->handler_depth > 0) buf_append(&e->out, "return 0; ");
-                else buf_append(&e->out, "exit 0; ");
+                buf_append(&e->out, e->handler_depth > 0 ? "return 0; " : "exit 0; ");
                 buf_append(&e->out, "fi; printf '%s: error: pipeline failed with exit %s\\n' ");
                 emit_source_loc(&e->out, e->source, stmt->span);
                 buf_append(&e->out, " \"$__ds_code\" >&2; ");
-                if (e->handler_depth > 0) buf_append(&e->out, "return \"$__ds_code\"; }");
-                else buf_append(&e->out, "exit \"$__ds_code\"; }");
+                buf_append(&e->out, e->handler_depth > 0 ? "return \"$__ds_code\"; }" : "exit \"$__ds_code\"; }");
                 buf_append(&e->out, "\n\n");
             } else {
                 buf_append(&e->out, " ) || __ds_fail ");
@@ -881,11 +871,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_var_name(&e->out, iter_name);
                 buf_append(&e->out, "[@]}\"; do\n");
                 emit_indent(&e->out, indent + 1);
-                buf_append(&e->out, e->function_depth > 0 ? "local -A " : "declare -A ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "-A");
                 emit_var_name(&e->out, stmt->as.for_stmt.name);
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent + 1);
-                buf_append(&e->out, e->function_depth > 0 ? "local -A " : "declare -A ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "-A");
                 bash_emit_map_value_type_var_name(&e->out, stmt->as.for_stmt.name);
                 buf_append(&e->out, "=()\n");
                 for (size_t i = 0; i < stmt->as.for_stmt.row_schema.len; i++) {
@@ -915,8 +905,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     }
                 }
                 size_t mark = e->symbols.len;
-                DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
-                symbol_vec_push(&e->symbols, copy);
+                bash_register_symbol(e, stmt->as.for_stmt.name);
                 bash_emit_type_assignment(e, stmt->as.for_stmt.name, "map", indent + 1, false);
                 if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
                 symbols_truncate(&e->symbols, mark);
@@ -968,8 +957,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "; do\n");
             }
             size_t mark = e->symbols.len;
-            DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
-            symbol_vec_push(&e->symbols, copy);
+            bash_register_symbol(e, stmt->as.for_stmt.name);
             bash_emit_type_assignment(e, stmt->as.for_stmt.name, ds_lower_value_kind_name(stmt->as.for_stmt.element_kind), indent + 1, false);
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
@@ -997,7 +985,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
 
             if (!emit_map_loop_materialize(e, stmt, raw_map, indent, loop_id)) return false;
             emit_indent(&e->out, indent);
-            buf_append(&e->out, e->function_depth > 0 ? "local -a " : "declare -a ");
+            emit_bash_decl_prefix(&e->out, e->function_depth, "-a");
             emit_var_name(&e->out, raw_keys);
             buf_append(&e->out, "=()\n");
             emit_indent(&e->out, indent);
@@ -1045,10 +1033,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             buf_append(&e->out, "}\"\n");
 
             size_t mark = e->symbols.len;
-            DsStr key_copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
-            DsStr value_copy = {ds_str_dup_range(stmt->as.for_stmt.value_name.data, stmt->as.for_stmt.value_name.len), stmt->as.for_stmt.value_name.len};
-            symbol_vec_push(&e->symbols, key_copy);
-            symbol_vec_push(&e->symbols, value_copy);
+            bash_register_symbol(e, stmt->as.for_stmt.name);
+            bash_register_symbol(e, stmt->as.for_stmt.value_name);
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
 
@@ -1088,8 +1074,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_var_name(&e->out, stmt->as.for_stmt.name);
             buf_append(&e->out, "++ )); do\n");
             size_t mark = e->symbols.len;
-            DsStr copy = {ds_str_dup_range(stmt->as.for_stmt.name.data, stmt->as.for_stmt.name.len), stmt->as.for_stmt.name.len};
-            symbol_vec_push(&e->symbols, copy);
+            bash_register_symbol(e, stmt->as.for_stmt.name);
             bash_emit_type_assignment(e, stmt->as.for_stmt.name, "int", indent + 1, false);
             if (!emit_block_body(e, stmt->as.for_stmt.body, indent + 1)) { symbols_truncate(&e->symbols, mark); return false; }
             symbols_truncate(&e->symbols, mark);
@@ -1142,7 +1127,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 bash_temp_ds_name(case_temp_buf, sizeof(case_temp_buf), "case", e->temp_counter++);
                 DsStr raw = {case_temp_buf, strlen(case_temp_buf)};
                 emit_indent(&e->out, indent);
-                if (e->function_depth > 0) buf_append(&e->out, "local ");
+                emit_bash_decl_prefix(&e->out, e->function_depth, "");
                 emit_var_name(&e->out, raw);
                 buf_append(&e->out, "=\"\"\n");
                 if (!bash_emit_user_call_into_raw_var(e, stmt->as.case_stmt.selector, raw, indent)) return false;
@@ -1155,8 +1140,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 case_temp_expr = *stmt->as.case_stmt.selector;
                 case_temp_expr.kind = DS_LOWER_EXPR_IDENT;
                 case_temp_expr.as.text = raw;
-                DsStr copy = {ds_str_dup_range(raw.data, raw.len), raw.len};
-                symbol_vec_push(&e->symbols, copy);
+                bash_register_symbol(e, raw);
                 case_selector = &case_temp_expr;
             }
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {

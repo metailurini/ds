@@ -192,8 +192,8 @@ const char *ds_bash_array_helpers_source(void) {
         "  if (( __ds_index < 0 || __ds_index >= __ds_len )); then\n"
         "    __ds_error \"array index $__ds_index out of range\"\n"
         "  fi\n"
-        "  eval \"${__ds_name}[\\$__ds_index]=\\$__ds_value\"\n"
-        "}\n\n";
+    "  eval \"${__ds_name}[\\$__ds_index]=\\$__ds_value\"\n"
+    "}\n\n";
 }
 
 const char *ds_bash_map_helpers_source(void) {
@@ -242,62 +242,14 @@ const char *ds_bash_dynamic_index_helper_source(void) {
 }
 
 const char *ds_bash_collection_helpers_source(void) {
-    /* Dynamic collection access failures mirror VM runtime data diagnostics. */
-    return
-        "__ds_array_get() {\n"
-        "  local __ds_name=$1 __ds_index=$2 __ds_len\n"
-        "  [[ \"$__ds_index\" =~ ^-?[0-9]+$ ]] || __ds_error \"runtime array index $__ds_index is not an int\"\n"
-        "  eval \"__ds_len=\\${#${__ds_name}[@]}\"\n"
-        "  if (( __ds_index < 0 || __ds_index >= __ds_len )); then\n"
-        "    __ds_error \"array index $__ds_index out of range\"\n"
-        "  fi\n"
-        "  eval \"printf '%s' \\\"\\${${__ds_name}[${__ds_index}]}\\\"\"\n"
-        "}\n"
-        "__ds_map_get() {\n"
-        "  local __ds_name=$1 __ds_key=$2\n"
-        "  eval \"[[ \\${${__ds_name}[\\$__ds_key]+__ds_set} == __ds_set ]]\" || __ds_error \"missing map key '$__ds_key'\"\n"
-        "  eval \"printf '%s' \\\"\\${${__ds_name}[\\$__ds_key]}\\\"\"\n"
-        "}\n"
-        "__ds_index_get() {\n"
-        "  local __ds_name=$1 __ds_key=$2 __ds_decl\n"
-        "  __ds_decl=$(declare -p \"$__ds_name\" 2>/dev/null) || __ds_error \"missing collection '$__ds_name'\"\n"
-        "  case \"$__ds_decl\" in\n"
-        "    declare\\ -a*) __ds_array_get \"$__ds_name\" \"$__ds_key\" ;;\n"
-        "    declare\\ -A*) __ds_map_get \"$__ds_name\" \"$__ds_key\" ;;\n"
-        "    *) __ds_error \"index receiver '$__ds_name' is not an array or map\" ;;\n"
-        "  esac\n"
-        "}\n"
-        "__ds_array_set() {\n"
-        "  local __ds_name=$1 __ds_index=$2 __ds_value=$3 __ds_len\n"
-        "  [[ \"$__ds_index\" =~ ^-?[0-9]+$ ]] || __ds_error \"runtime array index $__ds_index is not an int\"\n"
-        "  eval \"__ds_len=\\${#${__ds_name}[@]}\"\n"
-        "  if (( __ds_index < 0 || __ds_index >= __ds_len )); then\n"
-        "    __ds_error \"array index $__ds_index out of range\"\n"
-        "  fi\n"
-        "  eval \"${__ds_name}[\\$__ds_index]=\\$__ds_value\"\n"
-        "}\n"
-        "__ds_map_set() {\n"
-        "  local __ds_name=$1 __ds_key=$2 __ds_value=$3\n"
-        "  [[ -n \"$__ds_key\" ]] || __ds_error \"map key must be non-empty\"\n"
-        "  eval \"${__ds_name}[\\$__ds_key]=\\$__ds_value\"\n"
-        "}\n"
-        "__ds_map_sorted_keys() {\n"
-        "  local __ds_source=$1 __ds_target=$2 __ds_len __ds_i __ds_j __ds_tmp __ds_prev\n"
-        "  local LC_ALL=C\n"
-        "  eval \"$__ds_target=(\\\"\\${!${__ds_source}[@]}\\\")\"\n"
-        "  eval \"__ds_len=\\${#${__ds_target}[@]}\"\n"
-        "  for (( __ds_i = 1; __ds_i < __ds_len; __ds_i++ )); do\n"
-        "    eval \"__ds_tmp=\\\"\\${${__ds_target}[\\$__ds_i]}\\\"\"\n"
-        "    __ds_j=$__ds_i\n"
-        "    while (( __ds_j > 0 )); do\n"
-        "      eval \"__ds_prev=\\\"\\${${__ds_target}[\\$((__ds_j - 1))]}\\\"\"\n"
-        "      if [[ \"$__ds_prev\" < \"$__ds_tmp\" || \"$__ds_prev\" == \"$__ds_tmp\" ]]; then break; fi\n"
-        "      eval \"${__ds_target}[\\$__ds_j]=\\\"\\$__ds_prev\\\"\"\n"
-        "      __ds_j=$((__ds_j - 1))\n"
-        "    done\n"
-        "    eval \"${__ds_target}[\\$__ds_j]=\\\"\\$__ds_tmp\\\"\"\n"
-        "  done\n"
-        "}\n\n";
+    static char *data = NULL;
+    static size_t len = 0;
+    static size_t cap = 0;
+    if (data) return data;
+    source_append(&data, &len, &cap, ds_bash_array_helpers_source());
+    source_append(&data, &len, &cap, ds_bash_map_helpers_source());
+    source_append(&data, &len, &cap, ds_bash_dynamic_index_helper_source());
+    return data;
 }
 
 const char *ds_bash_stdlib_capture_helper_source(void) {

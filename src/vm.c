@@ -12,6 +12,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+static inline const char *str_data(const DsString *s) { return s->data ? s->data : ""; }
+#define STR_DATA(s) ((s).data ? (s).data : "")
+
+static bool reg_is_truthy(Vm *vm, int reg) { bool t = false; ds_value_truthy(&vm->regs[reg], &t); return t; }
+
+static DsHandlerSignal resolve_cleanup_signal(Vm *vm) {
+    if (ds_posix_signal_is_runtime_cleanup(vm->interrupted_signal)) {
+        return ds_handler_signal_from_posix(vm->interrupted_signal);
+    }
+    return DS_HANDLER_EXIT;
+}
+
 static volatile sig_atomic_t ds_vm_pending_signal = 0;
 
 static void ds_vm_signal_handler(int sig) {
@@ -65,11 +77,11 @@ bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, Ds
     if (desc) {
         switch (desc->id) {
             case DS_COMMAND_RESULT_FIELD_STDOUT:
-                ds_string_from_range(&out->as.string, value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "", value->as.command_result.stdout_text.len);
+                ds_string_from_range(&out->as.string, str_data(&value->as.command_result.stdout_text), value->as.command_result.stdout_text.len);
                 out->kind = DS_VALUE_STRING;
                 return true;
             case DS_COMMAND_RESULT_FIELD_STDERR:
-                ds_string_from_range(&out->as.string, value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "", value->as.command_result.stderr_text.len);
+                ds_string_from_range(&out->as.string, str_data(&value->as.command_result.stderr_text), value->as.command_result.stderr_text.len);
                 out->kind = DS_VALUE_STRING;
                 return true;
             case DS_COMMAND_RESULT_FIELD_STATUS:
@@ -165,6 +177,39 @@ static void vm_register_handler(Vm *vm, DsHandlerSignal signal, size_t target, b
     vm->handlers[vm->handler_len++] = (VmHandler){signal, target, is_trap};
 }
 
+static const char *op_cmp_name(OpCmp e) {
+    switch (e) {
+        case OP_CMP_ADD: return "+";
+        case OP_CMP_SUB: return "-";
+        case OP_CMP_MUL: return "*";
+        case OP_CMP_DIV: return "/";
+        case OP_CMP_MOD: return "%";
+        case OP_CMP_POW: return "**";
+        case OP_CMP_EQ_EQ: return "==";
+        case OP_CMP_NE: return "!=";
+        case OP_CMP_LT: return "<";
+        case OP_CMP_LE: return "<=";
+        case OP_CMP_GT: return ">";
+        case OP_CMP_GE: return ">=";
+        case OP_CMP_EQ_EQ_EQ: return "===";
+        case OP_CMP_NE_EQ: return "!==";
+    }
+    return "?";
+}
+
+static bool check_div_zero_and_overflow(DsDiag *diag, DsSpan span,
+    int64_t left, int64_t right, const char *op_name) {
+    if (right == 0) {
+        ds_diag_error(diag, span, "division or modulo by zero");
+        return false;
+    }
+    if (left == INT64_MIN && right == -1) {
+        ds_diag_error(diag, span, "integer overflow in operator `%s`", op_name);
+        return false;
+    }
+    return true;
+}
+
 int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag, DsVmOptions options) {
     (void)source;
     Program p;
@@ -238,7 +283,7 @@ dispatch_loop:
             case OP_SET_ENV: {
                 DsString rendered;
                 ds_value_to_string(&vm.regs[ins->a], &rendered);
-                if (setenv(ins->name, rendered.data ? rendered.data : "", 1) != 0) {
+                if (setenv(ins->name, str_data(&rendered), 1) != 0) {
                     ds_diag_error(vm.diag, ins->span, "failed to set environment `%s`", ins->name);
                     ds_string_free(&rendered);
                     rc = 1;
@@ -249,84 +294,101 @@ dispatch_loop:
                 break;
             }
             case OP_NOT: {
-                bool truth = false;
-                ds_value_truthy(&vm.regs[ins->a], &truth);
+                bool truth = reg_is_truthy(&vm, ins->a);
                 set_reg(&vm, ins->dst, ds_value_bool(!truth));
                 ip++;
                 break;
             }
             case OP_BINARY: {
-                /*
-                 * Lowering rejects statically-known operand-kind errors. The
-                 * checks below are runtime/data diagnostics for values whose
-                 * kind is only known while executing accepted HIR, plus
-                 * arithmetic overflow checks.
-                 */
                 DsValue *left = &vm.regs[ins->a];
                 DsValue *right = &vm.regs[ins->b];
-                if (strcmp(ins->cmp, "+") == 0) {
-                    if (left->kind == DS_VALUE_INT && right->kind == DS_VALUE_INT) {
-                        int64_t out = 0;
-                        if (!int_add_checked(left->as.integer, right->as.integer, &out)) {
-                            ds_diag_error(diag, ins->span, "integer overflow in operator `+`");
+                switch (ins->cmp_enum) {
+                    case OP_CMP_ADD:
+                        if (left->kind == DS_VALUE_INT && right->kind == DS_VALUE_INT) {
+                            int64_t out = 0;
+                            if (!int_add_checked(left->as.integer, right->as.integer, &out)) {
+                                ds_diag_error(diag, ins->span, "integer overflow in operator `+`");
+                                rc = 1; goto done;
+                            }
+                            set_reg(&vm, ins->dst, ds_value_int(out));
+                        } else if (left->kind == DS_VALUE_STRING && right->kind == DS_VALUE_STRING) {
+                            DsString joined;
+                            ds_string_init(&joined);
+                            ds_string_append_range(&joined, str_data(&left->as.string), left->as.string.len);
+                            ds_string_append_range(&joined, str_data(&right->as.string), right->as.string.len);
+                            set_reg(&vm, ins->dst, ds_value_string_take(&joined));
+                        } else {
+                            ds_diag_error(diag, ins->span, "runtime operator `+` supports int+int or string+string");
                             rc = 1; goto done;
                         }
-                        set_reg(&vm, ins->dst, ds_value_int(out));
-                    } else if (left->kind == DS_VALUE_STRING && right->kind == DS_VALUE_STRING) {
-                        DsString joined;
-                        ds_string_init(&joined);
-                        ds_string_append_range(&joined, left->as.string.data ? left->as.string.data : "", left->as.string.len);
-                        ds_string_append_range(&joined, right->as.string.data ? right->as.string.data : "", right->as.string.len);
-                        set_reg(&vm, ins->dst, ds_value_string_take(&joined));
-                    } else {
-                        ds_diag_error(diag, ins->span, "runtime operator `+` supports int+int or string+string");
-                        rc = 1; goto done;
-                    }
-                } else if (strcmp(ins->cmp, "-") == 0) {
-                    if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
-                        ds_diag_error(diag, ins->span, "runtime operator `-` requires integer operands");
-                        rc = 1; goto done;
-                    }
-                    int64_t out = 0;
-                    if (!int_sub_checked(left->as.integer, right->as.integer, &out)) {
-                        ds_diag_error(diag, ins->span, "integer overflow in operator `-`");
-                        rc = 1; goto done;
-                    }
-                    set_reg(&vm, ins->dst, ds_value_int(out));
-                } else if (strcmp(ins->cmp, "*") == 0 || strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0 || strcmp(ins->cmp, "**") == 0) {
-                    if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
-                        ds_diag_error(diag, ins->span, "runtime arithmetic operator `%s` requires integer operands", ins->cmp);
-                        rc = 1; goto done;
-                    }
-                    if ((strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0) && right->as.integer == 0) {
-                        ds_diag_error(diag, ins->span, "division or modulo by zero");
-                        rc = 1; goto done;
-                    }
-                    if ((strcmp(ins->cmp, "/") == 0 || strcmp(ins->cmp, "%") == 0) && left->as.integer == INT64_MIN && right->as.integer == -1) {
-                        ds_diag_error(diag, ins->span, "integer overflow in operator `%s`", ins->cmp);
-                        rc = 1; goto done;
-                    }
-                    if (strcmp(ins->cmp, "*") == 0) {
-                        int64_t out = 0;
-                        if (!int_mul_checked(left->as.integer, right->as.integer, &out)) {
-                            ds_diag_error(diag, ins->span, "integer overflow in operator `*`");
+                        break;
+                    case OP_CMP_SUB:
+                        if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                            ds_diag_error(diag, ins->span, "runtime operator `-` requires integer operands");
                             rc = 1; goto done;
                         }
-                        set_reg(&vm, ins->dst, ds_value_int(out));
-                    } else if (strcmp(ins->cmp, "/") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer / right->as.integer));
-                    else if (strcmp(ins->cmp, "%") == 0) set_reg(&vm, ins->dst, ds_value_int(left->as.integer % right->as.integer));
-                    else {
-                        if (right->as.integer < 0) { ds_diag_error(diag, ins->span, "negative exponent runtime value is rejected in v0.21.0"); rc = 1; goto done; }
-                        int64_t out = 0;
-                        if (!int_pow_checked(left->as.integer, right->as.integer, &out)) {
-                            ds_diag_error(diag, ins->span, "integer overflow in operator `**`");
+                        {
+                            int64_t out = 0;
+                            if (!int_sub_checked(left->as.integer, right->as.integer, &out)) {
+                                ds_diag_error(diag, ins->span, "integer overflow in operator `-`");
+                                rc = 1; goto done;
+                            }
+                            set_reg(&vm, ins->dst, ds_value_int(out));
+                        }
+                        break;
+                    case OP_CMP_MUL:
+                        if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                            ds_diag_error(diag, ins->span, "runtime arithmetic operator `*` requires integer operands");
                             rc = 1; goto done;
                         }
-                        set_reg(&vm, ins->dst, ds_value_int(out));
-                    }
-                } else {
-                    ds_diag_error(diag, ins->span, "internal VM invariant failed: unknown binary operator `%s` after lowering", ins->cmp ? ins->cmp : "");
-                    rc = 1; goto done;
+                        {
+                            int64_t out = 0;
+                            if (!int_mul_checked(left->as.integer, right->as.integer, &out)) {
+                                ds_diag_error(diag, ins->span, "integer overflow in operator `*`");
+                                rc = 1; goto done;
+                            }
+                            set_reg(&vm, ins->dst, ds_value_int(out));
+                        }
+                        break;
+                    case OP_CMP_DIV:
+                        if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                            ds_diag_error(diag, ins->span, "runtime arithmetic operator `/` requires integer operands");
+                            rc = 1; goto done;
+                        }
+                        if (!check_div_zero_and_overflow(diag, ins->span, left->as.integer, right->as.integer, "/"))
+                        { rc = 1; goto done; }
+                        set_reg(&vm, ins->dst, ds_value_int(left->as.integer / right->as.integer));
+                        break;
+                    case OP_CMP_MOD:
+                        if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                            ds_diag_error(diag, ins->span, "runtime arithmetic operator `%%` requires integer operands");
+                            rc = 1; goto done;
+                        }
+                        if (!check_div_zero_and_overflow(diag, ins->span, left->as.integer, right->as.integer, "%"))
+                        { rc = 1; goto done; }
+                        set_reg(&vm, ins->dst, ds_value_int(left->as.integer % right->as.integer));
+                        break;
+                    case OP_CMP_POW:
+                        if (left->kind != DS_VALUE_INT || right->kind != DS_VALUE_INT) {
+                            ds_diag_error(diag, ins->span, "runtime arithmetic operator `**` requires integer operands");
+                            rc = 1; goto done;
+                        }
+                        if (right->as.integer < 0) {
+                            ds_diag_error(diag, ins->span, "negative exponent runtime value is rejected in v0.21.0");
+                            rc = 1; goto done;
+                        }
+                        {
+                            int64_t out = 0;
+                            if (!int_pow_checked(left->as.integer, right->as.integer, &out)) {
+                                ds_diag_error(diag, ins->span, "integer overflow in operator `**`");
+                                rc = 1; goto done;
+                            }
+                            set_reg(&vm, ins->dst, ds_value_int(out));
+                        }
+                        break;
+                    default:
+                        ds_diag_error(diag, ins->span, "internal VM invariant failed: unknown binary operator `%s` after lowering", op_cmp_name(ins->cmp_enum));
+                        rc = 1; goto done;
                 }
                 ip++;
                 break;
@@ -335,14 +397,17 @@ dispatch_loop:
                 bool same_kind = vm.regs[ins->a].kind == vm.regs[ins->b].kind;
                 int cmp = ds_value_compare(&vm.regs[ins->a], &vm.regs[ins->b]);
                 bool result = false;
-                if (strcmp(ins->cmp, "===") == 0) result = same_kind && cmp == 0;
-                else if (strcmp(ins->cmp, "!==") == 0) result = !same_kind || cmp != 0;
-                else if (strcmp(ins->cmp, "==") == 0) result = cmp == 0;
-                else if (strcmp(ins->cmp, "!=") == 0) result = cmp != 0;
-                else if (strcmp(ins->cmp, ">") == 0) result = cmp > 0;
-                else if (strcmp(ins->cmp, ">=") == 0) result = cmp >= 0;
-                else if (strcmp(ins->cmp, "<") == 0) result = cmp < 0;
-                else if (strcmp(ins->cmp, "<=") == 0) result = cmp <= 0;
+                switch (ins->cmp_enum) {
+                    case OP_CMP_EQ_EQ_EQ: result = same_kind && cmp == 0; break;
+                    case OP_CMP_NE_EQ:    result = !same_kind || cmp != 0; break;
+                    case OP_CMP_EQ_EQ:    result = cmp == 0; break;
+                    case OP_CMP_NE:       result = cmp != 0; break;
+                    case OP_CMP_GT:       result = cmp > 0; break;
+                    case OP_CMP_GE:       result = cmp >= 0; break;
+                    case OP_CMP_LT:       result = cmp < 0; break;
+                    case OP_CMP_LE:       result = cmp <= 0; break;
+                    default: break;
+                }
                 set_reg(&vm, ins->dst, ds_value_bool(result));
                 ip++;
                 break;
@@ -365,16 +430,16 @@ dispatch_loop:
                 DsValue *pattern_value = &vm.regs[ins->b];
                 if (text->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: accepted `matches` left operand must be a string"); rc = 1; goto done; }
                 if (pattern_value->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "runtime right operand of `matches` must be a regex pattern string"); rc = 1; goto done; }
-                DsStr pattern = {pattern_value->as.string.data ? pattern_value->as.string.data : "", pattern_value->as.string.len};
+                DsStr pattern = {str_data(&pattern_value->as.string), pattern_value->as.string.len};
                 DsRegexStatus status = ds_regex_validate_pattern(pattern, NULL);
                 if (status != DS_REGEX_OK) { ds_diag_error(diag, ins->span, "%s", ds_regex_status_message(status)); rc = 1; goto done; }
                 int flags = REG_EXTENDED | (ins->regex_case_insensitive ? REG_ICASE : 0);
                 regex_t re;
-                char *tmp = ds_str_dup_range(pattern.data ? pattern.data : "", pattern.len);
+                char *tmp = ds_str_dup_range(STR_DATA(pattern), pattern.len);
                 int err = regcomp(&re, tmp, flags);
                 free(tmp);
                 if (err != 0) { ds_diag_error(diag, ins->span, "invalid regex pattern in v0.32.0"); rc = 1; goto done; }
-                int match = regexec(&re, text->as.string.data ? text->as.string.data : "", 0, NULL, 0);
+                int match = regexec(&re, str_data(&text->as.string), 0, NULL, 0);
                 regfree(&re);
                 if (match != 0 && match != REG_NOMATCH) { ds_diag_error(diag, ins->span, "failed to evaluate regex in v0.32.0"); rc = 1; goto done; }
                 set_reg(&vm, ins->dst, ds_value_bool(match == 0));
@@ -394,7 +459,7 @@ dispatch_loop:
                 for (size_t i = 0; i < ins->arg_count; i++) {
                     DsString piece;
                     ds_value_to_string(&vm.regs[ins->args[i]], &piece);
-                    ds_string_append_range(&rendered, piece.data ? piece.data : "", piece.len);
+                    ds_string_append_range(&rendered, str_data(&piece), piece.len);
                     ds_string_free(&piece);
                 }
                 set_reg(&vm, ins->dst, ds_value_string_take(&rendered));
@@ -423,8 +488,7 @@ dispatch_loop:
                 ip = (size_t)ins->target;
                 break;
             case OP_JUMP_IF_FALSE: {
-                bool truth = false;
-                ds_value_truthy(&vm.regs[ins->a], &truth);
+                bool truth = reg_is_truthy(&vm, ins->a);
                 ip = truth ? ip + 1 : (size_t)ins->target;
                 break;
             }
@@ -440,9 +504,7 @@ dispatch_loop:
                 rc = run_command(&vm, ins);
                 if (vm.test_done) goto done;
                 if (vm.control_exit_requested || rc != 0) {
-                    if (ds_posix_signal_is_runtime_cleanup(vm.interrupted_signal)) {
-                        cleanup_signal = ds_handler_signal_from_posix(vm.interrupted_signal);
-                    }
+                    cleanup_signal = resolve_cleanup_signal(&vm);
                     goto done;
                 }
                 ip++;
@@ -492,7 +554,7 @@ dispatch_loop:
                 } else if (obj->kind == DS_VALUE_MAP) {
                     DsString key;
                     ds_value_to_string(idx, &key);
-                    DsStr key_view = {key.data ? key.data : "", key.len};
+                    DsStr key_view = {str_data(&key), key.len};
                     DsValue *found = ds_map_get(&obj->as.map, key_view);
                     if (!found) { ds_diag_error(diag, ins->span, "missing map key `%.*s`", (int)key_view.len, key_view.data); ds_string_free(&key); rc = 1; goto done; }
                     set_reg(&vm, ins->dst, ds_value_copy(found));
@@ -514,7 +576,7 @@ dispatch_loop:
                     *slot = ds_value_copy(value);
                 } else if (obj->kind == DS_VALUE_MAP) {
                     if (idx->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "runtime map key must be a string"); rc = 1; goto done; }
-                    DsStr key = {idx->as.string.data ? idx->as.string.data : "", idx->as.string.len};
+                    DsStr key = {str_data(&idx->as.string), idx->as.string.len};
                     if (key.len == 0) { ds_diag_error(diag, ins->span, "map key must be non-empty"); rc = 1; goto done; }
                     if (!ds_map_set(&obj->as.map, key, ds_value_copy(value))) { ds_diag_error(diag, ins->span, "failed to set map key `%.*s`", (int)key.len, key.data); rc = 1; goto done; }
                 } else { ds_diag_error(diag, ins->span, "internal VM invariant failed: index assignment target should be an array or map after lowering"); rc = 1; goto done; }
@@ -570,7 +632,7 @@ dispatch_loop:
                 if (!found) { ds_diag_error(diag, ins->span, "runtime map loop key disappeared during iteration"); rc = 1; goto done; }
                 vm_push_scope(&vm);
                 DsString key_text;
-                ds_string_from_range(&key_text, map_key.data ? map_key.data : "", map_key.len);
+                ds_string_from_range(&key_text, STR_DATA(map_key), map_key.len);
                 DsStr key_var = {ins->name, strlen(ins->name)};
                 DsStr value_var = {ins->value_name, strlen(ins->value_name)};
                 ds_map_set(&vm.scope->vars, key_var, ds_value_string_take(&key_text));
@@ -610,8 +672,7 @@ dispatch_loop:
                 break;
             }
             case OP_ASSERT: {
-                bool truth = false;
-                ds_value_truthy(&vm.regs[ins->a], &truth);
+                bool truth = reg_is_truthy(&vm, ins->a);
                 if (!truth) {
                     if (vm.options.test_mode) {
                         const char *test_name = vm.options.test_name.data ? vm.options.test_name.data : "<test>";
@@ -685,9 +746,7 @@ done:
         vm.cleanup_running = true;
         final_rc = rc;
         vm.control_exit_requested = false;
-        if (ds_posix_signal_is_runtime_cleanup(vm.interrupted_signal)) {
-            cleanup_signal = ds_handler_signal_from_posix(vm.interrupted_signal);
-        }
+        cleanup_signal = resolve_cleanup_signal(&vm);
         cleanup_cursor = vm.handler_len;
         cleanup_trap_done = false;
     cleanup_next:

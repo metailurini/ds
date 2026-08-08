@@ -228,9 +228,13 @@ static void emit_error_helper(BashEmitter *e) {
     buf_append(&e->out, "__ds_error() { echo \"${0##*/}: error: $1\" >&2; exit 1; }\n\n");
 }
 
-static void emit_plain_command_fail_helper(BashEmitter *e) {
+static void emit_pipe_helpers(BashEmitter *e) {
     buf_append(&e->out, "__ds_stdout_is_pipe_like() { [[ -p /dev/stdout || -S /dev/stdout ]]; }\n");
     buf_append(&e->out, "__ds_is_quiet_broken_pipe() { local __ds_code=$1 __ds_allow=${2:-0}; (( __ds_allow == 1 && __ds_code == 141 )) && __ds_stdout_is_pipe_like; }\n");
+}
+
+static void emit_plain_command_fail_helper(BashEmitter *e) {
+    emit_pipe_helpers(e);
     buf_append(&e->out, "__ds_fail() {\n");
     buf_append(&e->out, "  local __ds_loc=$1 __ds_code=$2 __ds_allow=${3:-0}\n");
     buf_append(&e->out, "  if __ds_is_quiet_broken_pipe \"$__ds_code\" \"$__ds_allow\"; then exit 0; fi\n");
@@ -256,8 +260,7 @@ static void emit_cleanup_helpers(BashEmitter *e) {
      */
     buf_append(&e->out, "declare -a __ds_defer_EXIT=() __ds_defer_INT=() __ds_defer_TERM=()\n");
     buf_append(&e->out, "__ds_trap_EXIT=\n__ds_trap_INT=\n__ds_trap_TERM=\n__ds_cleanup_running=false\n__ds_handler_exit_requested=false\n__ds_stack_exit_requested=false\n__ds_stack_status=0\n__ds_foreground_pid=\n");
-    buf_append(&e->out, "__ds_stdout_is_pipe_like() { [[ -p /dev/stdout || -S /dev/stdout ]]; }\n");
-    buf_append(&e->out, "__ds_is_quiet_broken_pipe() { local __ds_code=$1 __ds_allow=${2:-0}; (( __ds_allow == 1 && __ds_code == 141 )) && __ds_stdout_is_pipe_like; }\n");
+    emit_pipe_helpers(e);
     buf_append(&e->out, "__ds_fail() { local __ds_loc=$1 __ds_code=$2 __ds_allow=${3:-0}; if __ds_is_quiet_broken_pipe \"$__ds_code\" \"$__ds_allow\"; then if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 0; fi; exit 0; fi; echo \"$__ds_loc: error: command failed with exit $__ds_code\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return \"$__ds_code\"; fi; exit \"$__ds_code\"; }\n");
     buf_append(&e->out, "__ds_control_fail() { local __ds_loc=$1; shift; local __ds_msg=\"$*\"; if [[ -n \"$__ds_msg\" ]]; then echo \"$__ds_loc: error: $__ds_msg\" >&2; else echo \"$__ds_loc: error: fail\" >&2; fi; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; }\n");
     buf_append(&e->out, "__ds_control_exit() { local __ds_loc=$1; shift; if (( $# != 1 )); then echo \"$__ds_loc: error: `exit` expects exactly one integer code\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; fi; if [[ ! \"$1\" =~ ^[0-9]+$ ]] || (( $1 < 0 || $1 > 255 )); then echo \"$__ds_loc: error: `exit` code must be an integer from 0 to 255\" >&2; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 1; fi; exit 1; fi; if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then __ds_handler_exit_requested=true; return \"$1\"; fi; exit \"$1\"; }\n");

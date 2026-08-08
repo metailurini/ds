@@ -6,6 +6,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 typedef struct {
     char *data;
@@ -37,6 +38,22 @@ void buf_reserve(EmitBuf *buf, size_t need);
 void buf_append_len(EmitBuf *buf, const char *data, size_t len);
 void buf_append(EmitBuf *buf, const char *text);
 void buf_appendf(EmitBuf *buf, const char *fmt, ...);
+
+static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags) {
+    bool has_flags = decl_flags && decl_flags[0];
+    if (function_depth > 0) {
+        buf_append(out, "local");
+    } else if (has_flags) {
+        buf_append(out, "declare");
+    } else {
+        return;
+    }
+    if (has_flags) {
+        buf_append(out, " ");
+        buf_append(out, decl_flags);
+    }
+    buf_append(out, " ");
+}
 
 void symbol_vec_push(SymbolVec *vec, DsStr name);
 bool str_eq(DsStr a, const char *b);
@@ -102,6 +119,42 @@ bool bash_emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, D
 bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const DsLowerExpr *call, int indent);
 bool bash_emit_user_call_statement(BashEmitter *e, DsStr name, const DsLowerExprVec *args, int indent);
 bool bash_emit_user_call_capture_return(BashEmitter *e, const DsLowerExpr *call, DsLowerValueKind return_kind, int indent);
+
+static inline bool bash_emit_user_call_to_temp(BashEmitter *e, const DsLowerExpr *expr,
+    const char *label, EmitBuf *out, char *temp_buf, size_t buf_size,
+    DsStr *temp_out, const DsStr **temp_ptr_out) {
+    bash_temp_ds_name(temp_buf, buf_size, label, e->temp_counter++);
+    *temp_out = (DsStr){temp_buf, strlen(temp_buf)};
+    if (temp_ptr_out) *temp_ptr_out = temp_out;
+    emit_var_name(out, *temp_out);
+    buf_append(out, "=\"\"; ");
+    const char *return_type = ds_lower_value_kind_name(expr->as.call.return_kind);
+    buf_append(out, "__ds_call_value_into ");
+    emit_var_name(out, *temp_out);
+    buf_append(out, " ");
+    bash_single_quote(out, return_type, strlen(return_type));
+    buf_append(out, " ");
+    emit_fn_name(out, expr->as.call.name);
+    if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;
+    buf_append(out, "; ");
+    return true;
+}
+
+static inline void emit_handler_depth_return_or_exit(EmitBuf *out, int handler_depth,
+    const char *return_fmt, const char *exit_fmt, ...) {
+    if (handler_depth > 0) {
+        buf_append(out, "return ");
+        if (return_fmt) buf_append(out, return_fmt);
+    } else {
+        buf_append(out, "exit ");
+        if (exit_fmt) buf_append(out, exit_fmt);
+    }
+}
+
+static inline void bash_register_symbol(BashEmitter *e, DsStr name) {
+    DsStr copy = {ds_str_dup_range(name.data, name.len), name.len};
+    symbol_vec_push(&e->symbols, copy);
+}
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out);
 bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span);

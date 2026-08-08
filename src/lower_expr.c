@@ -125,16 +125,18 @@ static const DsLowerRowSchema *ident_row_schema(Lower *lower, const DsLowerExpr 
     return sym->is_row ? &sym->row_schema : NULL;
 }
 
-static const DsLowerRowSchema *expr_row_schema_full(Lower *lower, const DsLowerExpr *expr) {
+static const DsLowerRowSchema *expr_row_schema_full_inner(Lower *lower, const DsLowerExpr *expr, bool want_array) {
     const DsLowerRowSchema *schema = NULL;
-    if (lower_expr_row_schema(expr, &schema)) return schema;
-    return ident_row_schema(lower, expr, false);
+    if (want_array ? lower_expr_row_array_schema(expr, &schema) : lower_expr_row_schema(expr, &schema)) return schema;
+    return ident_row_schema(lower, expr, want_array);
+}
+
+static const DsLowerRowSchema *expr_row_schema_full(Lower *lower, const DsLowerExpr *expr) {
+    return expr_row_schema_full_inner(lower, expr, false);
 }
 
 static const DsLowerRowSchema *expr_row_array_schema_full(Lower *lower, const DsLowerExpr *expr) {
-    const DsLowerRowSchema *schema = NULL;
-    if (lower_expr_row_array_schema(expr, &schema)) return schema;
-    return ident_row_schema(lower, expr, true);
+    return expr_row_schema_full_inner(lower, expr, true);
 }
 
 DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
@@ -1015,48 +1017,57 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
     return SYM_UNKNOWN;
 }
 
-SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr) {
+static SymKind infer_collection_element_kind(Lower *lower, const DsLowerExpr *expr, bool is_map) {
     if (!expr) return SYM_UNKNOWN;
     if (expr->kind == DS_LOWER_EXPR_IDENT) {
         Symbol *sym = scope_find(lower->scope, expr->as.text);
         return sym ? sym->element_kind : SYM_UNKNOWN;
     }
-    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.returns_row_array) return SYM_MAP;
-    if (expr->kind == DS_LOWER_EXPR_CALL && helper_returns_string_array(expr->as.call.name)) return SYM_STRING;
-    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function) return SYM_UNKNOWN;
-    if (expr->kind != DS_LOWER_EXPR_ARRAY) return SYM_UNKNOWN;
-    if (expr->as.array.is_row_array) return SYM_MAP;
+    if (expr->kind == DS_LOWER_EXPR_CALL) {
+        if (!is_map) {
+            if (expr->as.call.returns_row_array) return SYM_MAP;
+            if (helper_returns_string_array(expr->as.call.name)) return SYM_STRING;
+            if (expr->as.call.is_user_function) return SYM_UNKNOWN;
+        } else {
+            if (expr->as.call.is_user_function) {
+                DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
+                return fn ? sym_kind_from_lower_value_kind(fn->return_element_kind) : SYM_UNKNOWN;
+            }
+        }
+        return SYM_UNKNOWN;
+    }
+    if (!is_map) {
+        if (expr->kind != DS_LOWER_EXPR_ARRAY) return SYM_UNKNOWN;
+        if (expr->as.array.is_row_array) return SYM_MAP;
+    } else {
+        if (expr->kind != DS_LOWER_EXPR_MAP) return SYM_UNKNOWN;
+    }
 
     SymKind common = SYM_UNKNOWN;
-    for (size_t i = 0; i < expr->as.array.elements.len; i++) {
-        SymKind elem = infer_lower_expr_kind(lower, expr->as.array.elements.items[i]);
-        if (elem == SYM_UNKNOWN) return SYM_UNKNOWN;
-        if (common == SYM_UNKNOWN) common = elem;
-        else if (common != elem) return SYM_UNKNOWN;
+    if (!is_map) {
+        for (size_t i = 0; i < expr->as.array.elements.len; i++) {
+            SymKind elem = infer_lower_expr_kind(lower, expr->as.array.elements.items[i]);
+            if (elem == SYM_UNKNOWN) return SYM_UNKNOWN;
+            if (common == SYM_UNKNOWN) common = elem;
+            else if (common != elem) return SYM_UNKNOWN;
+        }
+    } else {
+        for (size_t i = 0; i < expr->as.map.entries.len; i++) {
+            SymKind value = infer_lower_expr_kind(lower, expr->as.map.entries.items[i].value);
+            if (value == SYM_UNKNOWN) return SYM_UNKNOWN;
+            if (common == SYM_UNKNOWN) common = value;
+            else if (common != value) return SYM_UNKNOWN;
+        }
     }
     return common;
 }
 
-SymKind infer_map_value_kind(Lower *lower, const DsLowerExpr *expr) {
-    if (!expr) return SYM_UNKNOWN;
-    if (expr->kind == DS_LOWER_EXPR_IDENT) {
-        Symbol *sym = scope_find(lower->scope, expr->as.text);
-        return sym ? sym->element_kind : SYM_UNKNOWN;
-    }
-    if (expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function) {
-        DsLowerFn *fn = find_function(lower->program, expr->as.call.name);
-        return fn ? sym_kind_from_lower_value_kind(fn->return_element_kind) : SYM_UNKNOWN;
-    }
-    if (expr->kind != DS_LOWER_EXPR_MAP) return SYM_UNKNOWN;
+SymKind infer_array_element_kind(Lower *lower, const DsLowerExpr *expr) {
+    return infer_collection_element_kind(lower, expr, false);
+}
 
-    SymKind common = SYM_UNKNOWN;
-    for (size_t i = 0; i < expr->as.map.entries.len; i++) {
-        SymKind value = infer_lower_expr_kind(lower, expr->as.map.entries.items[i].value);
-        if (value == SYM_UNKNOWN) return SYM_UNKNOWN;
-        if (common == SYM_UNKNOWN) common = value;
-        else if (common != value) return SYM_UNKNOWN;
-    }
-    return common;
+SymKind infer_map_value_kind(Lower *lower, const DsLowerExpr *expr) {
+    return infer_collection_element_kind(lower, expr, true);
 }
 
 DsLowerExpr *lower_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {

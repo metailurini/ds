@@ -8,6 +8,23 @@
 #include <stddef.h>
 
 typedef enum {
+    OP_CMP_ADD,
+    OP_CMP_SUB,
+    OP_CMP_MUL,
+    OP_CMP_DIV,
+    OP_CMP_MOD,
+    OP_CMP_POW,
+    OP_CMP_EQ_EQ,
+    OP_CMP_NE,
+    OP_CMP_LT,
+    OP_CMP_LE,
+    OP_CMP_GT,
+    OP_CMP_GE,
+    OP_CMP_EQ_EQ_EQ,
+    OP_CMP_NE_EQ,
+} OpCmp;
+
+typedef enum {
     OP_LOAD_CONST,
     OP_LOAD_VAR,
     OP_STORE_VAR,
@@ -81,6 +98,7 @@ typedef struct {
     int b;
     int target;
     char *name;
+    OpCmp cmp_enum;
     char *cmp;
     char *field;
     int *args;

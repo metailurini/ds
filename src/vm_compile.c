@@ -16,6 +16,30 @@
 
 void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
 
+static OpCmp op_cmp_from_str(const char *s, size_t len) {
+    if (len == 1) {
+        switch (s[0]) {
+            case '+': return OP_CMP_ADD;
+            case '-': return OP_CMP_SUB;
+            case '*': return OP_CMP_MUL;
+            case '/': return OP_CMP_DIV;
+            case '%': return OP_CMP_MOD;
+            case '>': return OP_CMP_GT;
+            case '<': return OP_CMP_LT;
+        }
+    } else if (len == 2) {
+        if (s[0] == '=' && s[1] == '=') return OP_CMP_EQ_EQ;
+        if (s[0] == '!' && s[1] == '=') return OP_CMP_NE;
+        if (s[0] == '>' && s[1] == '=') return OP_CMP_GE;
+        if (s[0] == '<' && s[1] == '=') return OP_CMP_LE;
+        if (s[0] == '*' && s[1] == '*') return OP_CMP_POW;
+    } else if (len == 3) {
+        if (s[0] == '=' && s[1] == '=' && s[2] == '=') return OP_CMP_EQ_EQ_EQ;
+        if (s[0] == '!' && s[1] == '=' && s[2] == '=') return OP_CMP_NE_EQ;
+    }
+    return OP_CMP_ADD;
+}
+
 static void instr_free(Instr *ins) {
     free(ins->name);
     free(ins->value_name);
@@ -323,6 +347,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                 ins.op = OP_BINARY;
                 ins.b = right;
                 ins.cmp = ds_str_dup_range("-", 1);
+            ins.cmp_enum = OP_CMP_SUB;
                 ins.a = zero;
             } else {
                 ins.op = OP_NOT;
@@ -446,6 +471,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.b = right;
             ins.regex_case_insensitive = regex_insensitive;
             ins.cmp = ds_str_dup_range(expr->as.binary.op.data, expr->as.binary.op.len);
+            ins.cmp_enum = op_cmp_from_str(expr->as.binary.op.data, expr->as.binary.op.len);
             emit_instr(p, ins);
             return r;
         }
@@ -574,6 +600,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                                   (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_MUL ? "*" :
                                    (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_DIV ? "/" : "%")));
                 bin.cmp = ds_str_dup_range(op, strlen(op));
+                bin.cmp_enum = op_cmp_from_str(op, strlen(op));
                 emit_instr(p, bin);
             }
             Instr ins = {0};
@@ -798,6 +825,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     cmp.a = selector;
                     cmp.b = lit;
                     cmp.cmp = ds_str_dup_range("===", 3);
+                    cmp.cmp_enum = OP_CMP_EQ_EQ_EQ;
                     emit_instr(p, cmp);
                     Instr jif = {0};
                     jif.op = OP_JUMP_IF_FALSE;

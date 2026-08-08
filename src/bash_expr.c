@@ -33,16 +33,6 @@ static void emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr fiel
     }
 }
 
-static bool emit_user_call_into_raw_var(BashEmitter *e, const DsLowerExpr *expr, DsStr raw_name, EmitBuf *out) {
-    buf_append(out, "__ds_call_value_into ");
-    emit_var_name(out, raw_name);
-    buf_append(out, " ");
-    bash_single_quote(out, ds_lower_value_kind_name(expr->as.call.return_kind), strlen(ds_lower_value_kind_name(expr->as.call.return_kind)));
-    buf_append(out, " ");
-    emit_fn_name(out, expr->as.call.name);
-    return emit_user_call_args(e, &expr->as.call.args, out);
-}
-
 static bool emit_condition_operand_or_raw_temp(BashEmitter *e, const DsLowerExpr *expr, const DsStr *raw_temp, EmitBuf *out) {
     if (raw_temp) {
         buf_append(out, "\"$");
@@ -183,14 +173,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     const DsStr *left_temp_ptr = NULL;
     buf_append(out, "{ ");
     if (is_user_function_call_expr(left)) {
-        temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "in_left", e->temp_counter++);
-        left_temp.data = left_temp_buf;
-        left_temp.len = strlen(left_temp_buf);
-        emit_var_name(out, left_temp);
-        buf_append(out, "=\"\"; ");
-        if (!emit_user_call_into_raw_var(e, left, left_temp, out)) return false;
-        buf_append(out, "; ");
-        left_temp_ptr = &left_temp;
+        if (!bash_emit_user_call_to_temp(e, left, "in_left", out, left_temp_buf, sizeof(left_temp_buf), &left_temp, &left_temp_ptr)) return false;
     }
     buf_append(out, "__ds_needle=");
     if (left_temp_ptr) {
@@ -517,6 +500,25 @@ static void emit_index_type_lookup(const DsLowerExpr *expr, EmitBuf *out) {
     buf_append(out, "]:-unknown}\"");
 }
 
+static bool emit_condition_check(BashEmitter *e, DsLowerValueKind kind, const DsLowerExpr *value_expr, EmitBuf *out) {
+    if (kind == DS_LOWER_VALUE_BOOL) {
+        buf_append(out, "[[ ");
+        if (!emit_value_expr(e, value_expr, out)) return false;
+        buf_append(out, " == true ]]");
+    } else if (kind == DS_LOWER_VALUE_INT) {
+        buf_append(out, "[[ ");
+        if (!emit_value_expr(e, value_expr, out)) return false;
+        buf_append(out, " != 0 ]]");
+    } else if (kind == DS_LOWER_VALUE_STRING) {
+        buf_append(out, "[[ -n ");
+        if (!emit_value_expr(e, value_expr, out)) return false;
+        buf_append(out, " ]]");
+    } else {
+        buf_append(out, "false");
+    }
+    return true;
+}
+
 bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     if (expr->kind == DS_LOWER_EXPR_IDENT) {
         if (!symbol_exists(&e->symbols, expr->as.text)) {
@@ -541,28 +543,12 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, "\" ) ]]");
             return true;
         }
-        buf_append(out, "[[ \"$");
-        emit_var_name(out, expr->as.text);
-        buf_append(out, "\" == true ]]");
+        if (!emit_condition_check(e, DS_LOWER_VALUE_BOOL, expr, out)) return false;
         return true;
     }
     if (expr->kind == DS_LOWER_EXPR_INDEX) {
-        if (expr->as.index.element_kind == DS_LOWER_VALUE_BOOL) {
-            buf_append(out, "[[ ");
-            if (!emit_value_expr(e, expr, out)) return false;
-            buf_append(out, " == true ]]");
-            return true;
-        }
-        if (expr->as.index.element_kind == DS_LOWER_VALUE_INT) {
-            buf_append(out, "[[ ");
-            if (!emit_value_expr(e, expr, out)) return false;
-            buf_append(out, " != 0 ]]");
-            return true;
-        }
-        if (expr->as.index.element_kind == DS_LOWER_VALUE_STRING) {
-            buf_append(out, "[[ -n ");
-            if (!emit_value_expr(e, expr, out)) return false;
-            buf_append(out, " ]]");
+        if (expr->as.index.element_kind != DS_LOWER_VALUE_UNKNOWN) {
+            if (!emit_condition_check(e, expr->as.index.element_kind, expr, out)) return false;
             return true;
         }
         buf_append(out, "[[ ( ");
@@ -602,31 +588,28 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         DsLowerValueKind kind = expr->as.call.return_kind;
         if (expr->as.call.is_user_function) {
             char temp_buf[64];
-            temp_ds_name(temp_buf, sizeof(temp_buf), "cond", e->temp_counter++);
-            DsStr temp = {temp_buf, strlen(temp_buf)};
+            DsStr temp;
             buf_append(out, "{ ");
-            emit_var_name(out, temp);
-            buf_append(out, "=\"\"; ");
-            if (!emit_user_call_into_raw_var(e, expr, temp, out)) return false;
+            if (!bash_emit_user_call_to_temp(e, expr, "cond", out, temp_buf, sizeof(temp_buf), &temp, NULL)) return false;
             if (kind == DS_LOWER_VALUE_BOOL) {
-                buf_append(out, "; [[ \"$");
+                buf_append(out, "[[ \"$");
                 emit_var_name(out, temp);
                 buf_append(out, "\" == true ]]; }");
                 return true;
             }
             if (kind == DS_LOWER_VALUE_INT) {
-                buf_append(out, "; [[ \"$");
+                buf_append(out, "[[ \"$");
                 emit_var_name(out, temp);
                 buf_append(out, "\" != 0 ]]; }");
                 return true;
             }
             if (kind == DS_LOWER_VALUE_STRING) {
-                buf_append(out, "; [[ -n \"$");
+                buf_append(out, "[[ -n \"$");
                 emit_var_name(out, temp);
                 buf_append(out, "\" ]]; }");
                 return true;
             }
-            buf_append(out, "; false; }");
+            buf_append(out, "false; }");
             return true;
         }
         if (kind == DS_LOWER_VALUE_BOOL) {
@@ -694,24 +677,10 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 const DsStr *right_temp_ptr = NULL;
                 buf_append(out, "{ ");
                 if (is_user_function_call_expr(expr->as.binary.left)) {
-                    temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "match_left", e->temp_counter++);
-                    left_temp.data = left_temp_buf;
-                    left_temp.len = strlen(left_temp_buf);
-                    emit_var_name(out, left_temp);
-                    buf_append(out, "=\"\"; ");
-                    if (!emit_user_call_into_raw_var(e, expr->as.binary.left, left_temp, out)) return false;
-                    buf_append(out, "; ");
-                    left_temp_ptr = &left_temp;
+                    if (!bash_emit_user_call_to_temp(e, expr->as.binary.left, "match_left", out, left_temp_buf, sizeof(left_temp_buf), &left_temp, &left_temp_ptr)) return false;
                 }
                 if (is_user_function_call_expr(expr->as.binary.right)) {
-                    temp_ds_name(right_temp_buf, sizeof(right_temp_buf), "match_pattern", e->temp_counter++);
-                    right_temp.data = right_temp_buf;
-                    right_temp.len = strlen(right_temp_buf);
-                    emit_var_name(out, right_temp);
-                    buf_append(out, "=\"\"; ");
-                    if (!emit_user_call_into_raw_var(e, expr->as.binary.right, right_temp, out)) return false;
-                    buf_append(out, "; ");
-                    right_temp_ptr = &right_temp;
+                    if (!bash_emit_user_call_to_temp(e, expr->as.binary.right, "match_pattern", out, right_temp_buf, sizeof(right_temp_buf), &right_temp, &right_temp_ptr)) return false;
                 }
                 if (expr->as.binary.right->kind == DS_LOWER_EXPR_REGEX) {
                     DsStr pattern = {0}; bool insensitive = false;
@@ -749,24 +718,10 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             const DsStr *right_temp_ptr = NULL;
             buf_append(out, "{ ");
             if (is_user_function_call_expr(expr->as.binary.left)) {
-                temp_ds_name(left_temp_buf, sizeof(left_temp_buf), "cmp_left", e->temp_counter++);
-                left_temp.data = left_temp_buf;
-                left_temp.len = strlen(left_temp_buf);
-                emit_var_name(out, left_temp);
-                buf_append(out, "=\"\"; ");
-                if (!emit_user_call_into_raw_var(e, expr->as.binary.left, left_temp, out)) return false;
-                buf_append(out, "; ");
-                left_temp_ptr = &left_temp;
+                if (!bash_emit_user_call_to_temp(e, expr->as.binary.left, "cmp_left", out, left_temp_buf, sizeof(left_temp_buf), &left_temp, &left_temp_ptr)) return false;
             }
             if (is_user_function_call_expr(expr->as.binary.right)) {
-                temp_ds_name(right_temp_buf, sizeof(right_temp_buf), "cmp_right", e->temp_counter++);
-                right_temp.data = right_temp_buf;
-                right_temp.len = strlen(right_temp_buf);
-                emit_var_name(out, right_temp);
-                buf_append(out, "=\"\"; ");
-                if (!emit_user_call_into_raw_var(e, expr->as.binary.right, right_temp, out)) return false;
-                buf_append(out, "; ");
-                right_temp_ptr = &right_temp;
+                if (!bash_emit_user_call_to_temp(e, expr->as.binary.right, "cmp_right", out, right_temp_buf, sizeof(right_temp_buf), &right_temp, &right_temp_ptr)) return false;
             }
             if (int_compare) {
                 if (!emit_int_comparison(e, expr->as.binary.left, expr->as.binary.right, left_temp_ptr, right_temp_ptr, op, out)) return false;
