@@ -42,7 +42,7 @@ static DsStmt *parse_let(Parser *p) {
     DsToken *start = parser_previous(p);
     if (!parser_expect_identifier_like(p, "expected identifier after `let`")) return NULL;
     DsToken *name = parser_previous(p);
-    if (name->text.len == 3 && memcmp(name->text.data, "env", 3) == 0) {
+    if (parser_token_text_eq(name, "env")) {
         ds_diag_error(p->diag, name->span, "`env` is a reserved environment namespace in v0.27.0");
     }
     if (!parser_expect(p, DS_TOK_EQUAL, "expected `=` after variable name")) return NULL;
@@ -308,7 +308,7 @@ static DsStmt *parse_push_stmt(Parser *p) {
     stmt->as.push_stmt.name = parser_copy_token_text(name);
     parser_expect(p, DS_TOK_DOT, "expected `.` before `push`");
     DsToken *push_name = parser_advance(p);
-    if (!(push_name->text.len == 4 && memcmp(push_name->text.data, "push", 4) == 0)) {
+    if (!parser_token_text_eq(push_name, "push")) {
         ds_diag_error(p->diag, push_name->span, "only `push` collection method is supported in v0.10.0");
     }
     if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after `push`")) return stmt;
@@ -562,7 +562,7 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_advance_if(p, DS_TOK_LBRACE)) return parse_block(p);
     if (parser_at(p, DS_TOK_IDENT) && parser_next_at(p, DS_TOK_DOT)) {
         if (p->pos + 3 < p->tokens->len && p->tokens->items[p->pos + 2].kind == DS_TOK_IDENT &&
-            p->tokens->items[p->pos + 2].text.len == 4 && memcmp(p->tokens->items[p->pos + 2].text.data, "push", 4) == 0 &&
+            parser_token_text_eq(&p->tokens->items[p->pos + 2], "push") &&
             p->tokens->items[p->pos + 3].kind == DS_TOK_LPAREN) return parse_push_stmt(p);
         return parse_member_call_stmt(p);
     }

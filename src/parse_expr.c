@@ -146,9 +146,7 @@ static DsExpr *parse_primary(Parser *p) {
 }
 
 static bool parser_ident_text_eq(DsExpr *expr, const char *text) {
-    if (!expr || expr->kind != DS_EXPR_IDENT) return false;
-    size_t len = strlen(text);
-    return expr->as.text.len == len && memcmp(expr->as.text.data, text, len) == 0;
+    return expr && expr->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.text, text);
 }
 
 static bool parser_expr_is_stdlib_namespace(DsExpr *expr) {
