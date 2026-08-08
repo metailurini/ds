@@ -70,17 +70,46 @@ static void use_cstr(Checker *c, const char *data, size_t len) {
     use_name(c, s);
 }
 
+static bool is_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static bool is_ident_cont(char c) {
+    return is_ident_start(c) || (c >= '0' && c <= '9');
+}
+
+static size_t skip_quoted_string(const char *data, size_t len, size_t pos) {
+    char quote = data[pos++];
+    while (pos < len && data[pos] != quote) {
+        pos += data[pos] == '\\' && pos + 1 < len ? 2 : 1;
+    }
+    return pos < len ? pos + 1 : pos;
+}
+
+static size_t skip_paren_args(const char *data, size_t len, size_t open,
+                              size_t *args_start, size_t *args_len) {
+    int depth = 1;
+    size_t pos = open + 1;
+    *args_start = pos;
+    *args_len = 0;
+    while (pos < len && depth > 0) {
+        if (data[pos] == '"' || data[pos] == '\'') pos = skip_quoted_string(data, len, pos);
+        else if (data[pos] == '(') { depth++; pos++; }
+        else if (data[pos] == ')') { depth--; pos++; }
+        else pos++;
+    }
+    if (depth == 0 && pos > *args_start) *args_len = (pos - 1) - *args_start;
+    return pos;
+}
+
 static void scan_fragment_for_ident_uses(Checker *c, const char *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         if (data[i] == '"' || data[i] == '\'') {
-            char quote = data[i++];
-            while (i < len && data[i] != quote) {
-                if (data[i] == '\\' && i + 1 < len) i += 2;
-                else i++;
-            }
-        } else if (isalpha((unsigned char)data[i]) || data[i] == '_') {
+            i = skip_quoted_string(data, len, i);
+            if (i > 0) i--;
+        } else if (is_ident_start(data[i])) {
             size_t start = i;
-            while (i < len && (isalnum((unsigned char)data[i]) || data[i] == '_')) i++;
+            while (i < len && is_ident_cont(data[i])) i++;
             if (start == 0 || data[start - 1] != '.') use_cstr(c, data + start, i - start);
             if (i > 0) i--;
         }
@@ -89,19 +118,19 @@ static void scan_fragment_for_ident_uses(Checker *c, const char *data, size_t le
 
 static void scan_text_for_uses(Checker *c, DsStr text) {
     for (size_t i = 0; i < text.len; i++) {
-        if (text.data[i] == '$' && i + 1 < text.len && (isalpha((unsigned char)text.data[i + 1]) || text.data[i + 1] == '_')) {
+        if (text.data[i] == '$' && i + 1 < text.len && is_ident_start(text.data[i + 1])) {
             size_t start = ++i;
-            while (i < text.len && (isalnum((unsigned char)text.data[i]) || text.data[i] == '_')) i++;
+            while (i < text.len && is_ident_cont(text.data[i])) i++;
             use_cstr(c, text.data + start, i - start);
             if (i > 0) i--;
         } else if (text.data[i] == '{' && i + 1 < text.len && text.data[i + 1] == '{') {
             i++;
         } else if (text.data[i] == '}' && i + 1 < text.len && text.data[i + 1] == '}') {
             i++;
-        } else if (text.data[i] == '{' && i + 1 < text.len && (isalpha((unsigned char)text.data[i + 1]) || text.data[i + 1] == '_')) {
+        } else if (text.data[i] == '{' && i + 1 < text.len && is_ident_start(text.data[i + 1])) {
             size_t start = i + 1;
             size_t j = start;
-            while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+            while (j < text.len && is_ident_cont(text.data[j])) j++;
             size_t name_end = j;
             size_t index_start = 0;
             size_t index_len = 0;
@@ -110,77 +139,30 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             if (j < text.len && text.data[j] == '[') {
                 j++;
                 while (j < text.len && isspace((unsigned char)text.data[j])) j++;
-                if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
+                if (j < text.len && is_ident_start(text.data[j])) {
                     index_start = j;
-                    while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+                    while (j < text.len && is_ident_cont(text.data[j])) j++;
                     index_len = j - index_start;
                     while (j < text.len && isspace((unsigned char)text.data[j])) j++;
                 } else if (j < text.len && (text.data[j] == '"' || text.data[j] == '\'')) {
-                    char quote = text.data[j++];
-                    while (j < text.len && text.data[j] != quote) {
-                        if (text.data[j] == '\\' && j + 1 < text.len) j += 2;
-                        else j++;
-                    }
-                    if (j < text.len) j++;
+                    j = skip_quoted_string(text.data, text.len, j);
                     while (j < text.len && isspace((unsigned char)text.data[j])) j++;
                 } else {
                     while (j < text.len && text.data[j] != ']') j++;
                 }
                 if (j < text.len && text.data[j] == ']') j++;
             } else if (j < text.len && text.data[j] == '(') {
-                int depth = 1;
-                j++;
-                call_args_start = j;
-                while (j < text.len && depth > 0) {
-                    if (text.data[j] == '"' || text.data[j] == '\'') {
-                        char quote = text.data[j++];
-                        while (j < text.len && text.data[j] != quote) {
-                            if (text.data[j] == '\\' && j + 1 < text.len) j += 2;
-                            else j++;
-                        }
-                        if (j < text.len) j++;
-                    } else if (text.data[j] == '(') {
-                        depth++;
-                        j++;
-                    } else if (text.data[j] == ')') {
-                        depth--;
-                        j++;
-                    } else {
-                        j++;
-                    }
-                }
-                if (depth == 0 && j > call_args_start) call_args_len = (j - 1) - call_args_start;
+                j = skip_paren_args(text.data, text.len, j, &call_args_start, &call_args_len);
             } else if (j < text.len && text.data[j] == '.') {
                 while (j < text.len && text.data[j] == '.') {
                     j++;
-                    if (j < text.len && (isalpha((unsigned char)text.data[j]) || text.data[j] == '_')) {
-                        while (j < text.len && (isalnum((unsigned char)text.data[j]) || text.data[j] == '_')) j++;
+                    if (j < text.len && is_ident_start(text.data[j])) {
+                        while (j < text.len && is_ident_cont(text.data[j])) j++;
                     } else {
                         break;
                     }
                     if (j < text.len && text.data[j] == '(') {
-                        int depth = 1;
-                        j++;
-                        call_args_start = j;
-                        while (j < text.len && depth > 0) {
-                            if (text.data[j] == '"' || text.data[j] == '\'') {
-                                char quote = text.data[j++];
-                                while (j < text.len && text.data[j] != quote) {
-                                    if (text.data[j] == '\\' && j + 1 < text.len) j += 2;
-                                    else j++;
-                                }
-                                if (j < text.len) j++;
-                            } else if (text.data[j] == '(') {
-                                depth++;
-                                j++;
-                            } else if (text.data[j] == ')') {
-                                depth--;
-                                j++;
-                            } else {
-                                j++;
-                            }
-                        }
-                        if (depth == 0 && j > call_args_start) call_args_len = (j - 1) - call_args_start;
+                        j = skip_paren_args(text.data, text.len, j, &call_args_start, &call_args_len);
                     }
                 }
             }
