@@ -231,8 +231,7 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                     while (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || (decoded.data[j] >= '0' && decoded.data[j] <= '9') || decoded.data[j] == '_')) j++;
                 }
                 DsStr field = {decoded.data + field_start, j - field_start};
-                if (!is_env_name_text(field)) {
-                    ds_diag_error(lower->diag, span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);
+                if (!lower_validate_env_name(lower, field, span, "v0.27.0")) {
                     free(decoded.data);
                     return false;
                 }
@@ -437,10 +436,7 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
             return false;
         }
         if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
-            if (!is_env_name_text(field)) {
-                ds_diag_error(lower->diag, field_span, "invalid environment variable name `%.*s` in v0.27.0", (int)field.len, field.data);
-                return false;
-            }
+            if (!lower_validate_env_name(lower, field, field_span, "v0.27.0")) return false;
             return true;
         }
         SymKind field_kind = SYM_UNKNOWN;

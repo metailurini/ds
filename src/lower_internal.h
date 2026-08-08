@@ -97,6 +97,12 @@ static inline DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam
     return param->has_default ? param->default_kind : param->inferred_kind;
 }
 bool is_env_name_text(DsStr name);
+static inline bool lower_validate_env_name(Lower *lower, DsStr name, DsSpan span, const char *version) {
+    if (is_env_name_text(name)) return true;
+    ds_diag_error(lower->diag, span, "invalid environment variable name `%.*s` in %s",
+                  (int)name.len, name.data ? name.data : "", version);
+    return false;
+}
 bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
 bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind);
 DsLowerValueKind lower_stdlib_return_value_kind(const DsStdlibHelper *helper);

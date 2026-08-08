@@ -82,7 +82,7 @@ DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     if (stdlib_helper && stdlib_helper->validates_env_name && stmt->as.call_stmt.args.len > 0 && stmt->as.call_stmt.args.items[0]->kind == DS_EXPR_STRING) {
         DsStr decoded = {0};
         if (lower_decode_string_text(stmt->as.call_stmt.args.items[0]->as.text, &decoded)) {
-            if (!is_env_name_text(decoded)) ds_diag_error(lower->diag, stmt->as.call_stmt.args.items[0]->span, "invalid environment variable name `%.*s` in v0.11.0", (int)decoded.len, decoded.data);
+            lower_validate_env_name(lower, decoded, stmt->as.call_stmt.args.items[0]->span, "v0.11.0");
             free(decoded.data);
         }
     }
@@ -551,9 +551,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             bool env_assign = stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0;
             if (env_assign) {
                 DsStr env_name = {stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4};
-                if (!is_env_name_text(env_name)) {
-                    ds_diag_error(lower->diag, stmt->span, "invalid environment variable name `%.*s` in v0.27.0", (int)env_name.len, env_name.data);
-                }
+                lower_validate_env_name(lower, env_name, stmt->span, "v0.27.0");
                 if (stmt->as.assign_stmt.op != DS_ASSIGN_SET) {
                     ds_diag_error(lower->diag, stmt->span, "environment assignment supports only `=` in v0.27.0");
                 }

@@ -436,9 +436,7 @@ DsLowerExpr *lower_map_field_expr(Lower *lower, const DsExpr *expr, DsLowerExpr 
 
 DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     if (expr->as.field.object && expr->as.field.object->kind == DS_EXPR_IDENT && lower_str_eq(expr->as.field.object->as.text, "env")) {
-        if (!is_env_name_text(expr->as.field.field)) {
-            ds_diag_error(lower->diag, expr->span, "invalid environment variable name `%.*s` in v0.27.0", (int)expr->as.field.field.len, expr->as.field.field.data);
-        }
+        lower_validate_env_name(lower, expr->as.field.field, expr->span, "v0.27.0");
         DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
         out->as.call.name = (DsStr){ds_str_dup_range("env.get", 7), 7};
         DsLowerExpr *arg = expr_new(DS_LOWER_EXPR_STRING, expr->span);
@@ -717,7 +715,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         if (stdlib_helper->validates_env_name && expr->as.call.args.len > 0 && expr->as.call.args.items[0]->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
             if (lower_decode_string_text(expr->as.call.args.items[0]->as.text, &decoded)) {
-                if (!is_env_name_text(decoded)) ds_diag_error(lower->diag, expr->as.call.args.items[0]->span, "invalid environment variable name `%.*s` in v0.11.0", (int)decoded.len, decoded.data);
+                lower_validate_env_name(lower, decoded, expr->as.call.args.items[0]->span, "v0.11.0");
                 free(decoded.data);
             }
         }
