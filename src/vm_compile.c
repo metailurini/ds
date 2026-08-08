@@ -148,11 +148,6 @@ static int compile_const(Program *p, DsSpan span, DsValue value) {
     return reg;
 }
 
-static void loop_patch_vec_push(size_t **items, size_t *len, size_t *cap, size_t value) {
-    DS_GROW_ARRAY(*items, *len, *cap, 4);
-    (*items)[(*len)++] = value;
-}
-
 static LoopPatch *push_loop(Program *p, size_t start, int base_scope_depth) {
     DS_GROW_ARRAY(p->loop_stack, p->loop_len, p->loop_cap, 4);
     LoopPatch *loop = &p->loop_stack[p->loop_len++];
@@ -636,8 +631,13 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             jump.a = loop ? p->scope_depth - loop->base_scope_depth : 0;
             size_t pos = emit_instr(p, jump);
             if (loop) {
-                if (stmt->kind == DS_LOWER_STMT_BREAK) loop_patch_vec_push(&loop->breaks, &loop->break_len, &loop->break_cap, pos);
-                else loop_patch_vec_push(&loop->continues, &loop->continue_len, &loop->continue_cap, pos);
+                if (stmt->kind == DS_LOWER_STMT_BREAK) {
+                    DS_GROW_ARRAY(loop->breaks, loop->break_len, loop->break_cap, 4);
+                    loop->breaks[loop->break_len++] = pos;
+                } else {
+                    DS_GROW_ARRAY(loop->continues, loop->continue_len, loop->continue_cap, 4);
+                    loop->continues[loop->continue_len++] = pos;
+                }
             }
             break;
         }
@@ -686,7 +686,8 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     end_jump.op = OP_JUMP;
                     end_jump.span = arm->span;
                     size_t end_pos = emit_instr(p, end_jump);
-                    loop_patch_vec_push(&end_jumps, &end_len, &end_cap, end_pos);
+                    DS_GROW_ARRAY(end_jumps, end_len, end_cap, 4);
+                    end_jumps[end_len++] = end_pos;
                     p->instrs[false_pos].target = (int)p->instr_len;
                 }
                 if (is_default) {
@@ -695,7 +696,8 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     end_jump.op = OP_JUMP;
                     end_jump.span = arm->span;
                     size_t end_pos = emit_instr(p, end_jump);
-                    loop_patch_vec_push(&end_jumps, &end_len, &end_cap, end_pos);
+                    DS_GROW_ARRAY(end_jumps, end_len, end_cap, 4);
+                    end_jumps[end_len++] = end_pos;
                 }
                 next_arm_target = 0;
             }

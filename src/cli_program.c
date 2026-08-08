@@ -31,18 +31,9 @@ void ds_cli_program_free(DsCliProgram *program) {
     ds_free_cstr_array(program->stack, program->stack_len);
 }
 
-static void units_push(DsCliProgram *program, LoadedUnit *unit) {
-    DS_GROW_ARRAY(program->units, program->units_len, program->units_cap, 8);
-    program->units[program->units_len++] = unit;
-}
-
-static void string_push(char ***items, size_t *len, size_t *cap, char *value) {
-    DS_GROW_ARRAY(*items, *len, *cap, 8);
-    (*items)[(*len)++] = value;
-}
-
 static void import_stack_push(DsCliProgram *program, const char *path) {
-    string_push(&program->stack, &program->stack_len, &program->stack_cap, ds_str_dup_cstr(path));
+    DS_GROW_ARRAY(program->stack, program->stack_len, program->stack_cap, 8);
+    program->stack[program->stack_len++] = ds_str_dup_cstr(path);
 }
 
 static void import_stack_pop(DsCliProgram *program) {
@@ -155,7 +146,8 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         return true;
     }
 
-    string_push(&program->loaded_paths, &program->loaded_len, &program->loaded_cap, ds_str_dup_cstr(normalized));
+    DS_GROW_ARRAY(program->loaded_paths, program->loaded_len, program->loaded_cap, 8);
+    program->loaded_paths[program->loaded_len++] = ds_str_dup_cstr(normalized);
     import_stack_push(program, normalized);
 
     LoadedUnit *unit = (LoadedUnit *)ds_xcalloc(1, sizeof(LoadedUnit));
@@ -180,7 +172,8 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         program->source = unit->source;
     }
     if (ok) process_ast_statements(program, unit, is_root, composed);
-    units_push(program, unit);
+    DS_GROW_ARRAY(program->units, program->units_len, program->units_cap, 8);
+    program->units[program->units_len++] = unit;
 
     import_stack_pop(program);
     free(normalized);
