@@ -379,20 +379,14 @@ static bool read_path_to_string_msg(Vm *vm, Instr *ins, const char *path, const 
     }
 
     DsString s;
-    ds_string_init(&s);
-    char buf[4096];
-    size_t n = 0;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        if (memchr(buf, '\0', n)) {
-            ds_diag_error(vm->diag, ins->span, "%s `%s` contains embedded NUL bytes", what, path);
-            fclose(fp);
-            ds_string_free(&s);
-            return false;
-        }
-        ds_string_append_range(&s, buf, n);
+    VmReadStreamStatus status = vm_read_stream(fp, &s, false, true);
+    if (status == VM_READ_STREAM_EMBEDDED_NUL) {
+        ds_diag_error(vm->diag, ins->span, "%s `%s` contains embedded NUL bytes", what, path);
+        fclose(fp);
+        ds_string_free(&s);
+        return false;
     }
-
-    if (ferror(fp)) {
+    if (status != VM_READ_STREAM_OK) {
         ds_diag_error(vm->diag, ins->span, "failed to read %s `%s`: %s", what, path, strerror(errno));
         fclose(fp);
         ds_string_free(&s);

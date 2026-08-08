@@ -72,6 +72,27 @@ static inline void vm_fprint_escaped(FILE *out, const char *data, size_t len) {
 }
 
 typedef enum {
+    VM_READ_STREAM_OK,
+    VM_READ_STREAM_IO_ERROR,
+    VM_READ_STREAM_EMBEDDED_NUL,
+} VmReadStreamStatus;
+
+static inline VmReadStreamStatus vm_read_stream(FILE *fp, DsString *out, bool rewind_first,
+                                                bool reject_nul) {
+    ds_string_init(out);
+    if (rewind_first && (fflush(fp) != 0 || fseek(fp, 0, SEEK_SET) != 0)) {
+        return VM_READ_STREAM_IO_ERROR;
+    }
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        if (reject_nul && memchr(buf, '\0', n)) return VM_READ_STREAM_EMBEDDED_NUL;
+        ds_string_append_range(out, buf, n);
+    }
+    return ferror(fp) ? VM_READ_STREAM_IO_ERROR : VM_READ_STREAM_OK;
+}
+
+typedef enum {
     OP_CMP_ADD,
     OP_CMP_SUB,
     OP_CMP_MUL,

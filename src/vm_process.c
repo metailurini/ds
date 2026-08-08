@@ -792,16 +792,6 @@ static void process_result_free(VmProcessResult *result) {
     result->has_non_sigpipe_failure = false;
 }
 
-static bool read_file_into_string(FILE *fp, DsString *out) {
-    ds_string_init(out);
-    fflush(fp);
-    if (fseek(fp, 0, SEEK_SET) != 0) return false;
-    char buf[4096];
-    size_t n = 0;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) ds_string_append_range(out, buf, n);
-    return ferror(fp) == 0;
-}
-
 static bool open_redirect_target(Vm *vm, const DsRedirect *redirect, int *out_fd) {
     *out_fd = -1;
     char *redirect_path = NULL;
@@ -1162,7 +1152,8 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     }
 
     if (spec->capture) {
-        if (!read_file_into_string(out_fp, &result->stdout_text) || !read_file_into_string(err_fp, &result->stderr_text)) {
+        if (vm_read_stream(out_fp, &result->stdout_text, true, false) != VM_READ_STREAM_OK ||
+            vm_read_stream(err_fp, &result->stderr_text, true, false) != VM_READ_STREAM_OK) {
             ds_diag_error(vm->diag, spec->span, "failed to read command capture output");
             fclose(out_fp);
             fclose(err_fp);
@@ -1336,7 +1327,8 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
         ds_diag_error(vm->diag, ins->span, "failed to launch pipeline command: %s", strerror(exec_errno));
     }
     if (capture) {
-        if (!read_file_into_string(out_fp, &result->stdout_text) || !read_file_into_string(err_fp, &result->stderr_text)) {
+        if (vm_read_stream(out_fp, &result->stdout_text, true, false) != VM_READ_STREAM_OK ||
+            vm_read_stream(err_fp, &result->stderr_text, true, false) != VM_READ_STREAM_OK) {
             ds_diag_error(vm->diag, ins->span, "failed to read pipeline capture output");
             ok = false;
             goto cleanup;
