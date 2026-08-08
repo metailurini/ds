@@ -68,10 +68,9 @@ static void print_script_help(const DsSource *source, const DsLowerProgram *prog
 }
 
 static int find_decl_by_option(const DsLowerProgram *program, const char *name) {
-    size_t len = strlen(name);
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-        if (decl->kind != DS_SCRIPT_DECL_ARG && decl->name.len == len && memcmp(decl->name.data, name, len) == 0) return (int)i;
+        if (decl->kind != DS_SCRIPT_DECL_ARG && ds_str_eq_cstr(decl->name, name)) return (int)i;
     }
     return -1;
 }

@@ -24,6 +24,10 @@ static bool helper_is(const Instr *ins, const char *name) {
     return ins->name && strcmp(ins->name, name) == 0;
 }
 
+static const char *ins_name_or(const Instr *ins, const char *fallback) {
+    return ins->name ? ins->name : fallback;
+}
+
 static bool vm_string_arg(Vm *vm, Instr *ins, size_t index, const char **out, size_t *len) {
     if (index >= ins->arg_count) return false;
 
@@ -33,14 +37,14 @@ static bool vm_string_arg(Vm *vm, Instr *ins, size_t index, const char **out, si
      */
     DsValue *v = &vm->regs[ins->args[index]];
     if (v->kind != DS_VALUE_STRING) {
-        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects string arguments", ins->name ? ins->name : "<helper>");
+        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects string arguments", ins_name_or(ins, "<helper>"));
         return false;
     }
 
     *out = v->as.string.data ? v->as.string.data : "";
     *len = v->as.string.len;
     if (memchr(*out, '\0', *len)) {
-        ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` does not support embedded NUL bytes", ins->name ? ins->name : "<helper>");
+        ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` does not support embedded NUL bytes", ins_name_or(ins, "<helper>"));
         return false;
     }
     return true;
@@ -55,7 +59,7 @@ static bool vm_int_arg(Vm *vm, Instr *ins, size_t index, int64_t *out) {
      */
     DsValue *v = &vm->regs[ins->args[index]];
     if (v->kind != DS_VALUE_INT) {
-        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects int arguments", ins->name ? ins->name : "<helper>");
+        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects int arguments", ins_name_or(ins, "<helper>"));
         return false;
     }
 
@@ -81,14 +85,8 @@ static char *vm_string_arg_dup(Vm *vm, Instr *ins, size_t index) {
 
 static bool vm_valid_env_name(const char *name) {
     if (!name || !name[0]) return false;
-
-    unsigned char c = (unsigned char)name[0];
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
-
-    for (size_t i = 1; name[i]; i++) {
-        c = (unsigned char)name[i];
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
-    }
+    if (!ds_is_ident_start(name[0])) return false;
+    for (size_t i = 1; name[i]; i++) if (!ds_is_ident_continue(name[i])) return false;
     return true;
 }
 
@@ -703,25 +701,25 @@ static bool vm_walk_extension_valid(const char *ext, const char *helper, Vm *vm,
 static bool vm_walk_collect_extensions(Vm *vm, Instr *ins, VmStringVec *exts) {
     DsValue *value = &vm->regs[ins->args[1]];
     if (value->kind != DS_VALUE_ARRAY) {
-        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects a string-array extension argument", ins->name ? ins->name : "dir.walk_ext");
+        ds_diag_error(vm->diag, ins->span, "runtime standard-library helper `%s` expects a string-array extension argument", ins_name_or(ins, "dir.walk_ext"));
         return false;
     }
     if (value->as.array.len == 0) {
-        ds_diag_error(vm->diag, ins->span, "%s expects a non-empty extension array", ins->name ? ins->name : "dir.walk_ext");
+        ds_diag_error(vm->diag, ins->span, "%s expects a non-empty extension array", ins_name_or(ins, "dir.walk_ext"));
         return false;
     }
     for (size_t i = 0; i < value->as.array.len; i++) {
         DsValue *item = (DsValue *)value->as.array.items[i];
         if (!item || item->kind != DS_VALUE_STRING) {
-            ds_diag_error(vm->diag, ins->span, "%s expects extension filters to be strings such as `.c`", ins->name ? ins->name : "dir.walk_ext");
+            ds_diag_error(vm->diag, ins->span, "%s expects extension filters to be strings such as `.c`", ins_name_or(ins, "dir.walk_ext"));
             return false;
         }
         const char *ext = item->as.string.data ? item->as.string.data : "";
         if (memchr(ext, '\0', item->as.string.len)) {
-            ds_diag_error(vm->diag, ins->span, "%s does not support embedded NUL bytes in extensions", ins->name ? ins->name : "dir.walk_ext");
+            ds_diag_error(vm->diag, ins->span, "%s does not support embedded NUL bytes in extensions", ins_name_or(ins, "dir.walk_ext"));
             return false;
         }
-        if (!vm_walk_extension_valid(ext, ins->name ? ins->name : "dir.walk_ext", vm, ins)) return false;
+        if (!vm_walk_extension_valid(ext, ins_name_or(ins, "dir.walk_ext"), vm, ins)) return false;
         vm_string_vec_push_copy(exts, ext);
     }
     return true;
@@ -748,7 +746,7 @@ static bool vm_walk_ext_matches(const char *path, const VmStringVec *exts) {
 static bool vm_dir_walk_collect(Vm *vm, Instr *ins, const char *dir, const VmStringVec *exts, VmStringVec *matches) {
     DIR *dp = opendir(dir);
     if (!dp) {
-        ds_diag_error(vm->diag, ins->span, "%s failed to open root `%s`: %s", ins->name ? ins->name : "dir.walk", dir, strerror(errno));
+        ds_diag_error(vm->diag, ins->span, "%s failed to open root `%s`: %s", ins_name_or(ins, "dir.walk"), dir, strerror(errno));
         return false;
     }
     struct dirent *ent = NULL;
@@ -789,7 +787,7 @@ static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsValue *out) {
 
     struct stat st;
     if (lstat(root, &st) != 0 || !S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) {
-        ds_diag_error(vm->diag, ins->span, "%s root `%s` is not an existing directory", ins->name ? ins->name : "dir.walk", root);
+        ds_diag_error(vm->diag, ins->span, "%s root `%s` is not an existing directory", ins_name_or(ins, "dir.walk"), root);
         free(root);
         return false;
     }
@@ -811,7 +809,7 @@ static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsValue *out) {
     }
     DsValue array = sorted_unique_string_array(&matches);
     if (required && array.as.array.len == 0) {
-        ds_diag_error(vm->diag, ins->span, "%s matched no files", ins->name ? ins->name : "dir.walk!");
+        ds_diag_error(vm->diag, ins->span, "%s matched no files", ins_name_or(ins, "dir.walk!"));
         ds_value_free(&array);
         return false;
     }
@@ -1043,7 +1041,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         array_push_string(&array, s + part, len - part);
         *out = array; return true;
     }
-    ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown string method `%s` after lowering", ins->name ? ins->name : "");
+    ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown string method `%s` after lowering", ins_name_or(ins, ""));
     return false;
 }
 
@@ -1220,7 +1218,7 @@ static bool stdlib_regex_replace(Vm *vm, Instr *ins, DsValue *out) {
 bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     *out = ds_value_null();
 
-    const char *name = ins->name ? ins->name : "";
+    const char *name = ins_name_or(ins, "");
     if (helper_is(ins, "rowarray.sort_by")) return stdlib_rowarray_sort_by(vm, ins, out);
     DsStr helper_name = {(char *)name, strlen(name)};
     const DsStdlibHelper *helper = ds_stdlib_lookup(helper_name);

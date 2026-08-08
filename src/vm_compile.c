@@ -158,7 +158,7 @@ static int add_function_meta(Program *p, const DsLowerFn *fn) {
 
 static int find_function_meta(Program *p, DsStr name) {
     for (size_t i = 0; i < p->function_len; i++) {
-        if (strlen(p->functions[i].name) == name.len && memcmp(p->functions[i].name, name.data, name.len) == 0) return (int)i;
+        if (ds_str_eq_cstr(name, p->functions[i].name)) return (int)i;
     }
     return -1;
 }
