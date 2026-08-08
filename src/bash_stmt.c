@@ -738,7 +738,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: unsafe lowered variable name `%.*s` reached Bash emission", (int)stmt->as.assign_stmt.name.len, stmt->as.assign_stmt.name.data);
                 return false;
             }
-            if (stmt->as.assign_stmt.op == DS_LOWER_ASSIGN_SET) {
+            if (stmt->as.assign_stmt.op == DS_ASSIGN_SET) {
                 return emit_assignment_rhs(e, stmt->as.assign_stmt.name, stmt->as.assign_stmt.value, indent);
             }
             emit_indent(&e->out, indent);

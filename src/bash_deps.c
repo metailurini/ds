@@ -619,7 +619,7 @@ DEFINE_STMT_USES_NESTED(stmt_uses_control_commands, stmt_is_control_command)
 DEFINE_PROGRAM_USES(program_uses_control_commands, stmt_uses_control_commands)
 
 static bool stmt_needs_int_helpers(const DsLowerStmt *stmt) {
-    return (stmt->kind == DS_LOWER_STMT_ASSIGN && stmt->as.assign_stmt.op != DS_LOWER_ASSIGN_SET) ||
+    return (stmt->kind == DS_LOWER_STMT_ASSIGN && stmt->as.assign_stmt.op != DS_ASSIGN_SET) ||
            (stmt->kind == DS_LOWER_STMT_CMD && command_uses_int_helpers(&stmt->as.cmd_stmt));
 }
 

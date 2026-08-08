@@ -126,35 +126,20 @@ typedef enum {
 
 typedef struct DsLowerStmt DsLowerStmt;
 
-typedef enum {
-    DS_LOWER_ASSIGN_SET,
-    DS_LOWER_ASSIGN_ADD,
-    DS_LOWER_ASSIGN_SUB,
-    DS_LOWER_ASSIGN_MUL,
-    DS_LOWER_ASSIGN_DIV,
-    DS_LOWER_ASSIGN_MOD
-} DsLowerAssignOp;
+typedef DsAssignOp DsLowerAssignOp;
 
 static inline const char *ds_lower_assign_op_name(DsLowerAssignOp op) {
-    switch (op) {
-        case DS_LOWER_ASSIGN_ADD: return "+=";
-        case DS_LOWER_ASSIGN_SUB: return "-=";
-        case DS_LOWER_ASSIGN_MUL: return "*=";
-        case DS_LOWER_ASSIGN_DIV: return "/=";
-        case DS_LOWER_ASSIGN_MOD: return "%=";
-        case DS_LOWER_ASSIGN_SET: return "=";
-    }
-    return "=";
+    return ds_assign_op_name(op);
 }
 
 static inline const char *ds_lower_assign_binary_op(DsLowerAssignOp op) {
     switch (op) {
-        case DS_LOWER_ASSIGN_ADD: return "+";
-        case DS_LOWER_ASSIGN_SUB: return "-";
-        case DS_LOWER_ASSIGN_MUL: return "*";
-        case DS_LOWER_ASSIGN_DIV: return "/";
-        case DS_LOWER_ASSIGN_MOD: return "%";
-        case DS_LOWER_ASSIGN_SET: return "=";
+        case DS_ASSIGN_ADD: return "+";
+        case DS_ASSIGN_SUB: return "-";
+        case DS_ASSIGN_MUL: return "*";
+        case DS_ASSIGN_DIV: return "/";
+        case DS_ASSIGN_MOD: return "%";
+        case DS_ASSIGN_SET: return "=";
     }
     return "=";
 }

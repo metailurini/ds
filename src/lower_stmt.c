@@ -113,18 +113,6 @@ DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope) {
     return out;
 }
 
-static DsLowerAssignOp lower_assign_op(DsAssignOp op) {
-    switch (op) {
-        case DS_ASSIGN_ADD: return DS_LOWER_ASSIGN_ADD;
-        case DS_ASSIGN_SUB: return DS_LOWER_ASSIGN_SUB;
-        case DS_ASSIGN_MUL: return DS_LOWER_ASSIGN_MUL;
-        case DS_ASSIGN_DIV: return DS_LOWER_ASSIGN_DIV;
-        case DS_ASSIGN_MOD: return DS_LOWER_ASSIGN_MOD;
-        case DS_ASSIGN_SET: return DS_LOWER_ASSIGN_SET;
-    }
-    return DS_LOWER_ASSIGN_SET;
-}
-
 static void maybe_update_symbol(Symbol *sym, SymKind kind) {
     if (!sym) return;
     if (kind != SYM_UNKNOWN && sym->kind != SYM_TOPLEVEL_PREDECLARED) sym->kind = kind;
@@ -559,7 +547,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         case DS_STMT_ASSIGN: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSIGN, stmt->span);
             out->as.assign_stmt.name = str_clone(stmt->as.assign_stmt.name);
-            out->as.assign_stmt.op = lower_assign_op(stmt->as.assign_stmt.op);
+            out->as.assign_stmt.op = stmt->as.assign_stmt.op;
             bool env_assign = stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0;
             if (env_assign) {
                 DsStr env_name = {stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4};
