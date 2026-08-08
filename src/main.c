@@ -47,7 +47,8 @@ typedef struct {
 
 static int parse_flagged_path(int argc, char **argv, int start, const char *command,
                               const CliBoolFlag *flags, size_t flag_count, bool stop_at_path,
-                              const char *usage_message, int *path_index) {
+                              const char *usage_message, const char *extra_arg_message,
+                              int *path_index) {
     *path_index = -1;
     for (int i = start; i < argc; i++) {
         bool matched = false;
@@ -60,7 +61,7 @@ static int parse_flagged_path(int argc, char **argv, int start, const char *comm
         }
         if (matched) continue;
         if (strncmp(argv[i], "--", 2) == 0) return usage_error("unknown %s flag `%s`", command, argv[i]);
-        if (*path_index >= 0) return usage_error("%s", usage_message);
+        if (*path_index >= 0) return usage_error("%s", extra_arg_message ? extra_arg_message : usage_message);
         *path_index = i;
         if (stop_at_path) break;
     }
@@ -140,7 +141,7 @@ static int cli_format(int argc, char **argv) {
     CliBoolFlag flags[] = {{"--check", &check}, {"--write", &write}, {"-w", &write}};
     int path_index;
     if (parse_flagged_path(argc, argv, 2, "fmt", flags, 3, false,
-                           "expected `ds fmt [--check] [--write|-w] <file.ds>`", &path_index)) return 1;
+                           "expected `ds fmt [--check] [--write|-w] <file.ds>`", NULL, &path_index)) return 1;
     const char *path = argv[path_index];
     if (check && write) return usage_error("`ds fmt --check --write` is invalid");
 
@@ -199,7 +200,8 @@ static int cli_check(int argc, char **argv) {
     CliBoolFlag flags[] = {{"--warnings-as-errors", &warnings_as_errors}, {"--no-warnings", &no_warnings}};
     int path_index;
     if (parse_flagged_path(argc, argv, 2, "check", flags, 2, false,
-                           "expected `ds check [--warnings-as-errors] [--no-warnings] <file.ds>`", &path_index)) return 1;
+                           "expected `ds check [--warnings-as-errors] [--no-warnings] <file.ds>`",
+                           "expected a command and <file.ds>", &path_index)) return 1;
     const char *path = argv[path_index];
     if (warnings_as_errors && no_warnings) return usage_error("`ds check --warnings-as-errors --no-warnings` is invalid");
 
@@ -245,7 +247,7 @@ int main(int argc, char **argv) {
         CliBoolFlag flags[] = {{"--trace-cmd", &options.trace_cmd}, {"--trace-vm", &options.trace_vm}};
         int path_index;
         if (parse_flagged_path(argc, argv, 2, "run", flags, 2, true,
-                               "expected script path after `ds run` flags", &path_index)) return 1;
+                               "expected script path after `ds run` flags", NULL, &path_index)) return 1;
         DsCliProgram program;
         int rc = ds_cli_load_lower(argv[path_index], &program) ? ds_vm_run_program_args_options(&program.source, program.lowered, argc - path_index - 1, argv + path_index + 1, &program.diag, options) : 1;
         ds_cli_program_free(&program);
