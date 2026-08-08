@@ -133,6 +133,9 @@ typedef struct {
     DsStmtKind outer_kind;
 } RunMaterializeCtx;
 
+static DsLowerValueKind lower_infer_collection_element_kind(Lower *lower, const DsLowerExpr *expr, SymKind kind);
+static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span);
+
 static DsLowerStmt *lower_materialize_run_in_stmt(Lower *lower, DsCommand *command, DsSpan span, Scope *temp_scope, Scope **saved_scope, DsCommand *command_copy) {
     ds_command_clone(command_copy, command);
     DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, span);
@@ -144,6 +147,26 @@ static DsLowerStmt *lower_materialize_run_in_stmt(Lower *lower, DsCommand *comma
     lower_temp_scope_end(lower, temp_scope, *saved_scope);
     lower_stmt_free(block);
     return NULL;
+}
+
+static DsExpr lower_run_copy_expr(const DsExpr *source, DsCommand command) {
+    DsExpr expr;
+    memset(&expr, 0, sizeof(expr));
+    expr.kind = DS_EXPR_RUN;
+    expr.span = source->span;
+    expr.as.run = command;
+    return expr;
+}
+
+static DsLowerStmt *lower_let_with_value(Lower *lower, const DsStmt *stmt, const DsExpr *value) {
+    SymKind kind = SYM_UNKNOWN;
+    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
+    out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
+    out->as.let_stmt.value = lower_expr(lower, value, &kind);
+    out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
+    out->as.let_stmt.element_kind = lower_infer_collection_element_kind(lower, out->as.let_stmt.value, kind);
+    lower_apply_let_schema(lower, out, stmt->as.let_stmt.name, kind, stmt->span);
+    return out;
 }
 
 static bool pattern_equal(const DsLowerCasePattern *a, const DsLowerCasePattern *b) {
@@ -285,6 +308,20 @@ static void lower_validate_function_return_contract(Lower *lower, const DsStmt *
             row_schema_clone(schema, &out->as.return_stmt.row_schema);
         }
     }
+}
+
+static DsLowerStmt *lower_return_with_value(Lower *lower, const DsStmt *stmt, const DsExpr *value) {
+    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
+    if (lower->handler_depth > 0) {
+        ds_diag_error(lower->diag, stmt->span, "`return` from a cleanup handler is not supported in v0.22.0; move the return into a function called by the handler or use `exit`");
+    }
+    if (lower->function_depth <= 0 || !lower->current_function) {
+        ds_diag_error(lower->diag, stmt->span, "`return` is only allowed inside a function");
+    }
+    SymKind value_kind = SYM_UNKNOWN;
+    out->as.return_stmt.value = lower_expr(lower, value, &value_kind);
+    lower_validate_function_return_contract(lower, stmt, out, value_kind);
+    return out;
 }
 
 static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
@@ -516,33 +553,16 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 Scope *saved_scope = NULL;
                 DsLowerStmt *block = lower_materialize_run_in_stmt(lower, &stmt->as.let_stmt.value->as.run, stmt->span, &temp_scope, &saved_scope, &command_copy);
                 if (block) {
-                    DsExpr fake;
-                    memset(&fake, 0, sizeof(fake));
-                    fake.kind = DS_EXPR_RUN;
-                    fake.span = stmt->as.let_stmt.value->span;
-                    fake.as.run = command_copy;
-                    SymKind kind = SYM_UNKNOWN;
-                    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
-                    out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
-                    out->as.let_stmt.value = lower_expr(lower, &fake, &kind);
-                    out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
-                    out->as.let_stmt.element_kind = lower_infer_collection_element_kind(lower, out->as.let_stmt.value, kind);
+                    DsExpr fake = lower_run_copy_expr(stmt->as.let_stmt.value, command_copy);
+                    DsLowerStmt *out = lower_let_with_value(lower, stmt, &fake);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
-                    lower_apply_let_schema(lower, out, stmt->as.let_stmt.name, kind, stmt->span);
                     lower_stmt_vec_push(&block->as.block_stmt.statements, out);
                     ds_command_free(&command_copy);
                     return block;
                 }
                 ds_command_free(&command_copy);
             }
-            SymKind kind = SYM_UNKNOWN;
-            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
-            out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
-            out->as.let_stmt.value = lower_expr(lower, stmt->as.let_stmt.value, &kind);
-            out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
-            out->as.let_stmt.element_kind = lower_infer_collection_element_kind(lower, out->as.let_stmt.value, kind);
-            lower_apply_let_schema(lower, out, stmt->as.let_stmt.name, kind, stmt->span);
-            return out;
+            return lower_let_with_value(lower, stmt, stmt->as.let_stmt.value);
         }
         case DS_STMT_ASSIGN: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSIGN, stmt->span);
@@ -868,21 +888,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 Scope *saved_scope = NULL;
                 DsLowerStmt *block = lower_materialize_run_in_stmt(lower, &stmt->as.return_stmt.value->as.run, stmt->span, &temp_scope, &saved_scope, &command_copy);
                 if (block) {
-                    DsExpr fake;
-                    memset(&fake, 0, sizeof(fake));
-                    fake.kind = DS_EXPR_RUN;
-                    fake.span = stmt->as.return_stmt.value->span;
-                    fake.as.run = command_copy;
-                    DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
-                    if (lower->handler_depth > 0) {
-                        ds_diag_error(lower->diag, stmt->span, "`return` from a cleanup handler is not supported in v0.22.0; move the return into a function called by the handler or use `exit`");
-                    }
-                    if (lower->function_depth <= 0 || !lower->current_function) {
-                        ds_diag_error(lower->diag, stmt->span, "`return` is only allowed inside a function");
-                    }
-                    SymKind value_kind = SYM_UNKNOWN;
-                    out->as.return_stmt.value = lower_expr(lower, &fake, &value_kind);
-                    lower_validate_function_return_contract(lower, stmt, out, value_kind);
+                    DsExpr fake = lower_run_copy_expr(stmt->as.return_stmt.value, command_copy);
+                    DsLowerStmt *out = lower_return_with_value(lower, stmt, &fake);
                     lower_stmt_vec_push(&block->as.block_stmt.statements, out);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     ds_command_free(&command_copy);
@@ -890,17 +897,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 }
                 ds_command_free(&command_copy);
             }
-            DsLowerStmt *out = stmt_new(DS_LOWER_STMT_RETURN, stmt->span);
-            if (lower->handler_depth > 0) {
-                ds_diag_error(lower->diag, stmt->span, "`return` from a cleanup handler is not supported in v0.22.0; move the return into a function called by the handler or use `exit`");
-            }
-            if (lower->function_depth <= 0 || !lower->current_function) {
-                ds_diag_error(lower->diag, stmt->span, "`return` is only allowed inside a function");
-            }
-            SymKind value_kind = SYM_UNKNOWN;
-            out->as.return_stmt.value = lower_expr(lower, stmt->as.return_stmt.value, &value_kind);
-            lower_validate_function_return_contract(lower, stmt, out, value_kind);
-            return out;
+            return lower_return_with_value(lower, stmt, stmt->as.return_stmt.value);
         }
         case DS_STMT_DEFER:
         case DS_STMT_TRAP: {
