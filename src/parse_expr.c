@@ -30,6 +30,12 @@ void parse_call_args(Parser *p, DsExprVec *args);
 
 static void skip_collection_newlines(Parser *p) { parser_skip_newlines(p); }
 
+static DsExpr *parser_new_text_expr(DsExprKind kind, const DsToken *token) {
+    DsExpr *expr = parser_new_expr(kind, token->span);
+    expr->as.text = parser_copy_token_text(token);
+    return expr;
+}
+
 static DsExpr *parse_array_literal(Parser *p) {
     DsToken *open = parser_previous(p);
     DsExpr *expr = parser_new_expr(DS_EXPR_ARRAY, open->span);
@@ -96,27 +102,19 @@ static DsExpr *parse_primary(Parser *p) {
         return parse_run_expr(p);
     }
     if (parser_advance_if(p, DS_TOK_IDENT)) {
-        DsExpr *expr = parser_new_expr(DS_EXPR_IDENT, tok->span);
-        expr->as.text = parser_copy_token_text(tok);
-        return expr;
+        return parser_new_text_expr(DS_EXPR_IDENT, tok);
     }
     if (parser_advance_if(p, DS_TOK_TYPE_STRING) || parser_advance_if(p, DS_TOK_TYPE_INT) ||
         parser_advance_if(p, DS_TOK_TYPE_BOOL) || parser_advance_if(p, DS_TOK_SCRIPT) ||
         parser_advance_if(p, DS_TOK_IMPORT) || parser_advance_if(p, DS_TOK_ARG) || parser_advance_if(p, DS_TOK_OPTION) || parser_advance_if(p, DS_TOK_FLAG)) {
         DsToken *used = parser_previous(p);
-        DsExpr *expr = parser_new_expr(DS_EXPR_IDENT, used->span);
-        expr->as.text = parser_copy_token_text(used);
-        return expr;
+        return parser_new_text_expr(DS_EXPR_IDENT, used);
     }
     if (parser_advance_if(p, DS_TOK_STRING)) {
-        DsExpr *expr = parser_new_expr(DS_EXPR_STRING, tok->span);
-        expr->as.text = parser_copy_token_text(tok);
-        return expr;
+        return parser_new_text_expr(DS_EXPR_STRING, tok);
     }
     if (parser_advance_if(p, DS_TOK_INT)) {
-        DsExpr *expr = parser_new_expr(DS_EXPR_INT, tok->span);
-        expr->as.text = parser_copy_token_text(tok);
-        return expr;
+        return parser_new_text_expr(DS_EXPR_INT, tok);
     }
     if (parser_advance_if(p, DS_TOK_TRUE) || parser_advance_if(p, DS_TOK_FALSE)) {
         DsToken *used = parser_previous(p);
@@ -125,9 +123,7 @@ static DsExpr *parse_primary(Parser *p) {
         return expr;
     }
     if (parser_advance_if(p, DS_TOK_REGEX)) {
-        DsExpr *expr = parser_new_expr(DS_EXPR_REGEX, tok->span);
-        expr->as.regex = parser_copy_token_text(tok);
-        return expr;
+        return parser_new_text_expr(DS_EXPR_REGEX, tok);
     }
     if (parser_advance_if(p, DS_TOK_LPAREN)) {
         DsToken *open = parser_previous(p);
