@@ -100,7 +100,7 @@ DsStr lower_map_key_decode(const DsMapEntry *entry) {
 
 bool map_has_duplicate_key(const DsLowerMapEntryVec *entries, DsStr key) {
     for (size_t i = 0; i < entries->len; i++) {
-        if (entries->items[i].key.len == key.len && memcmp(entries->items[i].key.data, key.data, key.len) == 0) return true;
+        if (ds_str_eq(entries->items[i].key, key)) return true;
     }
     return false;
 }
@@ -643,8 +643,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         DsStr direction = {0};
         if (expr->as.call.args.len > 2 && expr->as.call.args.items[2]->kind == DS_EXPR_STRING) {
             lower_decode_string_text(expr->as.call.args.items[2]->as.text, &direction);
-            if (!(direction.len == 3 && memcmp(direction.data, "asc", 3) == 0) &&
-                !(direction.len == 4 && memcmp(direction.data, "desc", 4) == 0)) {
+            if (!ds_str_eq_cstr(direction, "asc") && !ds_str_eq_cstr(direction, "desc")) {
                 ds_diag_error(lower->diag, expr->as.call.args.items[2]->span, "sort_by direction must be \"asc\" or \"desc\" in v0.37.0");
             }
         } else if (expr->as.call.args.len == 2) {

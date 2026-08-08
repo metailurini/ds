@@ -219,7 +219,7 @@ bool lower_validate_word_interpolation(Lower *lower, DsStr text, DsSpan span) {
                 free(decoded.data);
                 return false;
             }
-            if (name.len == 3 && memcmp(name.data, "env", 3) == 0 && j < decoded.len && decoded.data[j] == '.') {
+            if (ds_str_eq_cstr(name, "env") && j < decoded.len && decoded.data[j] == '.') {
                 size_t field_start = ++j;
                 if (j < decoded.len && ((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') || (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') || decoded.data[j] == '_')) {
                     j++;
@@ -408,7 +408,7 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
             ds_diag_error(lower->diag, field_span, "expected field name after `.`");
             return false;
         }
-        if (name.len == 6 && memcmp(name.data, "string", 6) == 0) {
+        if (ds_str_eq_cstr(name, "string")) {
             DsStr member = field;
             for (size_t j = 0; j < member.len; j++) {
                 if (member.data[j] == '(') {
@@ -419,7 +419,7 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
             lower_diag_unknown_string_method(lower, field_span, member);
             return false;
         }
-        if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
+        if (ds_str_eq_cstr(name, "env")) {
             if (!lower_validate_env_name(lower, field, field_span, "v0.27.0")) return false;
             return true;
         }

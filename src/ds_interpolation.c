@@ -10,15 +10,15 @@ bool ds_interp_parse_format_spec(DsStr spec, DsInterpFormatSpec *out) {
     memset(out, 0, sizeof(*out));
     out->precision = -1;
 
-    if (spec.len == 5 && memcmp(spec.data, "upper", 5) == 0) {
+    if (ds_str_eq_cstr(spec, "upper")) {
         out->kind = DS_INTERP_FORMAT_UPPER;
         return true;
     }
-    if (spec.len == 5 && memcmp(spec.data, "lower", 5) == 0) {
+    if (ds_str_eq_cstr(spec, "lower")) {
         out->kind = DS_INTERP_FORMAT_LOWER;
         return true;
     }
-    if (spec.len == 4 && memcmp(spec.data, "trim", 4) == 0) {
+    if (ds_str_eq_cstr(spec, "trim")) {
         out->kind = DS_INTERP_FORMAT_TRIM;
         return true;
     }

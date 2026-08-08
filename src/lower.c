@@ -3,8 +3,7 @@
 static void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
     if (stmt->kind != DS_STMT_TEST) return;
     for (size_t i = 0; i < program->tests.len; i++) {
-        if (program->tests.items[i].name.len == stmt->as.test_stmt.name.len &&
-            memcmp(program->tests.items[i].name.data, stmt->as.test_stmt.name.data, stmt->as.test_stmt.name.len) == 0) {
+        if (ds_str_eq(program->tests.items[i].name, stmt->as.test_stmt.name)) {
             ds_diag_error(lower->diag, stmt->span, "duplicate test `%.*s`", (int)stmt->as.test_stmt.name.len, stmt->as.test_stmt.name.data);
             return;
         }

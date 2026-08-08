@@ -465,7 +465,7 @@ const DsLowerMapEntry *bash_row_map_entry(const DsLowerExpr *row, DsStr field) {
     if (!row || row->kind != DS_LOWER_EXPR_MAP) return NULL;
     for (size_t i = 0; i < row->as.map.entries.len; i++) {
         const DsLowerMapEntry *entry = &row->as.map.entries.items[i];
-        if (entry->key.len == field.len && memcmp(entry->key.data, field.data, field.len) == 0) return entry;
+        if (ds_str_eq(entry->key, field)) return entry;
     }
     return NULL;
 }
@@ -668,7 +668,7 @@ bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr
 static DsLowerValueKind row_schema_field_kind(const DsLowerRowSchema *schema, DsStr field) {
     if (!schema) return DS_LOWER_VALUE_UNKNOWN;
     for (size_t i = 0; i < schema->len; i++) {
-        if (schema->items[i].name.len == field.len && memcmp(schema->items[i].name.data, field.data, field.len) == 0) {
+        if (ds_str_eq(schema->items[i].name, field)) {
             return schema->items[i].kind;
         }
     }

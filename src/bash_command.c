@@ -41,7 +41,7 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
     if (form.kind == DS_COMMAND_WORD_FIELD) {
         DsStr name = form.name;
         DsStr field = form.field;
-        if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
+        if (ds_str_eq_cstr(name, "env")) {
             buf_append(out, "\"${");
             buf_append_dsstr(out, field);
             buf_append(out, ":-}\"");

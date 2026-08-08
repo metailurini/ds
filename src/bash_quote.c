@@ -47,7 +47,7 @@ void symbol_vec_push(SymbolVec *vec, DsStr name) {
 bool symbol_exists(const SymbolVec *symbols, DsStr name) {
     for (size_t i = 0; i < symbols->len; i++) {
         DsStr existing = symbols->items[i];
-        if (existing.len == name.len && memcmp(existing.data, name.data, name.len) == 0) return true;
+        if (ds_str_eq(existing, name)) return true;
     }
     return false;
 }

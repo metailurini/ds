@@ -180,7 +180,7 @@ bool lower_validate_handler_capture(Lower *lower, const Symbol *sym, DsStr name,
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {
     for (size_t i = 0; i < program->functions.len; i++) {
         DsLowerFn *fn = &program->functions.items[i];
-        if (fn->name.len == name.len && memcmp(fn->name.data, name.data, name.len) == 0) return fn;
+        if (ds_str_eq(fn->name, name)) return fn;
     }
     return NULL;
 }
@@ -188,7 +188,7 @@ DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {
 int find_function_index(DsLowerProgram *program, DsStr name) {
     for (size_t i = 0; i < program->functions.len; i++) {
         DsLowerFn *fn = &program->functions.items[i];
-        if (fn->name.len == name.len && memcmp(fn->name.data, name.data, name.len) == 0) return (int)i;
+        if (ds_str_eq(fn->name, name)) return (int)i;
     }
     return -1;
 }

@@ -323,8 +323,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             return r;
         }
         case DS_LOWER_EXPR_BINARY: {
-            if ((expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "&&", 2) == 0) ||
-                (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "||", 2) == 0)) {
+            if (ds_str_eq_cstr(expr->as.binary.op, "&&") || ds_str_eq_cstr(expr->as.binary.op, "||")) {
                 bool is_and = expr->as.binary.op.data[0] == '&';
                 int r = new_reg(p);
                 int left = compile_expr(p, expr->as.binary.left);
@@ -378,7 +377,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             }
             int left = compile_expr(p, expr->as.binary.left);
             int right = -1;
-            bool regex_literal_rhs = expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0 &&
+            bool regex_literal_rhs = ds_str_eq_cstr(expr->as.binary.op, "matches") &&
                                      expr->as.binary.right->kind == DS_LOWER_EXPR_REGEX;
             bool regex_insensitive = false;
             if (regex_literal_rhs) {
@@ -393,10 +392,10 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             if (right < 0) right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "in", 2) == 0) ins.op = OP_MEMBERSHIP;
-            else if (expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0) ins.op = OP_REGEX_MATCH;
+            if (ds_str_eq_cstr(expr->as.binary.op, "in")) ins.op = OP_MEMBERSHIP;
+            else if (ds_str_eq_cstr(expr->as.binary.op, "matches")) ins.op = OP_REGEX_MATCH;
             else ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-' || expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) ||
-                     (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "**", 2) == 0) ? OP_BINARY : OP_COMPARE;
+                     ds_str_eq_cstr(expr->as.binary.op, "**") ? OP_BINARY : OP_COMPARE;
             ins.span = expr->span;
             ins.dst = r;
             ins.a = left;

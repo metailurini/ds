@@ -123,7 +123,7 @@ bool row_schema_clone(const DsLowerRowSchema *src, DsLowerRowSchema *dst) {
 const DsLowerRowField *row_schema_find(const DsLowerRowSchema *schema, DsStr name) {
     if (!schema) return NULL;
     for (size_t i = 0; i < schema->len; i++) {
-        if (schema->items[i].name.len == name.len && memcmp(schema->items[i].name.data, name.data, name.len) == 0) return &schema->items[i];
+        if (ds_str_eq(schema->items[i].name, name)) return &schema->items[i];
     }
     return NULL;
 }
