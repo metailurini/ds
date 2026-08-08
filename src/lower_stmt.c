@@ -314,10 +314,7 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
 
 static bool lower_push_map_loop_symbol(Lower *lower, Symbol *symbol) {
     if (!symbol) return false;
-    if (lower->map_loop_len == lower->map_loop_cap) {
-        lower->map_loop_cap = lower->map_loop_cap ? lower->map_loop_cap * 2 : 4;
-        lower->map_loop_symbols = (Symbol **)ds_xrealloc(lower->map_loop_symbols, lower->map_loop_cap * sizeof(Symbol *));
-    }
+    DS_GROW_ARRAY(lower->map_loop_symbols, lower->map_loop_len, lower->map_loop_cap, 4);
     lower->map_loop_symbols[lower->map_loop_len++] = symbol;
     return true;
 }

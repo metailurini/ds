@@ -41,18 +41,12 @@ void ds_cli_program_free(DsCliProgram *program) {
 }
 
 static void units_push(DsCliProgram *program, LoadedUnit *unit) {
-    if (program->units_len == program->units_cap) {
-        program->units_cap = program->units_cap ? program->units_cap * 2 : 8;
-        program->units = (LoadedUnit **)ds_xrealloc(program->units, program->units_cap * sizeof(LoadedUnit *));
-    }
+    DS_GROW_ARRAY(program->units, program->units_len, program->units_cap, 8);
     program->units[program->units_len++] = unit;
 }
 
 static void string_push(char ***items, size_t *len, size_t *cap, char *value) {
-    if (*len == *cap) {
-        *cap = *cap ? *cap * 2 : 8;
-        *items = (char **)ds_xrealloc(*items, *cap * sizeof(char *));
-    }
+    DS_GROW_ARRAY(*items, *len, *cap, 8);
     (*items)[(*len)++] = value;
 }
 

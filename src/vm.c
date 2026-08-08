@@ -128,10 +128,7 @@ static void vm_register_handler(Vm *vm, DsHandlerSignal signal, size_t target, b
             }
         }
     }
-    if (vm->handler_len == vm->handler_cap) {
-        vm->handler_cap = vm->handler_cap ? vm->handler_cap * 2 : 8;
-        vm->handlers = (VmHandler *)ds_xrealloc(vm->handlers, vm->handler_cap * sizeof(VmHandler));
-    }
+    DS_GROW_ARRAY(vm->handlers, vm->handler_len, vm->handler_cap, 8);
     vm->handlers[vm->handler_len++] = (VmHandler){signal, target, is_trap};
 }
 

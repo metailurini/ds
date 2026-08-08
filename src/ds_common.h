@@ -124,11 +124,15 @@ static inline void ds_fprint_indent(FILE *out, int level) {
     for (int i = 0; i < level; i++) fputs("  ", out);
 }
 
-#define DS_VEC_PUSH(vec, value, initial_cap) do { \
-    if ((vec)->len == (vec)->cap) { \
-        (vec)->cap = (vec)->cap ? (vec)->cap * 2 : (initial_cap); \
-        (vec)->items = ds_xrealloc((vec)->items, (vec)->cap * sizeof(*(vec)->items)); \
+#define DS_GROW_ARRAY(items, len, cap, initial_cap) do { \
+    if ((len) == (cap)) { \
+        (cap) = (cap) ? (cap) * 2 : (initial_cap); \
+        (items) = ds_xrealloc((items), (cap) * sizeof(*(items))); \
     } \
+} while (0)
+
+#define DS_VEC_PUSH(vec, value, initial_cap) do { \
+    DS_GROW_ARRAY((vec)->items, (vec)->len, (vec)->cap, initial_cap); \
     (vec)->items[(vec)->len++] = (value); \
 } while (0)
 

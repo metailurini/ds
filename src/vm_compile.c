@@ -105,10 +105,7 @@ void program_free(Program *p) {
 static int new_reg(Program *p) { return p->next_reg++; }
 
 static int add_const(Program *p, DsValue value) {
-    if (p->const_len == p->const_cap) {
-        p->const_cap = p->const_cap ? p->const_cap * 2 : 16;
-        p->consts = (DsValue *)ds_xrealloc(p->consts, p->const_cap * sizeof(DsValue));
-    }
+    DS_GROW_ARRAY(p->consts, p->const_len, p->const_cap, 16);
     p->consts[p->const_len] = value;
     return (int)p->const_len++;
 }
@@ -137,10 +134,7 @@ static DsValue literal_default_value(const DsLowerExpr *expr) {
 }
 
 static int add_function_meta(Program *p, const DsLowerFn *fn) {
-    if (p->function_len == p->function_cap) {
-        p->function_cap = p->function_cap ? p->function_cap * 2 : 8;
-        p->functions = (FnMeta *)ds_xrealloc(p->functions, p->function_cap * sizeof(FnMeta));
-    }
+    DS_GROW_ARRAY(p->functions, p->function_len, p->function_cap, 8);
     FnMeta *meta = &p->functions[p->function_len];
     memset(meta, 0, sizeof(*meta));
     meta->name = ds_str_dup_range(fn->name.data, fn->name.len);
@@ -164,10 +158,7 @@ static int find_function_meta(Program *p, DsStr name) {
 }
 
 static size_t emit_instr(Program *p, Instr ins) {
-    if (p->instr_len == p->instr_cap) {
-        p->instr_cap = p->instr_cap ? p->instr_cap * 2 : 32;
-        p->instrs = (Instr *)ds_xrealloc(p->instrs, p->instr_cap * sizeof(Instr));
-    }
+    DS_GROW_ARRAY(p->instrs, p->instr_len, p->instr_cap, 32);
     p->instrs[p->instr_len] = ins;
     return p->instr_len++;
 }
@@ -188,18 +179,12 @@ static int compile_const(Program *p, DsSpan span, DsValue value) {
 }
 
 static void loop_patch_vec_push(size_t **items, size_t *len, size_t *cap, size_t value) {
-    if (*len == *cap) {
-        *cap = *cap ? *cap * 2 : 4;
-        *items = (size_t *)ds_xrealloc(*items, *cap * sizeof(size_t));
-    }
+    DS_GROW_ARRAY(*items, *len, *cap, 4);
     (*items)[(*len)++] = value;
 }
 
 static LoopPatch *push_loop(Program *p, size_t start, int base_scope_depth) {
-    if (p->loop_len == p->loop_cap) {
-        p->loop_cap = p->loop_cap ? p->loop_cap * 2 : 4;
-        p->loop_stack = (LoopPatch *)ds_xrealloc(p->loop_stack, p->loop_cap * sizeof(LoopPatch));
-    }
+    DS_GROW_ARRAY(p->loop_stack, p->loop_len, p->loop_cap, 4);
     LoopPatch *loop = &p->loop_stack[p->loop_len++];
     memset(loop, 0, sizeof(*loop));
     loop->start = start;
