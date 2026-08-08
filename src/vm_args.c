@@ -8,8 +8,7 @@
 
 static const char *script_basename(const DsSource *source) {
     const char *path = source && source->path ? source->path : "<script>";
-    const char *slash = strrchr(path, '/');
-    return slash ? slash + 1 : path;
+    return ds_path_basename(path);
 }
 
 static bool parse_runtime_int(const char *text, int64_t *out) {

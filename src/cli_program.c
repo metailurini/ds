@@ -78,13 +78,6 @@ static char *normalize_existing_path(const char *path) {
     return NULL;
 }
 
-static char *dir_name_dup(const char *path) {
-    const char *slash = strrchr(path, '/');
-    if (!slash) return ds_str_dup_range(".", 1);
-    if (slash == path) return ds_str_dup_range("/", 1);
-    return ds_str_dup_range(path, (size_t)(slash - path));
-}
-
 static char *join_path(const char *dir, const char *rel) {
     if (rel[0] == '/') return ds_str_dup_cstr(rel);
     while (rel[0] == '.' && rel[1] == '/') rel += 2;
@@ -143,7 +136,7 @@ static bool process_ast_statements(DsCliProgram *program, LoadedUnit *unit, bool
                 ds_diag_error(&program->diag, stmt->span, "invalid import path");
                 continue;
             }
-            char *dir = dir_name_dup(unit->source.path ? unit->source.path : ".");
+            char *dir = ds_path_dirname_dup(unit->source.path ? unit->source.path : ".");
             char *joined = join_path(dir, import_rel.data);
             bool loaded = load_composed_file(program, joined, stmt->span, false, composed);
             if (!loaded && !program->diag.has_error) {

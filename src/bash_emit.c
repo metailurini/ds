@@ -10,8 +10,7 @@
 
 static const char *script_basename(const DsSource *source) {
     const char *path = source && source->path ? source->path : "<script>";
-    const char *slash = strrchr(path, '/');
-    return slash ? slash + 1 : path;
+    return ds_path_basename(path);
 }
 
 static void emit_type_var_name(EmitBuf *out, DsStr name) {

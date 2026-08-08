@@ -88,6 +88,18 @@ static inline bool ds_decode_string_literal(DsStr literal, DsStr *out) {
     return true;
 }
 
+static inline const char *ds_path_basename(const char *path) {
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
+static inline char *ds_path_dirname_dup(const char *path) {
+    const char *slash = strrchr(path, '/');
+    if (!slash) return ds_str_dup_range(".", 1);
+    if (slash == path) return ds_str_dup_range("/", 1);
+    return ds_str_dup_range(path, (size_t)(slash - path));
+}
+
 static inline DsSpan ds_span_zero(const DsSource *source) {
     return (DsSpan){{0, 1, 1}, {0, 1, 1}, source};
 }
