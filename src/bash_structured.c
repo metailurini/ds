@@ -398,10 +398,7 @@ bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSp
  * intentionally stable insertion sort; v0.37 row arrays are scoped for small
  * in-memory analyzer/reporting datasets rather than large external tables.
  */
-void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
-    buf_append(out, "__ds_row_");
-    buf_append_dsstr(out, array_name);
-    buf_append(out, "_");
+static void bash_emit_row_field_suffix(EmitBuf *out, DsStr field) {
     static const char hex[] = "0123456789abcdef";
     for (size_t i = 0; i < field.len; i++) {
         unsigned char c = (unsigned char)field.data[i];
@@ -414,18 +411,16 @@ void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field)
     }
 }
 
+void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
+    buf_append(out, "__ds_row_");
+    buf_append_dsstr(out, array_name);
+    buf_append(out, "_");
+    bash_emit_row_field_suffix(out, field);
+}
+
 void bash_emit_return_row_field_array_name(EmitBuf *out, DsStr field) {
     buf_append(out, "__ds_return_row_");
-    static const char hex[] = "0123456789abcdef";
-    for (size_t i = 0; i < field.len; i++) {
-        unsigned char c = (unsigned char)field.data[i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-            buf_append_len(out, (const char *)&field.data[i], 1);
-        } else {
-            char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
-            buf_append(out, esc);
-        }
-    }
+    bash_emit_row_field_suffix(out, field);
 }
 
 bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
