@@ -4,18 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void token_vec_push(DsTokenVec *vec, DsToken token) {
-    DS_VEC_PUSH(vec, token, 64);
-}
-
-static bool is_ident_start(char c) {
-    return isalpha((unsigned char)c) || c == '_';
-}
-
-static bool is_ident_continue(char c) {
-    return isalnum((unsigned char)c) || c == '_';
-}
-
 static DsTokenKind keyword_kind(const char *text, size_t len) {
     if (len == 3 && strncmp(text, "let", 3) == 0) return DS_TOK_LET;
     if (len == 2 && strncmp(text, "if", 2) == 0) return DS_TOK_IF;
@@ -55,7 +43,7 @@ static void add_token(DsTokenVec *out, const DsSource *source, DsTokenKind kind,
     token.span.start = loc;
     token.span.end = end;
     token.span.source = source;
-    token_vec_push(out, token);
+    DS_VEC_PUSH(out, token, 64);
 }
 
 const char *ds_token_kind_name(DsTokenKind kind) {
@@ -170,10 +158,10 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             continue;
         }
 
-        if (is_ident_start(c)) {
+        if (ds_is_ident_start(c)) {
             size_t start = i;
             int start_col = col;
-            while (i < source->len && is_ident_continue(source->data[i])) {
+            while (i < source->len && ds_is_ident_continue(source->data[i])) {
                 i++;
                 col++;
             }
@@ -296,12 +284,12 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
             continue;
         }
 
-        if (c == '$' && i + 1 < source->len && is_ident_start(source->data[i + 1])) {
+        if (c == '$' && i + 1 < source->len && ds_is_ident_start(source->data[i + 1])) {
             size_t start = i;
             int start_col = col;
             i += 2;
             col += 2;
-            while (i < source->len && is_ident_continue(source->data[i])) {
+            while (i < source->len && ds_is_ident_continue(source->data[i])) {
                 i++;
                 col++;
             }

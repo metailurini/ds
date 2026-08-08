@@ -4,14 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool interp_is_ident_start(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-static bool interp_is_ident_char(char c) {
-    return interp_is_ident_start(c) || (c >= '0' && c <= '9');
-}
-
 static DsStr quoted_string_from_decoded(const char *data, size_t len) {
     size_t cap = len * 2 + 3;
     char *buf = (char *)ds_xcalloc(cap, 1);
@@ -104,9 +96,9 @@ static void interp_skip_ws(const char *s, size_t len, size_t *i) {
 
 static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) {
     size_t start = *i;
-    if (start >= len || !interp_is_ident_start(s[start])) return false;
+    if (start >= len || !ds_is_ident_start(s[start])) return false;
     (*i)++;
-    while (*i < len && interp_is_ident_char(s[*i])) (*i)++;
+    while (*i < len && ds_is_ident_continue(s[*i])) (*i)++;
     *out = (DsStr){(char *)s + start, *i - start};
     return true;
 }
@@ -309,10 +301,10 @@ static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *
     if (s[i] == '*' || s[i] == '/' || s[i] == '%') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 5; *right_bp = 6; return true; }
     if (s[i] == '+' || s[i] == '-') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 4; *right_bp = 5; return true; }
     if (s[i] == '>' || s[i] == '<') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 3; *right_bp = 4; return true; }
-    if (i + 2 <= len && memcmp(s + i, "in", 2) == 0 && (i == 0 || !interp_is_ident_char(s[i - 1])) && (i + 2 == len || !interp_is_ident_char(s[i + 2]))) {
+    if (i + 2 <= len && memcmp(s + i, "in", 2) == 0 && (i == 0 || !ds_is_ident_continue(s[i - 1])) && (i + 2 == len || !ds_is_ident_continue(s[i + 2]))) {
         *op = (DsStr){"in", 2}; *left_bp = 3; *right_bp = 4; return true;
     }
-    if (i + 7 <= len && memcmp(s + i, "matches", 7) == 0 && (i == 0 || !interp_is_ident_char(s[i - 1])) && (i + 7 == len || !interp_is_ident_char(s[i + 7]))) {
+    if (i + 7 <= len && memcmp(s + i, "matches", 7) == 0 && (i == 0 || !ds_is_ident_continue(s[i - 1])) && (i + 7 == len || !ds_is_ident_continue(s[i + 7]))) {
         *op = (DsStr){"matches", 7}; *left_bp = 3; *right_bp = 4; return true;
     }
     return false;
@@ -365,8 +357,8 @@ static bool decoded_needs_expr_interpolation(DsStr decoded) {
         if (j < decoded.len && decoded.data[j] == '[') return true;
         while (j < decoded.len && decoded.data[j] != '}') {
             if (decoded.data[j] == '+' || decoded.data[j] == '-' || decoded.data[j] == '*' || decoded.data[j] == '/' || decoded.data[j] == '%' || decoded.data[j] == '<' || decoded.data[j] == '>' || decoded.data[j] == '=') return true;
-            if (j + 2 <= decoded.len && memcmp(decoded.data + j, "in", 2) == 0 && (j == 0 || !interp_is_ident_char(decoded.data[j - 1])) && (j + 2 == decoded.len || !interp_is_ident_char(decoded.data[j + 2]))) return true;
-            if (j + 7 <= decoded.len && memcmp(decoded.data + j, "matches", 7) == 0 && (j == 0 || !interp_is_ident_char(decoded.data[j - 1])) && (j + 7 == decoded.len || !interp_is_ident_char(decoded.data[j + 7]))) return true;
+            if (j + 2 <= decoded.len && memcmp(decoded.data + j, "in", 2) == 0 && (j == 0 || !ds_is_ident_continue(decoded.data[j - 1])) && (j + 2 == decoded.len || !ds_is_ident_continue(decoded.data[j + 2]))) return true;
+            if (j + 7 <= decoded.len && memcmp(decoded.data + j, "matches", 7) == 0 && (j == 0 || !ds_is_ident_continue(decoded.data[j - 1])) && (j + 7 == decoded.len || !ds_is_ident_continue(decoded.data[j + 7]))) return true;
             j++;
         }
     }

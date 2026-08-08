@@ -208,14 +208,6 @@ static void interp_skip_ws(const char *data, size_t len, size_t *i) {
     while (*i < len && (data[*i] == ' ' || data[*i] == '\t' || data[*i] == '\n' || data[*i] == '\r')) (*i)++;
 }
 
-static bool interp_ident_start(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-static bool interp_ident_char(char c) {
-    return interp_ident_start(c) || (c >= '0' && c <= '9');
-}
-
 static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsSpan span, EmitBuf *arg) {
     (*j)++;
     interp_skip_ws(decoded, len, j);
@@ -225,10 +217,10 @@ static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *deco
         if (decoded[*j] == '-') (*j)++;
         while (*j < len && decoded[*j] >= '0' && decoded[*j] <= '9') (*j)++;
         buf_append_len(arg, decoded + index_start, *j - index_start);
-    } else if (*j < len && interp_ident_start(decoded[*j])) {
+    } else if (*j < len && ds_is_ident_start(decoded[*j])) {
         size_t index_start = *j;
         (*j)++;
-        while (*j < len && interp_ident_char(decoded[*j])) (*j)++;
+        while (*j < len && ds_is_ident_continue(decoded[*j])) (*j)++;
         DsStr index_name = {(char *)decoded + index_start, *j - index_start};
         if (!symbol_exists(&e->symbols, index_name)) {
             ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unknown interpolation index variable `%.*s`", (int)index_name.len, index_name.data);
@@ -260,9 +252,9 @@ static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const 
     }
     pos++;
     size_t field_start = pos;
-    if (pos < len && interp_ident_start(decoded[pos])) {
+    if (pos < len && ds_is_ident_start(decoded[pos])) {
         pos++;
-        while (pos < len && interp_ident_char(decoded[pos])) pos++;
+        while (pos < len && ds_is_ident_continue(decoded[pos])) pos++;
     }
     DsStr field = {(char *)decoded + field_start, pos - field_start};
     buf_append(out, "$( __ds_array_get ");
@@ -310,10 +302,10 @@ static bool emit_interpolation_index(BashEmitter *e, const char *decoded, size_t
         emit_var_name(out, name);
         buf_append(out, " ");
         buf_append_len(out, decoded + index_start, *j - index_start);
-    } else if (*j < len && interp_ident_start(decoded[*j])) {
+    } else if (*j < len && ds_is_ident_start(decoded[*j])) {
         size_t index_start = *j;
         (*j)++;
-        while (*j < len && interp_ident_char(decoded[*j])) (*j)++;
+        while (*j < len && ds_is_ident_continue(decoded[*j])) (*j)++;
         DsStr index_name = {(char *)decoded + index_start, *j - index_start};
         if (!symbol_exists(&e->symbols, index_name)) {
             ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unknown interpolation index variable `%.*s`", (int)index_name.len, index_name.data);
@@ -393,9 +385,9 @@ static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
         if (p->pos < p->len && p->data[p->pos] == '.') {
             p->pos++;
             size_t field_start = p->pos;
-            if (p->pos < p->len && interp_ident_start(p->data[p->pos])) {
+            if (p->pos < p->len && ds_is_ident_start(p->data[p->pos])) {
                 p->pos++;
-                while (p->pos < p->len && interp_ident_char(p->data[p->pos])) p->pos++;
+                while (p->pos < p->len && ds_is_ident_continue(p->data[p->pos])) p->pos++;
             }
             buf_append(out, "_");
             buf_append_len(out, p->data + field_start, p->pos - field_start);

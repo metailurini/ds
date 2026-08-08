@@ -114,14 +114,6 @@ static void word_interp_skip_ws(DsStr text, size_t *i) {
     while (*i < text.len && (text.data[*i] == ' ' || text.data[*i] == '\t' || text.data[*i] == '\n' || text.data[*i] == '\r')) (*i)++;
 }
 
-static bool word_interp_ident_start(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-static bool word_interp_ident_char(char c) {
-    return word_interp_ident_start(c) || (c >= '0' && c <= '9');
-}
-
 static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded, size_t *j, DsStr name, Symbol *sym, DsSpan span, SymKind *value_kind) {
     if (!sym) {
         ds_diag_error(lower->diag, span, "unknown interpolation variable `%.*s`", (int)name.len, name.data);
@@ -160,10 +152,10 @@ static bool lower_validate_word_index_interpolation(Lower *lower, DsStr decoded,
         if (decoded.data[*j] == '-') { negative_int = true; (*j)++; }
         while (*j < decoded.len && decoded.data[*j] >= '0' && decoded.data[*j] <= '9') (*j)++;
         index_is_int = true;
-    } else if (*j < decoded.len && word_interp_ident_start(decoded.data[*j])) {
+    } else if (*j < decoded.len && ds_is_ident_start(decoded.data[*j])) {
         size_t idx_start = *j;
         (*j)++;
-        while (*j < decoded.len && word_interp_ident_char(decoded.data[*j])) (*j)++;
+        while (*j < decoded.len && ds_is_ident_continue(decoded.data[*j])) (*j)++;
         DsStr idx_name = {decoded.data + idx_start, *j - idx_start};
         Symbol *idx_sym = scope_find(lower->scope, idx_name);
         if (!idx_sym) {

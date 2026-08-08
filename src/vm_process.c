@@ -149,14 +149,6 @@ typedef struct {
 
 static bool arithmetic_parse_expr(VmArithmeticParser *parser, int64_t *out);
 
-static bool ascii_is_ident_start(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-static bool ascii_is_ident_continue(char c) {
-    return ascii_is_ident_start(c) || (c >= '0' && c <= '9');
-}
-
 static void arithmetic_skip_ws(VmArithmeticParser *parser) {
     while (parser->pos < parser->len &&
            (parser->data[parser->pos] == ' ' || parser->data[parser->pos] == '\t')) {
@@ -229,7 +221,7 @@ static bool arithmetic_parse_integer_literal(VmArithmeticParser *parser, int64_t
 
 static bool arithmetic_parse_variable(VmArithmeticParser *parser, int64_t *out) {
     size_t start = parser->pos++;
-    while (parser->pos < parser->len && ascii_is_ident_continue(parser->data[parser->pos])) {
+    while (parser->pos < parser->len && ds_is_ident_continue(parser->data[parser->pos])) {
         parser->pos++;
     }
 
@@ -244,9 +236,9 @@ static bool arithmetic_parse_variable(VmArithmeticParser *parser, int64_t *out) 
     if (parser->pos < parser->len && parser->data[parser->pos] == '.') {
         parser->pos++;
         size_t field_start = parser->pos;
-        if (parser->pos < parser->len && ascii_is_ident_start(parser->data[parser->pos])) {
+        if (parser->pos < parser->len && ds_is_ident_start(parser->data[parser->pos])) {
             parser->pos++;
-            while (parser->pos < parser->len && ascii_is_ident_continue(parser->data[parser->pos])) parser->pos++;
+            while (parser->pos < parser->len && ds_is_ident_continue(parser->data[parser->pos])) parser->pos++;
         }
         DsStr field = {(char *)parser->data + field_start, parser->pos - field_start};
         if (value.kind != DS_VALUE_MAP) {
@@ -302,7 +294,7 @@ static bool arithmetic_parse_primary(VmArithmeticParser *parser, int64_t *out) {
     }
 
     if (c >= '0' && c <= '9') return arithmetic_parse_integer_literal(parser, out);
-    if (ascii_is_ident_start(c)) return arithmetic_parse_variable(parser, out);
+    if (ds_is_ident_start(c)) return arithmetic_parse_variable(parser, out);
     return false;
 }
 
@@ -471,10 +463,10 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
         if (*j < len && ((data[*j] == '-' && *j + 1 < len && data[*j + 1] >= '0' && data[*j + 1] <= '9') ||
                          (data[*j] >= '0' && data[*j] <= '9'))) {
             have_index = interp_parse_int_literal(data, len, j, &index);
-        } else if (*j < len && ascii_is_ident_start(data[*j])) {
+        } else if (*j < len && ds_is_ident_start(data[*j])) {
             size_t name_start = *j;
             (*j)++;
-            while (*j < len && ascii_is_ident_continue(data[*j])) (*j)++;
+            while (*j < len && ds_is_ident_continue(data[*j])) (*j)++;
             char *idx_name = ds_str_dup_range(data + name_start, *j - name_start);
             DsValue idx_value;
             if (!lookup_var(vm, idx_name, &idx_value, span)) { free(idx_name); return false; }
@@ -509,10 +501,10 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
         ds_string_init(&key);
         if (*j < len && data[*j] == '"') {
             have_key = interp_parse_string_literal(data, len, j, &key);
-        } else if (*j < len && ascii_is_ident_start(data[*j])) {
+        } else if (*j < len && ds_is_ident_start(data[*j])) {
             size_t name_start = *j;
             (*j)++;
-            while (*j < len && ascii_is_ident_continue(data[*j])) (*j)++;
+            while (*j < len && ds_is_ident_continue(data[*j])) (*j)++;
             char *idx_name = ds_str_dup_range(data + name_start, *j - name_start);
             DsValue idx_value;
             if (!lookup_var(vm, idx_name, &idx_value, span)) { free(idx_name); ds_string_free(&key); return false; }
@@ -561,9 +553,9 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
 static bool interp_parse_map_field_value(Vm *vm, DsValue *value, const char *data, size_t len, size_t *j, DsSpan span) {
     (*j)++;
     size_t field_start = *j;
-    if (*j < len && ascii_is_ident_start(data[*j])) {
+    if (*j < len && ds_is_ident_start(data[*j])) {
         (*j)++;
-        while (*j < len && ascii_is_ident_continue(data[*j])) (*j)++;
+        while (*j < len && ds_is_ident_continue(data[*j])) (*j)++;
     }
     DsStr field = {(char *)data + field_start, *j - field_start};
     if (value->kind != DS_VALUE_MAP) {
@@ -608,16 +600,16 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                 char ac = input->data[arith_end++];
                 if (ac == '+' || ac == '-' || ac == '*' || ac == '/' || ac == '%' || ac == '(' || ac == ')') maybe_arith = true;
             }
-            if (!maybe_arith && j < input->len && ascii_is_ident_start(input->data[j])) {
+            if (!maybe_arith && j < input->len && ds_is_ident_start(input->data[j])) {
                 j++;
-                while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
+                while (j < input->len && ds_is_ident_continue(input->data[j])) j++;
                 if (j < input->len && (input->data[j] == '}' || input->data[j] == '.' || input->data[j] == ':' || input->data[j] == '[')) {
                     char *name = ds_str_dup_range(input->data + start, j - start);
                     if (strcmp(name, "env") == 0 && input->data[j] == '.') {
                         size_t field_start = ++j;
-                        if (j < input->len && ascii_is_ident_start(input->data[j])) {
+                        if (j < input->len && ds_is_ident_start(input->data[j])) {
                             j++;
-                            while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
+                            while (j < input->len && ds_is_ident_continue(input->data[j])) j++;
                         }
                         char *field = ds_str_dup_range(input->data + field_start, j - field_start);
                         if (j >= input->len || input->data[j] != '}') {
@@ -638,9 +630,9 @@ bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan spa
                         }
                     } else if (input->data[j] == '.') {
                         size_t field_start = ++j;
-                        if (j < input->len && ascii_is_ident_start(input->data[j])) {
+                        if (j < input->len && ds_is_ident_start(input->data[j])) {
                             j++;
-                            while (j < input->len && ascii_is_ident_continue(input->data[j])) j++;
+                            while (j < input->len && ds_is_ident_continue(input->data[j])) j++;
                         }
                         char *field = ds_str_dup_range(input->data + field_start, j - field_start);
                         DsValue field_value = ds_value_null();

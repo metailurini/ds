@@ -3,7 +3,7 @@
 #include <string.h>
 
 bool ds_command_name_char(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    return ds_is_ident_continue(c);
 }
 
 DsCommandWordForm ds_command_word_analyze(DsStr word) {

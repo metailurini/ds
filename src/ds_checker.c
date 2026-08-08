@@ -70,14 +70,6 @@ static void use_cstr(Checker *c, const char *data, size_t len) {
     use_name(c, s);
 }
 
-static bool is_ident_start(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
-}
-
-static bool is_ident_cont(char c) {
-    return is_ident_start(c) || (c >= '0' && c <= '9');
-}
-
 static size_t skip_quoted_string(const char *data, size_t len, size_t pos) {
     char quote = data[pos++];
     while (pos < len && data[pos] != quote) {
@@ -107,9 +99,9 @@ static void scan_fragment_for_ident_uses(Checker *c, const char *data, size_t le
         if (data[i] == '"' || data[i] == '\'') {
             i = skip_quoted_string(data, len, i);
             if (i > 0) i--;
-        } else if (is_ident_start(data[i])) {
+        } else if (ds_is_ident_start(data[i])) {
             size_t start = i;
-            while (i < len && is_ident_cont(data[i])) i++;
+            while (i < len && ds_is_ident_continue(data[i])) i++;
             if (start == 0 || data[start - 1] != '.') use_cstr(c, data + start, i - start);
             if (i > 0) i--;
         }
@@ -118,19 +110,19 @@ static void scan_fragment_for_ident_uses(Checker *c, const char *data, size_t le
 
 static void scan_text_for_uses(Checker *c, DsStr text) {
     for (size_t i = 0; i < text.len; i++) {
-        if (text.data[i] == '$' && i + 1 < text.len && is_ident_start(text.data[i + 1])) {
+        if (text.data[i] == '$' && i + 1 < text.len && ds_is_ident_start(text.data[i + 1])) {
             size_t start = ++i;
-            while (i < text.len && is_ident_cont(text.data[i])) i++;
+            while (i < text.len && ds_is_ident_continue(text.data[i])) i++;
             use_cstr(c, text.data + start, i - start);
             if (i > 0) i--;
         } else if (text.data[i] == '{' && i + 1 < text.len && text.data[i + 1] == '{') {
             i++;
         } else if (text.data[i] == '}' && i + 1 < text.len && text.data[i + 1] == '}') {
             i++;
-        } else if (text.data[i] == '{' && i + 1 < text.len && is_ident_start(text.data[i + 1])) {
+        } else if (text.data[i] == '{' && i + 1 < text.len && ds_is_ident_start(text.data[i + 1])) {
             size_t start = i + 1;
             size_t j = start;
-            while (j < text.len && is_ident_cont(text.data[j])) j++;
+            while (j < text.len && ds_is_ident_continue(text.data[j])) j++;
             size_t name_end = j;
             size_t index_start = 0;
             size_t index_len = 0;
@@ -139,9 +131,9 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             if (j < text.len && text.data[j] == '[') {
                 j++;
                 while (j < text.len && isspace((unsigned char)text.data[j])) j++;
-                if (j < text.len && is_ident_start(text.data[j])) {
+                if (j < text.len && ds_is_ident_start(text.data[j])) {
                     index_start = j;
-                    while (j < text.len && is_ident_cont(text.data[j])) j++;
+                    while (j < text.len && ds_is_ident_continue(text.data[j])) j++;
                     index_len = j - index_start;
                     while (j < text.len && isspace((unsigned char)text.data[j])) j++;
                 } else if (j < text.len && (text.data[j] == '"' || text.data[j] == '\'')) {
@@ -156,8 +148,8 @@ static void scan_text_for_uses(Checker *c, DsStr text) {
             } else if (j < text.len && text.data[j] == '.') {
                 while (j < text.len && text.data[j] == '.') {
                     j++;
-                    if (j < text.len && is_ident_start(text.data[j])) {
-                        while (j < text.len && is_ident_cont(text.data[j])) j++;
+                    if (j < text.len && ds_is_ident_start(text.data[j])) {
+                        while (j < text.len && ds_is_ident_continue(text.data[j])) j++;
                     } else {
                         break;
                     }

@@ -62,6 +62,14 @@ static inline bool ds_str_eq(DsStr a, DsStr b) {
     return a.len == b.len && memcmp(a.data ? a.data : "", b.data ? b.data : "", a.len) == 0;
 }
 
+static inline bool ds_is_ident_start(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+}
+
+static inline bool ds_is_ident_continue(char c) {
+    return ds_is_ident_start(c) || (c >= '0' && c <= '9');
+}
+
 static inline DsStr ds_str_clone(DsStr value) {
     DsStr out = {ds_str_dup_range(value.data ? value.data : "", value.len), value.len};
     return out;
