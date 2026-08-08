@@ -7,9 +7,6 @@
 #include <signal.h>
 #include <regex.h>
 
-static inline const char *str_data(const DsString *s) { return s->data ? s->data : ""; }
-#define STR_DATA(s) ((s).data ? (s).data : "")
-
 static bool reg_is_truthy(Vm *vm, int reg) { bool t = false; ds_value_truthy(&vm->regs[reg], &t); return t; }
 
 static DsHandlerSignal resolve_cleanup_signal(Vm *vm) {
@@ -72,11 +69,11 @@ bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, Ds
     if (desc) {
         switch (desc->id) {
             case DS_COMMAND_RESULT_FIELD_STDOUT:
-                ds_string_from_range(&out->as.string, str_data(&value->as.command_result.stdout_text), value->as.command_result.stdout_text.len);
+                ds_string_from_range(&out->as.string, ds_string_data(&value->as.command_result.stdout_text), value->as.command_result.stdout_text.len);
                 out->kind = DS_VALUE_STRING;
                 return true;
             case DS_COMMAND_RESULT_FIELD_STDERR:
-                ds_string_from_range(&out->as.string, str_data(&value->as.command_result.stderr_text), value->as.command_result.stderr_text.len);
+                ds_string_from_range(&out->as.string, ds_string_data(&value->as.command_result.stderr_text), value->as.command_result.stderr_text.len);
                 out->kind = DS_VALUE_STRING;
                 return true;
             case DS_COMMAND_RESULT_FIELD_STATUS:
@@ -218,7 +215,7 @@ dispatch_loop:
             case OP_SET_ENV: {
                 DsString rendered;
                 ds_value_to_string(&vm.regs[ins->a], &rendered);
-                if (setenv(ins->name, str_data(&rendered), 1) != 0) {
+                if (setenv(ins->name, ds_string_data(&rendered), 1) != 0) {
                     ds_diag_error(vm.diag, ins->span, "failed to set environment `%s`", ins->name);
                     ds_string_free(&rendered);
                     rc = 1;
@@ -249,8 +246,8 @@ dispatch_loop:
                         } else if (left->kind == DS_VALUE_STRING && right->kind == DS_VALUE_STRING) {
                             DsString joined;
                             ds_string_init(&joined);
-                            ds_string_append_range(&joined, str_data(&left->as.string), left->as.string.len);
-                            ds_string_append_range(&joined, str_data(&right->as.string), right->as.string.len);
+                            ds_string_append_range(&joined, ds_string_data(&left->as.string), left->as.string.len);
+                            ds_string_append_range(&joined, ds_string_data(&right->as.string), right->as.string.len);
                             set_reg(&vm, ins->dst, ds_value_string_take(&joined));
                         } else {
                             ds_diag_error(diag, ins->span, "runtime operator `+` supports int+int or string+string");
@@ -365,16 +362,16 @@ dispatch_loop:
                 DsValue *pattern_value = &vm.regs[ins->b];
                 if (text->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "internal VM regex invariant failed: accepted `matches` left operand must be a string"); rc = 1; goto done; }
                 if (pattern_value->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "runtime right operand of `matches` must be a regex pattern string"); rc = 1; goto done; }
-                DsStr pattern = {str_data(&pattern_value->as.string), pattern_value->as.string.len};
+                DsStr pattern = {pattern_value->as.string.data, pattern_value->as.string.len};
                 DsRegexStatus status = ds_regex_validate_pattern(pattern, NULL);
                 if (status != DS_REGEX_OK) { ds_diag_error(diag, ins->span, "%s", ds_regex_status_message(status)); rc = 1; goto done; }
                 int flags = REG_EXTENDED | (ins->regex_case_insensitive ? REG_ICASE : 0);
                 regex_t re;
-                char *tmp = ds_str_dup_range(STR_DATA(pattern), pattern.len);
+                char *tmp = ds_str_dup_range(ds_str_data(pattern), pattern.len);
                 int err = regcomp(&re, tmp, flags);
                 free(tmp);
                 if (err != 0) { ds_diag_error(diag, ins->span, "invalid regex pattern in v0.32.0"); rc = 1; goto done; }
-                int match = regexec(&re, str_data(&text->as.string), 0, NULL, 0);
+                int match = regexec(&re, ds_string_data(&text->as.string), 0, NULL, 0);
                 regfree(&re);
                 if (match != 0 && match != REG_NOMATCH) { ds_diag_error(diag, ins->span, "failed to evaluate regex in v0.32.0"); rc = 1; goto done; }
                 set_reg(&vm, ins->dst, ds_value_bool(match == 0));
@@ -394,7 +391,7 @@ dispatch_loop:
                 for (size_t i = 0; i < ins->arg_count; i++) {
                     DsString piece;
                     ds_value_to_string(&vm.regs[ins->args[i]], &piece);
-                    ds_string_append_range(&rendered, str_data(&piece), piece.len);
+                    ds_string_append_range(&rendered, ds_string_data(&piece), piece.len);
                     ds_string_free(&piece);
                 }
                 set_reg(&vm, ins->dst, ds_value_string_take(&rendered));
@@ -485,7 +482,7 @@ dispatch_loop:
                 } else if (obj->kind == DS_VALUE_MAP) {
                     DsString key;
                     ds_value_to_string(idx, &key);
-                    DsStr key_view = {str_data(&key), key.len};
+                    DsStr key_view = {key.data, key.len};
                     DsValue *found = ds_map_get(&obj->as.map, key_view);
                     if (!found) { ds_diag_error(diag, ins->span, "missing map key `%.*s`", (int)key_view.len, key_view.data); ds_string_free(&key); rc = 1; goto done; }
                     set_reg(&vm, ins->dst, ds_value_copy(found));
@@ -507,7 +504,7 @@ dispatch_loop:
                     *slot = ds_value_copy(value);
                 } else if (obj->kind == DS_VALUE_MAP) {
                     if (idx->kind != DS_VALUE_STRING) { ds_diag_error(diag, ins->span, "runtime map key must be a string"); rc = 1; goto done; }
-                    DsStr key = {str_data(&idx->as.string), idx->as.string.len};
+                    DsStr key = {idx->as.string.data, idx->as.string.len};
                     if (key.len == 0) { ds_diag_error(diag, ins->span, "map key must be non-empty"); rc = 1; goto done; }
                     if (!ds_map_set(&obj->as.map, key, ds_value_copy(value))) { ds_diag_error(diag, ins->span, "failed to set map key `%.*s`", (int)key.len, key.data); rc = 1; goto done; }
                 } else { ds_diag_error(diag, ins->span, "internal VM invariant failed: index assignment target should be an array or map after lowering"); rc = 1; goto done; }
@@ -563,7 +560,7 @@ dispatch_loop:
                 if (!found) { ds_diag_error(diag, ins->span, "runtime map loop key disappeared during iteration"); rc = 1; goto done; }
                 vm_push_scope(&vm);
                 DsString key_text;
-                ds_string_from_range(&key_text, STR_DATA(map_key), map_key.len);
+                ds_string_from_range(&key_text, ds_str_data(map_key), map_key.len);
                 DsStr key_var = {ins->name, strlen(ins->name)};
                 DsStr value_var = {ins->value_name, strlen(ins->value_name)};
                 ds_map_set(&vm.scope->vars, key_var, ds_value_string_take(&key_text));

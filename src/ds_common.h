@@ -13,6 +13,10 @@ typedef struct {
     size_t len;
 } DsStr;
 
+static inline const char *ds_str_data(DsStr value) {
+    return value.data ? value.data : "";
+}
+
 typedef struct {
     const char *path;
     char *data;

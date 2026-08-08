@@ -19,6 +19,10 @@ typedef struct {
     size_t cap;
 } DsString;
 
+static inline const char *ds_string_data(const DsString *string) {
+    return string && string->data ? string->data : "";
+}
+
 typedef struct {
     DsString stdout_text;
     DsString stderr_text;

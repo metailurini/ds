@@ -100,14 +100,14 @@ DsValue ds_value_copy(const DsValue *value) {
     DsValue out = {.kind = value->kind};
     switch (value->kind) {
         case DS_VALUE_STRING:
-            ds_string_from_range(&out.as.string, value->as.string.data ? value->as.string.data : "", value->as.string.len);
+            ds_string_from_range(&out.as.string, ds_string_data(&value->as.string), value->as.string.len);
             break;
         case DS_VALUE_COMMAND_RESULT:
             ds_string_from_range(&out.as.command_result.stdout_text,
-                                 value->as.command_result.stdout_text.data ? value->as.command_result.stdout_text.data : "",
+                                 ds_string_data(&value->as.command_result.stdout_text),
                                  value->as.command_result.stdout_text.len);
             ds_string_from_range(&out.as.command_result.stderr_text,
-                                 value->as.command_result.stderr_text.data ? value->as.command_result.stderr_text.data : "",
+                                 ds_string_data(&value->as.command_result.stderr_text),
                                  value->as.command_result.stderr_text.len);
             out.as.command_result.code = value->as.command_result.code;
             break;
@@ -219,7 +219,7 @@ bool ds_value_to_string(const DsValue *value, DsString *out) {
             snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
             return ds_string_append_cstr(out, buf);
         case DS_VALUE_STRING:
-            return ds_string_append_range(out, value->as.string.data ? value->as.string.data : "", value->as.string.len);
+            return ds_string_append_range(out, ds_string_data(&value->as.string), value->as.string.len);
         case DS_VALUE_COMMAND_RESULT:
             return ds_string_append_cstr(out, "[command result]");
         case DS_VALUE_ARRAY:
