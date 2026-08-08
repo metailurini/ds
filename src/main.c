@@ -3,12 +3,10 @@
 #include "cli_program.h"
 #include "ds_checker.h"
 
-#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 
@@ -107,34 +105,6 @@ cleanup:
     return rc;
 }
 
-static bool write_formatted_file(const char *path, const DsString *formatted) {
-    struct stat st;
-    mode_t mode = 0644;
-    if (stat(path, &st) == 0) mode = st.st_mode & 0777;
-
-    size_t path_len = strlen(path);
-    char *tmp = (char *)ds_xcalloc(path_len + 32, 1);
-    snprintf(tmp, path_len + 32, "%s.tmp.%ld", path, (long)getpid());
-    FILE *out = fopen(tmp, "wb");
-    if (!out) {
-        fprintf(stderr, "error: failed to write `%s`: %s\n", tmp, strerror(errno));
-        free(tmp);
-        return false;
-    }
-    bool ok = formatted->len == 0 || fwrite(formatted->data, 1, formatted->len, out) == formatted->len;
-    if (fclose(out) != 0) ok = false;
-    if (ok && chmod(tmp, mode) != 0) ok = false;
-    if (ok && rename(tmp, path) != 0) ok = false;
-    if (!ok) {
-        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(errno));
-        unlink(tmp);
-        free(tmp);
-        return false;
-    }
-    free(tmp);
-    return true;
-}
-
 static int cli_format(int argc, char **argv) {
     bool check = false;
     bool write = false;
@@ -164,7 +134,7 @@ static int cli_format(int argc, char **argv) {
             rc = 1;
         }
     } else if (write) {
-        if (!write_formatted_file(path, &formatted)) rc = 1;
+        if (!ds_file_write_atomic(path, formatted.data, formatted.len)) rc = 1;
     } else if (formatted.len > 0) {
         fwrite(formatted.data, 1, formatted.len, stdout);
     }

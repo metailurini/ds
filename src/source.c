@@ -3,6 +3,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 void ds_fatal_oom(void) {
     fprintf(stderr, "fatal: out of memory\n");
@@ -79,4 +82,28 @@ void ds_source_free(DsSource *source) {
     free(source->data);
     source->data = NULL;
     source->len = 0;
+}
+
+bool ds_file_write_atomic(const char *path, const char *data, size_t len) {
+    struct stat st;
+    mode_t mode = stat(path, &st) == 0 ? st.st_mode & 0777 : 0644;
+    size_t path_len = strlen(path);
+    char *tmp = (char *)ds_xcalloc(path_len + 32, 1);
+    snprintf(tmp, path_len + 32, "%s.tmp.%ld", path, (long)getpid());
+    FILE *out = fopen(tmp, "wb");
+    if (!out) {
+        fprintf(stderr, "error: failed to write `%s`: %s\n", tmp, strerror(errno));
+        free(tmp);
+        return false;
+    }
+    bool ok = len == 0 || fwrite(data, 1, len, out) == len;
+    if (fclose(out) != 0) ok = false;
+    if (ok && chmod(tmp, mode) != 0) ok = false;
+    if (ok && rename(tmp, path) != 0) ok = false;
+    if (!ok) {
+        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(errno));
+        unlink(tmp);
+    }
+    free(tmp);
+    return ok;
 }
