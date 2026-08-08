@@ -45,17 +45,15 @@ static int expr_prec(const DsExpr *expr) {
     if (!expr) return 99;
     switch (expr->kind) {
         case DS_EXPR_BINARY:
-            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "||", 2) == 0) return 0;
-            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "&&", 2) == 0) return 0;
-            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "in", 2) == 0) return 1;
-            if (expr->as.binary.op.len == 7 && memcmp(expr->as.binary.op.data, "matches", 7) == 0) return 1;
-            if (expr->as.binary.op.len == 2 &&
-                (memcmp(expr->as.binary.op.data, "==", 2) == 0 || memcmp(expr->as.binary.op.data, "!=", 2) == 0)) return 1;
-            if ((expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '>' || expr->as.binary.op.data[0] == '<')) ||
-                (expr->as.binary.op.len == 2 && (memcmp(expr->as.binary.op.data, ">=", 2) == 0 || memcmp(expr->as.binary.op.data, "<=", 2) == 0))) return 2;
-            if (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-')) return 3;
-            if (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) return 4;
-            if (expr->as.binary.op.len == 2 && memcmp(expr->as.binary.op.data, "**", 2) == 0) return 5;
+            if (ds_str_eq_cstr(expr->as.binary.op, "||") || ds_str_eq_cstr(expr->as.binary.op, "&&")) return 0;
+            if (ds_str_eq_cstr(expr->as.binary.op, "in") || ds_str_eq_cstr(expr->as.binary.op, "matches") ||
+                ds_str_eq_cstr(expr->as.binary.op, "==") || ds_str_eq_cstr(expr->as.binary.op, "!=")) return 1;
+            if (ds_str_eq_cstr(expr->as.binary.op, ">") || ds_str_eq_cstr(expr->as.binary.op, "<") ||
+                ds_str_eq_cstr(expr->as.binary.op, ">=") || ds_str_eq_cstr(expr->as.binary.op, "<=")) return 2;
+            if (ds_str_eq_cstr(expr->as.binary.op, "+") || ds_str_eq_cstr(expr->as.binary.op, "-")) return 3;
+            if (ds_str_eq_cstr(expr->as.binary.op, "*") || ds_str_eq_cstr(expr->as.binary.op, "/") ||
+                ds_str_eq_cstr(expr->as.binary.op, "%")) return 4;
+            if (ds_str_eq_cstr(expr->as.binary.op, "**")) return 5;
             return 1;
         case DS_EXPR_RANGE: return 2;
         case DS_EXPR_UNARY: return 5;
@@ -67,9 +65,7 @@ static int expr_prec(const DsExpr *expr) {
 }
 
 static bool expr_binary_op_is(const DsExpr *expr, const char *op) {
-    if (!expr || expr->kind != DS_EXPR_BINARY) return false;
-    size_t len = strlen(op);
-    return expr->as.binary.op.len == len && memcmp(expr->as.binary.op.data, op, len) == 0;
+    return expr && expr->kind == DS_EXPR_BINARY && ds_str_eq_cstr(expr->as.binary.op, op);
 }
 
 static bool expr_binary_op_is_logical(const DsExpr *expr) {
