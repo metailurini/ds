@@ -159,25 +159,8 @@ static inline const char *ds_lower_assign_binary_op(DsLowerAssignOp op) {
     return "=";
 }
 
-typedef enum {
-    DS_LOWER_CASE_PATTERN_STRING,
-    DS_LOWER_CASE_PATTERN_INT,
-    DS_LOWER_CASE_PATTERN_BOOL,
-    DS_LOWER_CASE_PATTERN_DEFAULT
-} DsLowerCasePatternKind;
-
-typedef struct {
-    DsLowerCasePatternKind kind;
-    DsStr text;
-    bool boolean;
-    DsSpan span;
-} DsLowerCasePattern;
-
-typedef struct {
-    DsLowerCasePattern *items;
-    size_t len;
-    size_t cap;
-} DsLowerCasePatternVec;
+typedef DsCasePattern DsLowerCasePattern;
+typedef DsCasePatternVec DsLowerCasePatternVec;
 
 typedef struct {
     DsLowerCasePatternVec patterns;

@@ -1450,7 +1450,7 @@ static bool stmt_all_paths_return(const DsLowerStmt *stmt) {
                 const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
                 bool arm_default = false;
                 for (size_t j = 0; j < arm->patterns.len; j++) {
-                    if (arm->patterns.items[j].kind == DS_LOWER_CASE_PATTERN_DEFAULT) arm_default = true;
+                    if (arm->patterns.items[j].kind == DS_CASE_PATTERN_DEFAULT) arm_default = true;
                 }
                 has_default = has_default || arm_default;
                 if (!stmt_all_paths_return(arm->body)) return false;

@@ -695,13 +695,13 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                 bool is_default = false;
                 for (size_t j = 0; j < arm->patterns.len; j++) {
                     const DsLowerCasePattern *pat = &arm->patterns.items[j];
-                    if (pat->kind == DS_LOWER_CASE_PATTERN_DEFAULT) { is_default = true; break; }
+                    if (pat->kind == DS_CASE_PATTERN_DEFAULT) { is_default = true; break; }
                     DsValue value;
-                    if (pat->kind == DS_LOWER_CASE_PATTERN_STRING) {
+                    if (pat->kind == DS_CASE_PATTERN_STRING) {
                         DsString decoded;
                         decode_string_text(pat->text, &decoded);
                         value = ds_value_string_take(&decoded);
-                    } else if (pat->kind == DS_LOWER_CASE_PATTERN_INT) {
+                    } else if (pat->kind == DS_CASE_PATTERN_INT) {
                         char *tmp = ds_str_dup_range(pat->text.data, pat->text.len);
                         value = ds_value_int(strtoll(tmp, NULL, 10));
                         free(tmp);

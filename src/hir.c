@@ -252,11 +252,8 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
                 const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
                 ds_fprint_indent(out, level + 1); fputs("Arm", out);
                 for (size_t j = 0; j < arm->patterns.len; j++) {
-                    const DsLowerCasePattern *p = &arm->patterns.items[j];
                     fputc(' ', out);
-                    if (p->kind == DS_LOWER_CASE_PATTERN_DEFAULT) fputs("_", out);
-                    else if (p->kind == DS_LOWER_CASE_PATTERN_BOOL) fputs(p->boolean ? "true" : "false", out);
-                    else ds_fprint_str(out, p->text);
+                    ds_case_pattern_fprint(out, &arm->patterns.items[j]);
                 }
                 print_span(out, arm->span); fputc('\n', out);
                 dump_block(out, arm->body, level + 2);

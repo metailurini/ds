@@ -160,8 +160,8 @@ static DsLowerStmt *lower_materialize_run_in_stmt(Lower *lower, DsCommand *comma
 
 static bool pattern_equal(const DsLowerCasePattern *a, const DsLowerCasePattern *b) {
     if (a->kind != b->kind) return false;
-    if (a->kind == DS_LOWER_CASE_PATTERN_BOOL) return a->boolean == b->boolean;
-    if (a->kind == DS_LOWER_CASE_PATTERN_DEFAULT) return true;
+    if (a->kind == DS_CASE_PATTERN_BOOL) return a->boolean == b->boolean;
+    if (a->kind == DS_CASE_PATTERN_DEFAULT) return true;
     return a->text.len == b->text.len && memcmp(a->text.data, b->text.data, a->text.len) == 0;
 }
 
@@ -305,10 +305,10 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     out.span = pattern->span;
     out.boolean = pattern->boolean;
     switch (pattern->kind) {
-        case DS_CASE_PATTERN_STRING: out.kind = DS_LOWER_CASE_PATTERN_STRING; out.text = str_clone(pattern->text); break;
-        case DS_CASE_PATTERN_INT: out.kind = DS_LOWER_CASE_PATTERN_INT; out.text = str_clone(pattern->text); break;
-        case DS_CASE_PATTERN_BOOL: out.kind = DS_LOWER_CASE_PATTERN_BOOL; break;
-        case DS_CASE_PATTERN_DEFAULT: out.kind = DS_LOWER_CASE_PATTERN_DEFAULT; break;
+        case DS_CASE_PATTERN_STRING: out.kind = DS_CASE_PATTERN_STRING; out.text = str_clone(pattern->text); break;
+        case DS_CASE_PATTERN_INT: out.kind = DS_CASE_PATTERN_INT; out.text = str_clone(pattern->text); break;
+        case DS_CASE_PATTERN_BOOL: out.kind = DS_CASE_PATTERN_BOOL; break;
+        case DS_CASE_PATTERN_DEFAULT: out.kind = DS_CASE_PATTERN_DEFAULT; break;
     }
     return out;
 }
@@ -799,7 +799,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 lowered.span = arm->span;
                 for (size_t j = 0; j < arm->patterns.len; j++) {
                     DsLowerCasePattern pattern = lower_case_pattern(&arm->patterns.items[j]);
-                    if (pattern.kind == DS_LOWER_CASE_PATTERN_DEFAULT) {
+                    if (pattern.kind == DS_CASE_PATTERN_DEFAULT) {
                         if (seen_default) ds_diag_error(lower->diag, pattern.span, "case statements may contain only one `_` default arm");
                         seen_default = true;
                         if (i + 1 != stmt->as.case_stmt.arms.len || j + 1 != arm->patterns.len) {

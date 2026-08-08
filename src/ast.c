@@ -3,6 +3,12 @@
 
 #include <stdlib.h>
 
+void ds_case_pattern_fprint(FILE *out, const DsCasePattern *pattern) {
+    if (pattern->kind == DS_CASE_PATTERN_DEFAULT) fputs("_", out);
+    else if (pattern->kind == DS_CASE_PATTERN_BOOL) fputs(pattern->boolean ? "true" : "false", out);
+    else ds_fprint_str(out, pattern->text);
+}
+
 static void print_expr(const DsExpr *expr, FILE *out, int level) {
     if (!expr) {
         ds_fprint_indent(out, level);
@@ -194,11 +200,8 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
                 ds_fprint_indent(out, level + 1);
                 fputs("Arm", out);
                 for (size_t j = 0; j < arm->patterns.len; j++) {
-                    const DsCasePattern *p = &arm->patterns.items[j];
                     fputc(' ', out);
-                    if (p->kind == DS_CASE_PATTERN_DEFAULT) fputs("_", out);
-                    else if (p->kind == DS_CASE_PATTERN_BOOL) fputs(p->boolean ? "true" : "false", out);
-                    else ds_fprint_str(out, p->text);
+                    ds_case_pattern_fprint(out, &arm->patterns.items[j]);
                 }
                 fputc('\n', out);
                 print_stmt(arm->body, out, level + 2);

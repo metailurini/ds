@@ -124,6 +124,8 @@ typedef struct {
     size_t cap;
 } DsCasePatternVec;
 
+void ds_case_pattern_fprint(FILE *out, const DsCasePattern *pattern);
+
 typedef struct {
     DsCasePatternVec patterns;
     DsStmt *body;

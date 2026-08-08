@@ -392,22 +392,22 @@ static bool emit_case_pattern_condition(BashEmitter *e, const DsLowerExpr *selec
     buf_append(out, "[[ ");
     emit_case_selector_type(e, selector, out);
     buf_append(out, " == ");
-    if (pattern->kind == DS_LOWER_CASE_PATTERN_STRING) bash_single_quote(out, "string", 6);
-    else if (pattern->kind == DS_LOWER_CASE_PATTERN_INT) bash_single_quote(out, "int", 3);
-    else if (pattern->kind == DS_LOWER_CASE_PATTERN_BOOL) bash_single_quote(out, "bool", 4);
+    if (pattern->kind == DS_CASE_PATTERN_STRING) bash_single_quote(out, "string", 6);
+    else if (pattern->kind == DS_CASE_PATTERN_INT) bash_single_quote(out, "int", 3);
+    else if (pattern->kind == DS_CASE_PATTERN_BOOL) bash_single_quote(out, "bool", 4);
     buf_append(out, " && ");
     if (!emit_condition_operand(e, selector, out)) return false;
     buf_append(out, " == ");
-    if (pattern->kind == DS_LOWER_CASE_PATTERN_STRING) {
+    if (pattern->kind == DS_CASE_PATTERN_STRING) {
         char *decoded = NULL; size_t len = 0;
         DsLowerExpr tmp = {.kind = DS_LOWER_EXPR_STRING, .span = pattern->span};
         tmp.as.text = pattern->text;
         if (!decode_string_literal(e->diag, &tmp, &decoded, &len)) return false;
         bash_single_quote(out, decoded, len);
         free(decoded);
-    } else if (pattern->kind == DS_LOWER_CASE_PATTERN_INT) {
+    } else if (pattern->kind == DS_CASE_PATTERN_INT) {
         buf_append_dsstr(out, pattern->text);
-    } else if (pattern->kind == DS_LOWER_CASE_PATTERN_BOOL) {
+    } else if (pattern->kind == DS_CASE_PATTERN_BOOL) {
         buf_append(out, pattern->boolean ? "true" : "false");
     }
     buf_append(out, " ]]");
@@ -1130,7 +1130,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             }
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
                 const DsLowerCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
-                bool is_default = arm->patterns.len > 0 && arm->patterns.items[0].kind == DS_LOWER_CASE_PATTERN_DEFAULT;
+                bool is_default = arm->patterns.len > 0 && arm->patterns.items[0].kind == DS_CASE_PATTERN_DEFAULT;
                 emit_indent(&e->out, indent);
                 if (is_default) {
                     if (i == 0) buf_append(&e->out, "if true; then\n");
