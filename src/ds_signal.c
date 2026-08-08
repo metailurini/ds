@@ -3,13 +3,8 @@
 #include <signal.h>
 
 const char *ds_handler_signal_name(DsHandlerSignal signal) {
-    switch (signal) {
-        case DS_HANDLER_EXIT: return "EXIT";
-        case DS_HANDLER_INT: return "INT";
-        case DS_HANDLER_TERM: return "TERM";
-        case DS_HANDLER_INVALID: return "<invalid>";
-    }
-    return "<invalid>";
+    static const char *const names[] = {"EXIT", "INT", "TERM", "<invalid>"};
+    return (unsigned)signal < DS_ARRAY_LEN(names) ? names[signal] : "<invalid>";
 }
 
 bool ds_handler_signal_is_runtime_cleanup(DsHandlerSignal signal) {
@@ -17,14 +12,8 @@ bool ds_handler_signal_is_runtime_cleanup(DsHandlerSignal signal) {
 }
 
 int ds_handler_signal_default_status(DsHandlerSignal signal) {
-    switch (signal) {
-        case DS_HANDLER_INT: return 130;
-        case DS_HANDLER_TERM: return 143;
-        case DS_HANDLER_EXIT:
-        case DS_HANDLER_INVALID:
-            return 0;
-    }
-    return 0;
+    static const int statuses[] = {0, 130, 143, 0};
+    return (unsigned)signal < DS_ARRAY_LEN(statuses) ? statuses[signal] : 0;
 }
 
 DsHandlerSignal ds_handler_signal_from_posix(int sig) {

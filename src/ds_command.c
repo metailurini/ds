@@ -4,29 +4,13 @@
 #include <string.h>
 
 const char *ds_redirect_source_op(DsRedirectKind kind) {
-    switch (kind) {
-        case DS_REDIRECT_OUT: return "|>";
-        case DS_REDIRECT_OUT_APPEND: return "|>>";
-        case DS_REDIRECT_ERR: return "!>";
-        case DS_REDIRECT_ERR_APPEND: return "!>>";
-        case DS_REDIRECT_ALL: return "&>";
-        case DS_REDIRECT_ALL_APPEND: return "&>>";
-        case DS_REDIRECT_NONE: return "";
-    }
-    return "";
+    static const char *const ops[] = {"", "|>", "|>>", "!>", "!>>", "&>", "&>>"};
+    return (unsigned)kind < DS_ARRAY_LEN(ops) ? ops[kind] : "";
 }
 
 const char *ds_redirect_shell_op(DsRedirectKind kind) {
-    switch (kind) {
-        case DS_REDIRECT_OUT: return ">";
-        case DS_REDIRECT_OUT_APPEND: return ">>";
-        case DS_REDIRECT_ERR: return "2>";
-        case DS_REDIRECT_ERR_APPEND: return "2>>";
-        case DS_REDIRECT_ALL: return "&>";
-        case DS_REDIRECT_ALL_APPEND: return "&>>";
-        case DS_REDIRECT_NONE: return NULL;
-    }
-    return NULL;
+    static const char *const ops[] = {NULL, ">", ">>", "2>", "2>>", "&>", "&>>"};
+    return (unsigned)kind < DS_ARRAY_LEN(ops) ? ops[kind] : NULL;
 }
 
 void ds_word_vec_init(DsWordVec *vec) {

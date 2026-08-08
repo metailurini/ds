@@ -808,7 +808,7 @@ static void infer_command_word(InferCtx *ctx, InferEnv *env, DsWord word) {
             if (memcmp(word.text.data + pos, name.data, name.len) != 0 || !infer_name_boundary(word.text.data, word.text.len, pos, name.len)) continue;
             size_t dot = pos + name.len;
             if (dot >= word.text.len || word.text.data[dot] != '.') continue;
-            for (size_t m = 0; m < sizeof(methods) / sizeof(methods[0]); m++) {
+            for (size_t m = 0; m < DS_ARRAY_LEN(methods); m++) {
                 size_t method_pos = dot + 1;
                 size_t method_len = strlen(methods[m]);
                 if (method_pos + method_len + 1 > word.text.len) continue;

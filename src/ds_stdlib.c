@@ -50,7 +50,7 @@ static const DsStdlibHelper HELPERS[] = {
 };
 
 const DsStdlibHelper *ds_stdlib_lookup(DsStr name) {
-    for (size_t i = 0; i < sizeof(HELPERS) / sizeof(HELPERS[0]); i++) {
+    for (size_t i = 0; i < DS_ARRAY_LEN(HELPERS); i++) {
         if (ds_str_eq_cstr(name, HELPERS[i].name)) return &HELPERS[i];
     }
     return NULL;

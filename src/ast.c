@@ -237,33 +237,18 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
 }
 
 const char *ds_assign_op_name(DsAssignOp op) {
-    switch (op) {
-        case DS_ASSIGN_ADD: return "+=";
-        case DS_ASSIGN_SUB: return "-=";
-        case DS_ASSIGN_MUL: return "*=";
-        case DS_ASSIGN_DIV: return "/=";
-        case DS_ASSIGN_MOD: return "%=";
-        case DS_ASSIGN_SET: return "=";
-    }
-    return "=";
+    static const char *const names[] = {"=", "+=", "-=", "*=", "/=", "%="};
+    return (unsigned)op < DS_ARRAY_LEN(names) ? names[op] : "=";
 }
 
 static const char *decl_kind_name(DsScriptDeclKind kind) {
-    switch (kind) {
-        case DS_SCRIPT_DECL_ARG: return "ArgDecl";
-        case DS_SCRIPT_DECL_OPTION: return "OptionDecl";
-        case DS_SCRIPT_DECL_FLAG: return "FlagDecl";
-    }
-    return "Decl";
+    static const char *const names[] = {"ArgDecl", "OptionDecl", "FlagDecl"};
+    return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "Decl";
 }
 
 const char *ds_script_type_name(DsScriptType type) {
-    switch (type) {
-        case DS_SCRIPT_TYPE_STRING: return "string";
-        case DS_SCRIPT_TYPE_INT: return "int";
-        case DS_SCRIPT_TYPE_BOOL: return "bool";
-    }
-    return "unknown";
+    static const char *const names[] = {"string", "int", "bool"};
+    return (unsigned)type < DS_ARRAY_LEN(names) ? names[type] : "unknown";
 }
 
 void ds_ast_print(const DsAst *ast, FILE *out) {

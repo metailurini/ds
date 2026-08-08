@@ -386,7 +386,7 @@ bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
         if (kind == DS_TOK_DOT && regex_helper_state == REGEX_HELPER_SAW_REGEX) {
             regex_helper_state = REGEX_HELPER_SAW_DOT;
         } else if (kind == DS_TOK_LPAREN) {
-            if (regex_helper_state == REGEX_HELPER_SAW_NAME && regex_helper_stack_len < sizeof(regex_helper_paren_depth) / sizeof(regex_helper_paren_depth[0])) {
+            if (regex_helper_state == REGEX_HELPER_SAW_NAME && regex_helper_stack_len < DS_ARRAY_LEN(regex_helper_paren_depth)) {
                 regex_helper_paren_depth[regex_helper_stack_len] = 1;
                 regex_helper_arg_index[regex_helper_stack_len] = 0;
                 regex_helper_stack_len++;

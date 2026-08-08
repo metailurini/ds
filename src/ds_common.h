@@ -179,6 +179,8 @@ static inline void ds_fprint_indent(FILE *out, int level) {
     } \
 } while (0)
 
+#define DS_ARRAY_LEN(items) (sizeof(items) / sizeof((items)[0]))
+
 #define DS_VEC_PUSH(vec, value, initial_cap) do { \
     DS_GROW_ARRAY((vec)->items, (vec)->len, (vec)->cap, initial_cap); \
     (vec)->items[(vec)->len++] = (value); \

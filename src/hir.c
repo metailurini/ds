@@ -23,25 +23,13 @@ static void print_row_schema(FILE *out, const DsLowerRowSchema *schema) {
 }
 
 const char *ds_lower_value_kind_name(DsLowerValueKind kind) {
-    switch (kind) {
-        case DS_LOWER_VALUE_BOOL: return "bool";
-        case DS_LOWER_VALUE_INT: return "int";
-        case DS_LOWER_VALUE_STRING: return "string";
-        case DS_LOWER_VALUE_ARRAY: return "array";
-        case DS_LOWER_VALUE_MAP: return "map";
-        case DS_LOWER_VALUE_COMMAND_RESULT: return "command_result";
-        case DS_LOWER_VALUE_UNKNOWN: return "unknown";
-    }
-    return "unknown";
+    static const char *const names[] = {"unknown", "bool", "int", "string", "array", "map", "command_result"};
+    return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "unknown";
 }
 
 static const char *script_decl_kind(DsScriptDeclKind kind) {
-    switch (kind) {
-        case DS_SCRIPT_DECL_ARG: return "Arg";
-        case DS_SCRIPT_DECL_OPTION: return "Option";
-        case DS_SCRIPT_DECL_FLAG: return "Flag";
-    }
-    return "Decl";
+    static const char *const names[] = {"Arg", "Option", "Flag"};
+    return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "Decl";
 }
 
 static void print_escaped(FILE *out, const char *data, size_t len) {

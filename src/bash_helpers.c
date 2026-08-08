@@ -493,7 +493,7 @@ const char *ds_bash_string_helpers_source(unsigned helper_mask) {
     static EmitBuf source = {0};
     source.len = 0;
     if (source.data) source.data[0] = '\0';
-    for (size_t i = 0; i < sizeof(helpers) / sizeof(helpers[0]); i++) {
+    for (size_t i = 0; i < DS_ARRAY_LEN(helpers); i++) {
         if (helper_mask & helpers[i].mask) buf_append(&source, helpers[i].source);
     }
     if (source.len > 0) buf_append(&source, "\n");

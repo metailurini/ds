@@ -61,7 +61,7 @@ static const DsCommandResultField k_fields[] = {
 };
 
 const DsCommandResultField *ds_command_result_field_lookup(DsStr field) {
-    for (size_t i = 0; i < sizeof(k_fields) / sizeof(k_fields[0]); i++) {
+    for (size_t i = 0; i < DS_ARRAY_LEN(k_fields); i++) {
         size_t len = strlen(k_fields[i].name);
         if (field.len == len && memcmp(field.data, k_fields[i].name, len) == 0) return &k_fields[i];
     }
@@ -69,7 +69,7 @@ const DsCommandResultField *ds_command_result_field_lookup(DsStr field) {
 }
 
 size_t ds_command_result_field_count(void) {
-    return sizeof(k_fields) / sizeof(k_fields[0]);
+    return DS_ARRAY_LEN(k_fields);
 }
 
 const DsCommandResultField *ds_command_result_field_at(size_t index) {
