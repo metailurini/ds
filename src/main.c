@@ -158,12 +158,15 @@ static int cli_inspect(const char *cmd, const char *path) {
     } else if (strcmp(cmd, "ast") == 0) {
         rc = ds_cli_load_parse(path, &program) ? 0 : 1;
         if (rc == 0) ds_ast_print(program.ast, stdout);
-    } else if (strcmp(cmd, "hir") == 0) {
+    } else {
         rc = ds_cli_load_lower(path, &program) ? 0 : 1;
-        if (rc == 0 && !ds_hir_dump_program(program.lowered, stdout)) rc = 1;
-    } else if (strcmp(cmd, "bytecode") == 0) {
-        rc = ds_cli_load_lower(path, &program) ? 0 : 1;
-        if (rc == 0 && !ds_bytecode_dump_program(&program.source, program.lowered, stdout, &program.diag)) rc = 1;
+        if (rc == 0) {
+            if (strcmp(cmd, "hir") == 0) {
+                if (!ds_hir_dump_program(program.lowered, stdout)) rc = 1;
+            } else if (!ds_bytecode_dump_program(&program.source, program.lowered, stdout, &program.diag)) {
+                rc = 1;
+            }
+        }
     }
     ds_cli_program_free(&program);
     return rc;
