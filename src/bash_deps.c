@@ -6,54 +6,55 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool expr_uses_run(const DsLowerExpr *expr) {
+typedef bool (*ExprUsePredicate)(const DsLowerExpr *expr, void *context);
+
+static bool expr_uses(const DsLowerExpr *expr, ExprUsePredicate predicate, void *context) {
     if (!expr) return false;
+    if (predicate(expr, context)) return true;
     switch (expr->kind) {
-        case DS_LOWER_EXPR_RUN: return true;
-        case DS_LOWER_EXPR_FIELD: return expr_uses_run(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_run(expr->as.index.object) || expr_uses_run(expr->as.index.index);
+        case DS_LOWER_EXPR_FIELD:
+            return expr_uses(expr->as.field.object, predicate, context);
+        case DS_LOWER_EXPR_INDEX:
+            return expr_uses(expr->as.index.object, predicate, context) || expr_uses(expr->as.index.index, predicate, context);
         case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_run(expr->as.array.elements.items[i])) return true;
+            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses(expr->as.array.elements.items[i], predicate, context)) return true;
             return false;
         case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_run(expr->as.map.entries.items[i].value)) return true;
+            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses(expr->as.map.entries.items[i].value, predicate, context)) return true;
             return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_run(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_run(expr->as.binary.left) || expr_uses_run(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_run(expr->as.range.start) || expr_uses_run(expr->as.range.end);
+        case DS_LOWER_EXPR_UNARY:
+            return expr_uses(expr->as.unary.right, predicate, context);
+        case DS_LOWER_EXPR_BINARY:
+            return expr_uses(expr->as.binary.left, predicate, context) || expr_uses(expr->as.binary.right, predicate, context);
+        case DS_LOWER_EXPR_RANGE:
+            return expr_uses(expr->as.range.start, predicate, context) || expr_uses(expr->as.range.end, predicate, context);
         case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_run(expr->as.call.args.items[i])) return true;
+            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses(expr->as.call.args.items[i], predicate, context)) return true;
             return false;
         case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_run(expr->as.interp.parts.items[i])) return true;
+            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses(expr->as.interp.parts.items[i], predicate, context)) return true;
             return false;
-        default: return false;
+        default:
+            return false;
     }
 }
 
+static bool expr_is_run(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_RUN;
+}
+
+static bool expr_uses_run(const DsLowerExpr *expr) {
+    return expr_uses(expr, expr_is_run, NULL);
+}
+
+static bool expr_is_pipeline_run(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_RUN && ds_command_is_pipeline(&expr->as.run);
+}
+
 static bool expr_uses_pipeline_run(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_RUN: return ds_command_is_pipeline(&expr->as.run);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_pipeline_run(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_pipeline_run(expr->as.index.object) || expr_uses_pipeline_run(expr->as.index.index);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_pipeline_run(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_pipeline_run(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_pipeline_run(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_pipeline_run(expr->as.binary.left) || expr_uses_pipeline_run(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_pipeline_run(expr->as.range.start) || expr_uses_pipeline_run(expr->as.range.end);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_pipeline_run(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_pipeline_run(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_pipeline_run, NULL);
 }
 
 static bool stdlib_call_uses_base_helpers(DsStr name) {
@@ -90,30 +91,13 @@ static bool string_literal_contains_index_interpolation(DsStr text) {
     return false;
 }
 
+static bool expr_is_base_stdlib_call(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_CALL && stdlib_call_uses_base_helpers(expr->as.call.name);
+}
+
 static bool expr_uses_stdlib(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING: return false;
-        case DS_LOWER_EXPR_CALL:
-            if (stdlib_call_uses_base_helpers(expr->as.call.name)) return true;
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_stdlib(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_FIELD: return expr_uses_stdlib(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_stdlib(expr->as.index.object) || expr_uses_stdlib(expr->as.index.index);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_stdlib(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_stdlib(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_stdlib(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_stdlib(expr->as.binary.left) || expr_uses_stdlib(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_stdlib(expr->as.range.start) || expr_uses_stdlib(expr->as.range.end);
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_stdlib(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_base_stdlib_call, NULL);
 }
 
 static bool call_name_is_glob(DsStr name) {
@@ -249,29 +233,14 @@ static unsigned command_string_helper_mask(const DsCommand *command) {
     return mask;
 }
 
+static bool expr_is_collection_index(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_INDEX ||
+           (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text));
+}
+
 static bool expr_uses_collection_index(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING: return string_literal_contains_index_interpolation(expr->as.text);
-        case DS_LOWER_EXPR_INDEX: return true;
-        case DS_LOWER_EXPR_FIELD: return expr_uses_collection_index(expr->as.field.object);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_collection_index(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_collection_index(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_collection_index(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_collection_index(expr->as.binary.left) || expr_uses_collection_index(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_collection_index(expr->as.range.start) || expr_uses_collection_index(expr->as.range.end);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_collection_index(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_collection_index(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_collection_index, NULL);
 }
 
 static bool command_uses_collection_index(const DsCommand *command) {
@@ -286,26 +255,13 @@ static bool command_uses_collection_index(const DsCommand *command) {
     return false;
 }
 
+static bool expr_is_map_literal(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_MAP;
+}
+
 static bool expr_uses_map_literal(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_MAP: return true;
-        case DS_LOWER_EXPR_INDEX: return expr_uses_map_literal(expr->as.index.object) || expr_uses_map_literal(expr->as.index.index);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_map_literal(expr->as.field.object);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_map_literal(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_map_literal(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_map_literal(expr->as.binary.left) || expr_uses_map_literal(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_map_literal(expr->as.range.start) || expr_uses_map_literal(expr->as.range.end);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_map_literal(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_map_literal(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_map_literal, NULL);
 }
 
 static bool word_has_arith_interp(DsStr word) {
@@ -332,59 +288,23 @@ static bool command_uses_int_helpers(const DsCommand *command) {
     return word_has_arith_interp(command->redirect.target);
 }
 
+static bool expr_is_int_helper(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return (expr->kind == DS_LOWER_EXPR_BINARY && bash_is_int_binary_op(expr->as.binary.op)) ||
+           (expr->kind == DS_LOWER_EXPR_UNARY && str_eq(expr->as.unary.op, "-"));
+}
+
 static bool expr_uses_int_helpers(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_BINARY:
-            return bash_is_int_binary_op(expr->as.binary.op) || expr_uses_int_helpers(expr->as.binary.left) || expr_uses_int_helpers(expr->as.binary.right);
-        case DS_LOWER_EXPR_UNARY:
-            return str_eq(expr->as.unary.op, "-") || expr_uses_int_helpers(expr->as.unary.right);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_int_helpers(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_FIELD: return expr_uses_int_helpers(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_int_helpers(expr->as.index.object) || expr_uses_int_helpers(expr->as.index.index);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_int_helpers(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_int_helpers(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_int_helpers(expr->as.interp.parts.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_RANGE:
-            return expr_uses_int_helpers(expr->as.range.start) || expr_uses_int_helpers(expr->as.range.end);
-        default:
-            return false;
-    }
+    return expr_uses(expr, expr_is_int_helper, NULL);
+}
+
+static bool expr_is_user_function_call(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
 }
 
 static bool expr_uses_function_value_helpers(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_CALL:
-            if (expr->as.call.is_user_function) return true;
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_function_value_helpers(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_BINARY:
-            return expr_uses_function_value_helpers(expr->as.binary.left) || expr_uses_function_value_helpers(expr->as.binary.right);
-        case DS_LOWER_EXPR_UNARY: return expr_uses_function_value_helpers(expr->as.unary.right);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_function_value_helpers(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_function_value_helpers(expr->as.index.object) || expr_uses_function_value_helpers(expr->as.index.index);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_function_value_helpers(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_function_value_helpers(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_function_value_helpers(expr->as.interp.parts.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_RANGE:
-            return expr_uses_function_value_helpers(expr->as.range.start) || expr_uses_function_value_helpers(expr->as.range.end);
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_user_function_call, NULL);
 }
 
 static bool stmt_uses_run(const DsLowerStmt *stmt) {
@@ -654,56 +574,24 @@ static bool stmt_uses_collection_index(const DsLowerStmt *stmt) {
     return false;
 }
 
+static bool expr_is_array_helper(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.object_is_array) ||
+           (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text));
+}
+
 static bool expr_uses_array_helper(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING: return string_literal_contains_index_interpolation(expr->as.text);
-        case DS_LOWER_EXPR_INDEX:
-            return expr->as.index.object_is_array || expr_uses_array_helper(expr->as.index.object) || expr_uses_array_helper(expr->as.index.index);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_array_helper(expr->as.field.object);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_array_helper(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_array_helper(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_array_helper(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_array_helper(expr->as.binary.left) || expr_uses_array_helper(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_array_helper(expr->as.range.start) || expr_uses_array_helper(expr->as.range.end);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_array_helper(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_array_helper(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_array_helper, NULL);
+}
+
+static bool expr_is_map_helper(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return (expr->kind == DS_LOWER_EXPR_INDEX && expr->as.index.object_is_map) ||
+           (expr->kind == DS_LOWER_EXPR_STRING && string_literal_contains_index_interpolation(expr->as.text));
 }
 
 static bool expr_uses_map_helper(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING: return string_literal_contains_index_interpolation(expr->as.text);
-        case DS_LOWER_EXPR_INDEX:
-            return expr->as.index.object_is_map || expr_uses_map_helper(expr->as.index.object) || expr_uses_map_helper(expr->as.index.index);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_map_helper(expr->as.field.object);
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_map_helper(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_map_helper(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_UNARY: return expr_uses_map_helper(expr->as.unary.right);
-        case DS_LOWER_EXPR_BINARY: return expr_uses_map_helper(expr->as.binary.left) || expr_uses_map_helper(expr->as.binary.right);
-        case DS_LOWER_EXPR_RANGE: return expr_uses_map_helper(expr->as.range.start) || expr_uses_map_helper(expr->as.range.end);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_map_helper(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_map_helper(expr->as.interp.parts.items[i])) return true;
-            return false;
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_map_helper, NULL);
 }
 
 static bool command_uses_index_interpolation(const DsCommand *command) {
@@ -1320,30 +1208,13 @@ bool program_uses_case(const DsLowerProgram *program) {
     return program_uses_stmt(program, stmt_uses_case);
 }
 
+static bool expr_is_membership(const DsLowerExpr *expr, void *context) {
+    (void)context;
+    return expr->kind == DS_LOWER_EXPR_BINARY && str_eq(expr->as.binary.op, "in");
+}
+
 static bool expr_uses_membership(const DsLowerExpr *expr) {
-    if (!expr) return false;
-    switch (expr->kind) {
-        case DS_LOWER_EXPR_BINARY:
-            return str_eq(expr->as.binary.op, "in") || expr_uses_membership(expr->as.binary.left) || expr_uses_membership(expr->as.binary.right);
-        case DS_LOWER_EXPR_UNARY: return expr_uses_membership(expr->as.unary.right);
-        case DS_LOWER_EXPR_FIELD: return expr_uses_membership(expr->as.field.object);
-        case DS_LOWER_EXPR_INDEX: return expr_uses_membership(expr->as.index.object) || expr_uses_membership(expr->as.index.index);
-        case DS_LOWER_EXPR_CALL:
-            for (size_t i = 0; i < expr->as.call.args.len; i++) if (expr_uses_membership(expr->as.call.args.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_INTERP:
-            for (size_t i = 0; i < expr->as.interp.parts.len; i++) if (expr_uses_membership(expr->as.interp.parts.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_ARRAY:
-            for (size_t i = 0; i < expr->as.array.elements.len; i++) if (expr_uses_membership(expr->as.array.elements.items[i])) return true;
-            return false;
-        case DS_LOWER_EXPR_MAP:
-            for (size_t i = 0; i < expr->as.map.entries.len; i++) if (expr_uses_membership(expr->as.map.entries.items[i].value)) return true;
-            return false;
-        case DS_LOWER_EXPR_RANGE:
-            return expr_uses_membership(expr->as.range.start) || expr_uses_membership(expr->as.range.end);
-        default: return false;
-    }
+    return expr_uses(expr, expr_is_membership, NULL);
 }
 
 static bool stmt_uses_membership(const DsLowerStmt *stmt) {
