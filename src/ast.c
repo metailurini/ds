@@ -3,18 +3,14 @@
 
 #include <stdlib.h>
 
-static void indent(FILE *out, int level) {
-    for (int i = 0; i < level; i++) fputs("  ", out);
-}
-
 static void print_expr(const DsExpr *expr, FILE *out, int level) {
     if (!expr) {
-        indent(out, level);
+        ds_fprint_indent(out, level);
         fputs("<missing expr>\n", out);
         return;
     }
 
-    indent(out, level);
+    ds_fprint_indent(out, level);
     switch (expr->kind) {
         case DS_EXPR_IDENT:
             fprintf(out, "IdentExpr %.*s\n", (int)expr->as.text.len, expr->as.text.data);
@@ -34,10 +30,10 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
         case DS_EXPR_RUN:
             fputs("RunExpr\n", out);
             for (size_t s = 0; s < expr->as.run.stages.len; s++) {
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fprintf(out, "Stage %zu\n", s);
                 for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) {
-                    indent(out, level + 2);
+                    ds_fprint_indent(out, level + 2);
                     fprintf(out, "Word %.*s\n", (int)expr->as.run.stages.items[s].words.items[i].text.len, expr->as.run.stages.items[s].words.items[i].text.data);
                 }
             }
@@ -67,7 +63,7 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             fputs("MapExpr\n", out);
             for (size_t i = 0; i < expr->as.map.entries.len; i++) {
                 const DsMapEntry *entry = &expr->as.map.entries.items[i];
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fprintf(out, "Entry %.*s\n", (int)entry->key.len, entry->key.data);
                 print_expr(entry->value, out, level + 2);
             }
@@ -89,7 +85,7 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
 }
 
 static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
-    indent(out, level);
+    ds_fprint_indent(out, level);
     switch (stmt->kind) {
         case DS_STMT_LET:
             fprintf(out, "LetStmt %.*s\n", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
@@ -110,14 +106,14 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
         }
         case DS_STMT_IF:
             fputs("IfStmt\n", out);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Condition\n", out);
             print_expr(stmt->as.if_stmt.condition, out, level + 2);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Then\n", out);
             print_stmt(stmt->as.if_stmt.then_branch, out, level + 2);
             if (stmt->as.if_stmt.else_branch) {
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fputs("Else\n", out);
                 print_stmt(stmt->as.if_stmt.else_branch, out, level + 2);
             }
@@ -134,16 +130,16 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
         case DS_STMT_CMD:
             fputs("CmdStmt\n", out);
             for (size_t s = 0; s < stmt->as.cmd_stmt.stages.len; s++) {
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fprintf(out, "Stage %zu\n", s);
                 for (size_t i = 0; i < stmt->as.cmd_stmt.stages.items[s].words.len; i++) {
-                    indent(out, level + 2);
+                    ds_fprint_indent(out, level + 2);
                     fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.stages.items[s].words.items[i].text.len,
                             stmt->as.cmd_stmt.stages.items[s].words.items[i].text.data);
                 }
             }
             if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fprintf(out, "Redirect %s %.*s\n", ds_redirect_source_op(stmt->as.cmd_stmt.redirect.kind),
                         (int)stmt->as.cmd_stmt.redirect.target.len, stmt->as.cmd_stmt.redirect.target.data);
             }
@@ -152,7 +148,7 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fprintf(out, "FnStmt %.*s\n", (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
             for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
                 const DsFnParam *param = &stmt->as.fn_stmt.params.items[i];
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fprintf(out, "Param %.*s%s\n", (int)param->name.len, param->name.data, param->default_value ? " =" : "");
                 if (param->default_value) print_expr(param->default_value, out, level + 2);
             }
@@ -166,19 +162,19 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             fprintf(out, "ForStmt %.*s", (int)stmt->as.for_stmt.key_name.len, stmt->as.for_stmt.key_name.data);
             if (stmt->as.for_stmt.has_value_name) fprintf(out, ", %.*s", (int)stmt->as.for_stmt.value_name.len, stmt->as.for_stmt.value_name.data);
             fputc('\n', out);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Iterable\n", out);
             print_expr(stmt->as.for_stmt.iterable, out, level + 2);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Body\n", out);
             print_stmt(stmt->as.for_stmt.body, out, level + 2);
             break;
         case DS_STMT_WHILE:
             fputs("WhileStmt\n", out);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Condition\n", out);
             print_expr(stmt->as.while_stmt.condition, out, level + 2);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Body\n", out);
             print_stmt(stmt->as.while_stmt.body, out, level + 2);
             break;
@@ -190,12 +186,12 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             break;
         case DS_STMT_CASE:
             fputs("CaseStmt\n", out);
-            indent(out, level + 1);
+            ds_fprint_indent(out, level + 1);
             fputs("Selector\n", out);
             print_expr(stmt->as.case_stmt.selector, out, level + 2);
             for (size_t i = 0; i < stmt->as.case_stmt.arms.len; i++) {
                 const DsCaseArm *arm = &stmt->as.case_stmt.arms.items[i];
-                indent(out, level + 1);
+                ds_fprint_indent(out, level + 1);
                 fputs("Arm", out);
                 for (size_t j = 0; j < arm->patterns.len; j++) {
                     const DsCasePattern *p = &arm->patterns.items[j];
@@ -270,14 +266,14 @@ const char *ds_script_type_name(DsScriptType type) {
 void ds_ast_print(const DsAst *ast, FILE *out) {
     fputs("Script\n", out);
     if (ast->has_script) {
-        indent(out, 1);
+        ds_fprint_indent(out, 1);
         fputs("ScriptBlock\n", out);
         for (size_t i = 0; i < ast->script.declarations.len; i++) {
             const DsScriptDecl *decl = &ast->script.declarations.items[i];
-            indent(out, 2);
+            ds_fprint_indent(out, 2);
             fprintf(out, "%s %.*s: %s\n", decl_kind_name(decl->kind), (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
             if (decl->default_value) {
-                indent(out, 3);
+                ds_fprint_indent(out, 3);
                 fputs("Default\n", out);
                 print_expr(decl->default_value, out, 4);
             }
