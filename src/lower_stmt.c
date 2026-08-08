@@ -25,7 +25,7 @@ static bool expr_is_env_value_access(const DsExpr *expr) {
 
 DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt) {
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CALL, stmt->span);
-    out->as.call_stmt.name = str_clone(stmt->as.call_stmt.name);
+    out->as.call_stmt.name = ds_str_clone(stmt->as.call_stmt.name);
     const DsStdlibHelper *stdlib_helper = ds_stdlib_lookup(stmt->as.call_stmt.name);
     bool stdlib = stdlib_helper != NULL;
     DsLowerFn *fn = stdlib ? NULL : find_function(lower->program, stmt->as.call_stmt.name);
@@ -149,7 +149,7 @@ static DsExpr lower_run_copy_expr(const DsExpr *source, DsCommand command) {
 static DsLowerStmt *lower_let_with_value(Lower *lower, const DsStmt *stmt, const DsExpr *value) {
     SymKind kind = SYM_UNKNOWN;
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
-    out->as.let_stmt.name = str_clone(stmt->as.let_stmt.name);
+    out->as.let_stmt.name = ds_str_clone(stmt->as.let_stmt.name);
     out->as.let_stmt.value = lower_expr(lower, value, &kind);
     out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
     out->as.let_stmt.element_kind = lower_infer_collection_element_kind(lower, out->as.let_stmt.value, kind);
@@ -318,8 +318,8 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     out.span = pattern->span;
     out.boolean = pattern->boolean;
     switch (pattern->kind) {
-        case DS_CASE_PATTERN_STRING: out.kind = DS_CASE_PATTERN_STRING; out.text = str_clone(pattern->text); break;
-        case DS_CASE_PATTERN_INT: out.kind = DS_CASE_PATTERN_INT; out.text = str_clone(pattern->text); break;
+        case DS_CASE_PATTERN_STRING: out.kind = DS_CASE_PATTERN_STRING; out.text = ds_str_clone(pattern->text); break;
+        case DS_CASE_PATTERN_INT: out.kind = DS_CASE_PATTERN_INT; out.text = ds_str_clone(pattern->text); break;
         case DS_CASE_PATTERN_BOOL: out.kind = DS_CASE_PATTERN_BOOL; break;
         case DS_CASE_PATTERN_DEFAULT: out.kind = DS_CASE_PATTERN_DEFAULT; break;
     }
@@ -464,7 +464,7 @@ static DsLowerStmt *lower_index_assign_stmt(Lower *lower, const DsStmt *stmt) {
         return out;
     }
 
-    out->as.index_assign_stmt.name = str_clone(object->as.text);
+    out->as.index_assign_stmt.name = ds_str_clone(object->as.text);
     Symbol *sym = scope_find(lower->scope, object->as.text);
     if (!sym) {
         ds_diag_error(lower->diag, object->span,
@@ -554,7 +554,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         }
         case DS_STMT_ASSIGN: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSIGN, stmt->span);
-            out->as.assign_stmt.name = str_clone(stmt->as.assign_stmt.name);
+            out->as.assign_stmt.name = ds_str_clone(stmt->as.assign_stmt.name);
             out->as.assign_stmt.op = stmt->as.assign_stmt.op;
             bool env_assign = stmt->as.assign_stmt.name.len > 4 && ds_str_has_prefix_cstr(stmt->as.assign_stmt.name, "env.");
             if (env_assign) {
@@ -643,8 +643,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmtKind loop_kind = stmt->as.for_stmt.has_value_name ? DS_LOWER_STMT_FOR_MAP :
                                         (stmt->as.for_stmt.iterable && stmt->as.for_stmt.iterable->kind == DS_EXPR_RANGE ? DS_LOWER_STMT_FOR_RANGE : DS_LOWER_STMT_FOR_ARRAY);
             DsLowerStmt *out = stmt_new(loop_kind, stmt->span);
-            out->as.for_stmt.name = str_clone(stmt->as.for_stmt.key_name);
-            if (stmt->as.for_stmt.has_value_name) out->as.for_stmt.value_name = str_clone(stmt->as.for_stmt.value_name);
+            out->as.for_stmt.name = ds_str_clone(stmt->as.for_stmt.key_name);
+            if (stmt->as.for_stmt.has_value_name) out->as.for_stmt.value_name = ds_str_clone(stmt->as.for_stmt.value_name);
             if (stmt->as.for_stmt.has_value_name && ds_str_eq(stmt->as.for_stmt.key_name, stmt->as.for_stmt.value_name)) {
                 ds_diag_error(lower->diag, stmt->span, "map loop key and value variables must be different in v0.29.0");
             }
@@ -665,7 +665,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 bool env_value_iterable = expr_is_env_value_access(stmt->as.for_stmt.iterable);
                 if (env_namespace_iterable) {
                     out->as.for_stmt.iterable = expr_new(DS_LOWER_EXPR_IDENT, stmt->as.for_stmt.iterable->span);
-                    out->as.for_stmt.iterable->as.text = str_clone(stmt->as.for_stmt.iterable->as.text);
+                    out->as.for_stmt.iterable->as.text = ds_str_clone(stmt->as.for_stmt.iterable->as.text);
                 } else {
                     out->as.for_stmt.iterable = lower_expr(lower, stmt->as.for_stmt.iterable, &iterable_kind);
                 }
@@ -811,7 +811,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
         }
         case DS_STMT_PUSH: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_PUSH, stmt->span);
-            out->as.push_stmt.name = str_clone(stmt->as.push_stmt.name);
+            out->as.push_stmt.name = ds_str_clone(stmt->as.push_stmt.name);
             Symbol *sym = scope_find(lower->scope, stmt->as.push_stmt.name);
             if (!sym) {
                 ds_diag_error(lower->diag, stmt->span, "unknown array `%.*s`", (int)stmt->as.push_stmt.name.len, stmt->as.push_stmt.name.data);

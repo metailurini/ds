@@ -312,6 +312,6 @@ DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     lower_validate_word_interpolation(lower, expr->as.text, expr->span);
     *kind_out = SYM_STRING;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, expr->span);
-    out->as.text = str_clone(expr->as.text);
+    out->as.text = ds_str_clone(expr->as.text);
     return out;
 }

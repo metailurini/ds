@@ -10,7 +10,7 @@ static void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *progr
     }
     DsLowerTest test;
     memset(&test, 0, sizeof(test));
-    test.name = str_clone(stmt->as.test_stmt.name);
+    test.name = ds_str_clone(stmt->as.test_stmt.name);
     test.span = stmt->span;
     test.body = lower_block(lower, stmt->as.test_stmt.body, true);
     DS_VEC_PUSH(&program->tests, test, 8);

@@ -98,7 +98,7 @@ void row_schema_free(DsLowerRowSchema *schema) {
 
 bool row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {
     if (!schema) return false;
-    DsLowerRowField field = {str_clone(name), kind};
+    DsLowerRowField field = {ds_str_clone(name), kind};
     DS_VEC_PUSH(schema, field, 4);
     return true;
 }

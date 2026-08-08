@@ -20,7 +20,7 @@ void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram
     scope_define(lower, lower->scope, stmt->as.fn_stmt.name, SYM_FUNCTION, stmt->span);
     DsLowerFn fn;
     memset(&fn, 0, sizeof(fn));
-    fn.name = str_clone(stmt->as.fn_stmt.name);
+    fn.name = ds_str_clone(stmt->as.fn_stmt.name);
     fn.span = stmt->span;
     bool seen_default = false;
     Scope param_names;
@@ -41,7 +41,7 @@ void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram
         }
         DsLowerFnParam out;
         memset(&out, 0, sizeof(out));
-        out.name = str_clone(param->name);
+        out.name = ds_str_clone(param->name);
         out.span = param->span;
         if (param->default_value) {
             seen_default = true;

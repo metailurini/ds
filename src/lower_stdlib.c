@@ -14,7 +14,7 @@ bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *p
     memset(&out, 0, sizeof(out));
     out.kind = decl->kind;
     out.type = decl->type;
-    out.name = str_clone(decl->name);
+    out.name = ds_str_clone(decl->name);
     out.span = decl->span;
 
     if (decl->kind == DS_SCRIPT_DECL_ARG && decl->type == DS_SCRIPT_TYPE_BOOL) {

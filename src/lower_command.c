@@ -535,7 +535,7 @@ static DsLowerStmt *lower_command_interpolation_temp_string_let(Lower *lower, Ds
     fake.as.text = quoted_text;
     SymKind kind = SYM_UNKNOWN;
     DsLowerStmt *let = stmt_new(DS_LOWER_STMT_LET, span);
-    let->as.let_stmt.name = str_clone(name);
+    let->as.let_stmt.name = ds_str_clone(name);
     let->as.let_stmt.value = lower_expr(lower, &fake, &kind);
     let->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
     let->as.let_stmt.element_kind = DS_LOWER_VALUE_UNKNOWN;

@@ -111,8 +111,6 @@ static inline bool lower_validate_env_name(Lower *lower, DsStr name, DsSpan span
 bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
 bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind);
 DsLowerValueKind lower_stdlib_return_value_kind(const DsStdlibHelper *helper);
-static inline DsStr str_clone(DsStr s) { return ds_str_clone(s); }
-
 void scope_init(Scope *scope, Scope *parent);
 void scope_free(Scope *scope);
 Symbol *scope_find_current(Scope *scope, DsStr name);

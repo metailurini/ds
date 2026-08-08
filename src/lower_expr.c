@@ -94,7 +94,7 @@ void lower_map_entry_vec_push(DsLowerMapEntryVec *vec, DsLowerMapEntry entry) {
 DsStr lower_map_key_decode(const DsMapEntry *entry) {
     DsStr out = {0};
     if (entry->quoted_key) ds_decode_string_text(entry->key, &out);
-    else out = str_clone(entry->key);
+    else out = ds_str_clone(entry->key);
     return out;
 }
 
@@ -241,7 +241,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     else right = lower_expr(lower, expr->as.binary.right, &right_kind);
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_BINARY, expr->span);
     out->as.binary.left = left;
-    out->as.binary.op = str_clone(expr->as.binary.op);
+    out->as.binary.op = ds_str_clone(expr->as.binary.op);
     out->as.binary.right = right;
     out->as.binary.left_kind = lower_value_kind_from_sym(left_kind);
     out->as.binary.right_kind = lower_value_kind_from_sym(right_kind);
@@ -319,7 +319,7 @@ DsLowerExpr *lower_ident_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         *kind_out = sym->kind == SYM_TOPLEVEL_PREDECLARED ? SYM_UNKNOWN : sym->kind;
     }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_IDENT, expr->span);
-    out->as.text = str_clone(expr->as.text);
+    out->as.text = ds_str_clone(expr->as.text);
     return out;
 }
 
@@ -329,7 +329,7 @@ DsLowerExpr *lower_int_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
         ds_diag_error(lower->diag, expr->span, "integer literal is outside the supported int range");
     }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INT, expr->span);
-    out->as.text = str_clone(expr->as.text);
+    out->as.text = ds_str_clone(expr->as.text);
     return out;
 }
 
@@ -361,7 +361,7 @@ DsLowerExpr *lower_regex_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     if (!allowed_matches_rhs) ds_diag_error(lower->diag, expr->span, "regex literals are only supported as the right operand of `matches` or as regex helper pattern arguments in v0.32.0");
     *kind_out = SYM_UNKNOWN;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_REGEX, expr->span);
-    out->as.regex = str_clone(expr->as.regex);
+    out->as.regex = ds_str_clone(expr->as.regex);
     return out;
 }
 
@@ -393,7 +393,7 @@ DsLowerExpr *lower_map_field_expr(Lower *lower, const DsExpr *expr, DsLowerExpr 
     out->as.index.index->as.text.data = quoted.data;
     out->as.index.index->as.text.len = quoted.len;
     out->as.index.map_key_literal = true;
-    out->as.index.map_key = str_clone(expr->as.field.field);
+    out->as.index.map_key = ds_str_clone(expr->as.field.field);
     const DsLowerRowSchema *schema = expr_row_schema_full_inner(lower, object, false);
     if (schema) {
         const DsLowerRowField *field = row_schema_find(schema, expr->as.field.field);
@@ -446,7 +446,7 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     *kind_out = field_kind;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_FIELD, expr->span);
     out->as.field.object = object;
-    out->as.field.field = str_clone(expr->as.field.field);
+    out->as.field.field = ds_str_clone(expr->as.field.field);
     out->as.field.field_kind = lower_value_kind_from_sym(field_kind);
     return out;
 }
@@ -466,7 +466,7 @@ DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         *kind_out = SYM_BOOL;
     }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_UNARY, expr->span);
-    out->as.unary.op = str_clone(expr->as.unary.op);
+    out->as.unary.op = ds_str_clone(expr->as.unary.op);
     out->as.unary.right = right;
     return out;
 }
@@ -510,7 +510,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
     }
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
-    out->as.call.name = str_clone(expr->as.call.name);
+    out->as.call.name = ds_str_clone(expr->as.call.name);
     out->as.call.return_kind = is_match ? DS_LOWER_VALUE_MAP : DS_LOWER_VALUE_STRING;
 
     bool literal_pattern_insensitive = false;
@@ -594,7 +594,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
     bool is_string_helper = stdlib_helper && ds_stdlib_namespace(expr->as.call.name) == DS_STDLIB_NAMESPACE_STRING;
 
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_CALL, expr->span);
-    out->as.call.name = str_clone(expr->as.call.name);
+    out->as.call.name = ds_str_clone(expr->as.call.name);
     SymKind *arg_kinds = lower_args_to_kinds(lower, &expr->as.call.args, &out->as.call.args);
     for (size_t i = 0; i < expr->as.call.args.len; i++) {
         SymKind arg_kind = arg_kinds[i];
