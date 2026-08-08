@@ -732,6 +732,11 @@ static hm_result hm_put_len_storage(hashmap *hm, const char *key, size_t key_len
     return HM_OK;
 }
 
+#define HM_DELEGATE_FROM_LEN(key, on_invalid, call) do { \
+    if (!(key)) { on_invalid; return HM_ERR_INVALID; } \
+    return (call); \
+} while (0)
+
 hm_result hm_put_len(hashmap *hm, const char *key, size_t key_len, void *value, void **old_value) {
     return hm_put_len_storage(hm, key, key_len, value, old_value, (hm_key_storage)-1);
 }
@@ -742,8 +747,7 @@ hm_result hm_put_borrowed_len(hashmap *hm, const char *key, size_t key_len, void
 }
 
 hm_result hm_put_borrowed(hashmap *hm, const char *key, void *value, void **old_value) {
-    if (!key) return HM_ERR_INVALID;
-    return hm_put_borrowed_len(hm, key, strlen(key), value, old_value);
+    HM_DELEGATE_FROM_LEN(key, (void)0, hm_put_borrowed_len(hm, key, strlen(key), value, old_value));
 }
 
 hm_result hm_put_move_key_len(hashmap *hm, char *owned_key, size_t key_len, void *value, void **old_value) {
@@ -752,13 +756,11 @@ hm_result hm_put_move_key_len(hashmap *hm, char *owned_key, size_t key_len, void
 }
 
 hm_result hm_put_move_key(hashmap *hm, char *owned_key, void *value, void **old_value) {
-    if (!owned_key) return HM_ERR_INVALID;
-    return hm_put_move_key_len(hm, owned_key, strlen(owned_key), value, old_value);
+    HM_DELEGATE_FROM_LEN(owned_key, (void)0, hm_put_move_key_len(hm, owned_key, strlen(owned_key), value, old_value));
 }
 
 hm_result hm_put(hashmap *hm, const char *key, void *value, void **old_value) {
-    if (!key) return HM_ERR_INVALID;
-    return hm_put_len(hm, key, strlen(key), value, old_value);
+    HM_DELEGATE_FROM_LEN(key, (void)0, hm_put_len(hm, key, strlen(key), value, old_value));
 }
 
 hm_result hm_get_len(const hashmap *hm, const char *key, size_t key_len, void **out_value) {
@@ -774,8 +776,7 @@ hm_result hm_get_len(const hashmap *hm, const char *key, size_t key_len, void **
 }
 
 hm_result hm_get(const hashmap *hm, const char *key, void **out_value) {
-    if (!key) { if (out_value) *out_value = NULL; return HM_ERR_INVALID; }
-    return hm_get_len(hm, key, strlen(key), out_value);
+    HM_DELEGATE_FROM_LEN(key, if (out_value) *out_value = NULL, hm_get_len(hm, key, strlen(key), out_value));
 }
 
 int hm_contains_key_len(const hashmap *hm, const char *key, size_t key_len) { return hm_get_len(hm, key, key_len, NULL) == HM_OK; }
@@ -833,8 +834,7 @@ hm_result hm_upsert_len(hashmap *hm, const char *key, size_t key_len, hm_upsert_
 }
 
 hm_result hm_upsert(hashmap *hm, const char *key, hm_upsert_fn fn, void *ctx, void **new_value) {
-    if (!key) { if (new_value) *new_value = NULL; return HM_ERR_INVALID; }
-    return hm_upsert_len(hm, key, strlen(key), fn, ctx, new_value);
+    HM_DELEGATE_FROM_LEN(key, if (new_value) *new_value = NULL, hm_upsert_len(hm, key, strlen(key), fn, ctx, new_value));
 }
 
 static int hm_lookup_result_allows_insert(const hashmap *hm, hm_result rc) {
@@ -862,8 +862,8 @@ hm_result hm_get_or_insert_len(hashmap *hm, const char *key, size_t key_len, voi
 }
 
 hm_result hm_get_or_insert(hashmap *hm, const char *key, void *default_value, void **out_value, int *inserted) {
-    if (!key) { if (out_value) *out_value = NULL; if (inserted) *inserted = 0; return HM_ERR_INVALID; }
-    return hm_get_or_insert_len(hm, key, strlen(key), default_value, out_value, inserted);
+    HM_DELEGATE_FROM_LEN(key, do { if (out_value) *out_value = NULL; if (inserted) *inserted = 0; } while (0),
+                         hm_get_or_insert_len(hm, key, strlen(key), default_value, out_value, inserted));
 }
 
 hm_result hm_put_many_len(hashmap *hm, const hm_put_item *items, size_t count, size_t *processed) {
@@ -909,8 +909,7 @@ hm_result hm_remove_len(hashmap *hm, const char *key, size_t key_len, void **old
 }
 
 hm_result hm_remove(hashmap *hm, const char *key, void **old_value) {
-    if (!key) { if (old_value) *old_value = NULL; return HM_ERR_INVALID; }
-    return hm_remove_len(hm, key, strlen(key), old_value);
+    HM_DELEGATE_FROM_LEN(key, if (old_value) *old_value = NULL, hm_remove_len(hm, key, strlen(key), old_value));
 }
 
 size_t hm_len(const hashmap *hm) { return hm ? hm->len : 0; }
