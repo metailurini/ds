@@ -68,16 +68,16 @@ static inline void ds_free_cstr_array(char **items, size_t len) {
 
 static inline bool ds_str_eq_cstr(DsStr value, const char *text) {
     size_t len = strlen(text);
-    return value.len == len && memcmp(value.data ? value.data : "", text, len) == 0;
+    return value.len == len && memcmp(ds_str_data(value), text, len) == 0;
 }
 
 static inline bool ds_str_eq(DsStr a, DsStr b) {
-    return a.len == b.len && memcmp(a.data ? a.data : "", b.data ? b.data : "", a.len) == 0;
+    return a.len == b.len && memcmp(ds_str_data(a), ds_str_data(b), a.len) == 0;
 }
 
 static inline bool ds_str_has_prefix_cstr(DsStr value, const char *prefix) {
     size_t len = strlen(prefix);
-    return value.len >= len && memcmp(value.data ? value.data : "", prefix, len) == 0;
+    return value.len >= len && memcmp(ds_str_data(value), prefix, len) == 0;
 }
 
 static inline char *ds_str_dup_len(DsStr value) {
@@ -223,7 +223,7 @@ static inline DsSpan ds_span_zero(const DsSource *source) {
 }
 
 static inline void ds_fprint_str(FILE *out, DsStr value) {
-    fprintf(out, "%.*s", (int)value.len, value.data ? value.data : "");
+    fprintf(out, "%.*s", (int)value.len, ds_str_data(value));
 }
 
 static inline void ds_fprint_escaped(FILE *out, const char *data, size_t len, bool hex_controls) {

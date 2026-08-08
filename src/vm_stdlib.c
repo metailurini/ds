@@ -36,7 +36,7 @@ static bool vm_string_arg(Vm *vm, Instr *ins, size_t index, const char **out, si
         return false;
     }
 
-    *out = v->as.string.data ? v->as.string.data : "";
+    *out = ds_string_data(&v->as.string);
     *len = v->as.string.len;
     if (memchr(*out, '\0', *len)) {
         ds_diag_error(vm->diag, ins->span, "standard-library helper `%s` does not support embedded NUL bytes", ins_name_or(ins, "<helper>"));
@@ -678,7 +678,7 @@ static bool vm_walk_collect_extensions(Vm *vm, Instr *ins, VmStringVec *exts) {
             ds_diag_error(vm->diag, ins->span, "%s expects extension filters to be strings such as `.c`", ins_name_or(ins, "dir.walk_ext"));
             return false;
         }
-        const char *ext = item->as.string.data ? item->as.string.data : "";
+        const char *ext = ds_string_data(&item->as.string);
         if (memchr(ext, '\0', item->as.string.len)) {
             ds_diag_error(vm->diag, ins->span, "%s does not support embedded NUL bytes in extensions", ins_name_or(ins, "dir.walk_ext"));
             return false;

@@ -87,7 +87,7 @@ static void print_value_literal(FILE *out, const DsValue *v) {
             break;
         case DS_VALUE_STRING:
             fputs("string \"", out);
-            ds_fprint_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len, false);
+            ds_fprint_escaped(out, ds_string_data(&v->as.string), v->as.string.len, false);
             fputc('"', out);
             break;
         case DS_VALUE_COMMAND_RESULT:
@@ -120,7 +120,7 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             if (decl->has_default) {
                 if (decl->type == DS_SCRIPT_TYPE_STRING) {
                     fputs(" = \"", out);
-                    ds_fprint_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len, false);
+                    ds_fprint_escaped(out, ds_str_data(decl->default_text), decl->default_text.len, false);
                     fputc('"', out);
                 } else if (decl->type == DS_SCRIPT_TYPE_INT) {
                     fprintf(out, " = %lld", (long long)decl->default_int);

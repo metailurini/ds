@@ -11,7 +11,7 @@ static bool lower_validate_handler_signal(Lower *lower, const DsStmt *stmt) {
     DsStr text = stmt->as.handler_stmt.signal_text;
     ds_diag_error(lower->diag, stmt->span,
                   "unsupported %s signal `%.*s`; supported signals are EXIT, INT, and TERM",
-                  form, (int)text.len, text.data ? text.data : "");
+                  form, (int)text.len, ds_str_data(text));
     return false;
 }
 

@@ -69,7 +69,7 @@ static DsInterpValueKind interp_kind_from_value(const DsValue *value) {
 static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, size_t spec_len, DsString *out, DsSpan span) {
     if (spec_len == 0) {
         DsString rendered; ds_value_to_string(value, &rendered);
-        ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
+        ds_string_append_range(out, ds_string_data(&rendered), rendered.len);
         ds_string_free(&rendered);
         return true;
     }
@@ -83,13 +83,13 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
         DsString rendered;
         const char *op = parsed.kind == DS_INTERP_FORMAT_UPPER ? "upper" : parsed.kind == DS_INTERP_FORMAT_LOWER ? "lower" : "trim";
         ascii_transform_string(&value->as.string, &rendered, op);
-        ds_string_append_range(out, rendered.data ? rendered.data : "", rendered.len);
+        ds_string_append_range(out, ds_string_data(&rendered), rendered.len);
         ds_string_free(&rendered);
         return true;
     }
     if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT || parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT || parsed.kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
         char align = parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT ? '<' : parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT ? '>' : '^';
-        return append_padded(out, value->as.string.data ? value->as.string.data : "", value->as.string.len, parsed.width, align);
+        return append_padded(out, ds_string_data(&value->as.string), value->as.string.len, parsed.width, align);
     }
     char buf[64];
     if (parsed.kind == DS_INTERP_FORMAT_INT_DECIMAL) {
@@ -449,7 +449,7 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
                 ds_string_free(&key);
                 return false;
             }
-            ds_string_append_range(&key, idx_value.as.string.data ? idx_value.as.string.data : "", idx_value.as.string.len);
+            ds_string_append_range(&key, ds_string_data(&idx_value.as.string), idx_value.as.string.len);
             ds_value_free(&idx_value);
             have_key = true;
         }
@@ -465,7 +465,7 @@ static bool interp_parse_indexed_value(Vm *vm, DsValue *value, const char *data,
             return false;
         }
         (*j)++;
-        DsStr key_view = {key.data ? key.data : "", key.len};
+        DsStr key_view = {key.data, key.len};
         DsValue *found = ds_map_get(&value->as.map, key_view);
         if (!found) {
             ds_diag_error(vm->diag, span, "missing map key `%.*s`", (int)key_view.len, key_view.data);
@@ -621,7 +621,7 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         bool ok = interpolate_string(vm, &decoded, &rendered, span);
         ds_string_free(&decoded);
         if (!ok) return false;
-        *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+        *out = ds_str_dup_range(ds_string_data(&rendered), rendered.len);
         ds_string_free(&rendered);
         return true;
     }
@@ -638,7 +638,7 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         }
         DsString rendered;
         ds_value_to_string(&value, &rendered);
-        *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+        *out = ds_str_dup_range(ds_string_data(&rendered), rendered.len);
         ds_string_free(&rendered);
         ds_value_free(&value);
         free(name);
@@ -679,7 +679,7 @@ static bool word_to_arg(Vm *vm, DsStr word, DsSpan span, char **out) {
         }
         DsString rendered;
         ds_value_to_string(&field_value, &rendered);
-        *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+        *out = ds_str_dup_range(ds_string_data(&rendered), rendered.len);
         ds_string_free(&rendered);
         ds_value_free(&field_value);
         ds_value_free(&value);
@@ -700,7 +700,7 @@ static bool render_redirect_target(Vm *vm, const DsRedirect *redirect, char **ou
     bool ok = interpolate_string(vm, &decoded, &rendered, redirect->target_span);
     ds_string_free(&decoded);
     if (!ok) return false;
-    *out = ds_str_dup_range(rendered.data ? rendered.data : "", rendered.len);
+    *out = ds_str_dup_range(ds_string_data(&rendered), rendered.len);
     ds_string_free(&rendered);
     return true;
 }

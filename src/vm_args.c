@@ -90,7 +90,7 @@ static bool set_default_from_decl(Vm *vm, const DsLowerScriptDecl *decl) {
     DsValue value = ds_value_null();
     if (decl->type == DS_SCRIPT_TYPE_STRING) {
         DsString s;
-        ds_string_from_range(&s, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+        ds_string_from_range(&s, ds_str_data(decl->default_text), decl->default_text.len);
         value = ds_value_string_take(&s);
     } else if (decl->type == DS_SCRIPT_TYPE_INT) {
         value = ds_value_int(decl->default_int);

@@ -240,7 +240,7 @@ int ds_value_compare(const DsValue *left, const DsValue *right) {
     ds_value_to_string(left, &a);
     ds_value_to_string(right, &b);
     size_t min = a.len < b.len ? a.len : b.len;
-    int cmp = memcmp(a.data ? a.data : "", b.data ? b.data : "", min);
+    int cmp = memcmp(ds_string_data(&a), ds_string_data(&b), min);
     if (cmp == 0) {
         if (a.len < b.len) cmp = -1;
         else if (a.len > b.len) cmp = 1;

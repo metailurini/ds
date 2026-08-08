@@ -79,7 +79,7 @@ static void dump_redirect(FILE *out, const DsRedirect *redirect) {
     if (!op) return;
     fprintf(out, " Redirect %s ", op);
     fputc('"', out);
-    ds_fprint_escaped(out, redirect->target.data ? redirect->target.data : "", redirect->target.len, true);
+    ds_fprint_escaped(out, ds_str_data(redirect->target), redirect->target.len, true);
     fputc('"', out);
     print_span(out, redirect->target_span);
 }
@@ -278,7 +278,7 @@ bool ds_hir_dump_program(const DsLowerProgram *program, FILE *out) {
             ds_fprint_str(out, decl->name);
             fprintf(out, ": %s", ds_script_type_name(decl->type));
             if (decl->has_default) {
-                if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); ds_fprint_escaped(out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len, true); fputc('"', out); }
+                if (decl->type == DS_SCRIPT_TYPE_STRING) { fputs(" = \"", out); ds_fprint_escaped(out, ds_str_data(decl->default_text), decl->default_text.len, true); fputc('"', out); }
                 else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, " = %lld", (long long)decl->default_int);
                 else fprintf(out, " = %s", decl->default_bool ? "true" : "false");
             }

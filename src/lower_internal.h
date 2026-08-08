@@ -110,7 +110,7 @@ bool is_env_name_text(DsStr name);
 static inline bool lower_validate_env_name(Lower *lower, DsStr name, DsSpan span, const char *version) {
     if (is_env_name_text(name)) return true;
     ds_diag_error(lower->diag, span, "invalid environment variable name `%.*s` in %s",
-                  (int)name.len, name.data ? name.data : "", version);
+                  (int)name.len, ds_str_data(name), version);
     return false;
 }
 bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
