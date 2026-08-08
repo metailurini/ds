@@ -106,11 +106,6 @@ cleanup:
     return rc;
 }
 
-static bool looks_like_script_path(const char *arg) {
-    size_t len = strlen(arg);
-    return strstr(arg, "/") != NULL || (len >= 3 && strcmp(arg + len - 3, ".ds") == 0);
-}
-
 static bool write_formatted_file(const char *path, const DsString *formatted) {
     struct stat st;
     mode_t mode = 0644;
@@ -237,7 +232,7 @@ int main(int argc, char **argv) {
     }
 
     if (argc >= 2 && is_direct_script_arg(argv[1]) &&
-        (access(argv[1], R_OK) == 0 || looks_like_script_path(argv[1]))) {
+        (access(argv[1], R_OK) == 0 || ds_path_looks_like_script(argv[1]))) {
         DsCliProgram program;
         int rc = ds_cli_load_lower(argv[1], &program) ? ds_vm_run_program_args(&program.source, program.lowered, argc - 2, argv + 2, &program.diag) : 1;
         ds_cli_program_free(&program);

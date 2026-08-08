@@ -134,6 +134,11 @@ static inline char *ds_path_dirname_dup(const char *path) {
     return ds_str_dup_range(path, (size_t)(slash - path));
 }
 
+static inline bool ds_path_looks_like_script(const char *path) {
+    size_t len = strlen(path);
+    return strchr(path, '/') != NULL || (len >= 3 && strcmp(path + len - 3, ".ds") == 0);
+}
+
 static inline DsSpan ds_span_zero(const DsSource *source) {
     return (DsSpan){{0, 1, 1}, {0, 1, 1}, source};
 }
