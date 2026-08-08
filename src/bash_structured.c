@@ -358,8 +358,7 @@ bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, Ds
         buf_appendf(&e->out, "__ds_temp_remove \"$__ds_return_iter_%zu\"\n", temp_id);
         return true;
     }
-    ds_diag_error(e->diag, span, "internal Bash invariant failed: array return should be literal, named, or forwarded after lowering");
-    return false;
+    return bash_invariant_fail(e, span, "array return should be literal, named, or forwarded after lowering");
 }
 
 bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent) {
@@ -390,8 +389,7 @@ bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSp
         buf_append(&e->out, "[$__ds_key]}\"; done\n");
         return true;
     }
-    ds_diag_error(e->diag, span, "internal Bash invariant failed: map return should be literal, named, or forwarded after lowering");
-    return false;
+    return bash_invariant_fail(e, span, "map return should be literal, named, or forwarded after lowering");
 }
 
 /*
@@ -452,8 +450,7 @@ bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value
             if (!bash_emit_row_array_decls(e, source, schema, indent, true)) return false;
             if (!bash_emit_user_function_value_call_into(e, source, value, indent)) return false;
         } else {
-            ds_diag_error(e->diag, span, "internal Bash invariant failed: unsupported row-array return expression after lowering");
-            return false;
+            return bash_invariant_fail(e, span, "unsupported row-array return expression after lowering");
         }
     }
     DsLowerExpr source_expr;
@@ -554,8 +551,7 @@ bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerR
         if (row && row->kind == DS_LOWER_EXPR_MAP) {
             const DsLowerMapEntry *entry = bash_row_map_entry(row, schema->items[i].name);
             if (!entry) {
-                ds_diag_error(e->diag, row ? row->span : (DsSpan){0}, "internal Bash invariant failed: row literal missing schema field");
-                return false;
+            return bash_invariant_fail(e, row ? row->span : (DsSpan){0}, "row literal missing schema field");
             }
             if (!emit_value_expr(e, entry->value, &e->out)) return false;
         } else if (row && row->kind == DS_LOWER_EXPR_IDENT) {
@@ -563,8 +559,7 @@ bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerR
             emit_row_map_field_ref(&e->out, row->as.text, schema->items[i].name);
             buf_append(&e->out, "\"");
         } else {
-            ds_diag_error(e->diag, row ? row->span : (DsSpan){0}, "internal Bash invariant failed: row-array literal elements should be row literals or named rows after lowering");
-            return false;
+            return bash_invariant_fail(e, row ? row->span : (DsSpan){0}, "row-array literal elements should be row literals or named rows after lowering");
         }
         buf_append(&e->out, ")\n");
     }
@@ -590,8 +585,7 @@ static bool emit_row_index_arg(BashEmitter *e, const DsLowerExpr *index, EmitBuf
         buf_append(out, "\"");
         return true;
     }
-    ds_diag_error(e->diag, index->span, "internal Bash invariant failed: row-array index should be a literal or variable after lowering");
-    return false;
+    return bash_invariant_fail(e, index->span, "row-array index should be a literal or variable after lowering");
 }
 
 bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *index_expr, const DsLowerRowSchema *schema, int indent, bool local_decl) {
@@ -676,8 +670,7 @@ bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr
         if (!bash_emit_row_array_decls(e, dest, schema, indent, local_decl)) return false;
         return bash_emit_user_function_value_call_into(e, dest, value, indent);
     }
-    ds_diag_error(e->diag, value->span, "internal Bash invariant failed: unsupported row-array expression after lowering");
-    return false;
+    return bash_invariant_fail(e, value->span, "unsupported row-array expression after lowering");
 }
 
 static DsLowerValueKind row_schema_field_kind(const DsLowerRowSchema *schema, DsStr field) {

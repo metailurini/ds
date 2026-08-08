@@ -512,8 +512,7 @@ static bool emit_map_loop_materialize(BashEmitter *e, const DsLowerStmt *stmt, D
     if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stmt->as.for_stmt.iterable->as.call.is_user_function) {
         return bash_emit_user_function_value_call_into(e, raw_map, stmt->as.for_stmt.iterable, indent);
     }
-    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: map loop iterable should be named or a supported map-returning function after lowering");
-    return false;
+    return bash_invariant_fail(e, stmt->span, "map loop iterable should be named or a supported map-returning function after lowering");
 }
 
 /* Return statement emission. Kept in bash_stmt.c so tiny statement-only logic
@@ -535,8 +534,7 @@ static bool emit_command_result_return(BashEmitter *e, const DsLowerExpr *value,
         bash_emit_command_result_copy_to_return(e, value->as.text, indent);
         return true;
     }
-    ds_diag_error(e->diag, span, "internal Bash invariant failed: command-result return should be run, named, or forwarded after lowering");
-    return false;
+    return bash_invariant_fail(e, span, "command-result return should be run, named, or forwarded after lowering");
 }
 
 static bool emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
@@ -852,8 +850,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     if (!bash_emit_row_array_expr_into(e, iter_name, stmt->as.for_stmt.iterable, &stmt->as.for_stmt.row_schema, indent, e->function_depth > 0)) return false;
                     emit_indent(&e->out, indent);
                 } else {
-                    ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: row-array loop iterable should be named or a known row-array result after lowering");
-                    return false;
+                    return bash_invariant_fail(e, stmt->span, "row-array loop iterable should be named or a known row-array result after lowering");
                 }
                 size_t id = e->temp_counter++;
                 buf_appendf(&e->out, "for __ds_row_i_%zu in \"${!", id);
@@ -909,8 +906,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 !iterable_is_user_array_call &&
                 !(stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.for_stmt.iterable->as.call.name))) {
                 /* Lowering rejects non-portable array iterables for VM/Bash parity. */
-                ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: array loop iterable should be named, a known stdlib array result, or a supported array-returning function after lowering");
-                return false;
+                return bash_invariant_fail(e, stmt->span, "array loop iterable should be named, a known stdlib array result, or a supported array-returning function after lowering");
             }
             size_t temp_id = 0;
             DsStr user_iter_name = {0};
@@ -1159,8 +1155,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_BLOCK:
             return emit_block_body(e, stmt, indent);
         case DS_LOWER_STMT_ASSERT:
-            ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: assert statement reached standalone Bash emission; the test runner owns assert emission in v0.14.0");
-            return false;
+            return bash_invariant_fail(e, stmt->span, "assert statement reached standalone Bash emission; the test runner owns assert emission in v0.14.0");
         case DS_LOWER_STMT_RETURN:
             return emit_return_stmt(e, stmt, indent);
         case DS_LOWER_STMT_DEFER:

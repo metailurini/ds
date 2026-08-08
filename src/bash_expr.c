@@ -53,8 +53,7 @@ static bool emit_index_argument(BashEmitter *e, const DsLowerExpr *index, bool m
     }
     if (index->kind == DS_LOWER_EXPR_STRING) {
         if (!map_index) {
-            ds_diag_error(e->diag, index->span, "internal Bash invariant failed: array index should not be a string after lowering");
-            return false;
+            return bash_invariant_fail(e, index->span, "array index should not be a string after lowering");
         }
         char *decoded = NULL; size_t len = 0;
         if (!decode_string_literal(e->diag, index, &decoded, &len)) return false;
@@ -69,8 +68,7 @@ static bool emit_index_argument(BashEmitter *e, const DsLowerExpr *index, bool m
         return true;
     }
     if (allow_computed) return emit_value_expr(e, index, out);
-    ds_diag_error(e->diag, index->span, "internal Bash invariant failed: collection index expression should be literal or named after lowering");
-    return false;
+    return bash_invariant_fail(e, index->span, "collection index expression should be literal or named after lowering");
 }
 
 static bool regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
@@ -187,8 +185,7 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     if (right->kind == DS_LOWER_EXPR_IDENT) {
         buf_append(out, "\"${"); emit_var_name(out, right->as.text); buf_append(out, "[@]}\"");
     } else {
-        ds_diag_error(e->diag, right->span, "internal Bash invariant failed: `in` right operand should be named, literal, or stdlib array after lowering");
-        return false;
+        return bash_invariant_fail(e, right->span, "`in` right operand should be named, literal, or stdlib array after lowering");
     }
     buf_append(out, "; do [[ ");
     buf_append(out, "$__ds_needle_type == ");
@@ -258,8 +255,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         case DS_LOWER_EXPR_FIELD:
             if (expr->as.field.object->kind != DS_LOWER_EXPR_IDENT) {
                 /* Lowering rejects temporary field receivers for VM/Bash parity. */
-                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: field receiver should be a named binding after lowering");
-                return false;
+                return bash_invariant_fail(e, expr->span, "field receiver should be a named binding after lowering");
             }
             {
                 DsStr storage_field = bash_command_result_field_storage_name(expr->as.field.field);
@@ -273,8 +269,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         case DS_LOWER_EXPR_INDEX:
             if (!expr->as.index.object_is_array && !expr->as.index.object_is_map) {
                 /* Lowering annotates accepted collection indexes with a known collection kind. */
-                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index should have a known collection kind after lowering");
-                return false;
+                return bash_invariant_fail(e, expr->span, "collection index should have a known collection kind after lowering");
             }
             if (expr->as.index.object_is_map && expr->as.index.map_key_literal &&
                 expr->as.index.object && expr->as.index.object->kind == DS_LOWER_EXPR_INDEX &&
@@ -316,8 +311,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 return true;
             }
             /* Lowering rejects other temporary collection receivers for VM/Bash parity. */
-            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: collection index receiver should be a named binding or accepted standard-library array result after lowering");
-            return false;
+            return bash_invariant_fail(e, expr->span, "collection index receiver should be a named binding or accepted standard-library array result after lowering");
         case DS_LOWER_EXPR_CALL:
             if (expr->as.call.is_user_function) {
                 buf_append(out, "\"$(__ds_call_value ");
@@ -329,8 +323,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 return true;
             }
             if (!ds_stdlib_is_name(expr->as.call.name) || stdlib_returns_array(expr->as.call.name) || expr->as.call.return_kind == DS_LOWER_VALUE_MAP) {
-                ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: value call should be a scalar stdlib or user-function call after lowering");
-                return false;
+                return bash_invariant_fail(e, expr->span, "value call should be a scalar stdlib or user-function call after lowering");
             }
             buf_append(out, "\"$(");
             if (!emit_stdlib_call(e, expr, out)) return false;
@@ -357,8 +350,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, "; then printf true; else printf false; fi)");
                 return true;
             }
-            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: binary value expression should be supported or rejected by lowering");
-            return false;
+            return bash_invariant_fail(e, expr->span, "binary value expression should be supported or rejected by lowering");
         case DS_LOWER_EXPR_UNARY:
             if (str_eq(expr->as.unary.op, "!")) {
                 buf_append(out, "$(if ");
@@ -372,11 +364,9 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: unary value expression should be supported or rejected by lowering");
-            return false;
+            return bash_invariant_fail(e, expr->span, "unary value expression should be supported or rejected by lowering");
         default:
-            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: assignment value should be emitted or rejected by lowering");
-            return false;
+            return bash_invariant_fail(e, expr->span, "assignment value should be emitted or rejected by lowering");
     }
 }
 
@@ -448,8 +438,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_INTERP:
             return emit_value_expr(e, expr, out);
         default:
-            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition operand should be supported or rejected by lowering");
-            return false;
+            return bash_invariant_fail(e, expr->span, "condition operand should be supported or rejected by lowering");
     }
 }
 
@@ -714,8 +703,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         buf_append(out, " ]]");
         return true;
     }
-    ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition should be supported or rejected by lowering");
-    return false;
+    return bash_invariant_fail(e, expr->span, "condition should be supported or rejected by lowering");
 }
 
 bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
@@ -751,8 +739,7 @@ bool emit_stdlib_call(BashEmitter *e, const DsLowerExpr *call, EmitBuf *out) {
         buf_append(out, "[@]}\"");
         return true;
     }
-    ds_diag_error(e->diag, exts->span, "internal Bash invariant failed: dir.walk_ext extension argument should be an array literal or named array after lowering");
-    return false;
+    return bash_invariant_fail(e, exts->span, "dir.walk_ext extension argument should be an array literal or named array after lowering");
 }
 
 bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
