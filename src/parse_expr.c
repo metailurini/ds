@@ -1,4 +1,5 @@
 #include "parser_internal.h"
+#include "ds_stdlib.h"
 
 static int precedence(DsTokenKind kind) {
     switch (kind) {
@@ -155,9 +156,7 @@ static bool parser_ident_text_eq(DsExpr *expr, const char *text) {
 }
 
 static bool parser_expr_is_stdlib_namespace(DsExpr *expr) {
-    return parser_ident_text_eq(expr, "file") || parser_ident_text_eq(expr, "dir") ||
-           parser_ident_text_eq(expr, "path") || parser_ident_text_eq(expr, "cmd") ||
-           parser_ident_text_eq(expr, "env") || parser_ident_text_eq(expr, "regex");
+    return expr && expr->kind == DS_EXPR_IDENT && ds_stdlib_is_namespace(expr->as.text);
 }
 
 static DsStr parser_copy_dotted_bang_name(DsToken *left, DsToken *right) {
