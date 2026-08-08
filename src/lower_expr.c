@@ -119,14 +119,6 @@ static const DsLowerRowSchema *expr_row_schema_full_inner(Lower *lower, const Ds
     return ident_row_schema(lower, expr, want_array);
 }
 
-static const DsLowerRowSchema *expr_row_schema_full(Lower *lower, const DsLowerExpr *expr) {
-    return expr_row_schema_full_inner(lower, expr, false);
-}
-
-static const DsLowerRowSchema *expr_row_array_schema_full(Lower *lower, const DsLowerExpr *expr) {
-    return expr_row_schema_full_inner(lower, expr, true);
-}
-
 bool command_result_field_kind(DsStr field, SymKind *kind_out) {
     const DsCommandResultField *desc = ds_command_result_field_lookup(field);
     if (!desc) return false;
@@ -402,7 +394,7 @@ DsLowerExpr *lower_map_field_expr(Lower *lower, const DsExpr *expr, DsLowerExpr 
     out->as.index.index->as.text.len = quoted.len;
     out->as.index.map_key_literal = true;
     out->as.index.map_key = str_clone(expr->as.field.field);
-    const DsLowerRowSchema *schema = expr_row_schema_full(lower, object);
+    const DsLowerRowSchema *schema = expr_row_schema_full_inner(lower, object, false);
     if (schema) {
         const DsLowerRowField *field = row_schema_find(schema, expr->as.field.field);
         if (!field) {
@@ -635,7 +627,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
             ds_diag_error(lower->diag, expr->span, "row-array method `sort_by` expects a field and optional direction in v0.37.0");
         }
         const DsLowerRowSchema *schema = NULL;
-        if (out->as.call.args.len > 0) schema = expr_row_array_schema_full(lower, out->as.call.args.items[0]);
+        if (out->as.call.args.len > 0) schema = expr_row_schema_full_inner(lower, out->as.call.args.items[0], true);
         if (!schema) {
             ds_diag_error(lower->diag, expr->span, "row-array method `sort_by` requires a row-array with known schema in v0.37.0");
         }
@@ -850,7 +842,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         SymKind element_kind = infer_array_element_kind(lower, object);
         out->as.index.element_kind = lower_value_kind_from_sym(element_kind);
         if (element_kind == SYM_MAP) {
-            const DsLowerRowSchema *schema = expr_row_array_schema_full(lower, object);
+            const DsLowerRowSchema *schema = expr_row_schema_full_inner(lower, object, true);
             if (schema) {
                 out->as.index.returns_row = true;
                 row_schema_clone(schema, &out->as.index.row_schema);
@@ -867,7 +859,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_STRING) {
             out->as.index.map_key_literal = true;
             ds_decode_string_text(expr->as.index.index->as.text, &out->as.index.map_key);
-            const DsLowerRowSchema *schema = expr_row_schema_full(lower, object);
+            const DsLowerRowSchema *schema = expr_row_schema_full_inner(lower, object, false);
             if (schema) {
                 const DsLowerRowField *field = row_schema_find(schema, out->as.index.map_key);
                 if (field) {

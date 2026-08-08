@@ -150,10 +150,6 @@ static bool vm_string_vec_push_copy(VmStringVec *vec, const char *text) {
     return vm_string_vec_push_owned(vec, ds_str_dup_cstr(text));
 }
 
-static char *path_join2(const char *a, const char *b) {
-    return ds_path_join(a, b);
-}
-
 static char *glob_escape_literal_path(const char *path) {
     size_t len = path ? strlen(path) : 0;
     size_t extra = 0;
@@ -240,7 +236,7 @@ static bool collect_dirs_recursive(Vm *vm, Instr *ins, const char *dir, VmString
     while ((ent = readdir(dp)) != NULL) {
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
         if (should_skip_hidden_child(ent->d_name)) continue;
-        char *child = path_join2(dir, ent->d_name);
+        char *child = ds_path_join(dir, ent->d_name);
         struct stat st;
         bool descend = lstat(child, &st) == 0 && S_ISDIR(st.st_mode) && !S_ISLNK(st.st_mode);
         if (descend && !collect_dirs_recursive(vm, ins, child, dirs)) {
@@ -267,7 +263,7 @@ static bool collect_recursive_matches_for_dir(Vm *vm, Instr *ins, const char *di
         pattern = ds_str_dup_cstr(suffix);
     } else {
         char *escaped_dir = glob_escape_literal_path(dir);
-        pattern = path_join2(escaped_dir, suffix);
+        pattern = ds_path_join(escaped_dir, suffix);
         free(escaped_dir);
     }
 
@@ -717,7 +713,7 @@ static bool vm_dir_walk_collect(Vm *vm, Instr *ins, const char *dir, const VmStr
     while ((ent = readdir(dp)) != NULL) {
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
         if (should_skip_hidden_child(ent->d_name)) continue;
-        char *child = path_join2(dir, ent->d_name);
+        char *child = ds_path_join(dir, ent->d_name);
         struct stat st;
         if (lstat(child, &st) != 0) {
             free(child);

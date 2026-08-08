@@ -150,10 +150,6 @@ static DsExpr *parse_primary(Parser *p) {
     return parser_new_expr(DS_EXPR_ERROR, tok->span);
 }
 
-static bool parser_ident_text_eq(DsExpr *expr, const char *text) {
-    return expr && expr->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.text, text);
-}
-
 static bool parser_expr_is_stdlib_namespace(DsExpr *expr) {
     return expr && expr->kind == DS_EXPR_IDENT && ds_stdlib_is_namespace(expr->as.text);
 }
@@ -203,7 +199,7 @@ static DsExpr *parser_take_ident_call(DsExpr *ident, const DsToken *opener, bool
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
     while (expr) {
-        if (expr->kind == DS_EXPR_IDENT && parser_ident_text_eq(expr, "glob") && parser_advance_if(p, DS_TOK_BANG)) {
+        if (expr->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.text, "glob") && parser_advance_if(p, DS_TOK_BANG)) {
             DsToken *bang = parser_previous(p);
             if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after `glob!`")) break;
             DsExpr *call = parser_take_ident_call(expr, bang, true);
