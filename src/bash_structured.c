@@ -53,17 +53,17 @@ const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
 
 void bash_emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_type_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
 }
 
 void bash_emit_elem_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_elem_type_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
 }
 
 void bash_emit_map_value_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_value_type_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
 }
 
 static const char *command_result_field_default(const DsCommandResultField *field) {
@@ -229,7 +229,7 @@ static void emit_index_type_assignment(BashEmitter *e, DsStr name, const DsLower
         bash_emit_elem_type_var_name(&e->out, value->as.index.object->as.text);
         buf_append(&e->out, "[");
         if (value->as.index.index->kind == DS_LOWER_EXPR_INT) {
-            buf_append_len(&e->out, value->as.index.index->as.text.data, value->as.index.index->as.text.len);
+            buf_append_dsstr(&e->out, value->as.index.index->as.text);
         } else if (value->as.index.index->kind == DS_LOWER_EXPR_IDENT) {
             buf_append(&e->out, "$");
             emit_var_name(&e->out, value->as.index.index->as.text);
@@ -402,7 +402,7 @@ bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSp
  */
 void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field) {
     buf_append(out, "__ds_row_");
-    buf_append_len(out, array_name.data, array_name.len);
+    buf_append_dsstr(out, array_name);
     buf_append(out, "_");
     static const char hex[] = "0123456789abcdef";
     for (size_t i = 0; i < field.len; i++) {
@@ -514,7 +514,7 @@ bool bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const Ds
         emit_indent(&e->out, indent);
         emit_var_name(&e->out, name);
         buf_append(&e->out, "_");
-        buf_append_len(&e->out, field->name.data, field->name.len);
+        buf_append_dsstr(&e->out, field->name);
         buf_append(&e->out, "=\"");
         emit_row_map_field_ref(&e->out, name, field->name);
         buf_append(&e->out, "\"\n");
@@ -581,7 +581,7 @@ bool bash_emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *
 
 static bool emit_row_index_arg(BashEmitter *e, const DsLowerExpr *index, EmitBuf *out) {
     if (index->kind == DS_LOWER_EXPR_INT) {
-        buf_append_len(out, index->as.text.data, index->as.text.len);
+        buf_append_dsstr(out, index->as.text);
         return true;
     }
     if (index->kind == DS_LOWER_EXPR_IDENT) {
@@ -628,7 +628,7 @@ bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *ind
             emit_indent(&e->out, indent);
             emit_var_name(&e->out, dest);
             buf_append(&e->out, "_");
-            buf_append_len(&e->out, field->name.data, field->name.len);
+            buf_append_dsstr(&e->out, field->name);
             buf_append(&e->out, "=\"$( __ds_array_get ");
             bash_emit_row_field_array_name(&e->out, src, field->name);
             buf_append(&e->out, " ");

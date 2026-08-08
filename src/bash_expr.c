@@ -48,7 +48,7 @@ static bool expr_is_stdlib_array_call(const DsLowerExpr *expr) {
 
 static bool emit_index_argument(BashEmitter *e, const DsLowerExpr *index, bool map_index, bool allow_computed, EmitBuf *out) {
     if (index->kind == DS_LOWER_EXPR_INT) {
-        buf_append_len(out, index->as.text.data, index->as.text.len);
+        buf_append_dsstr(out, index->as.text);
         return true;
     }
     if (index->kind == DS_LOWER_EXPR_STRING) {
@@ -250,7 +250,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         case DS_LOWER_EXPR_INTERP:
             return emit_interp_expr(e, expr, out);
         case DS_LOWER_EXPR_INT:
-            buf_append_len(out, expr->as.text.data, expr->as.text.len);
+            buf_append_dsstr(out, expr->as.text);
             return true;
         case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
@@ -266,7 +266,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, "\"$");
                 emit_var_name(out, expr->as.field.object->as.text);
                 buf_append(out, "_");
-                buf_append_len(out, storage_field.data, storage_field.len);
+                buf_append_dsstr(out, storage_field);
                 buf_append(out, "\"");
             }
             return true;
@@ -431,7 +431,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_STRING:
             return emit_interpolated_string(e, expr, out);
         case DS_LOWER_EXPR_INT:
-            buf_append_len(out, expr->as.text.data, expr->as.text.len);
+            buf_append_dsstr(out, expr->as.text);
             return true;
         case DS_LOWER_EXPR_BOOL:
             buf_append(out, expr->as.boolean ? "true" : "false");
@@ -463,7 +463,7 @@ static void emit_index_type_lookup(const DsLowerExpr *expr, EmitBuf *out) {
     if (expr->as.index.object_is_map && expr->as.index.map_key_literal) {
         bash_single_quote(out, expr->as.index.map_key.data, expr->as.index.map_key.len);
     } else if (index->kind == DS_LOWER_EXPR_INT) {
-        buf_append_len(out, index->as.text.data, index->as.text.len);
+        buf_append_dsstr(out, index->as.text);
     } else if (index->kind == DS_LOWER_EXPR_IDENT) {
         buf_append(out, "$");
         emit_var_name(out, index->as.text);

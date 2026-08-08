@@ -81,12 +81,12 @@ bool is_safe_identifier(DsStr name) {
 
 void emit_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
 }
 
 void emit_fn_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_fn_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
 }
 
 void emit_stdlib_helper_name(EmitBuf *out, DsStr name) {
@@ -140,7 +140,7 @@ bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_dat
 static bool emit_interpolation_var(BashEmitter *e, DsStr name, const char *field, size_t field_len, EmitBuf *out) {
     (void)e;
     buf_append(out, "${__ds_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
     if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); }
     buf_append(out, "}");
     return true;
@@ -526,7 +526,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                             return false;
                         }
                         buf_append(out, "${");
-                        buf_append_len(out, field.data, field.len);
+                        buf_append_dsstr(out, field);
                         buf_append(out, ":-}");
                         i = j;
                         continue;

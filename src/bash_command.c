@@ -46,7 +46,7 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
         DsStr field = form.field;
         if (name.len == 3 && memcmp(name.data, "env", 3) == 0) {
             buf_append(out, "\"${");
-            buf_append_len(out, field.data, field.len);
+            buf_append_dsstr(out, field);
             buf_append(out, ":-}\"");
             return true;
         }
@@ -57,11 +57,11 @@ bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
         buf_append(out, "\"$");
         emit_var_name(out, name);
         buf_append(out, "_");
-        buf_append_len(out, field.data, field.len);
+        buf_append_dsstr(out, field);
         buf_append(out, "\"");
         return true;
     }
-    buf_append_len(out, word.data, word.len);
+    buf_append_dsstr(out, word);
     return true;
 }
 

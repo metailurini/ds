@@ -377,7 +377,7 @@ static void emit_case_selector_type(BashEmitter *e, const DsLowerExpr *selector,
         if (selector->as.index.object_is_map && selector->as.index.map_key_literal) {
             bash_single_quote(out, selector->as.index.map_key.data, selector->as.index.map_key.len);
         } else if (index->kind == DS_LOWER_EXPR_INT) {
-            buf_append_len(out, index->as.text.data, index->as.text.len);
+            buf_append_dsstr(out, index->as.text);
         } else if (index->kind == DS_LOWER_EXPR_IDENT) {
             buf_append(out, "$");
             emit_var_name(out, index->as.text);
@@ -406,7 +406,7 @@ static bool emit_case_pattern_condition(BashEmitter *e, const DsLowerExpr *selec
         bash_single_quote(out, decoded, len);
         free(decoded);
     } else if (pattern->kind == DS_LOWER_CASE_PATTERN_INT) {
-        buf_append_len(out, pattern->text.data, pattern->text.len);
+        buf_append_dsstr(out, pattern->text);
     } else if (pattern->kind == DS_LOWER_CASE_PATTERN_BOOL) {
         buf_append(out, pattern->boolean ? "true" : "false");
     }
@@ -692,7 +692,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                         emit_indent(&e->out, indent);
                         emit_var_name(&e->out, stmt->as.let_stmt.name);
                         buf_append(&e->out, "_");
-                        buf_append_len(&e->out, field->name.data, field->name.len);
+                        buf_append_dsstr(&e->out, field->name);
                         buf_append(&e->out, "=");
                         if (!emit_value_expr(e, entry->value, &e->out)) return false;
                         buf_append(&e->out, "\n");
@@ -730,7 +730,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 }
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, "export ");
-                buf_append_len(&e->out, env_name.data, env_name.len);
+                buf_append_dsstr(&e->out, env_name);
                 buf_append(&e->out, "=\"$");
                 emit_var_name(&e->out, tmp);
                 buf_append(&e->out, "\"\n");
@@ -887,7 +887,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                         emit_indent(&e->out, indent + 1);
                         emit_var_name(&e->out, stmt->as.for_stmt.name);
                         buf_append(&e->out, "_");
-                        buf_append_len(&e->out, field->name.data, field->name.len);
+                        buf_append_dsstr(&e->out, field->name);
                         buf_append(&e->out, "=\"${");
                         bash_emit_row_field_array_name(&e->out, iter_name, field->name);
                         buf_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
@@ -1122,7 +1122,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (!bash_emit_user_call_into_raw_var(e, stmt->as.case_stmt.selector, raw, indent)) return false;
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, "__ds_type_");
-                buf_append_len(&e->out, raw.data, raw.len);
+                buf_append_dsstr(&e->out, raw);
                 buf_append(&e->out, "=");
                 bash_single_quote(&e->out, ds_lower_value_kind_name(stmt->as.case_stmt.selector->as.call.return_kind), strlen(ds_lower_value_kind_name(stmt->as.case_stmt.selector->as.call.return_kind)));
                 buf_append(&e->out, "\n");

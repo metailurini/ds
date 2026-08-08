@@ -15,7 +15,7 @@ static const char *script_basename(const DsSource *source) {
 
 static void emit_type_var_name(EmitBuf *out, DsStr name) {
     buf_append(out, "__ds_type_");
-    buf_append_len(out, name.data, name.len);
+    buf_append_dsstr(out, name);
 }
 
 static void emit_script_type_assignment(BashEmitter *e, DsStr name, DsScriptType type) {
@@ -100,7 +100,7 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
         }
         if (decl->kind != DS_SCRIPT_DECL_ARG) {
             buf_append(&e->out, "__ds_seen_");
-            buf_append_len(&e->out, decl->name.data, decl->name.len);
+            buf_append_dsstr(&e->out, decl->name);
             buf_append(&e->out, "=false\n");
         }
     }
@@ -114,12 +114,12 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
         if (decl->kind == DS_SCRIPT_DECL_ARG) continue;
         buf_appendf(&e->out, "    --%.*s)\n", (int)decl->name.len, decl->name.data);
         buf_append(&e->out, "      $__ds_seen_");
-        buf_append_len(&e->out, decl->name.data, decl->name.len);
+        buf_append_dsstr(&e->out, decl->name);
         buf_append(&e->out, " && __ds_error 'duplicate option `--");
-        buf_append_len(&e->out, decl->name.data, decl->name.len);
+        buf_append_dsstr(&e->out, decl->name);
         buf_append(&e->out, "`'\n");
         buf_append(&e->out, "      __ds_seen_");
-        buf_append_len(&e->out, decl->name.data, decl->name.len);
+        buf_append_dsstr(&e->out, decl->name);
         buf_append(&e->out, "=true\n");
         if (decl->kind == DS_SCRIPT_DECL_FLAG) {
             emit_var_name(&e->out, decl->name);
@@ -127,15 +127,15 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
         } else {
             buf_append(&e->out, "      shift\n");
             buf_append(&e->out, "      [[ $# -gt 0 && \"$1\" != --* ]] || __ds_error 'option `--");
-            buf_append_len(&e->out, decl->name.data, decl->name.len);
+            buf_append_dsstr(&e->out, decl->name);
             buf_append(&e->out, "` requires a value'\n");
             if (decl->type == DS_SCRIPT_TYPE_INT) {
                 buf_append(&e->out, "      __ds_parse_int \"$1\" || __ds_error 'invalid int value `'\"$1\"'` for `");
-                buf_append_len(&e->out, decl->name.data, decl->name.len);
+                buf_append_dsstr(&e->out, decl->name);
                 buf_append(&e->out, "`'\n");
             } else if (decl->type == DS_SCRIPT_TYPE_BOOL) {
                 buf_append(&e->out, "      [[ \"$1\" == true || \"$1\" == false ]] || __ds_error 'invalid bool value `'\"$1\"'` for `");
-                buf_append_len(&e->out, decl->name.data, decl->name.len);
+                buf_append_dsstr(&e->out, decl->name);
                 buf_append(&e->out, "`'\n");
             }
             emit_var_name(&e->out, decl->name);
