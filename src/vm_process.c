@@ -731,8 +731,7 @@ typedef struct {
 } VmProcessSpec;
 
 static void argv_free(VmArgv *argv) {
-    for (size_t i = 0; i < argv->len; i++) free(argv->items[i]);
-    free(argv->items);
+    ds_free_cstr_array(argv->items, argv->len);
     argv->items = NULL;
     argv->len = 0;
 }

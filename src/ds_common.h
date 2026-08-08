@@ -52,7 +52,8 @@ void *ds_xcalloc(size_t count, size_t size);
 void *ds_xrealloc(void *ptr, size_t size);
 
 static inline char *ds_str_dup_cstr(const char *value) {
-    return ds_str_dup_range(value, strlen(value));
+    const char *text = value ? value : "";
+    return ds_str_dup_range(text, strlen(text));
 }
 
 static inline void ds_free_cstr_array(char **items, size_t len) {

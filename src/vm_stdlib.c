@@ -134,13 +134,8 @@ static char *vm_strdup_range(const char *data, size_t len) {
     return out;
 }
 
-static char *vm_strdup_cstr(const char *data) {
-    return vm_strdup_range(data ? data : "", data ? strlen(data) : 0);
-}
-
 static void vm_string_vec_free(VmStringVec *vec) {
-    for (size_t i = 0; i < vec->len; i++) free(vec->items[i]);
-    free(vec->items);
+    ds_free_cstr_array(vec->items, vec->len);
     vec->items = NULL;
     vec->len = 0;
     vec->cap = 0;
@@ -165,12 +160,12 @@ static bool vm_string_vec_push_owned(VmStringVec *vec, char *text) {
 }
 
 static bool vm_string_vec_push_copy(VmStringVec *vec, const char *text) {
-    return vm_string_vec_push_owned(vec, vm_strdup_cstr(text));
+    return vm_string_vec_push_owned(vec, ds_str_dup_cstr(text));
 }
 
 static char *path_join2(const char *a, const char *b) {
-    if (!a || !*a) return vm_strdup_cstr(b ? b : "");
-    if (!b || !*b) return vm_strdup_cstr(a);
+    if (!a || !*a) return ds_str_dup_cstr(b);
+    if (!b || !*b) return ds_str_dup_cstr(a);
     size_t alen = strlen(a);
     size_t blen = strlen(b);
     bool slash = a[alen - 1] == '/';
@@ -209,14 +204,14 @@ static bool has_glob_meta(const char *s) {
 static void normalize_recursive_prefix(const char *prefix, char **base_pattern, bool *strip_root_dot) {
     *strip_root_dot = false;
     if (!prefix || !*prefix) {
-        *base_pattern = vm_strdup_cstr(".");
+        *base_pattern = ds_str_dup_cstr(".");
         *strip_root_dot = true;
         return;
     }
     size_t len = strlen(prefix);
     while (len > 1 && prefix[len - 1] == '/') len--;
     if (len == 1 && prefix[0] == '.') {
-        *base_pattern = vm_strdup_cstr(".");
+        *base_pattern = ds_str_dup_cstr(".");
         return;
     }
     *base_pattern = vm_strdup_range(prefix, len);
@@ -284,8 +279,8 @@ static bool collect_dirs_recursive(Vm *vm, Instr *ins, const char *dir, VmString
 }
 
 static char *strip_leading_dot_slash_copy(const char *path, bool strip_root_dot) {
-    if (strip_root_dot && path && path[0] == '.' && path[1] == '/') return vm_strdup_cstr(path + 2);
-    return vm_strdup_cstr(path);
+    if (strip_root_dot && path && path[0] == '.' && path[1] == '/') return ds_str_dup_cstr(path + 2);
+    return ds_str_dup_cstr(path);
 }
 
 static bool collect_recursive_matches_for_dir(Vm *vm, Instr *ins, const char *dir, const char *suffix, bool strip_root_dot, VmStringVec *matches) {
@@ -293,7 +288,7 @@ static bool collect_recursive_matches_for_dir(Vm *vm, Instr *ins, const char *di
     if (!suffix || !*suffix) {
         pattern = glob_escape_literal_path(dir);
     } else if (strcmp(dir, ".") == 0 && strip_root_dot) {
-        pattern = vm_strdup_cstr(suffix);
+        pattern = ds_str_dup_cstr(suffix);
     } else {
         char *escaped_dir = glob_escape_literal_path(dir);
         pattern = path_join2(escaped_dir, suffix);
@@ -336,7 +331,7 @@ static bool stdlib_recursive_glob(Vm *vm, Instr *ins, const char *pattern, DsVal
     size_t prefix_len = (size_t)(marker - pattern);
     size_t suffix_start = prefix_len + 2;
     char *prefix = vm_strdup_range(pattern, prefix_len);
-    char *suffix = vm_strdup_cstr(pattern + suffix_start);
+    char *suffix = ds_str_dup_cstr(pattern + suffix_start);
     if (suffix[0] == '/') memmove(suffix, suffix + 1, strlen(suffix));
 
     char *base_pattern = NULL;
