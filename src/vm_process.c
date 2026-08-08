@@ -1050,6 +1050,26 @@ static bool process_exec_error_pipe(Vm *vm, const VmProcessSpec *spec, int pipe_
     return true;
 }
 
+static bool process_capture_open(Vm *vm, DsSpan span, const char *kind, FILE **out_fp, FILE **err_fp) {
+    *out_fp = tmpfile();
+    *err_fp = tmpfile();
+    if (*out_fp && *err_fp) return true;
+    ds_diag_error(vm->diag, span, "failed to create %s capture temporary files: %s", kind, strerror(errno));
+    if (*out_fp) fclose(*out_fp);
+    if (*err_fp) fclose(*err_fp);
+    *out_fp = NULL;
+    *err_fp = NULL;
+    return false;
+}
+
+static bool process_capture_read(Vm *vm, DsSpan span, const char *kind, FILE *out_fp, FILE *err_fp,
+                                 VmProcessResult *result) {
+    if (vm_read_stream(out_fp, &result->stdout_text, true, false) == VM_READ_STREAM_OK &&
+        vm_read_stream(err_fp, &result->stderr_text, true, false) == VM_READ_STREAM_OK) return true;
+    ds_diag_error(vm->diag, span, "failed to read %s capture output", kind);
+    return false;
+}
+
 /* -------------------------------------------------------------------------
  * Direct process execution
  * ------------------------------------------------------------------------- */
@@ -1090,14 +1110,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     }
 
     if (spec->capture) {
-        out_fp = tmpfile();
-        err_fp = tmpfile();
-        if (!out_fp || !err_fp) {
-            ds_diag_error(vm->diag, spec->span, "failed to create command capture temporary files: %s", strerror(errno));
-            if (out_fp) fclose(out_fp);
-            if (err_fp) fclose(err_fp);
-            return false;
-        }
+        if (!process_capture_open(vm, spec->span, "command", &out_fp, &err_fp)) return false;
     }
 
     if (!process_exec_error_pipe(vm, spec, exec_error_pipe)) {
@@ -1148,9 +1161,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     }
 
     if (spec->capture) {
-        if (vm_read_stream(out_fp, &result->stdout_text, true, false) != VM_READ_STREAM_OK ||
-            vm_read_stream(err_fp, &result->stderr_text, true, false) != VM_READ_STREAM_OK) {
-            ds_diag_error(vm->diag, spec->span, "failed to read command capture output");
+        if (!process_capture_read(vm, spec->span, "command", out_fp, err_fp, result)) {
             fclose(out_fp);
             fclose(err_fp);
             return false;
@@ -1245,13 +1256,7 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
         if (!open_redirect_target(vm, &ins->redirect, &redirect_fd)) { ok = false; goto cleanup; }
     }
     if (capture) {
-        out_fp = tmpfile();
-        err_fp = tmpfile();
-        if (!out_fp || !err_fp) {
-            ds_diag_error(vm->diag, ins->span, "failed to create pipeline capture temporary files: %s", strerror(errno));
-            ok = false;
-            goto cleanup;
-        }
+        if (!process_capture_open(vm, ins->span, "pipeline", &out_fp, &err_fp)) { ok = false; goto cleanup; }
     }
     for (size_t i = 0; i + 1 < n; i++) {
         if (pipe(pipes[i]) != 0) {
@@ -1323,12 +1328,7 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
         ds_diag_error(vm->diag, ins->span, "failed to launch pipeline command: %s", strerror(exec_errno));
     }
     if (capture) {
-        if (vm_read_stream(out_fp, &result->stdout_text, true, false) != VM_READ_STREAM_OK ||
-            vm_read_stream(err_fp, &result->stderr_text, true, false) != VM_READ_STREAM_OK) {
-            ds_diag_error(vm->diag, ins->span, "failed to read pipeline capture output");
-            ok = false;
-            goto cleanup;
-        }
+        if (!process_capture_read(vm, ins->span, "pipeline", out_fp, err_fp, result)) { ok = false; goto cleanup; }
     }
 
 cleanup:
