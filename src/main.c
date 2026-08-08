@@ -49,14 +49,13 @@ static bool is_direct_script_arg(const char *arg) {
 
 static int cli_run_tests(const char *path) {
     DsCliProgram program;
+    int rc = 1;
     if (!ds_cli_load_lower(path, &program)) {
-        ds_cli_program_free(&program);
-        return 1;
+        goto cleanup;
     }
     if (program.lowered->tests.len == 0) {
         fprintf(stderr, "error: no tests found in `%s`\n", path);
-        ds_cli_program_free(&program);
-        return 1;
+        goto cleanup;
     }
     size_t passed = 0;
     size_t failed = 0;
@@ -73,8 +72,10 @@ static int cli_run_tests(const char *path) {
         }
     }
     fprintf(stdout, "\n%zu tests, %zu passed, %zu failed\n", passed + failed, passed, failed);
+    rc = failed == 0 ? 0 : 1;
+cleanup:
     ds_cli_program_free(&program);
-    return failed == 0 ? 0 : 1;
+    return rc;
 }
 
 static bool looks_like_script_path(const char *arg) {
@@ -131,17 +132,16 @@ static int cli_format(int argc, char **argv) {
     if (check && write) return usage_error("`ds fmt --check --write` is invalid");
 
     DsCliProgram program;
+    int rc = 1;
     if (!ds_cli_load_parse(path, &program)) {
-        ds_cli_program_free(&program);
-        return 1;
+        goto cleanup_program;
     }
     DsString formatted;
     bool ok = ds_format_source(&program.source, program.ast, &formatted, &program.diag);
     if (!ok) {
-        ds_cli_program_free(&program);
-        return 1;
+        goto cleanup_program;
     }
-    int rc = 0;
+    rc = 0;
     if (check) {
         bool differs = formatted.len != program.source.len;
         if (!differs && memcmp(formatted.data, program.source.data, formatted.len) != 0) differs = true;
@@ -155,6 +155,27 @@ static int cli_format(int argc, char **argv) {
         fwrite(formatted.data, 1, formatted.len, stdout);
     }
     ds_string_free(&formatted);
+cleanup_program:
+    ds_cli_program_free(&program);
+    return rc;
+}
+
+static int cli_inspect(const char *cmd, const char *path) {
+    DsCliProgram program;
+    int rc = 1;
+    if (strcmp(cmd, "tokens") == 0) {
+        rc = ds_cli_load_and_lex(path, &program) ? 0 : 1;
+        if (rc == 0) ds_tokens_print(&program.tokens, stdout);
+    } else if (strcmp(cmd, "ast") == 0) {
+        rc = ds_cli_load_parse(path, &program) ? 0 : 1;
+        if (rc == 0) ds_ast_print(program.ast, stdout);
+    } else if (strcmp(cmd, "hir") == 0) {
+        rc = ds_cli_load_lower(path, &program) ? 0 : 1;
+        if (rc == 0 && !ds_hir_dump_program(program.lowered, stdout)) rc = 1;
+    } else if (strcmp(cmd, "bytecode") == 0) {
+        rc = ds_cli_load_lower(path, &program) ? 0 : 1;
+        if (rc == 0 && !ds_bytecode_dump_program(&program.source, program.lowered, stdout, &program.diag)) rc = 1;
+    }
     ds_cli_program_free(&program);
     return rc;
 }
@@ -252,34 +273,9 @@ int main(int argc, char **argv) {
 
     const char *cmd = argv[1];
     const char *path = argv[2];
-    DsCliProgram program;
-
-    if (strcmp(cmd, "tokens") == 0) {
-        int rc = ds_cli_load_and_lex(path, &program) ? 0 : 1;
-        if (rc == 0) ds_tokens_print(&program.tokens, stdout);
-        ds_cli_program_free(&program);
-        return rc;
-    }
-
-    if (strcmp(cmd, "ast") == 0) {
-        int rc = ds_cli_load_parse(path, &program) ? 0 : 1;
-        if (rc == 0) ds_ast_print(program.ast, stdout);
-        ds_cli_program_free(&program);
-        return rc;
-    }
-
-    if (strcmp(cmd, "hir") == 0) {
-        int rc = ds_cli_load_lower(path, &program) ? 0 : 1;
-        if (rc == 0 && !ds_hir_dump_program(program.lowered, stdout)) rc = 1;
-        ds_cli_program_free(&program);
-        return rc;
-    }
-
-    if (strcmp(cmd, "bytecode") == 0) {
-        int rc = ds_cli_load_lower(path, &program) ? 0 : 1;
-        if (rc == 0 && !ds_bytecode_dump_program(&program.source, program.lowered, stdout, &program.diag)) rc = 1;
-        ds_cli_program_free(&program);
-        return rc;
+    if (strcmp(cmd, "tokens") == 0 || strcmp(cmd, "ast") == 0 ||
+        strcmp(cmd, "hir") == 0 || strcmp(cmd, "bytecode") == 0) {
+        return cli_inspect(cmd, path);
     }
 
     return usage_error("unknown command `%s`", cmd);
