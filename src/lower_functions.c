@@ -198,9 +198,7 @@ static AstKindEnv ast_kind_env_clone(const AstKindEnv *env) {
 static void ast_kind_env_free(AstKindEnv *env) {
     for (size_t i = 0; i < env->len; i++) row_schema_free(&env->items[i].row_schema);
     free(env->items);
-    env->items = NULL;
-    env->len = 0;
-    env->cap = 0;
+    *env = (AstKindEnv){0};
 }
 
 typedef enum {
@@ -299,9 +297,7 @@ static InferEnv infer_env_clone(const InferEnv *env) {
 
 static void infer_env_free(InferEnv *env) {
     free(env->items);
-    env->items = NULL;
-    env->len = 0;
-    env->cap = 0;
+    *env = (InferEnv){0};
 }
 
 static const char *infer_kind_name(DsLowerValueKind kind) {

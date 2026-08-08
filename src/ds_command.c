@@ -11,9 +11,7 @@ const char *ds_redirect_shell_op(DsRedirectKind kind) {
 }
 
 void ds_word_vec_init(DsWordVec *vec) {
-    vec->items = NULL;
-    vec->len = 0;
-    vec->cap = 0;
+    *vec = (DsWordVec){0};
 }
 
 bool ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src) {
@@ -36,8 +34,7 @@ void ds_word_vec_free(DsWordVec *vec) {
 }
 
 void ds_command_stage_init(DsCommandStage *stage) {
-    memset(stage, 0, sizeof(*stage));
-    ds_word_vec_init(&stage->words);
+    *stage = (DsCommandStage){0};
 }
 
 bool ds_command_stage_clone(DsCommandStage *dst, const DsCommandStage *src) {
@@ -50,13 +47,11 @@ bool ds_command_stage_clone(DsCommandStage *dst, const DsCommandStage *src) {
 void ds_command_stage_free(DsCommandStage *stage) {
     if (!stage) return;
     ds_word_vec_free(&stage->words);
-    memset(&stage->span, 0, sizeof(stage->span));
+    *stage = (DsCommandStage){0};
 }
 
 void ds_command_stage_vec_init(DsCommandStageVec *vec) {
-    vec->items = NULL;
-    vec->len = 0;
-    vec->cap = 0;
+    *vec = (DsCommandStageVec){0};
 }
 
 bool ds_command_stage_vec_clone(DsCommandStageVec *dst, const DsCommandStageVec *src) {
@@ -76,8 +71,7 @@ void ds_command_stage_vec_free(DsCommandStageVec *vec) {
 }
 
 void ds_redirect_init(DsRedirect *redirect) {
-    memset(redirect, 0, sizeof(*redirect));
-    redirect->kind = DS_REDIRECT_NONE;
+    *redirect = (DsRedirect){.kind = DS_REDIRECT_NONE};
 }
 
 bool ds_redirect_clone(DsRedirect *dst, const DsRedirect *src) {
@@ -96,11 +90,7 @@ void ds_redirect_free(DsRedirect *redirect) {
 }
 
 void ds_command_init(DsCommand *command, DsCommandKind kind, DsSpan span) {
-    memset(command, 0, sizeof(*command));
-    command->kind = kind;
-    command->span = span;
-    ds_command_stage_vec_init(&command->stages);
-    ds_redirect_init(&command->redirect);
+    *command = (DsCommand){.kind = kind, .span = span};
 }
 
 bool ds_command_clone(DsCommand *dst, const DsCommand *src) {
@@ -114,6 +104,5 @@ void ds_command_free(DsCommand *command) {
     if (!command) return;
     ds_command_stage_vec_free(&command->stages);
     ds_redirect_free(&command->redirect);
-    command->kind = DS_COMMAND_PLAIN;
-    memset(&command->span, 0, sizeof(command->span));
+    *command = (DsCommand){.kind = DS_COMMAND_PLAIN};
 }

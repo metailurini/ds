@@ -40,10 +40,7 @@ bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind) {
 }
 
 void scope_init(Scope *scope, Scope *parent) {
-    scope->parent = parent;
-    scope->items = NULL;
-    scope->len = 0;
-    scope->cap = 0;
+    *scope = (Scope){.parent = parent};
 }
 
 void scope_free(Scope *scope) {

@@ -426,9 +426,7 @@ void ds_tokens_free(DsTokenVec *tokens) {
         free(tokens->items[i].text.data);
     }
     free(tokens->items);
-    tokens->items = NULL;
-    tokens->len = 0;
-    tokens->cap = 0;
+    *tokens = (DsTokenVec){0};
 }
 
 void ds_tokens_print(const DsTokenVec *tokens, FILE *out) {

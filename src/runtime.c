@@ -10,9 +10,7 @@ static const hashmap *ds_map_impl_const(const DsMap *map) {
 }
 
 void ds_string_init(DsString *s) {
-    s->data = NULL;
-    s->len = 0;
-    s->cap = 0;
+    *s = (DsString){0};
 }
 
 bool ds_string_append_range(DsString *s, const char *data, size_t len) {
@@ -58,9 +56,7 @@ bool ds_string_from_cstr(DsString *s, const char *text) {
 
 void ds_string_free(DsString *s) {
     free(s->data);
-    s->data = NULL;
-    s->len = 0;
-    s->cap = 0;
+    *s = (DsString){0};
 }
 
 DsValue ds_value_null(void) {
@@ -273,9 +269,7 @@ int ds_value_compare(const DsValue *left, const DsValue *right) {
 }
 
 void ds_array_init(DsArray *array) {
-    array->items = NULL;
-    array->len = 0;
-    array->cap = 0;
+    *array = (DsArray){0};
 }
 
 bool ds_array_push(DsArray *array, void *item) {

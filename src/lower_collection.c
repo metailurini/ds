@@ -86,18 +86,14 @@ void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span)
 
 void row_schema_init(DsLowerRowSchema *schema) {
     if (!schema) return;
-    schema->items = NULL;
-    schema->len = 0;
-    schema->cap = 0;
+    *schema = (DsLowerRowSchema){0};
 }
 
 void row_schema_free(DsLowerRowSchema *schema) {
     if (!schema) return;
     for (size_t i = 0; i < schema->len; i++) free(schema->items[i].name.data);
     free(schema->items);
-    schema->items = NULL;
-    schema->len = 0;
-    schema->cap = 0;
+    *schema = (DsLowerRowSchema){0};
 }
 
 bool row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {

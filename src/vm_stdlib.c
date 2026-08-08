@@ -132,9 +132,7 @@ static char *vm_strdup_range(const char *data, size_t len) {
 
 static void vm_string_vec_free(VmStringVec *vec) {
     ds_free_cstr_array(vec->items, vec->len);
-    vec->items = NULL;
-    vec->len = 0;
-    vec->cap = 0;
+    *vec = (VmStringVec){0};
 }
 
 static DsValue sorted_unique_string_array(VmStringVec *items) {
