@@ -1,4 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
 #include "ds_command_facts.h"
 
 #include "vm_internal.h"

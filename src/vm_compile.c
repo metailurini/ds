@@ -1,4 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
 
 #include "ds_regex.h"
 #include "vm_internal.h"

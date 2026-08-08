@@ -71,7 +71,7 @@ ds_compile_unit() {
   local root="$1" group="$2" unit="$3" output="$4"
   local -a sources
   mapfile -t sources < <(ds_source_group "$root" "$group")
-  cc -std=c99 -Wall -Wextra -Wpedantic ${DS_UNIT_EXTRA_CFLAGS:-} \
+  cc -std=c99 -Wall -Wextra -Wpedantic -D_XOPEN_SOURCE=700 -D_POSIX_C_SOURCE=200809L ${DS_UNIT_EXTRA_CFLAGS:-} \
     -I"$root/include" -I"$root/src" \
     "$unit" "${sources[@]}" \
     -o "$output"

@@ -1,4 +1,3 @@
-#define _XOPEN_SOURCE 700
 #include "cli_program.h"
 
 #include <errno.h>
