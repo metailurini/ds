@@ -47,7 +47,7 @@ static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr bod
             expect_operand = false;
             continue;
         }
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+        if (ds_is_ident_start(c)) {
             size_t name_start = i++;
             while (i < body.len && ds_command_name_char(body.data[i])) i++;
             if (i < body.len && body.data[i] == '(') {
@@ -64,7 +64,7 @@ static bool lower_validate_arithmetic_interpolation_text(Lower *lower, DsStr bod
             SymKind value_kind = sym->kind;
             if (i < body.len && body.data[i] == '.') {
                 size_t field_start = ++i;
-                if (i < body.len && ((body.data[i] >= 'A' && body.data[i] <= 'Z') || (body.data[i] >= 'a' && body.data[i] <= 'z') || body.data[i] == '_')) {
+                if (i < body.len && ds_is_ident_start(body.data[i])) {
                     i++;
                     while (i < body.len && ds_command_name_char(body.data[i])) i++;
                 }
@@ -502,9 +502,7 @@ static bool command_quoted_word_needs_value_call_materialization(Lower *lower, D
 static bool command_word_is_index_field_access(DsStr word) {
     if (word.len == 0 || word.data[0] == '$' || word.data[0] == '"') return false;
     size_t i = 0;
-    if (!((word.data[i] >= 'A' && word.data[i] <= 'Z') ||
-          (word.data[i] >= 'a' && word.data[i] <= 'z') ||
-          word.data[i] == '_')) {
+    if (!ds_is_ident_start(word.data[i])) {
         return false;
     }
     i++;
@@ -519,9 +517,7 @@ static bool command_word_is_index_field_access(DsStr word) {
     }
     if (depth != 0 || i >= word.len || word.data[i] != '.') return false;
     i++;
-    if (i >= word.len || !((word.data[i] >= 'A' && word.data[i] <= 'Z') ||
-                           (word.data[i] >= 'a' && word.data[i] <= 'z') ||
-                           word.data[i] == '_')) {
+    if (i >= word.len || !ds_is_ident_start(word.data[i])) {
         return false;
     }
     i++;

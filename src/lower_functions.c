@@ -353,16 +353,11 @@ static void infer_constrain_expr(InferCtx *ctx, InferEnv *env, const DsExpr *exp
 
 static bool infer_parse_ident_span(const char *data, size_t start, size_t end, size_t *cursor, DsStr *name_out) {
     size_t i = *cursor;
-    while (i < end && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r')) i++;
+    ds_skip_ascii_ws(data, end, &i);
     if (i >= end) return false;
-    char c = data[i];
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
+    if (!ds_is_ident_start(data[i])) return false;
     size_t name_start = i++;
-    while (i < end) {
-        c = data[i];
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) break;
-        i++;
-    }
+    while (i < end && ds_is_ident_continue(data[i])) i++;
     *cursor = i;
     *name_out = (DsStr){(char *)data + name_start, i - name_start};
     (void)start;
@@ -749,12 +744,12 @@ static void infer_stmt(InferCtx *ctx, InferEnv *env, const DsStmt *stmt) {
 static bool infer_name_boundary(const char *data, size_t len, size_t pos, size_t name_len) {
     if (pos > 0) {
         char c = data[pos - 1];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') return false;
+        if (ds_is_ident_continue(c)) return false;
     }
     size_t end = pos + name_len;
     if (end < len) {
         char c = data[end];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') return false;
+        if (ds_is_ident_continue(c)) return false;
     }
     return true;
 }
@@ -763,11 +758,9 @@ static bool infer_extract_ident_arg(const char *data, size_t start, size_t end, 
     while (start < end && (data[start] == ' ' || data[start] == '\t')) start++;
     while (end > start && (data[end - 1] == ' ' || data[end - 1] == '\t')) end--;
     if (start >= end) return false;
-    char c = data[start];
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')) return false;
+    if (!ds_is_ident_start(data[start])) return false;
     for (size_t i = start + 1; i < end; i++) {
-        c = data[i];
-        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
+        if (!ds_is_ident_continue(data[i])) return false;
     }
     *name_out = (DsStr){(char *)data + start, end - start};
     return true;

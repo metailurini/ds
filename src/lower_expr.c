@@ -91,10 +91,6 @@ static void validate_dir_walk_ext_literal_arg(Lower *lower, DsStr helper_name, c
     }
 }
 
-bool is_name_char(char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
-}
-
 void lower_map_entry_vec_push(DsLowerMapEntryVec *vec, DsLowerMapEntry entry) {
     DS_VEC_PUSH(vec, entry, 8);
 }
