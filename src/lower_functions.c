@@ -114,45 +114,31 @@ typedef struct {
     size_t cap;
 } AstKindEnv;
 
+static AstKindBinding *ast_kind_env_get_or_add(AstKindEnv *env, DsStr name) {
+    for (size_t i = env->len; i > 0; i--) {
+        if (ds_str_eq(env->items[i - 1].name, name)) return &env->items[i - 1];
+    }
+    DS_VEC_PUSH(env, ((AstKindBinding){.name = name}), 8);
+    return &env->items[env->len - 1];
+}
+
 static void ast_kind_env_push(AstKindEnv *env, DsStr name, DsLowerValueKind kind) {
     if (kind == DS_LOWER_VALUE_UNKNOWN) return;
-    for (size_t i = env->len; i > 0; i--) {
-        if (ds_str_eq(env->items[i - 1].name, name)) {
-            row_schema_free(&env->items[i - 1].row_schema);
-            env->items[i - 1].kind = kind;
-            env->items[i - 1].is_row = false;
-            env->items[i - 1].is_row_array = false;
-            return;
-        }
-    }
-    AstKindBinding binding;
-    memset(&binding, 0, sizeof(binding));
-    binding.name = name;
-    binding.kind = kind;
-    row_schema_init(&binding.row_schema);
-    DS_VEC_PUSH(env, binding, 8);
+    AstKindBinding *binding = ast_kind_env_get_or_add(env, name);
+    row_schema_free(&binding->row_schema);
+    binding->kind = kind;
+    binding->is_row = false;
+    binding->is_row_array = false;
 }
 
 static void ast_kind_env_push_row_schema(AstKindEnv *env, DsStr name, DsLowerValueKind kind, const DsLowerRowSchema *schema, bool is_array) {
     if (!schema || (kind != DS_LOWER_VALUE_MAP && kind != DS_LOWER_VALUE_ARRAY)) return;
-    for (size_t i = env->len; i > 0; i--) {
-        if (ds_str_eq(env->items[i - 1].name, name)) {
-            row_schema_free(&env->items[i - 1].row_schema);
-            env->items[i - 1].kind = kind;
-            env->items[i - 1].is_row = !is_array;
-            env->items[i - 1].is_row_array = is_array;
-            row_schema_clone(schema, &env->items[i - 1].row_schema);
-            return;
-        }
-    }
-    AstKindBinding binding;
-    memset(&binding, 0, sizeof(binding));
-    binding.name = name;
-    binding.kind = kind;
-    binding.is_row = !is_array;
-    binding.is_row_array = is_array;
-    row_schema_clone(schema, &binding.row_schema);
-    DS_VEC_PUSH(env, binding, 8);
+    AstKindBinding *binding = ast_kind_env_get_or_add(env, name);
+    row_schema_free(&binding->row_schema);
+    binding->kind = kind;
+    binding->is_row = !is_array;
+    binding->is_row_array = is_array;
+    row_schema_clone(schema, &binding->row_schema);
 }
 
 static bool ast_kind_env_find(const AstKindEnv *env, DsStr name, DsLowerValueKind *kind_out) {
