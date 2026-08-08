@@ -1006,6 +1006,21 @@ static bool vm_make_foreground_group(pid_t pgid, int *tty_fd, pid_t *shell_pgid)
     return true;
 }
 
+static bool vm_wait_child(Vm *vm, pid_t pid, pid_t pgid, DsSpan span, const char *kind,
+                          const char *command, int *status) {
+    while (waitpid(pid, status, 0) < 0) {
+        if (errno == EINTR) {
+            int sig = vm_take_pending_signal();
+            if (sig) vm_forward_signal_to_child_group(vm, pgid, sig);
+            continue;
+        }
+        ds_diag_error(vm->diag, span, "failed waiting for %s `%s`: %s", kind, command, strerror(errno));
+        return false;
+    }
+    vm_note_wait_status_signal(vm, *status);
+    return true;
+}
+
 static bool vm_wait_foreground_child(Vm *vm, pid_t pid, pid_t pgid, const VmProcessSpec *spec, int *status) {
     /*
      * Direct foreground commands get their own process group when possible.
@@ -1016,18 +1031,11 @@ static bool vm_wait_foreground_child(Vm *vm, pid_t pid, pid_t pgid, const VmProc
     int tty_fd = -1;
     pid_t shell_pgid = -1;
     vm_make_foreground_group(pgid, &tty_fd, &shell_pgid);
-    while (waitpid(pid, status, 0) < 0) {
-        if (errno == EINTR) {
-            int sig = vm_take_pending_signal();
-            if (sig) vm_forward_signal_to_child_group(vm, pgid, sig);
-            continue;
-        }
+    if (!vm_wait_child(vm, pid, pgid, spec->span, "command", spec->argv.items[0], status)) {
         vm_restore_terminal_pgrp(tty_fd, shell_pgid);
-        ds_diag_error(vm->diag, spec->span, "failed waiting for command `%s`: %s", spec->argv.items[0], strerror(errno));
         return false;
     }
     vm_restore_terminal_pgrp(tty_fd, shell_pgid);
-    vm_note_wait_status_signal(vm, *status);
     return true;
 }
 
@@ -1066,6 +1074,18 @@ static bool process_capture_read(Vm *vm, DsSpan span, const char *kind, FILE *ou
     return false;
 }
 
+static void process_child_exec_argv(const VmProcessSpec *spec) {
+    execvp(spec->argv.items[0], spec->argv.items);
+    int exec_errno = errno;
+    if (spec->exec_error_fd >= 0) {
+        ssize_t ignored = write(spec->exec_error_fd, &exec_errno, sizeof(exec_errno));
+        (void)ignored;
+        close(spec->exec_error_fd);
+    }
+    if (spec->capture) fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(exec_errno));
+    _exit(127);
+}
+
 /* -------------------------------------------------------------------------
  * Direct process execution
  * ------------------------------------------------------------------------- */
@@ -1080,15 +1100,7 @@ static void process_child_exec(const VmProcessSpec *spec, int redirect_fd, FILE 
         else { dup2(redirect_fd, STDOUT_FILENO); dup2(redirect_fd, STDERR_FILENO); }
     }
     if (redirect_fd >= 0) close(redirect_fd);
-    execvp(spec->argv.items[0], spec->argv.items);
-    int exec_errno = errno;
-    if (spec->exec_error_fd >= 0) {
-        ssize_t ignored = write(spec->exec_error_fd, &exec_errno, sizeof(exec_errno));
-        (void)ignored;
-        close(spec->exec_error_fd);
-    }
-    if (spec->capture) fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(exec_errno));
-    _exit(127);
+    process_child_exec_argv(spec);
 }
 
 static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result) {
@@ -1210,15 +1222,7 @@ static void pipeline_child_exec(VmProcessSpec *specs, size_t stage_count, size_t
     }
     close_pipe_array(pipes, stage_count > 0 ? stage_count - 1 : 0);
     if (redirect_fd >= 0) close(redirect_fd);
-    execvp(spec->argv.items[0], spec->argv.items);
-    int exec_errno = errno;
-    if (spec->exec_error_fd >= 0) {
-        ssize_t ignored = write(spec->exec_error_fd, &exec_errno, sizeof(exec_errno));
-        (void)ignored;
-        close(spec->exec_error_fd);
-    }
-    if (spec->capture) fprintf(stderr, "ds: failed to launch command `%s`: %s\n", spec->argv.items[0], strerror(exec_errno));
-    _exit(127);
+    process_child_exec_argv(spec);
 }
 
 static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcessResult *result) {
@@ -1295,18 +1299,12 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
     if (pgid > 0) vm_make_foreground_group(pgid, &tty_fd, &shell_pgid);
     for (size_t i = 0; i < n; i++) {
         int status = 0;
-        while (waitpid(pids[i], &status, 0) < 0) {
-            if (errno == EINTR) {
-                int sig = vm_take_pending_signal();
-                if (sig) vm_forward_signal_to_child_group(vm, pgid, sig);
-                continue;
-            }
-            ds_diag_error(vm->diag, ins->span, "failed waiting for pipeline stage `%s`: %s", specs[i].argv.len ? specs[i].argv.items[0] : "<stage>", strerror(errno));
+        const char *command = specs[i].argv.len ? specs[i].argv.items[0] : "<stage>";
+        if (!vm_wait_child(vm, pids[i], pgid, ins->span, "pipeline stage", command, &status)) {
             vm_restore_terminal_pgrp(tty_fd, shell_pgid);
             ok = false;
             goto cleanup;
         }
-        vm_note_wait_status_signal(vm, status);
         codes[i] = process_status_code(status);
         if (codes[i] != 0) {
             bool stage_sigpipe = process_status_is_signal(status, SIGPIPE);
