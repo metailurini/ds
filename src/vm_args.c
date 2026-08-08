@@ -82,8 +82,9 @@ static bool set_var_from_decl(Vm *vm, const DsLowerScriptDecl *decl, const char 
         }
         value = ds_value_bool(parsed);
     }
-    ds_map_set(&vm->scope->vars, decl->name, value);
-    return true;
+    if (ds_map_set(&vm->scope->vars, decl->name, value)) return true;
+    ds_diag_error(vm->diag, span, "failed to bind script value `%.*s`", (int)decl->name.len, decl->name.data);
+    return false;
 }
 
 static bool set_default_from_decl(Vm *vm, const DsLowerScriptDecl *decl) {
@@ -97,8 +98,9 @@ static bool set_default_from_decl(Vm *vm, const DsLowerScriptDecl *decl) {
     } else {
         value = ds_value_bool(decl->default_bool);
     }
-    ds_map_set(&vm->scope->vars, decl->name, value);
-    return true;
+    if (ds_map_set(&vm->scope->vars, decl->name, value)) return true;
+    ds_diag_error(vm->diag, decl->span, "failed to bind script default `%.*s`", (int)decl->name.len, decl->name.data);
+    return false;
 }
 
 int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **argv) {
@@ -113,7 +115,10 @@ int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **arg
     bool *seen = (bool *)ds_xcalloc(program->script_decls.len, sizeof(bool));
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-        if (decl->kind != DS_SCRIPT_DECL_ARG) set_default_from_decl(vm, decl);
+        if (decl->kind != DS_SCRIPT_DECL_ARG && !set_default_from_decl(vm, decl)) {
+            free(seen);
+            return 1;
+        }
     }
 
     size_t next_arg = 0;
@@ -145,7 +150,11 @@ int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **arg
             seen[idx] = true;
             const DsLowerScriptDecl *decl = &program->script_decls.items[idx];
             if (decl->kind == DS_SCRIPT_DECL_FLAG) {
-                ds_map_set(&vm->scope->vars, decl->name, ds_value_bool(true));
+                if (!ds_map_set(&vm->scope->vars, decl->name, ds_value_bool(true))) {
+                    ds_diag_error(vm->diag, decl->span, "failed to bind script flag `%.*s`", (int)decl->name.len, decl->name.data);
+                    free(seen);
+                    return 1;
+                }
             } else {
                 if (i + 1 >= argc || strncmp(argv[i + 1], "--", 2) == 0) {
                     ds_diag_error(vm->diag, decl->span, "option `%s` requires a value", arg);

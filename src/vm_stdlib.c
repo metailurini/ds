@@ -1058,7 +1058,11 @@ static bool stdlib_regex_match(Vm *vm, Instr *ins, DsValue *out) {
         return false;
     }
 
-    DsValue map = ds_value_map();
+    DsValue map;
+    if (!ds_value_map_init(&map)) {
+        ds_diag_error(vm->diag, ins->span, "failed to initialize regex result map");
+        return false;
+    }
     bool matched = rc == 0;
     if (!regex_map_set_bool(&map, "matched", matched) ||
         !regex_map_set_string(&map, "full", matched ? text + matches[0].rm_so : "", matched ? (size_t)(matches[0].rm_eo - matches[0].rm_so) : 0) ||

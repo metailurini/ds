@@ -155,6 +155,11 @@ int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram 
     vm.source = source;
     vm.options = options;
     vm.scope = scope_new(NULL);
+    if (!vm.scope) {
+        ds_diag_error(diag, ds_span_zero(source), "failed to initialize runtime scope");
+        program_free(&p);
+        return 1;
+    }
     ensure_regs(&vm);
 
     int rc = 0;
@@ -425,7 +430,7 @@ dispatch_loop:
                 break;
             }
             case OP_PUSH_SCOPE:
-                vm_push_scope(&vm);
+                if (!vm_push_scope(&vm)) { ds_diag_error(diag, ins->span, "failed to initialize runtime scope"); rc = 1; goto done; }
                 ip++;
                 break;
             case OP_POP_SCOPE:
@@ -466,8 +471,16 @@ dispatch_loop:
                 break;
             }
             case OP_MAP_LITERAL: {
-                DsValue map = ds_value_map();
-                for (size_t i = 0; i < ins->arg_count; i++) ds_map_set(&map.as.map, ins->words[i], ds_value_copy(&vm.regs[ins->args[i]]));
+                DsValue map;
+                if (!ds_value_map_init(&map)) { ds_diag_error(diag, ins->span, "failed to initialize map"); rc = 1; goto done; }
+                for (size_t i = 0; i < ins->arg_count; i++) {
+                    if (!ds_map_set(&map.as.map, ins->words[i], ds_value_copy(&vm.regs[ins->args[i]]))) {
+                        ds_value_free(&map);
+                        ds_diag_error(diag, ins->span, "failed to initialize map entry");
+                        rc = 1;
+                        goto done;
+                    }
+                }
                 set_reg(&vm, ins->dst, map);
                 ip++;
                 break;
@@ -526,9 +539,9 @@ dispatch_loop:
                 if (iter->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "runtime for loop iterable must be an array"); rc = 1; goto done; }
                 if (!ins->loop_active) { ins->loop_active = true; ins->loop_index = 0; }
                 if (ins->loop_index >= iter->as.array.len) { ins->loop_active = false; ip = (size_t)ins->target; break; }
-                vm_push_scope(&vm);
+                if (!vm_push_scope(&vm)) { ds_diag_error(diag, ins->span, "failed to initialize loop scope"); rc = 1; goto done; }
                 DsStr key = {ins->name, strlen(ins->name)};
-                ds_map_set(&vm.scope->vars, key, ds_value_copy((DsValue *)iter->as.array.items[ins->loop_index]));
+                if (!ds_map_set(&vm.scope->vars, key, ds_value_copy((DsValue *)iter->as.array.items[ins->loop_index]))) { ds_diag_error(diag, ins->span, "failed to bind loop variable"); rc = 1; goto done; }
                 ins->loop_index++;
                 ip++;
                 break;
@@ -558,13 +571,15 @@ dispatch_loop:
                 DsStr map_key = ins->loop_keys[ins->loop_index];
                 DsValue *found = ds_map_get(&iter->as.map, map_key);
                 if (!found) { ds_diag_error(diag, ins->span, "runtime map loop key disappeared during iteration"); rc = 1; goto done; }
-                vm_push_scope(&vm);
+                if (!vm_push_scope(&vm)) { ds_diag_error(diag, ins->span, "failed to initialize loop scope"); rc = 1; goto done; }
                 DsString key_text;
                 ds_string_from_range(&key_text, ds_str_data(map_key), map_key.len);
                 DsStr key_var = {ins->name, strlen(ins->name)};
                 DsStr value_var = {ins->value_name, strlen(ins->value_name)};
-                ds_map_set(&vm.scope->vars, key_var, ds_value_string_take(&key_text));
-                ds_map_set(&vm.scope->vars, value_var, ds_value_copy(found));
+                if (!ds_map_set(&vm.scope->vars, key_var, ds_value_string_take(&key_text)) ||
+                    !ds_map_set(&vm.scope->vars, value_var, ds_value_copy(found))) {
+                    ds_diag_error(diag, ins->span, "failed to bind map loop variables"); rc = 1; goto done;
+                }
                 ins->loop_index++;
                 ip++;
                 break;
@@ -575,9 +590,9 @@ dispatch_loop:
                 if (start->kind != DS_VALUE_INT || end->kind != DS_VALUE_INT) { ds_diag_error(diag, ins->span, "runtime range bounds must be ints"); rc = 1; goto done; }
                 if (!ins->loop_active) { ins->loop_active = true; ins->loop_current = start->as.integer; }
                 if (ins->loop_current > end->as.integer) { ins->loop_active = false; ip = (size_t)ins->target; break; }
-                vm_push_scope(&vm);
+                if (!vm_push_scope(&vm)) { ds_diag_error(diag, ins->span, "failed to initialize loop scope"); rc = 1; goto done; }
                 DsStr key = {ins->name, strlen(ins->name)};
-                ds_map_set(&vm.scope->vars, key, ds_value_int(ins->loop_current));
+                if (!ds_map_set(&vm.scope->vars, key, ds_value_int(ins->loop_current))) { ds_diag_error(diag, ins->span, "failed to bind loop variable"); rc = 1; goto done; }
                 ins->loop_current++;
                 ip++;
                 break;

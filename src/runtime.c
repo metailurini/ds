@@ -75,10 +75,14 @@ DsValue ds_value_array(void) {
     return (DsValue){.kind = DS_VALUE_ARRAY};
 }
 
+bool ds_value_map_init(DsValue *out) {
+    *out = (DsValue){.kind = DS_VALUE_MAP};
+    return ds_map_init(&out->as.map);
+}
+
 DsValue ds_value_map(void) {
-    DsValue v = ds_value_null();
-    v.kind = DS_VALUE_MAP;
-    ds_map_init(&v.as.map);
+    DsValue v;
+    ds_value_map_init(&v);
     return v;
 }
 
@@ -268,12 +272,16 @@ void ds_array_free(DsArray *array) {
     ds_array_init(array);
 }
 
-void ds_map_init(DsMap *map) {
-    map->impl = ds_xcalloc(1, sizeof(hashmap));
+bool ds_map_init(DsMap *map) {
+    if (!map) return false;
+    map->impl = calloc(1, sizeof(hashmap));
+    if (!map->impl) return false;
     if (hm_init(ds_map_impl(map)) != HM_OK) {
-        fprintf(stderr, "fatal: failed to initialize hashmap\n");
-        exit(2);
+        free(map->impl);
+        map->impl = NULL;
+        return false;
     }
+    return true;
 }
 
 DsValue *ds_map_get(DsMap *map, DsStr key) {
@@ -283,6 +291,10 @@ DsValue *ds_map_get(DsMap *map, DsStr key) {
 }
 
 bool ds_map_set(DsMap *map, DsStr key, DsValue value) {
+    if (!map || !map->impl) {
+        ds_value_free(&value);
+        return false;
+    }
     DsValue *boxed = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
     void *old = NULL;
     hm_result rc;

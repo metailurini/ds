@@ -67,6 +67,7 @@ DsValue ds_value_bool(bool value);
 DsValue ds_value_int(int64_t value);
 DsValue ds_value_array(void);
 DsValue ds_value_map(void);
+bool ds_value_map_init(DsValue *out);
 DsValue ds_value_string_take(DsString *string);
 DsValue ds_value_command_result_take(DsString *stdout_text, DsString *stderr_text, int64_t code);
 DsValue ds_value_copy(const DsValue *value);
@@ -80,7 +81,7 @@ bool ds_array_push(DsArray *array, void *item);
 void ds_array_clear(DsArray *array);
 void ds_array_free(DsArray *array);
 
-void ds_map_init(DsMap *map);
+bool ds_map_init(DsMap *map);
 bool ds_map_set(DsMap *map, DsStr key, DsValue value);
 DsValue *ds_map_get(DsMap *map, DsStr key);
 size_t ds_map_len(const DsMap *map);

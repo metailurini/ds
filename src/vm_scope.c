@@ -2,7 +2,10 @@
 
 VmScope *scope_new(VmScope *parent) {
     VmScope *scope = (VmScope *)ds_xcalloc(1, sizeof(VmScope));
-    ds_map_init(&scope->vars);
+    if (!ds_map_init(&scope->vars)) {
+        free(scope);
+        return NULL;
+    }
     scope->parent = parent;
     return scope;
 }
@@ -21,8 +24,11 @@ void scope_free_chain(VmScope *scope) {
     }
 }
 
-void vm_push_scope(Vm *vm) {
-    vm->scope = scope_new(vm->scope);
+bool vm_push_scope(Vm *vm) {
+    VmScope *scope = scope_new(vm->scope);
+    if (!scope) return false;
+    vm->scope = scope;
+    return true;
 }
 
 void vm_pop_scope(Vm *vm) {
@@ -75,6 +81,10 @@ bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
     FnMeta *fn = &vm->program->functions[ins->target];
     VmScope *caller_scope = vm->scope;
     VmScope *scope = scope_new(caller_scope);
+    if (!scope) {
+        ds_diag_error(vm->diag, ins->span, "failed to initialize function scope");
+        return false;
+    }
     for (size_t i = 0; i < fn->param_count; i++) {
         DsValue value = ds_value_null();
         if (i < ins->arg_count) value = ds_value_copy(&vm->regs[ins->args[i]]);
@@ -96,7 +106,11 @@ bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip) {
             return false;
         }
         DsStr key = {fn->params[i].name, strlen(fn->params[i].name)};
-        ds_map_set(&scope->vars, key, value);
+        if (!ds_map_set(&scope->vars, key, value)) {
+            scope_free_one(scope);
+            ds_diag_error(vm->diag, ins->span, "failed to bind function argument `%s`", fn->params[i].name);
+            return false;
+        }
     }
     vm->scope = scope;
     vm_push_return(vm, next_ip, ins->dst, caller_scope);

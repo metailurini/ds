@@ -252,7 +252,7 @@ int bind_script_args(Vm *vm, const DsLowerProgram *program, int argc, char **arg
 
 VmScope *scope_new(VmScope *parent);
 void scope_free_chain(VmScope *scope);
-void vm_push_scope(Vm *vm);
+bool vm_push_scope(Vm *vm);
 void vm_pop_scope(Vm *vm);
 bool vm_pop_return(Vm *vm, VmReturnFrame *out);
 void vm_pop_to_scope(Vm *vm, VmScope *target);
