@@ -1,20 +1,11 @@
 #include "lower_internal.h"
 
 static DsStr quoted_string_from_decoded(const char *data, size_t len) {
-    size_t cap = len * 2 + 3;
-    char *buf = (char *)ds_xcalloc(cap, 1);
-    size_t n = 0;
-    buf[n++] = '"';
-    for (size_t i = 0; i < len; i++) {
-        char c = data[i];
-        if (n + 3 >= cap) { cap *= 2; buf = (char *)ds_xrealloc(buf, cap); }
-        if (c == '\\' || c == '"') { buf[n++] = '\\'; buf[n++] = c; }
-        else if (c == '\n') { buf[n++] = '\\'; buf[n++] = 'n'; }
-        else if (c == '\t') { buf[n++] = '\\'; buf[n++] = 't'; }
-        else buf[n++] = c;
-    }
-    buf[n++] = '"';
-    return (DsStr){buf, n};
+    DsString quoted = {0};
+    ds_string_append_char(&quoted, '"');
+    ds_string_append_escaped(&quoted, data, len);
+    ds_string_append_char(&quoted, '"');
+    return (DsStr){quoted.data, quoted.len};
 }
 
 static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) {
@@ -26,14 +17,8 @@ static bool parse_interp_name(const char *s, size_t len, size_t *i, DsStr *out) 
     return true;
 }
 
-static bool interp_expr_is_ident_text(DsExpr *expr, const char *text) {
-    return expr && expr->kind == DS_EXPR_IDENT && ds_str_eq_cstr(expr->as.text, text);
-}
-
 static bool interp_expr_is_stdlib_namespace(DsExpr *expr) {
-    return interp_expr_is_ident_text(expr, "file") || interp_expr_is_ident_text(expr, "dir") ||
-           interp_expr_is_ident_text(expr, "path") || interp_expr_is_ident_text(expr, "cmd") ||
-           interp_expr_is_ident_text(expr, "env") || interp_expr_is_ident_text(expr, "regex");
+    return expr && expr->kind == DS_EXPR_IDENT && ds_stdlib_is_namespace(expr->as.text);
 }
 
 static DsStr interp_dup_dotted_name(DsStr left, DsStr right) {
