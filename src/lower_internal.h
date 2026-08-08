@@ -129,15 +129,6 @@ void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema);
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name);
 int find_function_index(DsLowerProgram *program, DsStr name);
 
-void lower_stmt_vec_push(DsLowerStmtVec *vec, DsLowerStmt *stmt);
-void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr);
-void lower_fn_param_vec_push(DsLowerFnParamVec *vec, DsLowerFnParam param);
-void lower_fn_vec_push(DsLowerFnVec *vec, DsLowerFn fn);
-void lower_test_vec_push(DsLowerTestVec *vec, DsLowerTest test);
-void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl);
-void lower_case_pattern_vec_push(DsLowerCasePatternVec *vec, DsLowerCasePattern pattern);
-void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm);
-
 static inline DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
     DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(*expr));
     expr->kind = kind;

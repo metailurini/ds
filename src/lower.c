@@ -13,7 +13,7 @@ static void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *progr
     test.name = str_clone(stmt->as.test_stmt.name);
     test.span = stmt->span;
     test.body = lower_block(lower, stmt->as.test_stmt.body, true);
-    lower_test_vec_push(&program->tests, test);
+    DS_VEC_PUSH(&program->tests, test, 8);
 }
 
 DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
@@ -48,7 +48,7 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     for (size_t i = 0; i < ast->statements.len; i++) collect_test(&lower, ast->statements.items[i], program);
     reject_recursive_functions(&lower);
     for (size_t i = 0; i < ast->statements.len; i++) {
-        if (ast->statements.items[i]->kind != DS_STMT_FN && ast->statements.items[i]->kind != DS_STMT_TEST) lower_stmt_vec_push(&program->statements, lower_stmt(&lower, ast->statements.items[i]));
+        if (ast->statements.items[i]->kind != DS_STMT_FN && ast->statements.items[i]->kind != DS_STMT_TEST) DS_VEC_PUSH(&program->statements, lower_stmt(&lower, ast->statements.items[i]), 16);
     }
     scope_free(&root);
     free(lower.map_loop_symbols);

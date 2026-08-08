@@ -14,26 +14,26 @@ DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag) {
         }
         if (parser_advance_if(&p, DS_TOK_IMPORT)) {
             DsStmt *stmt = parse_import_stmt(&p, true, after_executable);
-            if (stmt) parser_stmt_vec_push(&ast->statements, stmt);
+            if (stmt) DS_VEC_PUSH(&ast->statements, stmt, 16);
             parser_skip_newlines(&p);
             continue;
         }
         if (parser_advance_if(&p, DS_TOK_FN)) {
             DsStmt *stmt = parse_fn(&p, true);
-            if (stmt) parser_stmt_vec_push(&ast->statements, stmt);
+            if (stmt) DS_VEC_PUSH(&ast->statements, stmt, 16);
             parser_skip_newlines(&p);
             continue;
         }
         if (parser_at(&p, DS_TOK_TEST) && parser_next_at(&p, DS_TOK_STRING)) {
             parser_advance(&p);
             DsStmt *stmt = parse_test(&p, true);
-            if (stmt) parser_stmt_vec_push(&ast->statements, stmt);
+            if (stmt) DS_VEC_PUSH(&ast->statements, stmt, 16);
             after_executable = true;
             parser_skip_newlines(&p);
             continue;
         }
         DsStmt *stmt = parse_stmt(&p);
-        if (stmt) parser_stmt_vec_push(&ast->statements, stmt);
+        if (stmt) DS_VEC_PUSH(&ast->statements, stmt, 16);
         after_executable = true;
         parser_skip_newlines(&p);
     }

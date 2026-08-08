@@ -61,7 +61,7 @@ static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, ParseCollect
 }
 
 static bool parse_array_element(Parser *p, DsExpr *expr) {
-    parser_expr_vec_push(&expr->as.array.elements, parse_expr(p));
+    DS_VEC_PUSH(&expr->as.array.elements, parse_expr(p), 8);
     return true;
 }
 
@@ -84,7 +84,7 @@ static bool parse_map_entry(Parser *p, DsExpr *expr) {
     }
     entry.value = parse_expr(p);
     if (entry.value) entry.span.end = entry.value->span.end;
-    parser_map_entry_vec_push(&expr->as.map.entries, entry);
+    DS_VEC_PUSH(&expr->as.map.entries, entry, 8);
     return true;
 
 fail:
@@ -176,7 +176,7 @@ static DsExpr *parser_take_field_call(DsExpr *field_expr, const DsToken *field, 
         free(field_expr->as.field.object->as.text.data);
         free(field_expr->as.field.object);
     } else {
-        parser_expr_vec_push(&call->as.call.args, field_expr->as.field.object);
+        DS_VEC_PUSH(&call->as.call.args, field_expr->as.field.object, 8);
     }
     free(field_expr->as.field.field.data);
     free(field_expr);
@@ -314,7 +314,7 @@ DsExpr *parse_expr(Parser *p) {
 void parse_call_args(Parser *p, DsExprVec *args) {
     if (parser_at(p, DS_TOK_RPAREN)) return;
     while (!parser_at_end(p) && !parser_at(p, DS_TOK_RPAREN)) {
-        parser_expr_vec_push(args, parse_expr(p));
+        DS_VEC_PUSH(args, parse_expr(p), 8);
         if (!parser_advance_if(p, DS_TOK_COMMA)) break;
         if (parser_reject_trailing_comma(p, DS_TOK_RPAREN, "expected function call argument after `,`")) break;
     }

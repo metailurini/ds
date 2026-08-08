@@ -60,10 +60,10 @@ void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram
             }
             fn.required_count++;
         }
-        lower_fn_param_vec_push(&fn.params, out);
+        DS_VEC_PUSH(&fn.params, out, 8);
     }
     scope_free(&param_names);
-    lower_fn_vec_push(&program->functions, fn);
+    DS_VEC_PUSH(&program->functions, fn, 8);
 }
 
 void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {

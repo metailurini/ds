@@ -91,7 +91,7 @@ DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope) {
         lower->scope = local;
     }
     for (size_t i = 0; i < block->as.block_stmt.statements.len; i++) {
-        lower_stmt_vec_push(&out->as.block_stmt.statements, lower_stmt(lower, block->as.block_stmt.statements.items[i]));
+        DS_VEC_PUSH(&out->as.block_stmt.statements, lower_stmt(lower, block->as.block_stmt.statements.items[i]), 16);
     }
     if (child_scope) {
         lower->scope = saved;
@@ -544,7 +544,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                     DsExpr fake = lower_run_copy_expr(stmt->as.let_stmt.value, command_copy);
                     DsLowerStmt *out = lower_let_with_value(lower, stmt, &fake);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
-                    lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                    DS_VEC_PUSH(&block->as.block_stmt.statements, out, 16);
                     ds_command_free(&command_copy);
                     return block;
                 }
@@ -620,7 +620,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             ds_command_free(&command_copy);
             lower_temp_scope_end(lower, &temp_scope, saved_scope);
             if (block) {
-                lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                DS_VEC_PUSH(&block->as.block_stmt.statements, out, 16);
                 return block;
             }
             lower_stmt_free(block);
@@ -802,10 +802,10 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                         validate_case_pattern_duplicate(lower, &out->as.case_stmt.arms, &pattern);
                         validate_case_pattern_duplicate_in_arm(lower, &lowered.patterns, &pattern);
                     }
-                    lower_case_pattern_vec_push(&lowered.patterns, pattern);
+                    DS_VEC_PUSH(&lowered.patterns, pattern, 4);
                 }
                 lowered.body = lower_block(lower, arm->body, true);
-                lower_case_arm_vec_push(&out->as.case_stmt.arms, lowered);
+                DS_VEC_PUSH(&out->as.case_stmt.arms, lowered, 4);
             }
             return out;
         }
@@ -877,7 +877,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 if (block) {
                     DsExpr fake = lower_run_copy_expr(stmt->as.return_stmt.value, command_copy);
                     DsLowerStmt *out = lower_return_with_value(lower, stmt, &fake);
-                    lower_stmt_vec_push(&block->as.block_stmt.statements, out);
+                    DS_VEC_PUSH(&block->as.block_stmt.statements, out, 16);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     ds_command_free(&command_copy);
                     return block;

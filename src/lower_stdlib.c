@@ -56,6 +56,6 @@ bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *p
     }
 
     scope_define(lower, lower->scope, decl->name, script_type_to_sym(decl->type), decl->span);
-    lower_decl_vec_push(&program->script_decls, out);
+    DS_VEC_PUSH(&program->script_decls, out, 8);
     return !lower->diag->has_error;
 }

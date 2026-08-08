@@ -24,7 +24,7 @@ static void report_unsupported_command_operator(Parser *p, const DsToken *tok) {
 
 static void flush_word(DsWordVec *words, DsWord *current, size_t *cap, bool *have_current) {
     if (!*have_current) return;
-    parser_word_vec_push(words, *current);
+    DS_VEC_PUSH(words, *current, 8);
     current->text.data = NULL;
     current->text.len = 0;
     *cap = 0;

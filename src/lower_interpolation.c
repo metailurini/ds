@@ -259,7 +259,7 @@ static void interp_push_literal(DsLowerExpr *out, const char *data, size_t len, 
     if (len == 0) return;
     DsLowerExpr *part = expr_new(DS_LOWER_EXPR_STRING, span);
     part->as.text = quoted_string_from_decoded(data, len);
-    lower_expr_vec_push(&out->as.interp.parts, part);
+    DS_VEC_PUSH(&out->as.interp.parts, part, 8);
 }
 
 static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, DsStr decoded, SymKind *kind_out) {
@@ -284,7 +284,7 @@ static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr, Ds
             if (!lower_sym_kind_is_scalar(inner_kind) && inner_kind != SYM_UNKNOWN) {
                 ds_diag_error(lower->diag, expr->span, "interpolation expression must be scalar in v0.21.0");
             }
-            lower_expr_vec_push(&out->as.interp.parts, part);
+            DS_VEC_PUSH(&out->as.interp.parts, part, 8);
             ds_expr_free(inner);
             i = j;
             literal_start = j + 1;

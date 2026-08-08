@@ -582,7 +582,7 @@ bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand 
             if (!materialize_index_field && !command_quoted_word_needs_value_call_materialization(lower, word->text)) continue;
             DsStr tmp = lower_make_temp_name(lower, "cmd_interp");
             DsStr temp_text = materialize_index_field ? lower_command_index_field_temp_text(word->text) : word->text;
-            lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, temp_text, word->span));
+            DS_VEC_PUSH(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, temp_text, word->span), 16);
             if (materialize_index_field) free(temp_text.data);
             free(word->text.data);
             word->text = lower_command_temp_word(tmp);
@@ -592,7 +592,7 @@ bool lower_materialize_command_value_call_interpolation(Lower *lower, DsCommand 
     }
     if (command->redirect.kind != DS_REDIRECT_NONE && command_quoted_word_needs_value_call_materialization(lower, command->redirect.target)) {
         DsStr tmp = lower_make_temp_name(lower, "redir_interp");
-        lower_stmt_vec_push(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, command->redirect.target, command->redirect.target_span));
+        DS_VEC_PUSH(&block->as.block_stmt.statements, lower_command_interpolation_temp_string_let(lower, tmp, command->redirect.target, command->redirect.target_span), 16);
         free(command->redirect.target.data);
         command->redirect.target = lower_redirect_temp_target(tmp);
         free(tmp.data);

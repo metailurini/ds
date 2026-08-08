@@ -221,7 +221,7 @@ SymKind *lower_args_to_kinds(Lower *lower, const DsExprVec *args, DsLowerExprVec
     if (args->len == 0) return NULL;
     SymKind *kinds = (SymKind *)ds_xcalloc(args->len, sizeof(SymKind));
     for (size_t i = 0; i < args->len; i++) {
-        lower_expr_vec_push(out, lower_expr(lower, args->items[i], &kinds[i]));
+        DS_VEC_PUSH(out, lower_expr(lower, args->items[i], &kinds[i]), 8);
     }
     return kinds;
 }
@@ -422,7 +422,7 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
         ds_string_append_range(&quoted, expr->as.field.field.data, expr->as.field.field.len);
         ds_string_append_char(&quoted, '"');
         arg->as.text = (DsStr){quoted.data, quoted.len};
-        lower_expr_vec_push(&out->as.call.args, arg);
+        DS_VEC_PUSH(&out->as.call.args, arg, 8);
         out->as.call.return_kind = DS_LOWER_VALUE_STRING;
         *kind_out = SYM_STRING;
         return out;
@@ -523,25 +523,25 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
             DsStr pat = {0};
             if (!ds_regex_literal_parts(arg->as.regex, &pat, &literal_pattern_insensitive)) {
                 ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(DS_REGEX_ERR_LITERAL_SYNTAX));
-                lower_expr_vec_push(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span));
+                DS_VEC_PUSH(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span), 8);
                 continue;
             }
             DsString decoded;
             if (!ds_regex_decode_literal_pattern(pat, &decoded)) {
-                lower_expr_vec_push(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span));
+                DS_VEC_PUSH(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span), 8);
                 continue;
             }
             DsRegexStatus status = ds_regex_validate_pattern((DsStr){decoded.data, decoded.len}, &pattern_capture_count);
             pattern_capture_count_known = status == DS_REGEX_OK;
             if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
-            lower_expr_vec_push(&out->as.call.args, lower_raw_string_expr((DsStr){decoded.data, decoded.len}, arg->span));
+            DS_VEC_PUSH(&out->as.call.args, lower_raw_string_expr((DsStr){decoded.data, decoded.len}, arg->span), 8);
             ds_string_free(&decoded);
             continue;
         }
 
         SymKind arg_kind = SYM_UNKNOWN;
         DsLowerExpr *lowered = lower_expr(lower, arg, &arg_kind);
-        lower_expr_vec_push(&out->as.call.args, lowered);
+        DS_VEC_PUSH(&out->as.call.args, lowered, 8);
         if (i == 1 && arg->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
             if (ds_decode_string_text(arg->as.text, &decoded)) {
@@ -577,7 +577,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
         if (expr->as.call.args.len > flags_index) {
             ds_diag_error(lower->diag, expr->as.call.args.items[flags_index]->span, "regex flags may be specified either on the literal or as a helper argument in v0.32.0, not both");
         } else {
-            lower_expr_vec_push(&out->as.call.args, lower_raw_string_expr((DsStr){"i", 1}, expr->as.call.args.items[1]->span));
+            DS_VEC_PUSH(&out->as.call.args, lower_raw_string_expr((DsStr){"i", 1}, expr->as.call.args.items[1]->span), 8);
         }
     }
 
@@ -648,7 +648,7 @@ DsLowerExpr *lower_call_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out
         } else if (expr->as.call.args.len == 2) {
             DsLowerExpr *dir = expr_new(DS_LOWER_EXPR_STRING, expr->span);
             dir->as.text = (DsStr){ds_str_dup_range("\"asc\"", 5), 5};
-            lower_expr_vec_push(&out->as.call.args, dir);
+            DS_VEC_PUSH(&out->as.call.args, dir, 8);
         } else if (expr->as.call.args.len > 2) {
             ds_diag_error(lower->diag, expr->as.call.args.items[2]->span, "sort_by direction must be a string literal in v0.37.0");
         }
@@ -748,7 +748,7 @@ DsLowerExpr *lower_array_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
     for (size_t i = 0; i < expr->as.array.elements.len; i++) {
         SymKind elem_kind = SYM_UNKNOWN;
         DsLowerExpr *element = lower_expr(lower, expr->as.array.elements.items[i], &elem_kind);
-        lower_expr_vec_push(&out->as.array.elements, element);
+        DS_VEC_PUSH(&out->as.array.elements, element, 8);
         const DsLowerRowSchema *element_row_schema = NULL;
         if (elem_kind == SYM_MAP && (lower_expr_row_schema(element, &element_row_schema) || (element_row_schema = ident_row_schema(lower, element, false)))) {
             const DsLowerRowSchema *schema = NULL;

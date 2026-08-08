@@ -65,30 +65,6 @@ static inline DsStr parser_copy_bang_name(const DsToken *name) {
     return s;
 }
 
-static inline void parser_stmt_vec_push(DsStmtVec *vec, DsStmt *stmt) {
-    DS_VEC_PUSH(vec, stmt, 16);
-}
-
-static inline void parser_word_vec_push(DsWordVec *vec, DsWord word) {
-    DS_VEC_PUSH(vec, word, 8);
-}
-
-static inline void parser_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
-    DS_VEC_PUSH(vec, expr, 8);
-}
-
-static inline void parser_map_entry_vec_push(DsMapEntryVec *vec, DsMapEntry entry) {
-    DS_VEC_PUSH(vec, entry, 8);
-}
-
-static inline void parser_fn_param_vec_push(DsFnParamVec *vec, DsFnParam param) {
-    DS_VEC_PUSH(vec, param, 8);
-}
-
-static inline void parser_script_decl_vec_push(DsScriptDeclVec *vec, DsScriptDecl decl) {
-    DS_VEC_PUSH(vec, decl, 8);
-}
-
 static inline DsExpr *parser_new_expr(DsExprKind kind, DsSpan span) {
     return ds_expr_new(kind, span);
 }
@@ -150,14 +126,6 @@ static inline bool parser_is_identifier_like(DsTokenKind kind) {
            kind == DS_TOK_OPTION || kind == DS_TOK_FLAG || kind == DS_TOK_TYPE_STRING ||
            kind == DS_TOK_TYPE_INT || kind == DS_TOK_TYPE_BOOL || kind == DS_TOK_RUN || kind == DS_TOK_FN ||
            kind == DS_TOK_DEFER || kind == DS_TOK_TRAP;
-}
-
-static inline void parser_case_pattern_vec_push(DsCasePatternVec *vec, DsCasePattern pattern) {
-    DS_VEC_PUSH(vec, pattern, 4);
-}
-
-static inline void parser_case_arm_vec_push(DsCaseArmVec *vec, DsCaseArm arm) {
-    DS_VEC_PUSH(vec, arm, 4);
 }
 
 static inline bool parser_expect_identifier_like(Parser *p, const char *message) {

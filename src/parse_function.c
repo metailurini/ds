@@ -34,7 +34,7 @@ DsStmt *parse_fn(Parser *p, bool top_level) {
                               "required parameter `%.*s` cannot follow a default parameter",
                               (int)param.name.len, param.name.data);
             }
-            parser_fn_param_vec_push(&stmt->as.fn_stmt.params, param);
+            DS_VEC_PUSH(&stmt->as.fn_stmt.params, param, 8);
             if (!parser_advance_if(p, DS_TOK_COMMA)) break;
             if (parser_reject_trailing_comma(p, DS_TOK_RPAREN, "expected parameter name after `,`")) break;
         }

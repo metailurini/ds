@@ -189,35 +189,3 @@ int find_function_index(DsLowerProgram *program, DsStr name) {
     }
     return -1;
 }
-
-void lower_stmt_vec_push(DsLowerStmtVec *vec, DsLowerStmt *stmt) {
-    DS_VEC_PUSH(vec, stmt, 16);
-}
-
-void lower_expr_vec_push(DsLowerExprVec *vec, DsLowerExpr *expr) {
-    DS_VEC_PUSH(vec, expr, 8);
-}
-
-void lower_fn_param_vec_push(DsLowerFnParamVec *vec, DsLowerFnParam param) {
-    DS_VEC_PUSH(vec, param, 8);
-}
-
-void lower_fn_vec_push(DsLowerFnVec *vec, DsLowerFn fn) {
-    DS_VEC_PUSH(vec, fn, 8);
-}
-
-void lower_test_vec_push(DsLowerTestVec *vec, DsLowerTest test) {
-    DS_VEC_PUSH(vec, test, 8);
-}
-
-void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl) {
-    DS_VEC_PUSH(vec, decl, 8);
-}
-
-void lower_case_pattern_vec_push(DsLowerCasePatternVec *vec, DsLowerCasePattern pattern) {
-    DS_VEC_PUSH(vec, pattern, 4);
-}
-
-void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm) {
-    DS_VEC_PUSH(vec, arm, 4);
-}

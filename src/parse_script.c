@@ -49,7 +49,7 @@ static bool parse_script_decl(Parser *p, DsScriptBlock *script) {
 
     decl.span = (DsSpan){start->span.start, (decl.default_value ? decl.default_value->span.end : parser_previous(p)->span.end), start->span.source};
     parser_expect_stmt_end(p, "declaration");
-    parser_script_decl_vec_push(&script->declarations, decl);
+    DS_VEC_PUSH(&script->declarations, decl, 8);
     return true;
 }
 

@@ -28,7 +28,7 @@ DsStmt *parse_block(Parser *p) {
 
     while (!parser_at_end(p) && !parser_at(p, DS_TOK_RBRACE)) {
         DsStmt *stmt = parse_stmt(p);
-        if (stmt) parser_stmt_vec_push(&block->as.block_stmt.statements, stmt);
+        if (stmt) DS_VEC_PUSH(&block->as.block_stmt.statements, stmt, 16);
         parser_skip_newlines(p);
     }
 
@@ -197,7 +197,7 @@ static DsStmt *parse_env_unset(Parser *p) {
     stmt->as.call_stmt.name = (DsStr){ds_str_dup_cstr("env.unset"), 9};
     DsExpr *arg = parser_new_expr(DS_EXPR_STRING, field->span);
     arg->as.text = quoted_env_name_from_token(field);
-    parser_expr_vec_push(&stmt->as.call_stmt.args, arg);
+    DS_VEC_PUSH(&stmt->as.call_stmt.args, arg, 8);
 
     parser_expect_stmt_end(p, "environment unset statement");
     return stmt;
@@ -436,7 +436,7 @@ static DsStmt *parse_case(Parser *p) {
         do {
             DsCasePattern pattern;
             if (!parse_case_pattern(p, &pattern)) break;
-            parser_case_pattern_vec_push(&arm.patterns, pattern);
+            DS_VEC_PUSH(&arm.patterns, pattern, 4);
         } while (parser_advance_if(p, DS_TOK_PIPE));
         if (!parser_expect(p, DS_TOK_LBRACE, "expected `{` after case pattern")) {
             parser_skip_to_stmt_end_or(p, DS_TOK_RBRACE);
@@ -445,7 +445,7 @@ static DsStmt *parse_case(Parser *p) {
         }
         arm.body = parse_block(p);
         arm.span = (DsSpan){arm_start->span.start, arm.body ? arm.body->span.end : arm_start->span.end, arm_start->span.source};
-        parser_case_arm_vec_push(&stmt->as.case_stmt.arms, arm);
+        DS_VEC_PUSH(&stmt->as.case_stmt.arms, arm, 4);
         parser_skip_newlines(p);
     }
     if (!parser_expect(p, DS_TOK_RBRACE, "expected `}` to close case statement")) return stmt;
