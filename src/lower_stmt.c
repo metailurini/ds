@@ -129,7 +129,7 @@ typedef struct {
 static DsLowerValueKind lower_infer_collection_element_kind(Lower *lower, const DsLowerExpr *expr, SymKind kind);
 static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span);
 
-static DsLowerStmt *lower_materialize_run_in_stmt(Lower *lower, DsCommand *command, DsSpan span, Scope *temp_scope, Scope **saved_scope, DsCommand *command_copy) {
+static DsLowerStmt *lower_materialize_run_in_stmt(Lower *lower, const DsCommand *command, DsSpan span, Scope *temp_scope, Scope **saved_scope, DsCommand *command_copy) {
     ds_command_clone(command_copy, command);
     DsLowerStmt *block = stmt_new(DS_LOWER_STMT_BLOCK, span);
     block->as.block_stmt.scoped = false;
@@ -166,7 +166,7 @@ static bool pattern_equal(const DsLowerCasePattern *a, const DsLowerCasePattern 
     if (a->kind != b->kind) return false;
     if (a->kind == DS_CASE_PATTERN_BOOL) return a->boolean == b->boolean;
     if (a->kind == DS_CASE_PATTERN_DEFAULT) return true;
-    return a->text.len == b->text.len && memcmp(a->text.data, b->text.data, a->text.len) == 0;
+    return ds_str_eq(a->text, b->text);
 }
 
 static void validate_case_pattern_duplicate(Lower *lower, const DsLowerCaseArmVec *arms, const DsLowerCasePattern *pattern) {
