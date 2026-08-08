@@ -563,17 +563,12 @@ static unsigned program_regex_helper_mask(const DsLowerProgram *program) {
     return program_mask(program, stmt_regex_helper_mask);
 }
 
-bool program_uses_regex_base_helpers(const DsLowerProgram *program) {
-    return (program_regex_helper_mask(program) & DS_BASH_REGEX_BASE_HELPER) != 0;
-}
+#define DEFINE_PROGRAM_REGEX_USES(name, bit) \
+    bool name(const DsLowerProgram *program) { return (program_regex_helper_mask(program) & (bit)) != 0; }
 
-bool program_uses_regex_match_helpers(const DsLowerProgram *program) {
-    return (program_regex_helper_mask(program) & DS_BASH_REGEX_MATCH_HELPER) != 0;
-}
-
-bool program_uses_regex_replace_helpers(const DsLowerProgram *program) {
-    return (program_regex_helper_mask(program) & DS_BASH_REGEX_REPLACE_HELPER) != 0;
-}
+DEFINE_PROGRAM_REGEX_USES(program_uses_regex_base_helpers, DS_BASH_REGEX_BASE_HELPER)
+DEFINE_PROGRAM_REGEX_USES(program_uses_regex_match_helpers, DS_BASH_REGEX_MATCH_HELPER)
+DEFINE_PROGRAM_REGEX_USES(program_uses_regex_replace_helpers, DS_BASH_REGEX_REPLACE_HELPER)
 
 DEFINE_PROGRAM_USES(program_uses_collection_index, stmt_uses_collection_index)
 DEFINE_PROGRAM_USES(program_uses_array_helpers, stmt_uses_array_helper)
