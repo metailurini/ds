@@ -131,13 +131,6 @@ static const DsLowerRowSchema *expr_row_array_schema_full(Lower *lower, const Ds
     return expr_row_schema_full_inner(lower, expr, true);
 }
 
-DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
-    DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(DsLowerExpr));
-    expr->kind = kind;
-    expr->span = span;
-    return expr;
-}
-
 bool command_result_field_kind(DsStr field, SymKind *kind_out) {
     const DsCommandResultField *desc = ds_command_result_field_lookup(field);
     if (!desc) return false;

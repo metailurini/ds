@@ -132,7 +132,12 @@ void lower_decl_vec_push(DsLowerScriptDeclVec *vec, DsLowerScriptDecl decl);
 void lower_case_pattern_vec_push(DsLowerCasePatternVec *vec, DsLowerCasePattern pattern);
 void lower_case_arm_vec_push(DsLowerCaseArmVec *vec, DsLowerCaseArm arm);
 
-DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span);
+static inline DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
+    DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(*expr));
+    expr->kind = kind;
+    expr->span = span;
+    return expr;
+}
 bool command_result_field_kind(DsStr field, SymKind *kind_out);
 bool lower_expr_produces_command_result(const DsLowerExpr *expr);
 bool lower_expr_is_portable_command_result_return(const DsLowerExpr *expr);
@@ -179,7 +184,12 @@ DsStr lower_map_key_decode(const DsMapEntry *entry);
 
 bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program);
 
-DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span);
+static inline DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
+    DsLowerStmt *stmt = (DsLowerStmt *)ds_xcalloc(1, sizeof(*stmt));
+    stmt->kind = kind;
+    stmt->span = span;
+    return stmt;
+}
 DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt);
 DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope);
 DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt);
