@@ -185,17 +185,26 @@ static DsExpr *parser_take_field_call(DsExpr *field_expr, const DsToken *field, 
     return call;
 }
 
+static DsExpr *parser_take_ident_call(DsExpr *ident, const DsToken *opener, bool bang) {
+    DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){ident->span.start, opener->span.end, ident->span.source});
+    if (bang) {
+        DsToken token = {.text = ident->as.text, .span = ident->span};
+        call->as.call.name = parser_copy_bang_name(&token);
+        free(ident->as.text.data);
+    } else {
+        call->as.call.name = ident->as.text;
+    }
+    free(ident);
+    return call;
+}
+
 static DsExpr *parse_postfix(Parser *p) {
     DsExpr *expr = parse_primary(p);
     while (expr) {
         if (expr->kind == DS_EXPR_IDENT && parser_ident_text_eq(expr, "glob") && parser_advance_if(p, DS_TOK_BANG)) {
             DsToken *bang = parser_previous(p);
             if (!parser_expect(p, DS_TOK_LPAREN, "expected `(` after `glob!`")) break;
-            DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, bang->span.end, expr->span.source});
-            DsToken tmp = {.text = expr->as.text, .span = expr->span};
-            call->as.call.name = parser_copy_bang_name(&tmp);
-            free(expr->as.text.data);
-            free(expr);
+            DsExpr *call = parser_take_ident_call(expr, bang, true);
             parse_call_args(p, &call->as.call.args);
             if (parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) call->span.end = parser_previous(p)->span.end;
             expr = call;
@@ -204,10 +213,7 @@ static DsExpr *parse_postfix(Parser *p) {
 
         if (expr->kind == DS_EXPR_IDENT && parser_advance_if(p, DS_TOK_LPAREN)) {
             DsToken *open = parser_previous(p);
-            DsExpr *call = parser_new_expr(DS_EXPR_CALL, (DsSpan){expr->span.start, open->span.end, expr->span.source});
-            call->as.call.name = parser_copy_token_text(&(DsToken){.text = expr->as.text, .span = expr->span});
-            free(expr->as.text.data);
-            free(expr);
+            DsExpr *call = parser_take_ident_call(expr, open, false);
             parse_call_args(p, &call->as.call.args);
             expr = call;
             if (!parser_expect(p, DS_TOK_RPAREN, "expected `)` after function call arguments")) break;
