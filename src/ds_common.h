@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -52,6 +53,11 @@ void *ds_xrealloc(void *ptr, size_t size);
 
 static inline char *ds_str_dup_cstr(const char *value) {
     return ds_str_dup_range(value, strlen(value));
+}
+
+static inline void ds_free_cstr_array(char **items, size_t len) {
+    for (size_t i = 0; i < len; i++) free(items[i]);
+    free(items);
 }
 
 static inline bool ds_str_eq_cstr(DsStr value, const char *text) {

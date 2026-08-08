@@ -94,23 +94,21 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
             if (bash_is_user_function_call_expr(value->as.interp.parts.items[i])) { has_user_call = true; break; }
         }
         if (has_user_call) {
-            char **temps = calloc(value->as.interp.parts.len ? value->as.interp.parts.len : 1, sizeof(char *));
-            if (!temps) return false;
+            char **temps = ds_xcalloc(value->as.interp.parts.len ? value->as.interp.parts.len : 1, sizeof(char *));
             for (size_t i = 0; i < value->as.interp.parts.len; i++) {
                 const DsLowerExpr *part = value->as.interp.parts.items[i];
                 if (!bash_is_user_function_call_expr(part)) continue;
                 char tmp[64];
                 bash_temp_ds_name(tmp, sizeof(tmp), "interp", e->temp_counter++);
                 temps[i] = ds_str_dup_cstr(tmp);
-                if (!temps[i]) { free(temps); return false; }
+                if (!temps[i]) { ds_free_cstr_array(temps, value->as.interp.parts.len); return false; }
                 DsStr raw = {temps[i], strlen(temps[i])};
                 emit_indent(&e->out, indent);
                 emit_bash_decl_prefix(&e->out, e->function_depth, "");
                 emit_var_name(&e->out, raw);
                 buf_append(&e->out, "=\"\"\n");
                 if (!bash_emit_user_call_into_raw_var(e, part, raw, indent)) {
-                    for (size_t j = 0; j < value->as.interp.parts.len; j++) free(temps[j]);
-                    free(temps);
+                    ds_free_cstr_array(temps, value->as.interp.parts.len);
                     return false;
                 }
             }
@@ -126,14 +124,12 @@ static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *v
                     emit_var_name(&e->out, raw);
                     buf_append(&e->out, "\"");
                 } else if (!emit_value_expr(e, part, &e->out)) {
-                    for (size_t j = 0; j < value->as.interp.parts.len; j++) free(temps[j]);
-                    free(temps);
+                    ds_free_cstr_array(temps, value->as.interp.parts.len);
                     return false;
                 }
             }
             buf_append(&e->out, "\n");
-            for (size_t i = 0; i < value->as.interp.parts.len; i++) free(temps[i]);
-            free(temps);
+            ds_free_cstr_array(temps, value->as.interp.parts.len);
             bash_emit_type_assignment_for_expr(e, name, value, indent, false);
             buf_append(&e->out, "\n");
             return true;

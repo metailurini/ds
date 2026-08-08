@@ -16,11 +16,6 @@ struct LoadedUnit {
     DsAst *ast;
 };
 
-static void free_string_list(char **items, size_t len) {
-    for (size_t i = 0; i < len; i++) free(items[i]);
-    free(items);
-}
-
 void ds_cli_program_free(DsCliProgram *program) {
     if (!program) return;
     ds_lower_program_free(program->lowered);
@@ -35,8 +30,8 @@ void ds_cli_program_free(DsCliProgram *program) {
         free(program->units[i]);
     }
     free(program->units);
-    free_string_list(program->loaded_paths, program->loaded_len);
-    free_string_list(program->stack, program->stack_len);
+    ds_free_cstr_array(program->loaded_paths, program->loaded_len);
+    ds_free_cstr_array(program->stack, program->stack_len);
 }
 
 static void units_push(DsCliProgram *program, LoadedUnit *unit) {
