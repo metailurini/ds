@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 static inline bool vm_i64_add_checked(int64_t lhs, int64_t rhs, int64_t *out) {
     if ((rhs > 0 && lhs > INT64_MAX - rhs) || (rhs < 0 && lhs < INT64_MIN - rhs)) return false;
@@ -57,6 +58,17 @@ static inline void vm_ascii_trim_bounds(const char *data, size_t len, size_t *st
     while (b > a && vm_ascii_space(data[b - 1])) b--;
     *start = a;
     *end = b;
+}
+
+static inline void vm_fprint_escaped(FILE *out, const char *data, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        char c = data[i];
+        if (c == '\\') fputs("\\\\", out);
+        else if (c == '"') fputs("\\\"", out);
+        else if (c == '\n') fputs("\\n", out);
+        else if (c == '\t') fputs("\\t", out);
+        else fputc(c, out);
+    }
 }
 
 typedef enum {

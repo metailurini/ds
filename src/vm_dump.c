@@ -79,17 +79,6 @@ void trace_vm_instr(Vm *vm, size_t ip, const Instr *ins) {
     fprintf(stderr, " @ %s:%d:%d\n", span_path(vm->source, ins->span), ins->span.start.line, ins->span.start.column);
 }
 
-static void print_escaped(FILE *out, const char *data, size_t len) {
-    for (size_t i = 0; i < len; i++) {
-        char c = data[i];
-        if (c == '\\') fputs("\\\\", out);
-        else if (c == '"') fputs("\\\"", out);
-        else if (c == '\n') fputs("\\n", out);
-        else if (c == '\t') fputs("\\t", out);
-        else fputc(c, out);
-    }
-}
-
 static void print_value_literal(FILE *out, const DsValue *v) {
     switch (v->kind) {
         case DS_VALUE_NULL:
@@ -103,7 +92,7 @@ static void print_value_literal(FILE *out, const DsValue *v) {
             break;
         case DS_VALUE_STRING:
             fputs("string \"", out);
-            print_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
+            vm_fprint_escaped(out, v->as.string.data ? v->as.string.data : "", v->as.string.len);
             fputc('"', out);
             break;
         case DS_VALUE_COMMAND_RESULT:
