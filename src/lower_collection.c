@@ -106,13 +106,8 @@ void row_schema_free(DsLowerRowSchema *schema) {
 
 bool row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {
     if (!schema) return false;
-    if (schema->len == schema->cap) {
-        schema->cap = schema->cap ? schema->cap * 2 : 4;
-        schema->items = (DsLowerRowField *)ds_xrealloc(schema->items, schema->cap * sizeof(DsLowerRowField));
-    }
-    schema->items[schema->len].name = str_clone(name);
-    schema->items[schema->len].kind = kind;
-    schema->len++;
+    DsLowerRowField field = {str_clone(name), kind};
+    DS_VEC_PUSH(schema, field, 4);
     return true;
 }
 

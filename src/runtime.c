@@ -244,11 +244,7 @@ void ds_array_init(DsArray *array) {
 }
 
 bool ds_array_push(DsArray *array, void *item) {
-    if (array->len == array->cap) {
-        array->cap = array->cap ? array->cap * 2 : 8;
-        array->items = (void **)ds_xrealloc(array->items, array->cap * sizeof(void *));
-    }
-    array->items[array->len++] = item;
+    DS_VEC_PUSH(array, item, 8);
     return true;
 }
 

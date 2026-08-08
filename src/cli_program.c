@@ -41,19 +41,11 @@ void ds_cli_program_free(DsCliProgram *program) {
 }
 
 static void stmt_vec_push_cli(DsStmtVec *vec, DsStmt *stmt) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 16;
-        vec->items = (DsStmt **)ds_xrealloc(vec->items, vec->cap * sizeof(DsStmt *));
-    }
-    vec->items[vec->len++] = stmt;
+    DS_VEC_PUSH(vec, stmt, 16);
 }
 
 static void script_decl_vec_push_cli(DsScriptDeclVec *vec, DsScriptDecl decl) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsScriptDecl *)ds_xrealloc(vec->items, vec->cap * sizeof(DsScriptDecl));
-    }
-    vec->items[vec->len++] = decl;
+    DS_VEC_PUSH(vec, decl, 8);
 }
 
 static void units_push(DsCliProgram *program, LoadedUnit *unit) {

@@ -150,11 +150,7 @@ static void vm_string_vec_free(VmStringVec *vec) {
 }
 
 static bool vm_string_vec_push_owned(VmStringVec *vec, char *text) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 16;
-        vec->items = (char **)ds_xrealloc(vec->items, vec->cap * sizeof(char *));
-    }
-    vec->items[vec->len++] = text;
+    DS_VEC_PUSH(vec, text, 16);
     return true;
 }
 

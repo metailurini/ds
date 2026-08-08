@@ -37,11 +37,7 @@ static DsExpr *temp_expr_new(DsExprKind kind, DsSpan span) {
 }
 
 static void temp_expr_vec_push(DsExprVec *vec, DsExpr *expr) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 4;
-        vec->items = (DsExpr **)ds_xrealloc(vec->items, vec->cap * sizeof(DsExpr *));
-    }
-    vec->items[vec->len++] = expr;
+    DS_VEC_PUSH(vec, expr, 4);
 }
 
 static void temp_expr_free(DsExpr *expr) {

@@ -57,6 +57,10 @@ typedef struct {
 } Lower;
 
 static inline bool lower_str_eq(DsStr a, const char *b) { return ds_str_eq_cstr(a, b); }
+static inline DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam *param) {
+    if (!param) return DS_LOWER_VALUE_UNKNOWN;
+    return param->has_default ? param->default_kind : param->inferred_kind;
+}
 bool is_env_name_text(DsStr name);
 bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
 bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind);
@@ -130,6 +134,7 @@ bool lower_collection_for_iterable_is_portable(const DsLowerExpr *iterable);
 bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable);
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span);
 bool lower_decode_string_text(DsStr text, DsStr *out);
+DsStr lower_map_key_decode(const DsMapEntry *entry);
 
 bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program);
 

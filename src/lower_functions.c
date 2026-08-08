@@ -118,14 +118,10 @@ typedef struct {
     size_t cap;
 } AstKindEnv;
 
-static bool ast_str_eq(DsStr a, DsStr b) {
-    return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
-}
-
 static void ast_kind_env_push(AstKindEnv *env, DsStr name, DsLowerValueKind kind) {
     if (kind == DS_LOWER_VALUE_UNKNOWN) return;
     for (size_t i = env->len; i > 0; i--) {
-        if (ast_str_eq(env->items[i - 1].name, name)) {
+        if (ds_str_eq(env->items[i - 1].name, name)) {
             row_schema_free(&env->items[i - 1].row_schema);
             env->items[i - 1].kind = kind;
             env->items[i - 1].is_row = false;
@@ -133,22 +129,18 @@ static void ast_kind_env_push(AstKindEnv *env, DsStr name, DsLowerValueKind kind
             return;
         }
     }
-    if (env->len == env->cap) {
-        env->cap = env->cap ? env->cap * 2 : 8;
-        env->items = (AstKindBinding *)ds_xrealloc(env->items, env->cap * sizeof(AstKindBinding));
-    }
     AstKindBinding binding;
     memset(&binding, 0, sizeof(binding));
     binding.name = name;
     binding.kind = kind;
     row_schema_init(&binding.row_schema);
-    env->items[env->len++] = binding;
+    DS_VEC_PUSH(env, binding, 8);
 }
 
 static void ast_kind_env_push_row_schema(AstKindEnv *env, DsStr name, DsLowerValueKind kind, const DsLowerRowSchema *schema, bool is_array) {
     if (!schema || (kind != DS_LOWER_VALUE_MAP && kind != DS_LOWER_VALUE_ARRAY)) return;
     for (size_t i = env->len; i > 0; i--) {
-        if (ast_str_eq(env->items[i - 1].name, name)) {
+        if (ds_str_eq(env->items[i - 1].name, name)) {
             row_schema_free(&env->items[i - 1].row_schema);
             env->items[i - 1].kind = kind;
             env->items[i - 1].is_row = !is_array;
@@ -157,10 +149,6 @@ static void ast_kind_env_push_row_schema(AstKindEnv *env, DsStr name, DsLowerVal
             return;
         }
     }
-    if (env->len == env->cap) {
-        env->cap = env->cap ? env->cap * 2 : 8;
-        env->items = (AstKindBinding *)ds_xrealloc(env->items, env->cap * sizeof(AstKindBinding));
-    }
     AstKindBinding binding;
     memset(&binding, 0, sizeof(binding));
     binding.name = name;
@@ -168,12 +156,12 @@ static void ast_kind_env_push_row_schema(AstKindEnv *env, DsStr name, DsLowerVal
     binding.is_row = !is_array;
     binding.is_row_array = is_array;
     row_schema_clone(schema, &binding.row_schema);
-    env->items[env->len++] = binding;
+    DS_VEC_PUSH(env, binding, 8);
 }
 
 static bool ast_kind_env_find(const AstKindEnv *env, DsStr name, DsLowerValueKind *kind_out) {
     for (size_t i = env->len; i > 0; i--) {
-        if (ast_str_eq(env->items[i - 1].name, name)) {
+        if (ds_str_eq(env->items[i - 1].name, name)) {
             *kind_out = env->items[i - 1].kind;
             return true;
         }
@@ -184,7 +172,7 @@ static bool ast_kind_env_find(const AstKindEnv *env, DsStr name, DsLowerValueKin
 static bool ast_kind_env_find_row_schema(const AstKindEnv *env, DsStr name, bool want_array, DsLowerRowSchema *schema_out) {
     for (size_t i = env->len; i > 0; i--) {
         const AstKindBinding *binding = &env->items[i - 1];
-        if (!ast_str_eq(binding->name, name)) continue;
+        if (!ds_str_eq(binding->name, name)) continue;
         if (want_array ? binding->is_row_array : binding->is_row) {
             row_schema_clone(&binding->row_schema, schema_out);
             return true;
@@ -217,11 +205,6 @@ static void ast_kind_env_free(AstKindEnv *env) {
     env->items = NULL;
     env->len = 0;
     env->cap = 0;
-}
-
-static DsLowerValueKind fn_param_expected_kind(const DsLowerFnParam *param) {
-    if (!param) return DS_LOWER_VALUE_UNKNOWN;
-    return param->has_default ? param->default_kind : param->inferred_kind;
 }
 
 typedef enum {
@@ -285,33 +268,25 @@ static bool infer_binding_known_kind(InferCtx *ctx, InferBinding binding, DsLowe
         return binding.value_kind != DS_LOWER_VALUE_UNKNOWN;
     }
     if (binding.kind == INFER_BIND_PARAM && binding.param_index < ctx->fn->params.len) {
-        *kind_out = fn_param_expected_kind(&ctx->fn->params.items[binding.param_index]);
+        *kind_out = lower_fn_param_expected_kind(&ctx->fn->params.items[binding.param_index]);
         return *kind_out != DS_LOWER_VALUE_UNKNOWN;
     }
     return false;
 }
 
-static bool infer_env_name_eq(DsStr a, DsStr b) {
-    return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
-}
-
 static void infer_env_push(InferEnv *env, DsStr name, InferBinding binding) {
     for (size_t i = env->len; i > 0; i--) {
-        if (infer_env_name_eq(env->items[i - 1].name, name)) {
+        if (ds_str_eq(env->items[i - 1].name, name)) {
             env->items[i - 1].binding = binding;
             return;
         }
     }
-    if (env->len == env->cap) {
-        env->cap = env->cap ? env->cap * 2 : 8;
-        env->items = (InferEnvItem *)ds_xrealloc(env->items, env->cap * sizeof(InferEnvItem));
-    }
-    env->items[env->len++] = (InferEnvItem){name, binding};
+    DS_VEC_PUSH(env, ((InferEnvItem){name, binding}), 8);
 }
 
 static bool infer_env_find(const InferEnv *env, DsStr name, InferBinding *binding_out) {
     for (size_t i = env->len; i > 0; i--) {
-        if (infer_env_name_eq(env->items[i - 1].name, name)) {
+        if (ds_str_eq(env->items[i - 1].name, name)) {
             *binding_out = env->items[i - 1].binding;
             return true;
         }
@@ -344,7 +319,7 @@ static const char *infer_kind_name(DsLowerValueKind kind) {
 static void infer_constrain_param(InferCtx *ctx, size_t param_index, DsLowerValueKind expected, DsSpan span, const char *reason) {
     if (!infer_is_scalar(expected) || param_index >= ctx->fn->params.len) return;
     DsLowerFnParam *param = &ctx->fn->params.items[param_index];
-    DsLowerValueKind current = fn_param_expected_kind(param);
+    DsLowerValueKind current = lower_fn_param_expected_kind(param);
     if (current == DS_LOWER_VALUE_UNKNOWN) {
         param->inferred_kind = expected;
         ctx->changed = true;
@@ -449,7 +424,7 @@ static void infer_interpolation_call_args(InferCtx *ctx, InferEnv *env, const Ds
         }
         if (!split) continue;
         if (callee && arg_index < callee->params.len) {
-            DsLowerValueKind expected = fn_param_expected_kind(&callee->params.items[arg_index]);
+            DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[arg_index]);
             if (infer_is_scalar(expected)) {
                 DsStr arg_name = {0};
                 if (infer_extract_ident_arg(data, part_start, i, &arg_name)) {
@@ -624,7 +599,7 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             if (callee) {
                 size_t count = expr->as.call.args.len < callee->params.len ? expr->as.call.args.len : callee->params.len;
                 for (size_t i = 0; i < count; i++) {
-                    DsLowerValueKind expected = fn_param_expected_kind(&callee->params.items[i]);
+                    DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[i]);
                     if (infer_is_scalar(expected)) infer_constrain_expr(ctx, env, expr->as.call.args.items[i], expected, "function call");
                     else (void)infer_expr_binding(ctx, env, expr->as.call.args.items[i]);
                 }
@@ -703,7 +678,7 @@ static void infer_stmt(InferCtx *ctx, InferEnv *env, const DsStmt *stmt) {
             if (callee) {
                 size_t count = stmt->as.call_stmt.args.len < callee->params.len ? stmt->as.call_stmt.args.len : callee->params.len;
                 for (size_t i = 0; i < count; i++) {
-                    DsLowerValueKind expected = fn_param_expected_kind(&callee->params.items[i]);
+                    DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[i]);
                     if (infer_is_scalar(expected)) infer_constrain_expr(ctx, env, stmt->as.call_stmt.args.items[i], expected, "function call");
                     else (void)infer_expr_binding(ctx, env, stmt->as.call_stmt.args.items[i]);
                 }
@@ -1094,14 +1069,6 @@ static bool ast_value_kind_is_row_scalar(DsLowerValueKind kind) {
     return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
 }
 
-static DsStr ast_map_key_decode(const DsMapEntry *entry) {
-    DsStr out = {0};
-    if (!entry) return out;
-    if (entry->quoted_key) lower_decode_string_text(entry->key, &out);
-    else out = str_clone(entry->key);
-    return out;
-}
-
 static bool ast_expr_row_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out);
 static bool ast_expr_row_array_schema_known(Lower *lower, const AstKindEnv *env, const DsExpr *expr, DsLowerRowSchema *schema_out);
 
@@ -1134,7 +1101,7 @@ static bool ast_expr_row_schema_known(Lower *lower, const AstKindEnv *env, const
             row_schema_free(schema_out);
             return false;
         }
-        DsStr key = ast_map_key_decode(entry);
+        DsStr key = lower_map_key_decode(entry);
         if (!key.data || row_schema_find(schema_out, key)) {
             free(key.data);
             row_schema_free(schema_out);
@@ -1305,7 +1272,7 @@ void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
                 AstKindEnv env = {0};
                 for (size_t j = 0; j < stmt->as.fn_stmt.params.len && j < fn->params.len; j++) {
                     const DsFnParam *param = &stmt->as.fn_stmt.params.items[j];
-                    DsLowerValueKind param_kind = fn_param_expected_kind(&fn->params.items[j]);
+                    DsLowerValueKind param_kind = lower_fn_param_expected_kind(&fn->params.items[j]);
                     if (param_kind == DS_LOWER_VALUE_UNKNOWN) param_kind = ast_literal_default_kind(param->default_value);
                     ast_kind_env_push(&env, param->name, param_kind);
                 }
@@ -1325,7 +1292,7 @@ void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
                 AstKindEnv env = {0};
                 for (size_t j = 0; j < stmt->as.fn_stmt.params.len && j < fn->params.len; j++) {
                     const DsFnParam *param = &stmt->as.fn_stmt.params.items[j];
-                    DsLowerValueKind param_kind = fn_param_expected_kind(&fn->params.items[j]);
+                    DsLowerValueKind param_kind = lower_fn_param_expected_kind(&fn->params.items[j]);
                     if (param_kind == DS_LOWER_VALUE_UNKNOWN) param_kind = ast_literal_default_kind(param->default_value);
                     ast_kind_env_push(&env, param->name, param_kind);
                 }
@@ -1564,7 +1531,7 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     lower->function_depth++;
     lower->current_function = fn;
     for (size_t i = 0; i < fn->params.len; i++) {
-        SymKind kind = sym_kind_from_lower_value_kind(fn_param_expected_kind(&fn->params.items[i]));
+        SymKind kind = sym_kind_from_lower_value_kind(lower_fn_param_expected_kind(&fn->params.items[i]));
         scope_define(lower, &local, fn->params.items[i].name, kind, fn->params.items[i].span);
     }
     fn->body = lower_block(lower, stmt->as.fn_stmt.body, false);

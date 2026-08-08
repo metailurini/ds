@@ -96,14 +96,10 @@ bool is_name_char(char c) {
 }
 
 void lower_map_entry_vec_push(DsLowerMapEntryVec *vec, DsLowerMapEntry entry) {
-    if (vec->len == vec->cap) {
-        vec->cap = vec->cap ? vec->cap * 2 : 8;
-        vec->items = (DsLowerMapEntry *)ds_xrealloc(vec->items, vec->cap * sizeof(DsLowerMapEntry));
-    }
-    vec->items[vec->len++] = entry;
+    DS_VEC_PUSH(vec, entry, 8);
 }
 
-DsStr map_key_decode(const DsMapEntry *entry) {
+DsStr lower_map_key_decode(const DsMapEntry *entry) {
     DsStr out = {0};
     if (entry->quoted_key) lower_decode_string_text(entry->key, &out);
     else out = str_clone(entry->key);
@@ -204,16 +200,11 @@ static bool is_scalar_sym_kind(SymKind kind) {
     return kind == SYM_STRING || kind == SYM_INT || kind == SYM_BOOL;
 }
 
-static DsLowerValueKind lower_param_expected_kind(const DsLowerFnParam *param) {
-    if (!param) return DS_LOWER_VALUE_UNKNOWN;
-    return param->has_default ? param->default_kind : param->inferred_kind;
-}
-
 void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExprVec *args, const SymKind *arg_kinds) {
     if (!fn || !args || !arg_kinds) return;
     size_t count = args->len < fn->params.len ? args->len : fn->params.len;
     for (size_t i = 0; i < count; i++) {
-        SymKind expected = sym_kind_from_lower_value_kind(lower_param_expected_kind(&fn->params.items[i]));
+        SymKind expected = sym_kind_from_lower_value_kind(lower_fn_param_expected_kind(&fn->params.items[i]));
         SymKind actual = arg_kinds[i];
         if (!is_scalar_sym_kind(expected)) continue;
         if (actual == SYM_UNKNOWN) {
@@ -868,7 +859,7 @@ DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
         const DsMapEntry *entry = &expr->as.map.entries.items[i];
         DsLowerMapEntry lowered;
         memset(&lowered, 0, sizeof(lowered));
-        lowered.key = map_key_decode(entry);
+        lowered.key = lower_map_key_decode(entry);
         lowered.span = entry->span;
         if (lowered.key.len == 0) {
             ds_diag_error(lower->diag, entry->span, "empty map keys are deferred in v0.10.0 because emitted Bash cannot represent them safely");
