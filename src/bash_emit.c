@@ -44,7 +44,7 @@ static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_OPTION) {
             buf_appendf(&e->out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
-            if (decl->type == DS_SCRIPT_TYPE_STRING) buf_append_len(&e->out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+            if (decl->type == DS_SCRIPT_TYPE_STRING) buf_append_len(&e->out, ds_str_data(decl->default_text), decl->default_text.len);
             else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
             else buf_append(&e->out, decl->default_bool ? "true" : "false");
             buf_append(&e->out, "\n");
@@ -75,7 +75,7 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
         if (decl->kind == DS_SCRIPT_DECL_OPTION) {
             emit_var_name(&e->out, decl->name);
             buf_append(&e->out, "=");
-            if (decl->type == DS_SCRIPT_TYPE_STRING) bash_single_quote(&e->out, decl->default_text.data ? decl->default_text.data : "", decl->default_text.len);
+            if (decl->type == DS_SCRIPT_TYPE_STRING) bash_single_quote(&e->out, ds_str_data(decl->default_text), decl->default_text.len);
             else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
             else buf_append(&e->out, decl->default_bool ? "true" : "false");
             buf_append(&e->out, "\n");
@@ -348,7 +348,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
         ds_diag_error(diag, span, "failed to open output file `%s`: %s", output_path, strerror(errno));
         goto cleanup;
     }
-    size_t written = fwrite(e.out.data ? e.out.data : "", 1, e.out.len, fp);
+    size_t written = fwrite(emit_buf_data(&e.out), 1, e.out.len, fp);
     int close_rc = fclose(fp);
     if (written != e.out.len || close_rc != 0) {
         ds_diag_error(diag, lowered->span, "failed to write output file `%s`: %s", output_path, strerror(errno));

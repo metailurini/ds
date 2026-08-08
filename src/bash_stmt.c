@@ -61,7 +61,7 @@ static bool emit_signal_pipeline(BashEmitter *e, const DsCommand *command, DsSpa
     emit_source_loc(&e->out, e->source, span);
     buf_append(&e->out, command->redirect.kind == DS_REDIRECT_NONE ? " 1" : " 0");
     buf_append(&e->out, " ");
-    bash_single_quote(&e->out, pipeline.data ? pipeline.data : "", pipeline.len);
+    bash_single_quote(&e->out, emit_buf_data(&pipeline), pipeline.len);
     free(pipeline.data);
     if (e->handler_depth > 0) buf_append(&e->out, " || return $?\n\n");
     else buf_append(&e->out, "\n\n");

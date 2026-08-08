@@ -39,8 +39,12 @@ void buf_append_len(EmitBuf *buf, const char *data, size_t len);
 void buf_append(EmitBuf *buf, const char *text);
 void buf_appendf(EmitBuf *buf, const char *fmt, ...);
 
+static inline const char *emit_buf_data(const EmitBuf *buf) {
+    return buf && buf->data ? buf->data : "";
+}
+
 static inline void buf_append_dsstr(EmitBuf *buf, DsStr value) {
-    buf_append_len(buf, value.data ? value.data : "", value.len);
+    buf_append_len(buf, ds_str_data(value), value.len);
 }
 
 static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags) {

@@ -239,7 +239,7 @@ static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const 
     buf_append(out, "$( __ds_array_get ");
     bash_emit_row_field_array_name(out, name, field);
     buf_append(out, " ");
-    buf_append(out, index_arg.data ? index_arg.data : "");
+    buf_append(out, emit_buf_data(&index_arg));
     buf_append(out, " )");
     free(index_arg.data);
     *j = pos;
@@ -340,7 +340,7 @@ static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
         EmitBuf inner = {0};
         if (!bash_arith_parse_primary(p, &inner)) { free(inner.data); return false; }
         buf_append(out, "$(__ds_int_neg ");
-        buf_append(out, inner.data ? inner.data : "");
+        buf_append(out, emit_buf_data(&inner));
         buf_append(out, ")");
         free(inner.data);
         return true;
@@ -386,14 +386,14 @@ static bool bash_arith_parse_power(BashArithParser *p, EmitBuf *out) {
         EmitBuf right = {0};
         if (!bash_arith_parse_power(p, &right)) { free(left.data); free(right.data); return false; }
         buf_append(out, "$(__ds_int_bin '**' ");
-        buf_append(out, left.data ? left.data : "");
+        buf_append(out, emit_buf_data(&left));
         buf_append(out, " ");
-        buf_append(out, right.data ? right.data : "");
+        buf_append(out, emit_buf_data(&right));
         buf_append(out, ")");
         free(left.data); free(right.data);
         return true;
     }
-    buf_append(out, left.data ? left.data : "");
+    buf_append(out, emit_buf_data(&left));
     free(left.data);
     return true;
 }
@@ -415,13 +415,13 @@ static bool bash_arith_parse_mul(BashArithParser *p, EmitBuf *out) {
         buf_append(&next, "$(__ds_int_bin ");
         bash_single_quote(&next, op_text, 1);
         buf_append(&next, " ");
-        buf_append(&next, acc.data ? acc.data : "");
+        buf_append(&next, emit_buf_data(&acc));
         buf_append(&next, " ");
-        buf_append(&next, right.data ? right.data : "");
+        buf_append(&next, emit_buf_data(&right));
         buf_append(&next, ")");
         free(acc.data); free(right.data); acc = next;
     }
-    buf_append(out, acc.data ? acc.data : "");
+    buf_append(out, emit_buf_data(&acc));
     free(acc.data);
     return true;
 }
@@ -442,13 +442,13 @@ static bool bash_arith_parse_expr(BashArithParser *p, EmitBuf *out) {
         buf_append(&next, "$(__ds_int_bin ");
         bash_single_quote(&next, op_text, 1);
         buf_append(&next, " ");
-        buf_append(&next, acc.data ? acc.data : "");
+        buf_append(&next, emit_buf_data(&acc));
         buf_append(&next, " ");
-        buf_append(&next, right.data ? right.data : "");
+        buf_append(&next, emit_buf_data(&right));
         buf_append(&next, ")");
         free(acc.data); free(right.data); acc = next;
     }
-    buf_append(out, acc.data ? acc.data : "");
+    buf_append(out, emit_buf_data(&acc));
     free(acc.data);
     return true;
 }
@@ -459,7 +459,7 @@ static bool emit_arithmetic_interpolation(BashEmitter *e, const char *data, size
     if (!bash_arith_parse_expr(&p, &expr)) { free(expr.data); return false; }
     bash_arith_skip(&p);
     if (p.pos != len) { free(expr.data); return false; }
-    buf_append(out, expr.data ? expr.data : "");
+    buf_append(out, emit_buf_data(&expr));
     free(expr.data);
     return true;
 }

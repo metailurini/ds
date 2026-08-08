@@ -495,5 +495,5 @@ const char *ds_bash_string_helpers_source(unsigned helper_mask) {
         if (helper_mask & helpers[i].mask) buf_append(&source, helpers[i].source);
     }
     if (source.len > 0) buf_append(&source, "\n");
-    return source.data ? source.data : "";
+    return emit_buf_data(&source);
 }

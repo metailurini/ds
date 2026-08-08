@@ -140,7 +140,7 @@ bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out
         buf_append(out, " ");
         emit_source_loc(out, e->source, span);
         buf_append(out, " ");
-        bash_single_quote(out, cmd.data ? cmd.data : "", cmd.len);
+        bash_single_quote(out, emit_buf_data(&cmd), cmd.len);
         free(cmd.data);
         return true;
     }
