@@ -243,11 +243,7 @@ static bool helper_is_regex_replace(DsStr name) { return lower_str_eq(name, "reg
 static bool helper_is_regex(DsStr name) { return helper_is_regex_match(name) || helper_is_regex_replace(name); }
 
 static bool ast_binary_op_is_comparison_like(const DsExpr *expr) {
-    if (!expr || expr->kind != DS_EXPR_BINARY) return false;
-    return lower_str_eq(expr->as.binary.op, "in") || lower_str_eq(expr->as.binary.op, "matches") ||
-           lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
-           lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
-           lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=");
+    return expr && expr->kind == DS_EXPR_BINARY && lower_op_is_comparison_like(expr->as.binary.op);
 }
 
 DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
@@ -293,7 +289,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         *kind_out = SYM_BOOL;
         return out;
     }
-    if (lower_str_eq(expr->as.binary.op, "&&") || lower_str_eq(expr->as.binary.op, "||")) {
+    if (lower_op_is_logical(expr->as.binary.op)) {
         if (left_kind == SYM_ARRAY || left_kind == SYM_MAP || left_kind == SYM_COMMAND_RESULT) {
             ds_diag_error(lower->diag, expr->as.binary.left->span, "logical operator `%.*s` requires scalar operands in v0.23.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
         }
@@ -313,17 +309,13 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         else ds_diag_error(lower->diag, expr->span, "operator `+` supports integer operands in v0.17.0; string concatenation is deferred");
         return out;
     }
-    if (lower_str_eq(expr->as.binary.op, "-") || lower_str_eq(expr->as.binary.op, "*") ||
-        lower_str_eq(expr->as.binary.op, "/") || lower_str_eq(expr->as.binary.op, "%") ||
-        lower_str_eq(expr->as.binary.op, "**")) {
+    if (lower_op_is_arithmetic(expr->as.binary.op)) {
         if (left_kind != SYM_INT && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "operator `%.*s` requires integer operands in v0.21.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
         if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "operator `%.*s` requires integer operands in v0.21.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
         *kind_out = SYM_INT;
         return out;
     }
-    if (lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
-        lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
-        lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) {
+    if (lower_op_is_comparison(expr->as.binary.op)) {
         *kind_out = SYM_BOOL;
         return out;
     }
@@ -934,14 +926,8 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_UNARY:
             return lower_str_eq(expr->as.unary.op, "-") ? SYM_INT : SYM_BOOL;
         case DS_LOWER_EXPR_BINARY:
-            if (lower_str_eq(expr->as.binary.op, "+") || lower_str_eq(expr->as.binary.op, "-") ||
-                lower_str_eq(expr->as.binary.op, "*") || lower_str_eq(expr->as.binary.op, "/") ||
-                lower_str_eq(expr->as.binary.op, "%") || lower_str_eq(expr->as.binary.op, "**")) return SYM_INT;
-            if (lower_str_eq(expr->as.binary.op, "in") || lower_str_eq(expr->as.binary.op, "matches") ||
-                lower_str_eq(expr->as.binary.op, "&&") || lower_str_eq(expr->as.binary.op, "||") ||
-                lower_str_eq(expr->as.binary.op, "==") || lower_str_eq(expr->as.binary.op, "!=") ||
-                lower_str_eq(expr->as.binary.op, ">") || lower_str_eq(expr->as.binary.op, ">=") ||
-                lower_str_eq(expr->as.binary.op, "<") || lower_str_eq(expr->as.binary.op, "<=")) return SYM_BOOL;
+            if (lower_op_is_arithmetic(expr->as.binary.op)) return SYM_INT;
+            if (lower_op_is_comparison_like(expr->as.binary.op) || lower_op_is_logical(expr->as.binary.op)) return SYM_BOOL;
             return SYM_UNKNOWN;
         case DS_LOWER_EXPR_CALL: {
             (void)lower;
