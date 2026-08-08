@@ -1,10 +1,5 @@
 #include "ds_stdlib.h"
 
-static bool str_has_prefix(DsStr a, const char *prefix) {
-    size_t len = strlen(prefix);
-    return a.len >= len && memcmp(a.data, prefix, len) == 0;
-}
-
 static const DsStdlibHelper HELPERS[] = {
     {"file.exists", "__ds_stdlib_file_exists", 1, 1, DS_STDLIB_RETURN_BOOL, false, true, false, false, false, 0, 0},
     {"file.is_file", "__ds_stdlib_file_is_file", 1, 1, DS_STDLIB_RETURN_BOOL, false, true, false, false, false, 0, 0},
@@ -70,13 +65,13 @@ bool ds_stdlib_arity_ok(const DsStdlibHelper *helper, size_t argc) {
 }
 
 DsStdlibNamespace ds_stdlib_namespace(DsStr name) {
-    if (str_has_prefix(name, "file.")) return DS_STDLIB_NAMESPACE_FILE;
-    if (str_has_prefix(name, "dir.")) return DS_STDLIB_NAMESPACE_DIR;
-    if (str_has_prefix(name, "path.")) return DS_STDLIB_NAMESPACE_PATH;
-    if (str_has_prefix(name, "cmd.")) return DS_STDLIB_NAMESPACE_CMD;
-    if (str_has_prefix(name, "env.")) return DS_STDLIB_NAMESPACE_ENV;
-    if (str_has_prefix(name, "regex.")) return DS_STDLIB_NAMESPACE_REGEX;
-    if (str_has_prefix(name, "string.")) return DS_STDLIB_NAMESPACE_STRING;
+    if (ds_str_has_prefix_cstr(name, "file.")) return DS_STDLIB_NAMESPACE_FILE;
+    if (ds_str_has_prefix_cstr(name, "dir.")) return DS_STDLIB_NAMESPACE_DIR;
+    if (ds_str_has_prefix_cstr(name, "path.")) return DS_STDLIB_NAMESPACE_PATH;
+    if (ds_str_has_prefix_cstr(name, "cmd.")) return DS_STDLIB_NAMESPACE_CMD;
+    if (ds_str_has_prefix_cstr(name, "env.")) return DS_STDLIB_NAMESPACE_ENV;
+    if (ds_str_has_prefix_cstr(name, "regex.")) return DS_STDLIB_NAMESPACE_REGEX;
+    if (ds_str_has_prefix_cstr(name, "string.")) return DS_STDLIB_NAMESPACE_STRING;
     if (ds_str_eq_cstr(name, "glob") || ds_str_eq_cstr(name, "glob!") || ds_str_eq_cstr(name, "lines")) {
         return DS_STDLIB_NAMESPACE_TOP_LEVEL;
     }

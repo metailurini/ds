@@ -528,7 +528,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             break;
         }
         case DS_LOWER_STMT_ASSIGN: {
-            bool env_assign = stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0;
+            bool env_assign = stmt->as.assign_stmt.name.len > 4 && ds_str_has_prefix_cstr(stmt->as.assign_stmt.name, "env.");
             int src = -1;
             if (stmt->as.assign_stmt.op == DS_ASSIGN_SET) {
                 src = compile_expr(p, stmt->as.assign_stmt.value);

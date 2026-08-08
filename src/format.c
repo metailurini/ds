@@ -140,7 +140,7 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             else format_expr_prec(fmt, expr->as.binary.right, prec + 1);
             break;
         case DS_EXPR_CALL:
-            if (expr->as.call.name.len > 7 && memcmp(expr->as.call.name.data, "string.", 7) == 0 && expr->as.call.args.len > 0) {
+            if (expr->as.call.name.len > 7 && ds_str_has_prefix_cstr(expr->as.call.name, "string.") && expr->as.call.args.len > 0) {
                 format_expr_prec(fmt, expr->as.call.args.items[0], prec);
                 append_cstr(fmt, ".");
                 append_str(fmt, (DsStr){expr->as.call.name.data + 7, expr->as.call.name.len - 7});

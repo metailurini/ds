@@ -702,7 +702,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             return true;
 
         case DS_LOWER_STMT_ASSIGN:
-            if (stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0) {
+            if (stmt->as.assign_stmt.name.len > 4 && ds_str_has_prefix_cstr(stmt->as.assign_stmt.name, "env.")) {
                 DsStr env_name = {stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4};
                 char tmp_buf[64];
                 snprintf(tmp_buf, sizeof(tmp_buf), "__env_value_%zu", e->temp_counter++);

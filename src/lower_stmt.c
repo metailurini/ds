@@ -558,7 +558,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSIGN, stmt->span);
             out->as.assign_stmt.name = str_clone(stmt->as.assign_stmt.name);
             out->as.assign_stmt.op = stmt->as.assign_stmt.op;
-            bool env_assign = stmt->as.assign_stmt.name.len > 4 && memcmp(stmt->as.assign_stmt.name.data, "env.", 4) == 0;
+            bool env_assign = stmt->as.assign_stmt.name.len > 4 && ds_str_has_prefix_cstr(stmt->as.assign_stmt.name, "env.");
             if (env_assign) {
                 DsStr env_name = {stmt->as.assign_stmt.name.data + 4, stmt->as.assign_stmt.name.len - 4};
                 lower_validate_env_name(lower, env_name, stmt->span, "v0.27.0");
@@ -647,8 +647,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             DsLowerStmt *out = stmt_new(loop_kind, stmt->span);
             out->as.for_stmt.name = str_clone(stmt->as.for_stmt.key_name);
             if (stmt->as.for_stmt.has_value_name) out->as.for_stmt.value_name = str_clone(stmt->as.for_stmt.value_name);
-            if (stmt->as.for_stmt.has_value_name && stmt->as.for_stmt.key_name.len == stmt->as.for_stmt.value_name.len &&
-                memcmp(stmt->as.for_stmt.key_name.data, stmt->as.for_stmt.value_name.data, stmt->as.for_stmt.key_name.len) == 0) {
+            if (stmt->as.for_stmt.has_value_name && ds_str_eq(stmt->as.for_stmt.key_name, stmt->as.for_stmt.value_name)) {
                 ds_diag_error(lower->diag, stmt->span, "map loop key and value variables must be different in v0.29.0");
             }
             SymKind element_kind = SYM_UNKNOWN;

@@ -70,6 +70,11 @@ static inline bool ds_str_eq(DsStr a, DsStr b) {
     return a.len == b.len && memcmp(a.data ? a.data : "", b.data ? b.data : "", a.len) == 0;
 }
 
+static inline bool ds_str_has_prefix_cstr(DsStr value, const char *prefix) {
+    size_t len = strlen(prefix);
+    return value.len >= len && memcmp(value.data ? value.data : "", prefix, len) == 0;
+}
+
 static inline char *ds_str_dup_len(DsStr value) {
     return ds_str_dup_range(value.data, value.len);
 }
