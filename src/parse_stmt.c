@@ -102,21 +102,25 @@ static bool token_is_assignment_operator_at(const DsTokenVec *tokens, size_t i) 
            tokens->items[i + 1].kind == DS_TOK_EQUAL;
 }
 
-static DsStmt *parse_index_assign_stmt(Parser *p) {
-    DsToken *start = parser_peek(p);
+static size_t scan_stmt_assignment(const Parser *p, bool *bracket_before_operator) {
+    *bracket_before_operator = false;
     for (size_t i = p->pos; i < p->tokens->len; i++) {
         DsTokenKind kind = p->tokens->items[i].kind;
         if (kind == DS_TOK_NEWLINE || kind == DS_TOK_EOF || kind == DS_TOK_RBRACE) break;
-        if (token_is_assignment_operator_at(p->tokens, i)) {
-            if (kind != DS_TOK_EQUAL) {
-                ds_diag_error(p->diag, p->tokens->items[i].span,
-                              "compound index assignment is unsupported in v0.30.0; use `target[index] = value`");
-                parser_skip_to_stmt_end(p);
-                parser_consume_statement_end(p);
-                return NULL;
-            }
-            break;
-        }
+        if (token_is_assignment_operator_at(p->tokens, i)) return i;
+        if (kind == DS_TOK_LBRACKET) *bracket_before_operator = true;
+    }
+    return p->tokens->len;
+}
+
+static DsStmt *parse_index_assign_stmt(Parser *p, size_t operator_index) {
+    DsToken *start = parser_peek(p);
+    if (p->tokens->items[operator_index].kind != DS_TOK_EQUAL) {
+        ds_diag_error(p->diag, p->tokens->items[operator_index].span,
+                      "compound index assignment is unsupported in v0.30.0; use `target[index] = value`");
+        parser_skip_to_stmt_end(p);
+        parser_consume_statement_end(p);
+        return NULL;
     }
     DsExpr *target = parse_expr(p);
     DsAssignOp op = DS_ASSIGN_SET;
@@ -209,25 +213,6 @@ static DsStmt *parse_bad_unset(Parser *p) {
     parser_skip_to_stmt_end(p);
     parser_consume_statement_end(p);
     return NULL;
-}
-
-static bool stmt_contains_assignment_operator(const Parser *p) {
-    for (size_t i = p->pos; i < p->tokens->len; i++) {
-        DsTokenKind kind = p->tokens->items[i].kind;
-        if (kind == DS_TOK_NEWLINE || kind == DS_TOK_EOF || kind == DS_TOK_RBRACE) return false;
-        if (token_is_assignment_operator_at(p->tokens, i)) return true;
-    }
-    return false;
-}
-
-static bool stmt_has_bracket_before_assignment(const Parser *p) {
-    for (size_t i = p->pos; i < p->tokens->len; i++) {
-        DsTokenKind kind = p->tokens->items[i].kind;
-        if (kind == DS_TOK_NEWLINE || kind == DS_TOK_EOF || kind == DS_TOK_RBRACE) return false;
-        if (token_is_assignment_operator_at(p->tokens, i)) return false;
-        if (kind == DS_TOK_LBRACKET) return true;
-    }
-    return false;
 }
 
 static DsStmt *parse_return(Parser *p) {
@@ -534,10 +519,18 @@ DsStmt *parse_stmt(Parser *p) {
     if (parser_at_ident_text(p, "unset") && parser_next_ident_text(p, "env") &&
         parser_peek2_at(p, DS_TOK_DOT)) return parse_env_unset(p);
     if (parser_at_ident_text(p, "unset")) return parse_bad_unset(p);
-    if (parser_at_env_dot(p) && stmt_contains_assignment_operator(p) && stmt_has_bracket_before_assignment(p)) return parse_index_assign_stmt(p);
-    if (parser_at_env_dot(p) && stmt_contains_assignment_operator(p)) return parse_env_assign(p);
+    if (parser_at_env_dot(p)) {
+        bool bracket_before_operator;
+        size_t operator_index = scan_stmt_assignment(p, &bracket_before_operator);
+        if (operator_index < p->tokens->len && bracket_before_operator) return parse_index_assign_stmt(p, operator_index);
+        if (operator_index < p->tokens->len) return parse_env_assign(p);
+    }
     if (((parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_LBRACKET) || parser_next_at(p, DS_TOK_DOT) || parser_next_at(p, DS_TOK_LPAREN))) ||
-         parser_at(p, DS_TOK_LBRACKET)) && stmt_contains_assignment_operator(p)) return parse_index_assign_stmt(p);
+         parser_at(p, DS_TOK_LBRACKET))) {
+        bool bracket_before_operator;
+        size_t operator_index = scan_stmt_assignment(p, &bracket_before_operator);
+        if (operator_index < p->tokens->len) return parse_index_assign_stmt(p, operator_index);
+    }
     if (parser_at(p, DS_TOK_IDENT) && (parser_next_at(p, DS_TOK_EQUAL) ||
         ((parser_next_at(p, DS_TOK_PLUS) || parser_next_at(p, DS_TOK_MINUS) || parser_next_at(p, DS_TOK_STAR) || parser_next_at(p, DS_TOK_SLASH) || parser_next_at(p, DS_TOK_PERCENT)) && parser_peek2_at(p, DS_TOK_EQUAL)))) return parse_assign(p);
     if (parser_advance_if(p, DS_TOK_RETURN)) return parse_return(p);
