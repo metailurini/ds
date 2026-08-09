@@ -151,9 +151,15 @@ for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-for file in src/parse_expr.c src/lower_expr.c src/hir.c src/format.c src/ds_checker.c src/bash_deps.c; do
-  assert_matches "$file" 'MethodCall|method|format|specifier|string\.' "$file handles v0.19 string/format path"
-done
+assert_contains src/parse_expr.c 'parser_take_field_call' 'parser handles v0.19 method calls'
+assert_contains src/lower_expr.c 'lower_diag_unknown_string_method' 'lowerer handles v0.19 string methods'
+assert_contains src/hir.c 'DS_LOWER_EXPR_CALL' 'HIR dump handles lowered method calls'
+assert_contains src/hir.c 'DS_LOWER_EXPR_INTERP' 'HIR dump handles interpolated strings'
+assert_contains src/format.c 'ds_str_has_prefix_cstr(expr->as.call.name, "string.")' 'formatter handles v0.19 string methods'
+assert_contains src/ds_checker.c 'case DS_EXPR_CALL' 'checker traverses v0.19 method-call arguments'
+assert_contains src/ds_checker.c 'scan_fragment_for_ident_uses' 'checker scans interpolation fragments'
+assert_contains src/bash_deps.c 'ds_stdlib_bash_helper_mask' 'Bash dependency scanner tracks string helpers'
+assert_contains src/bash_deps.c 'string_literal_helper_mask' 'Bash dependency scanner tracks interpolation helpers'
 assert_contains src/ast.c 'CallExpr' 'AST printer handles lowered method calls as call expressions'
 assert_contains src/bash_expr.c 'emit_interpolated_string' 'Bash expression emitter uses interpolation formatter path'
 assert_contains src/ds_interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
