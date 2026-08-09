@@ -365,11 +365,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_FN:
             free(stmt->as.fn_stmt.name.data);
-            for (size_t i = 0; i < stmt->as.fn_stmt.params.len; i++) {
-                free(stmt->as.fn_stmt.params.items[i].name.data);
-                ds_expr_free(stmt->as.fn_stmt.params.items[i].default_value);
-            }
-            free(stmt->as.fn_stmt.params.items);
+            DS_FREE_NAMED_DEFAULT_VEC(stmt->as.fn_stmt.params, ds_expr_free);
             free_stmt(stmt->as.fn_stmt.body);
             break;
         case DS_STMT_CALL:
@@ -418,11 +414,7 @@ static void free_stmt(DsStmt *stmt) {
 
 void ds_ast_free(DsAst *ast) {
     if (!ast) return;
-    for (size_t i = 0; i < ast->script.declarations.len; i++) {
-        free(ast->script.declarations.items[i].name.data);
-        ds_expr_free(ast->script.declarations.items[i].default_value);
-    }
-    free(ast->script.declarations.items);
+    DS_FREE_NAMED_DEFAULT_VEC(ast->script.declarations, ds_expr_free);
     DS_FREE_PTR_VEC(ast->statements, free_stmt);
     free(ast);
 }

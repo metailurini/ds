@@ -141,11 +141,7 @@ void ds_lower_program_free(DsLowerProgram *program) {
     free(program->script_decls.items);
     for (size_t i = 0; i < program->functions.len; i++) {
         free(program->functions.items[i].name.data);
-        for (size_t j = 0; j < program->functions.items[i].params.len; j++) {
-            free(program->functions.items[i].params.items[j].name.data);
-            lower_expr_free(program->functions.items[i].params.items[j].default_value);
-        }
-        free(program->functions.items[i].params.items);
+        DS_FREE_NAMED_DEFAULT_VEC(program->functions.items[i].params, lower_expr_free);
         lower_stmt_free(program->functions.items[i].body);
         row_schema_free(&program->functions.items[i].row_schema);
     }
