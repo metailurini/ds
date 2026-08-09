@@ -1,5 +1,64 @@
 # Refactoring Opportunities — `src/ast.c` and Related Files
 
+## Current status — 2026-08-09
+
+This document started as a source audit and many of its original line references and
+duplication counts are now historical.  Use the status below before applying an older
+recommendation literally.
+
+### Still actionable
+
+- **AST/HIR traversal and ownership:** the large expression/statement switches still
+  mirror one another structurally, but the common ownership shapes have already been
+  extracted.  Prefer small shared operations over a generic AST/HIR visitor.
+- **FR10 list rendering:** keep extracting concrete typed list/range helpers when they
+  remove code.  Do not introduce a generic callback/macro join framework solely to
+  eliminate short explicit loops.
+- **VMR13 process execution:** direct commands and pipelines still have separate fork
+  topology.  Capture, exec-error, waiting, signal, and cleanup behavior is already
+  substantially centralized; further work should be kept only when it reduces the
+  implementation without obscuring process-group semantics.
+- **Runtime value operations:** copy/free/string/truthiness still switch over the same
+  value-kind enum.  Investigate shared metadata/helpers only where behavior really is
+  identical.
+- **Hashmap wrapper inlining (RR9):** technically open, but low priority because the
+  savings are small and moving implementation into public headers changes API/ABI
+  characteristics.
+
+### Completed or superseded
+
+- Shared vector growth (`DS_VEC_PUSH`) and parser/lower push-wrapper removal.
+- Shared pointer-vector, keyed-vector, named-default-vector, case-arm, owned-string-array,
+  and paired-pointer cleanup primitives.
+- Canonical signal, redirect, assignment-operator, case-pattern, string clone/equality,
+  indentation, escaping, path, integer parsing, and source/string helper APIs.
+- Parser collection framing/recovery, assignment-operator parsing, and statement
+  assignment scanning.  Assignment/index dispatch now scans a statement prefix once.
+- Bash dependency traversal consolidation, buffer/string data access, structured payload
+  reuse, command facts, and helper metadata centralization.
+- Runtime map iteration/init error handling and VM capture/error/wait cleanup work.
+- `DsString` now owns formatted append (`ds_string_appendf`); Bash `EmitBuf` aliases the
+  same buffer representation rather than maintaining a second formatted-buffer core.
+- VM and emitted Bash script help now come from one lowered-program renderer.
+- String-method diagnostics are derived from stdlib metadata instead of a parallel
+  `DS_STRING_METHODS` list.
+
+### Intentionally rejected / defer unless the code changes
+
+- A single generic AST/HIR visitor: current AST and lowered-HIR payload/ownership
+  differences make the abstraction larger and less explicit than the duplicated switch
+  skeletons it would replace.
+- A generic `DS_JOIN_ITEMS`/callback list-rendering abstraction: typed helpers have been
+  clearer and smaller in the cases implemented so far.
+- Broad Bash stdlib-iteration extraction (`BR12`): the straightforward extraction was
+  tested and increased code size/indirection.
+- A shared direct/pipeline process-I/O state object: the straightforward VMR13 extraction
+  was tested and made `vm_process.c` larger without reducing fork/wait complexity.
+
+When continuing this audit, measure the **current** diff and keep an extraction only if
+it improves reuse, ownership safety, drift resistance, or code size without hiding the
+language/runtime semantics.
+
 ## CATEGORY 1: Repeated Patterns within `ast.c`
 
 ### 1A. `indent()` function duplicated across files
