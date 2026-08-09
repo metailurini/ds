@@ -216,42 +216,43 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     e.source = source;
     e.diag = diag;
     bool ok = false;
-    e.needs_case_types = program_uses_case(lowered) || program_uses_membership(lowered) || program_uses_function_param_types(lowered);
+    BashDeps deps = bash_collect_deps(lowered);
+    e.needs_case_types = deps.uses_case || deps.uses_membership || deps.uses_function_param_types;
 
     buf_append(&e.out, "#!/usr/bin/env bash\n");
     buf_append(&e.out, "set -euo pipefail\n\n");
 
-    bool needs_map_iteration = program_uses_map_iteration(lowered);
-    bool needs_map_assignment = program_uses_map_assignment(lowered);
-    bool needs_map_guard = program_uses_map_literal(lowered) || needs_map_iteration || needs_map_assignment;
-    bool needs_collection_helpers = program_uses_collection_index(lowered) || needs_map_iteration;
-    bool needs_array_helpers = program_uses_array_helpers(lowered);
-    bool needs_map_helpers = program_uses_map_helpers(lowered) || needs_map_iteration;
+    bool needs_map_iteration = deps.uses_map_iteration;
+    bool needs_map_assignment = deps.uses_map_assignment;
+    bool needs_map_guard = deps.uses_map_literal || needs_map_iteration || needs_map_assignment;
+    bool needs_collection_helpers = deps.uses_collection_index || needs_map_iteration;
+    bool needs_array_helpers = deps.uses_array_helpers;
+    bool needs_map_helpers = deps.uses_map_helpers || needs_map_iteration;
     bool needs_dynamic_index_helper = needs_array_helpers && needs_map_helpers && needs_collection_helpers;
-    bool needs_stdlib = program_uses_stdlib(lowered);
-    bool needs_stdlib_capture = program_uses_stdlib_capture(lowered);
-    unsigned string_helper_mask = program_string_helper_mask(lowered);
+    bool needs_stdlib = deps.uses_stdlib;
+    bool needs_stdlib_capture = deps.uses_stdlib_capture;
+    unsigned string_helper_mask = deps.string_helper_mask;
     bool needs_string_array_capture = (string_helper_mask & DS_BASH_STRING_HELPER_SPLIT) != 0;
-    bool needs_glob_helpers = program_uses_glob_helpers(lowered);
-    bool needs_recursive_glob_helpers = program_uses_recursive_glob_helpers(lowered);
-    bool needs_regex_helpers = program_uses_regex_base_helpers(lowered);
-    bool needs_regex_match_helpers = program_uses_regex_match_helpers(lowered);
-    bool needs_regex_replace_helpers = program_uses_regex_replace_helpers(lowered);
-    bool needs_debug = program_has_command(lowered);
-    bool needs_int_helpers = program_uses_int_helpers(lowered) || program_uses_function_value_helpers(lowered);
-    bool needs_function_value_helpers = program_uses_function_value_helpers(lowered);
-    bool needs_cleanup_helpers = program_uses_handlers(lowered);
-    bool needs_signal_handlers = program_uses_signal_handlers(lowered);
-    bool needs_control_helpers = program_uses_control_commands(lowered);
-    bool needs_temp_helpers = needs_function_value_helpers || program_uses_run(lowered) ||
+    bool needs_glob_helpers = deps.uses_glob_helpers;
+    bool needs_recursive_glob_helpers = deps.uses_recursive_glob_helpers;
+    bool needs_regex_helpers = deps.uses_regex_base_helpers;
+    bool needs_regex_match_helpers = deps.uses_regex_match_helpers;
+    bool needs_regex_replace_helpers = deps.uses_regex_replace_helpers;
+    bool needs_debug = deps.has_command;
+    bool needs_int_helpers = deps.uses_int_helpers || deps.uses_function_value_helpers;
+    bool needs_function_value_helpers = deps.uses_function_value_helpers;
+    bool needs_cleanup_helpers = deps.uses_handlers;
+    bool needs_signal_handlers = deps.uses_signal_handlers;
+    bool needs_control_helpers = deps.uses_control_commands;
+    bool needs_temp_helpers = needs_function_value_helpers || deps.uses_run ||
                               needs_collection_helpers || needs_stdlib || needs_glob_helpers ||
-                              needs_string_array_capture || program_uses_membership(lowered) || needs_cleanup_helpers;
+                              needs_string_array_capture || deps.uses_membership || needs_cleanup_helpers;
     unsigned string_helpers_needing_error = DS_BASH_STRING_HELPER_REPLACE |
                                             DS_BASH_STRING_HELPER_SPLIT |
                                             DS_BASH_STRING_HELPER_CHAR_AT |
                                             DS_BASH_STRING_HELPER_SLICE;
     bool needs_error_helper = lowered->has_script || needs_int_helpers || needs_function_value_helpers ||
-                              program_uses_run(lowered) || needs_collection_helpers || needs_stdlib ||
+                              deps.uses_run || needs_collection_helpers || needs_stdlib ||
                               needs_glob_helpers || needs_regex_helpers ||
                               needs_temp_helpers ||
                               ((string_helper_mask & string_helpers_needing_error) != 0);
@@ -285,7 +286,7 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
         if (needs_debug) emit_plain_command_fail_helper(&e);
         if (needs_control_helpers) emit_plain_control_helpers(&e);
     }
-    if (program_uses_run(lowered)) emit_helper_source(&e, ds_bash_command_result_helpers_source());
+    if (deps.uses_run) emit_helper_source(&e, ds_bash_command_result_helpers_source());
     if (needs_array_helpers) emit_helper_source(&e, ds_bash_array_helpers_source());
     if (needs_map_helpers) emit_helper_source(&e, ds_bash_map_helpers_source());
     if (needs_dynamic_index_helper) emit_helper_source(&e, ds_bash_dynamic_index_helper_source());
