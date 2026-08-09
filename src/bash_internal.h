@@ -33,7 +33,6 @@ void buf_append_dsstr(EmitBuf *buf, DsStr value);
 void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags);
 
 bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message);
-bool bash_is_int_binary_op(DsStr op);
 bool symbol_exists(const SymbolVec *symbols, DsStr name);
 void free_symbols(SymbolVec *symbols);
 void symbols_truncate(SymbolVec *symbols, size_t len);

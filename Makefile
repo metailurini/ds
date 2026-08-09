@@ -11,7 +11,7 @@ BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17 0-18 0-19 0-20 0-21 0-22 0-23 0-24 0-25 0-26 0-27 0-29 0-30 0-31 0-32 0-33 0-34 0-35 0-36 0-37 0-38
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
-.PHONY: all clean check check-compile-flags smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
+.PHONY: all clean check check-compile-flags check-header-boundaries smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
 
 all: $(BIN)
 
@@ -25,7 +25,7 @@ build/%.o: src/%.c include/ds.h $(PRIVATE_HEADERS) | build
 build:
 	mkdir -p build
 
-check: check-compile-flags $(BIN)
+check: check-compile-flags check-header-boundaries $(BIN)
 	./$(BIN) check examples/basic.ds
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
 
@@ -36,6 +36,12 @@ check-compile-flags:
 			exit 1; \
 		}; \
 	done
+
+check-header-boundaries:
+	@if grep -nE '^[[:space:]]*static[[:space:]]+inline[[:space:]]' src/*.h; then \
+		echo "project headers must not contain static inline implementation logic" >&2; \
+		exit 1; \
+	fi
 
 test: $(BIN)
 	@for version in $(TEST_VERSIONS); do \

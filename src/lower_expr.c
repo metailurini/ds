@@ -87,10 +87,6 @@ static void validate_dir_walk_ext_literal_arg(Lower *lower, DsStr helper_name, c
     }
 }
 
-void lower_map_entry_vec_push(DsLowerMapEntryVec *vec, DsLowerMapEntry entry) {
-    DS_VEC_PUSH(vec, entry, 8);
-}
-
 DsStr lower_map_key_decode(const DsMapEntry *entry) {
     DsStr out = {0};
     if (entry->quoted_key) ds_decode_string_text(entry->key, &out);
@@ -800,7 +796,7 @@ DsLowerExpr *lower_map_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
         } else if (!lower_collection_row_field_is_portable(lowered.value)) {
             ds_diag_error(lower->diag, entry->value->span, "collection element expressions must be scalar Bash-emittable values in v0.10.0; bind the expression to a variable first");
         }
-        lower_map_entry_vec_push(&out->as.map.entries, lowered);
+        DS_VEC_PUSH(&out->as.map.entries, lowered, 8);
     }
     DsLowerRowSchema schema;
     if (lower_map_expr_schema(lower, out, &schema)) {

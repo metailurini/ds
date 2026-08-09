@@ -326,7 +326,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, ")\"");
             return true;
         case DS_LOWER_EXPR_BINARY:
-            if (bash_is_int_binary_op(expr->as.binary.op)) {
+            if (ds_binary_op_is_arithmetic(expr->as.binary.op)) {
                 buf_append(out, "\"$(__ds_int_bin ");
                 bash_single_quote(out, expr->as.binary.op.data, expr->as.binary.op.len);
                 buf_append(out, " ");

@@ -24,7 +24,7 @@ const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_RUN:
             return ds_lower_value_kind_name(DS_LOWER_VALUE_COMMAND_RESULT);
         case DS_LOWER_EXPR_BINARY:
-            return bash_is_int_binary_op(expr->as.binary.op)
+            return ds_binary_op_is_arithmetic(expr->as.binary.op)
                 ? ds_lower_value_kind_name(DS_LOWER_VALUE_INT)
                 : ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
         case DS_LOWER_EXPR_UNARY:

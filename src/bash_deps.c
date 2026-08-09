@@ -207,7 +207,7 @@ static bool command_uses_int_helpers(const DsCommand *command) {
 }
 
 DEFINE_SIMPLE_EXPR_USES(expr_is_int_helper, expr_uses_int_helpers,
-                        (expr->kind == DS_LOWER_EXPR_BINARY && bash_is_int_binary_op(expr->as.binary.op)) ||
+                        (expr->kind == DS_LOWER_EXPR_BINARY && ds_binary_op_is_arithmetic(expr->as.binary.op)) ||
                         (expr->kind == DS_LOWER_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "-")))
 DEFINE_SIMPLE_EXPR_USES(expr_is_user_function_call, expr_uses_function_value_helpers,
                         expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function)

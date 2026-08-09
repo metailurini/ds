@@ -30,10 +30,6 @@ bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message) {
     return false;
 }
 
-bool bash_is_int_binary_op(DsStr op) {
-    return ds_binary_op_is_arithmetic(op);
-}
-
 bool symbol_exists(const SymbolVec *symbols, DsStr name) {
     for (size_t i = 0; i < symbols->len; i++) {
         DsStr existing = symbols->items[i];
