@@ -96,7 +96,6 @@ bool ds_stdlib_arg_expects_int(DsStr name, size_t arg_index);
 bool ds_stdlib_arg_expects_string(DsStr name, size_t arg_index);
 unsigned ds_stdlib_bash_helper_mask(DsStr name);
 DsStdlibArrayTransport ds_stdlib_array_transport(DsStr name);
-bool ds_stdlib_array_uses_nul_records(DsStr name);
 DsStdlibArrayElementKind ds_stdlib_array_element_kind(DsStr name);
 bool ds_glob_pattern_contains_recursive(DsStr pattern);
 DsGlobPatternStatus ds_glob_pattern_validate(DsStr pattern, size_t *recursive_count_out);

@@ -710,7 +710,8 @@ bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out) {
     return true;
 }
 bool stdlib_array_call_uses_nul_records(const DsLowerExpr *call) {
-    return call && call->kind == DS_LOWER_EXPR_CALL && ds_stdlib_array_uses_nul_records(call->as.call.name);
+    return call && call->kind == DS_LOWER_EXPR_CALL &&
+           ds_stdlib_array_transport(call->as.call.name) == DS_STDLIB_ARRAY_TRANSPORT_NUL_RECORDS;
 }
 
 bool emit_stdlib_call(BashEmitter *e, const DsLowerExpr *call, EmitBuf *out) {

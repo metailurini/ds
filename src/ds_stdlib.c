@@ -157,10 +157,6 @@ DsStdlibArrayTransport ds_stdlib_array_transport(DsStr name) {
     return DS_STDLIB_ARRAY_TRANSPORT_NEWLINE_RECORDS;
 }
 
-bool ds_stdlib_array_uses_nul_records(DsStr name) {
-    return ds_stdlib_array_transport(name) == DS_STDLIB_ARRAY_TRANSPORT_NUL_RECORDS;
-}
-
 DsStdlibArrayElementKind ds_stdlib_array_element_kind(DsStr name) {
     const DsStdlibHelper *helper = ds_stdlib_lookup(name);
     if (!helper || helper->return_kind != DS_STDLIB_RETURN_ARRAY) {
