@@ -55,18 +55,12 @@ static int expr_prec(const DsExpr *expr) {
     }
 }
 
-static bool expr_binary_op_is(const DsExpr *expr, const char *op) {
-    return expr && expr->kind == DS_EXPR_BINARY && ds_str_eq_cstr(expr->as.binary.op, op);
-}
-
 static bool expr_binary_op_is_logical(const DsExpr *expr) {
-    return expr_binary_op_is(expr, "&&") || expr_binary_op_is(expr, "||");
+    return expr && expr->kind == DS_EXPR_BINARY && ds_binary_op_is_logical(expr->as.binary.op);
 }
 
 static bool expr_binary_op_is_comparison_like(const DsExpr *expr) {
-    if (!expr || expr->kind != DS_EXPR_BINARY) return false;
-    if (expr_binary_op_is_logical(expr)) return false;
-    return expr_prec(expr) <= 2;
+    return expr && expr->kind == DS_EXPR_BINARY && ds_binary_op_is_comparison_like(expr->as.binary.op);
 }
 
 static void format_logical_operand(Formatter *fmt, const DsExpr *expr, int prec) {

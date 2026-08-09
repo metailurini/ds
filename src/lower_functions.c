@@ -501,12 +501,12 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             }
             return infer_none();
         case DS_EXPR_BINARY: {
-            if (lower_op_is_arithmetic(expr->as.binary.op)) {
+            if (ds_binary_op_is_arithmetic(expr->as.binary.op)) {
                 infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_INT, "integer arithmetic");
                 infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_INT, "integer arithmetic");
                 return infer_kind(DS_LOWER_VALUE_INT);
             }
-            if (lower_op_is_logical(expr->as.binary.op)) {
+            if (ds_binary_op_is_logical(expr->as.binary.op)) {
                 infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_BOOL, "logical operator");
                 infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_BOOL, "logical operator");
                 return infer_kind(DS_LOWER_VALUE_BOOL);
@@ -852,7 +852,7 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
             }
             return false;
         case DS_EXPR_BINARY:
-            if (lower_op_is_arithmetic(expr->as.binary.op)) {
+            if (ds_binary_op_is_arithmetic(expr->as.binary.op)) {
                 DsLowerValueKind left = DS_LOWER_VALUE_UNKNOWN;
                 DsLowerValueKind right = DS_LOWER_VALUE_UNKNOWN;
                 if (!ast_expr_kind_known(lower, env, expr->as.binary.left, &left) ||
@@ -861,7 +861,7 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
                 *kind_out = DS_LOWER_VALUE_INT;
                 return true;
             }
-            if (lower_op_is_strict_comparison(expr->as.binary.op)) {
+            if (ds_binary_op_is_strict_comparison(expr->as.binary.op)) {
                 *kind_out = DS_LOWER_VALUE_BOOL;
                 return true;
             }

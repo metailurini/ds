@@ -63,6 +63,28 @@ struct DsExpr {
     } as;
 };
 
+static inline bool ds_binary_op_is_arithmetic(DsStr op) {
+    return ds_str_eq_cstr(op, "+") || ds_str_eq_cstr(op, "-") || ds_str_eq_cstr(op, "*") ||
+           ds_str_eq_cstr(op, "/") || ds_str_eq_cstr(op, "%") || ds_str_eq_cstr(op, "**");
+}
+
+static inline bool ds_binary_op_is_logical(DsStr op) {
+    return ds_str_eq_cstr(op, "&&") || ds_str_eq_cstr(op, "||");
+}
+
+static inline bool ds_binary_op_is_comparison(DsStr op) {
+    return ds_str_eq_cstr(op, "==") || ds_str_eq_cstr(op, "!=") || ds_str_eq_cstr(op, ">") ||
+           ds_str_eq_cstr(op, ">=") || ds_str_eq_cstr(op, "<") || ds_str_eq_cstr(op, "<=");
+}
+
+static inline bool ds_binary_op_is_strict_comparison(DsStr op) {
+    return ds_binary_op_is_comparison(op) || ds_str_eq_cstr(op, "===") || ds_str_eq_cstr(op, "!==");
+}
+
+static inline bool ds_binary_op_is_comparison_like(DsStr op) {
+    return ds_binary_op_is_comparison(op) || ds_str_eq_cstr(op, "in") || ds_str_eq_cstr(op, "matches");
+}
+
 static inline DsExpr *ds_expr_new(DsExprKind kind, DsSpan span) {
     DsExpr *expr = (DsExpr *)ds_xcalloc(1, sizeof(*expr));
     expr->kind = kind;
