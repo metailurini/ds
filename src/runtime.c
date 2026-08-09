@@ -3,6 +3,10 @@
 
 #include <stdarg.h>
 
+const char *ds_string_data(const DsString *string) {
+    return string && string->data ? string->data : "";
+}
+
 static hashmap *ds_map_impl(DsMap *map) {
     return (hashmap *)map->impl;
 }

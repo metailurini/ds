@@ -128,9 +128,7 @@ typedef struct DsLowerStmt DsLowerStmt;
 
 typedef DsAssignOp DsLowerAssignOp;
 
-static inline const char *ds_lower_assign_op_name(DsLowerAssignOp op) {
-    return ds_assign_op_name(op);
-}
+const char *ds_lower_assign_op_name(DsLowerAssignOp op);
 
 typedef DsCasePattern DsLowerCasePattern;
 typedef DsCasePatternVec DsLowerCasePatternVec;

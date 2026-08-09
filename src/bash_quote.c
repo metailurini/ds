@@ -5,6 +5,35 @@ void buf_append(EmitBuf *buf, const char *text) {
     ds_string_append_cstr(buf, text);
 }
 
+const char *emit_buf_data(const EmitBuf *buf) {
+    return ds_string_data(buf);
+}
+
+void buf_append_dsstr(EmitBuf *buf, DsStr value) {
+    ds_string_append_range(buf, ds_str_data(value), value.len);
+}
+
+void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags) {
+    bool has_flags = decl_flags && decl_flags[0];
+    if (function_depth > 0) buf_append(out, "local");
+    else if (has_flags) buf_append(out, "declare");
+    else return;
+    if (has_flags) {
+        buf_append(out, " ");
+        buf_append(out, decl_flags);
+    }
+    buf_append(out, " ");
+}
+
+bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message) {
+    ds_diag_error(e->diag, span, "internal Bash invariant failed: %s", message);
+    return false;
+}
+
+bool bash_is_int_binary_op(DsStr op) {
+    return ds_binary_op_is_arithmetic(op);
+}
+
 bool symbol_exists(const SymbolVec *symbols, DsStr name) {
     for (size_t i = 0; i < symbols->len; i++) {
         DsStr existing = symbols->items[i];

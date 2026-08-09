@@ -2,6 +2,10 @@
 #include "ds_runtime.h"
 #include "ds_signal.h"
 
+const char *ds_lower_assign_op_name(DsLowerAssignOp op) {
+    return ds_assign_op_name(op);
+}
+
 static void print_span(FILE *out, DsSpan span) {
     const DsSource *source = span.source;
     fprintf(out, " @ %s:%d:%d", source && source->path ? source->path : "<source>", span.start.line, span.start.column);

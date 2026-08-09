@@ -4,56 +4,12 @@
 #include "backend.h"
 #include "ds_stdlib.h"
 
-static inline bool vm_i64_add_checked(int64_t lhs, int64_t rhs, int64_t *out) {
-    if ((rhs > 0 && lhs > INT64_MAX - rhs) || (rhs < 0 && lhs < INT64_MIN - rhs)) return false;
-    *out = lhs + rhs;
-    return true;
-}
-
-static inline bool vm_i64_sub_checked(int64_t lhs, int64_t rhs, int64_t *out) {
-    if ((rhs < 0 && lhs > INT64_MAX + rhs) || (rhs > 0 && lhs < INT64_MIN + rhs)) return false;
-    *out = lhs - rhs;
-    return true;
-}
-
-static inline bool vm_i64_mul_checked(int64_t lhs, int64_t rhs, int64_t *out) {
-    if (lhs == 0 || rhs == 0) { *out = 0; return true; }
-    if ((lhs == -1 && rhs == INT64_MIN) || (rhs == -1 && lhs == INT64_MIN)) return false;
-    if (lhs > 0) {
-        if (rhs > 0) { if (lhs > INT64_MAX / rhs) return false; }
-        else if (rhs < INT64_MIN / lhs) return false;
-    } else {
-        if (rhs > 0) { if (lhs < INT64_MIN / rhs) return false; }
-        else if (lhs < INT64_MAX / rhs) return false;
-    }
-    *out = lhs * rhs;
-    return true;
-}
-
-static inline bool vm_i64_pow_checked(int64_t base, int64_t exp, int64_t *out) {
-    if (exp < 0) return false;
-    int64_t result = 1;
-    int64_t factor = base;
-    while (exp > 0) {
-        if ((exp & 1) && !vm_i64_mul_checked(result, factor, &result)) return false;
-        exp >>= 1;
-        if (exp > 0 && !vm_i64_mul_checked(factor, factor, &factor)) return false;
-    }
-    *out = result;
-    return true;
-}
-
-static inline bool vm_ascii_space(char c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
-}
-
-static inline void vm_ascii_trim_bounds(const char *data, size_t len, size_t *start, size_t *end) {
-    size_t a = 0, b = len;
-    while (a < b && vm_ascii_space(data[a])) a++;
-    while (b > a && vm_ascii_space(data[b - 1])) b--;
-    *start = a;
-    *end = b;
-}
+bool vm_i64_add_checked(int64_t lhs, int64_t rhs, int64_t *out);
+bool vm_i64_sub_checked(int64_t lhs, int64_t rhs, int64_t *out);
+bool vm_i64_mul_checked(int64_t lhs, int64_t rhs, int64_t *out);
+bool vm_i64_pow_checked(int64_t base, int64_t exp, int64_t *out);
+bool vm_ascii_space(char c);
+void vm_ascii_trim_bounds(const char *data, size_t len, size_t *start, size_t *end);
 
 typedef enum {
     VM_READ_STREAM_OK,
@@ -61,20 +17,7 @@ typedef enum {
     VM_READ_STREAM_EMBEDDED_NUL,
 } VmReadStreamStatus;
 
-static inline VmReadStreamStatus vm_read_stream(FILE *fp, DsString *out, bool rewind_first,
-                                                bool reject_nul) {
-    ds_string_init(out);
-    if (rewind_first && (fflush(fp) != 0 || fseek(fp, 0, SEEK_SET) != 0)) {
-        return VM_READ_STREAM_IO_ERROR;
-    }
-    char buf[4096];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        if (reject_nul && memchr(buf, '\0', n)) return VM_READ_STREAM_EMBEDDED_NUL;
-        ds_string_append_range(out, buf, n);
-    }
-    return ferror(fp) ? VM_READ_STREAM_IO_ERROR : VM_READ_STREAM_OK;
-}
+VmReadStreamStatus vm_read_stream(FILE *fp, DsString *out, bool rewind_first, bool reject_nul);
 
 typedef enum {
     OP_CMP_ADD,

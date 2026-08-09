@@ -10,6 +10,26 @@ bool bash_is_user_function_call_expr(const DsLowerExpr *expr) {
     return expr && expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function;
 }
 
+bool bash_emit_user_call_to_temp(BashEmitter *e, const DsLowerExpr *expr,
+    const char *label, EmitBuf *out, char *temp_buf, size_t buf_size,
+    DsStr *temp_out, const DsStr **temp_ptr_out) {
+    bash_temp_ds_name(temp_buf, buf_size, label, e->temp_counter++);
+    *temp_out = (DsStr){temp_buf, strlen(temp_buf)};
+    if (temp_ptr_out) *temp_ptr_out = temp_out;
+    emit_var_name(out, *temp_out);
+    buf_append(out, "=\"\"; ");
+    const char *return_type = ds_lower_value_kind_name(expr->as.call.return_kind);
+    buf_append(out, "__ds_call_value_into ");
+    emit_var_name(out, *temp_out);
+    buf_append(out, " ");
+    bash_single_quote(out, return_type, strlen(return_type));
+    buf_append(out, " ");
+    emit_fn_name(out, expr->as.call.name);
+    if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;
+    buf_append(out, "; ");
+    return true;
+}
+
 void bash_temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id) {
     snprintf(buf, cap, "__%s_%zu", prefix, id);
 }

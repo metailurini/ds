@@ -52,43 +52,16 @@ typedef struct {
     size_t map_loop_cap;
 } Lower;
 
-static inline bool lower_sym_kind_is_scalar(SymKind kind) {
-    return kind == SYM_STRING || kind == SYM_INT || kind == SYM_BOOL;
-}
-static inline bool lower_value_kind_is_scalar(DsLowerValueKind kind) {
-    return kind == DS_LOWER_VALUE_STRING || kind == DS_LOWER_VALUE_INT || kind == DS_LOWER_VALUE_BOOL;
-}
-static inline void lower_diag_stdlib_arity_error(Lower *lower, DsSpan span, DsStr name,
-                                                  size_t min_arity, size_t max_arity, size_t actual) {
-    if (min_arity == max_arity) {
-        ds_diag_error(lower->diag, span, "helper `%.*s` expects %zu arguments but got %zu",
-                      (int)name.len, name.data, min_arity, actual);
-    } else {
-        ds_diag_error(lower->diag, span, "helper `%.*s` expects %zu to %zu arguments but got %zu",
-                      (int)name.len, name.data, min_arity, max_arity, actual);
-    }
-}
-static inline void lower_diag_unknown_function(Lower *lower, DsSpan span, DsStr name) {
-    ds_diag_error(lower->diag, span, "unknown function `%.*s`", (int)name.len, name.data);
-}
-static inline void lower_diag_unknown_stdlib_helper(Lower *lower, DsSpan span, DsStr name) {
-    ds_diag_error(lower->diag, span, "unknown standard-library helper `%.*s`", (int)name.len, name.data);
-}
-static inline void lower_diag_unknown_string_method(Lower *lower, DsSpan span, DsStr member) {
-    ds_diag_error(lower->diag, span, "unknown string method `%.*s`; supported methods are %s",
-                  (int)member.len, member.data, ds_stdlib_string_method_names());
-}
-static inline DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam *param) {
-    if (!param) return DS_LOWER_VALUE_UNKNOWN;
-    return param->has_default ? param->default_kind : param->inferred_kind;
-}
+bool lower_sym_kind_is_scalar(SymKind kind);
+bool lower_value_kind_is_scalar(DsLowerValueKind kind);
+void lower_diag_stdlib_arity_error(Lower *lower, DsSpan span, DsStr name,
+                                   size_t min_arity, size_t max_arity, size_t actual);
+void lower_diag_unknown_function(Lower *lower, DsSpan span, DsStr name);
+void lower_diag_unknown_stdlib_helper(Lower *lower, DsSpan span, DsStr name);
+void lower_diag_unknown_string_method(Lower *lower, DsSpan span, DsStr member);
+DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam *param);
 bool is_env_name_text(DsStr name);
-static inline bool lower_validate_env_name(Lower *lower, DsStr name, DsSpan span, const char *version) {
-    if (is_env_name_text(name)) return true;
-    ds_diag_error(lower->diag, span, "invalid environment variable name `%.*s` in %s",
-                  (int)name.len, ds_str_data(name), version);
-    return false;
-}
+bool lower_validate_env_name(Lower *lower, DsStr name, DsSpan span, const char *version);
 bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
 bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind);
 DsLowerValueKind lower_stdlib_return_value_kind(const DsStdlibHelper *helper);
@@ -108,12 +81,7 @@ void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema);
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name);
 int find_function_index(DsLowerProgram *program, DsStr name);
 
-static inline DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
-    DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(*expr));
-    expr->kind = kind;
-    expr->span = span;
-    return expr;
-}
+DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span);
 bool command_result_field_kind(DsStr field, SymKind *kind_out);
 bool lower_expr_produces_command_result(const DsLowerExpr *expr);
 bool lower_expr_is_portable_command_result_return(const DsLowerExpr *expr);
@@ -160,12 +128,7 @@ DsStr lower_map_key_decode(const DsMapEntry *entry);
 
 bool lower_script_decl(Lower *lower, const DsScriptDecl *decl, DsLowerProgram *program);
 
-static inline DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
-    DsLowerStmt *stmt = (DsLowerStmt *)ds_xcalloc(1, sizeof(*stmt));
-    stmt->kind = kind;
-    stmt->span = span;
-    return stmt;
-}
+DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span);
 DsLowerStmt *lower_call_stmt(Lower *lower, const DsStmt *stmt);
 DsLowerStmt *lower_block(Lower *lower, const DsStmt *block, bool child_scope);
 DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt);

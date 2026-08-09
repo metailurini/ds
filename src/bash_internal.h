@@ -28,38 +28,12 @@ typedef struct {
 
 void buf_append(EmitBuf *buf, const char *text);
 
-static inline const char *emit_buf_data(const EmitBuf *buf) {
-    return buf && buf->data ? buf->data : "";
-}
+const char *emit_buf_data(const EmitBuf *buf);
+void buf_append_dsstr(EmitBuf *buf, DsStr value);
+void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags);
 
-static inline void buf_append_dsstr(EmitBuf *buf, DsStr value) {
-    ds_string_append_range(buf, ds_str_data(value), value.len);
-}
-
-static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags) {
-    bool has_flags = decl_flags && decl_flags[0];
-    if (function_depth > 0) {
-        buf_append(out, "local");
-    } else if (has_flags) {
-        buf_append(out, "declare");
-    } else {
-        return;
-    }
-    if (has_flags) {
-        buf_append(out, " ");
-        buf_append(out, decl_flags);
-    }
-    buf_append(out, " ");
-}
-
-static inline bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message) {
-    ds_diag_error(e->diag, span, "internal Bash invariant failed: %s", message);
-    return false;
-}
-static inline bool bash_is_int_binary_op(DsStr op) {
-    return ds_str_eq_cstr(op, "+") || ds_str_eq_cstr(op, "-") || ds_str_eq_cstr(op, "*") ||
-           ds_str_eq_cstr(op, "/") || ds_str_eq_cstr(op, "%") || ds_str_eq_cstr(op, "**");
-}
+bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message);
+bool bash_is_int_binary_op(DsStr op);
 bool symbol_exists(const SymbolVec *symbols, DsStr name);
 void free_symbols(SymbolVec *symbols);
 void symbols_truncate(SymbolVec *symbols, size_t len);
@@ -125,25 +99,9 @@ bool bash_emit_user_function_value_call_into(BashEmitter *e, DsStr name, const D
 bool bash_emit_user_call_statement(BashEmitter *e, DsStr name, const DsLowerExprVec *args, int indent);
 bool bash_emit_user_call_capture_return(BashEmitter *e, const DsLowerExpr *call, DsLowerValueKind return_kind, int indent);
 
-static inline bool bash_emit_user_call_to_temp(BashEmitter *e, const DsLowerExpr *expr,
+bool bash_emit_user_call_to_temp(BashEmitter *e, const DsLowerExpr *expr,
     const char *label, EmitBuf *out, char *temp_buf, size_t buf_size,
-    DsStr *temp_out, const DsStr **temp_ptr_out) {
-    bash_temp_ds_name(temp_buf, buf_size, label, e->temp_counter++);
-    *temp_out = (DsStr){temp_buf, strlen(temp_buf)};
-    if (temp_ptr_out) *temp_ptr_out = temp_out;
-    emit_var_name(out, *temp_out);
-    buf_append(out, "=\"\"; ");
-    const char *return_type = ds_lower_value_kind_name(expr->as.call.return_kind);
-    buf_append(out, "__ds_call_value_into ");
-    emit_var_name(out, *temp_out);
-    buf_append(out, " ");
-    bash_single_quote(out, return_type, strlen(return_type));
-    buf_append(out, " ");
-    emit_fn_name(out, expr->as.call.name);
-    if (!emit_user_call_args(e, &expr->as.call.args, out)) return false;
-    buf_append(out, "; ");
-    return true;
-}
+    DsStr *temp_out, const DsStr **temp_ptr_out);
 
 void bash_register_symbol(BashEmitter *e, DsStr name);
 
