@@ -7,6 +7,7 @@ CPPFLAGS += $(DS_FEATURE_CPPFLAGS)
 SRC := src/main.c src/cli_program.c src/ds_common.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/parse_expr.c src/parse_command.c src/parse_script.c src/parse_function.c src/parse_stmt.c src/lower.c src/lower_symbols.c src/lower_expr.c src/lower_interpolation.c src/lower_collection.c src/lower_command.c src/lower_stmt.c src/lower_stdlib.c src/lower_functions.c src/lower_free.c src/hir.c src/format.c src/ds_checker.c src/ds_command.c src/ds_command_facts.c src/ds_interpolation.c src/ds_signal.c src/runtime.c src/runtime/hashmap.c src/ds_stdlib.c src/ds_regex.c src/vm.c src/vm_args.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/bash_helpers.c src/bash_quote.c src/bash_structured.c src/bash_expr.c src/bash_command.c src/bash_function.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
 PRIVATE_HEADERS := $(wildcard src/*.h src/runtime/*.h)
+PROJECT_HEADERS := $(wildcard include/*.h src/*.h src/runtime/*.h)
 BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17 0-18 0-19 0-20 0-21 0-22 0-23 0-24 0-25 0-26 0-27 0-29 0-30 0-31 0-32 0-33 0-34 0-35 0-36 0-37 0-38
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
@@ -38,11 +39,11 @@ check-compile-flags:
 	done
 
 check-header-boundaries:
-	@if grep -nE '^[[:space:]]*static[[:space:]]+inline[[:space:]]' src/*.h; then \
-		echo "project headers must not contain static inline implementation logic" >&2; \
+	@if grep -nE '^[[:space:]]*(static[[:space:]]+)?([[:alnum:]_]+[[:space:]*]+)+[[:alnum:]_]+\([^;{}]*\)[[:space:]]*\{' $(PROJECT_HEADERS); then \
+		echo "project headers must not contain function implementations" >&2; \
 		exit 1; \
 	fi
-	@bad_macros=$$(grep -hE '^#define [A-Za-z0-9_]+.*\\$$' src/*.h | \
+	@bad_macros=$$(grep -hE '^#define [A-Za-z0-9_]+.*\\$$' $(PROJECT_HEADERS) | \
 		sed -E 's/^#define ([A-Za-z0-9_]+).*/\1/' | \
 		grep -vE '^(DS_GROW_ARRAY|DS_VEC_PUSH|DS_VM_OPCODE_LIST)$$' || true); \
 	if [ -n "$$bad_macros" ]; then \
