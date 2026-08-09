@@ -95,8 +95,10 @@ façade while the real declarations live in focused internal headers under
 `src/`. Implementation files include the narrowest practical header instead of
 the umbrella where possible:
 
-- `src/ds_common.h` owns source spans, diagnostics, source loading, and
-  allocation helpers.
+- `src/ds_common.h` owns foundational types and declarations shared across
+  components. Its executable implementation lives in `src/ds_common.c`; the
+  only behavioral macros kept in the header are the type-generic vector growth
+  primitives that require the caller's element type.
 - `src/ds_command.h` owns command words, redirections, captured/plain command
   metadata, and command-result field descriptors.
 - `src/ds_ast.h` owns parser AST nodes and script/function/test declaration
@@ -108,6 +110,15 @@ the umbrella where possible:
 - `src/ds_stdlib.h` owns standard-library helper metadata.
 - `src/ds_checker.h` owns the narrow checker warning entrypoint.
 - `src/backend.h` owns formatter, Bash emission, bytecode, and VM entrypoints.
+
+Project headers are declaration boundaries, not implementation containers. In
+particular, project-owned `.h` files do not carry `static inline` function
+bodies or specialized cleanup/workflow macros. The deliberate exceptions are
+`DS_GROW_ARRAY`/`DS_VEC_PUSH`, which need the caller's C element type, and the
+VM opcode X-macro used to define the opcode enum from one list. Domain helpers
+should wrap those primitives only when they add ownership, validation, state
+transition, representation hiding, or another meaningful contract; pure
+pass-through push/grow aliases should be inlined at their caller.
 
 - `src/ds_stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,
@@ -123,9 +134,11 @@ the umbrella where possible:
   orchestration entrypoint, and `src/lower_free.c` owns HIR cleanup. These modules consume `src/ds_stdlib.c` metadata rather than each
   maintaining independent helper arity/name lists.
 - `src/lower_internal.h` contains lowerer-private symbol/value-kind structs and
-  prototypes. It is not part of the public user-facing API.
-- `src/vm_internal.h` contains bytecode/VM-private structs shared only by VM
-  implementation files. It is not part of the public user-facing API.
+  prototypes only. Shared lowerer helper implementations live in the lowerer
+  `.c` modules. It is not part of the public user-facing API.
+- `src/vm_internal.h` contains bytecode/VM-private structs, declarations, and
+  the opcode X-macro shared only by VM implementation files. VM helper logic
+  lives in `.c` files. It is not part of the public user-facing API.
 - VM responsibilities are split by component: `src/vm.c` owns the main
   interpreter loop and public VM entrypoints, `src/vm_compile.c` owns HIR to
   bytecode construction, `src/vm_dump.c` owns bytecode/debug output,

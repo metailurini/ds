@@ -38,11 +38,19 @@ the same.
 
 ### `ds_common.h` ownership boundary
 
-`ds_common.h` now contains heavily reused allocation, checked-size, vector-growth,
-string/span, path, escaping, and formatting helpers. Do not split it into many tiny
-utility modules, but prefer an existing domain module when a non-trivial helper clearly
-belongs to source handling, command handling, paths, formatting, or another established
-area.
+`ds_common.h` is now a declaration/type boundary with executable common helpers in
+`ds_common.c`. Keep it that way. The type-generic `DS_GROW_ARRAY` and `DS_VEC_PUSH`
+macros are deliberate C-level exceptions; non-trivial helpers should live in an
+existing implementation module rather than returning to the header or creating a new
+single-purpose utility module.
+
+### Vector wrapper discipline
+
+The shared growth primitives are useful only if callers do not rebuild layers of
+one-line aliases around them. Keep a domain helper when it adds ownership, validation,
+state transition, representation hiding, or meaningful multi-step construction. Inline
+helpers that merely rename `DS_VEC_PUSH`/`DS_GROW_ARRAY`, and avoid boolean return values
+for operations whose only failure mode is the project's fatal allocation path.
 
 ### Hashmap wrapper inlining (RR9)
 
@@ -57,11 +65,12 @@ without introducing a more complicated iterator/callback API.
 
 ## Completed or superseded
 
-- Shared vector growth (`DS_VEC_PUSH`) and parser/lower push-wrapper removal.
+- Shared vector growth (`DS_VEC_PUSH`) and parser/lower/Bash pass-through push-wrapper
+  removal.
 - Checked shared vector/buffer growth, including overflow-safe capacity and allocation
   size calculations.
-- Shared pointer-vector, keyed-vector, named-default-vector, case-arm,
-  owned-string-array, and paired-pointer cleanup primitives.
+- Header-resident specialized cleanup macros were removed in favor of domain-owned
+  cleanup functions in implementation files.
 - Canonical signal, redirect, assignment-operator, case-pattern, string
   clone/equality, indentation, escaping, path, integer parsing, and source/string
   helper APIs.

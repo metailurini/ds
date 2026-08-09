@@ -42,6 +42,13 @@ check-header-boundaries:
 		echo "project headers must not contain static inline implementation logic" >&2; \
 		exit 1; \
 	fi
+	@bad_macros=$$(grep -hE '^#define [A-Za-z0-9_]+.*\\$$' src/*.h | \
+		sed -E 's/^#define ([A-Za-z0-9_]+).*/\1/' | \
+		grep -vE '^(DS_GROW_ARRAY|DS_VEC_PUSH|DS_VM_OPCODE_LIST)$$' || true); \
+	if [ -n "$$bad_macros" ]; then \
+		echo "unexpected multiline implementation macros in project headers: $$bad_macros" >&2; \
+		exit 1; \
+	fi
 
 test: $(BIN)
 	@for version in $(TEST_VERSIONS); do \
