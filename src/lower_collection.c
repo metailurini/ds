@@ -96,24 +96,19 @@ void row_schema_free(DsLowerRowSchema *schema) {
     *schema = (DsLowerRowSchema){0};
 }
 
-bool row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {
-    if (!schema) return false;
+void row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {
+    if (!schema) return;
     DsLowerRowField field = {ds_str_clone(name), kind};
     DS_VEC_PUSH(schema, field, 4);
-    return true;
 }
 
-bool row_schema_clone(const DsLowerRowSchema *src, DsLowerRowSchema *dst) {
-    if (!dst) return false;
+void row_schema_clone(const DsLowerRowSchema *src, DsLowerRowSchema *dst) {
+    if (!dst) return;
     row_schema_init(dst);
-    if (!src) return true;
+    if (!src) return;
     for (size_t i = 0; i < src->len; i++) {
-        if (!row_schema_push(dst, src->items[i].name, src->items[i].kind)) {
-            row_schema_free(dst);
-            return false;
-        }
+        row_schema_push(dst, src->items[i].name, src->items[i].kind);
     }
-    return true;
 }
 
 const DsLowerRowField *row_schema_find(const DsLowerRowSchema *schema, DsStr name) {
