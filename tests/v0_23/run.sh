@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 assert_run_fails() {
   local name="$1" fixture="$2" fragment="$3"
   run_fail "${name}_run" "$DS" run "$fixture"

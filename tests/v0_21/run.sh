@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 assert_file_equals() {
   local file="$1" expected="$2" name="$3"
   local expected_file="$TMP/${name//[^A-Za-z0-9_]/_}.expected"

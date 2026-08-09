@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 assert_exact_stdout() {
   local name="$1" expected="$2"
   assert_same_text "$expected" "$TMP/${name}.out" "$name stdout"

@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 make_fakebin() {
   local bin="$TMP/fakebin"
   mkdir -p "$bin"

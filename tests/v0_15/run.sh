@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 assert_no_trailing_ws() {
   local file="$1" name="$2"
   if grep -nE '[[:blank:]]+$' "$file" >/dev/null; then

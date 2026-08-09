@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 run_in_dir_ok() {
   local name="$1" dir="$2"; shift 2
   mkdir -p "$dir"

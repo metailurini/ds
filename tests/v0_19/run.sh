@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 capture_env_in_dir() {
   local name="$1" dir="$2"; shift 2
   mkdir -p "$dir"

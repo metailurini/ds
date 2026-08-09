@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 assert_parity() {
   local name="$1" fixture="$2" expected_status="$3" expected_stdout="$4"; shift 4
   local vm_work="$TMP/${name}_vm_work"

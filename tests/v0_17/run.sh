@@ -16,12 +16,6 @@ fi
 
 cd "$ROOT"
 
-write_fixture() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
-
 assert_diag_shape() {
   local file="$1" path_fragment="$2" severity="$3" text="$4" name="$5"
   assert_contains "$file" "$path_fragment:" "$name path"

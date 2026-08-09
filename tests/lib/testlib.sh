@@ -14,11 +14,17 @@ pass() {
 }
 
 write_fixture() {
-  local name="$1"
-  local path="$FIX/$name.ds"
+  local target="$1" path
+  if [[ "$target" == *.ds ]]; then
+    path="$target"
+  else
+    path="$FIX/$target.ds"
+  fi
   mkdir -p "$(dirname "$path")"
   cat >"$path"
-  printf '%s' "$path"
+  if [[ "$target" != *.ds ]]; then
+    printf '%s' "$path"
+  fi
 }
 
 run_ok() {
@@ -310,4 +316,76 @@ assert_vm_bash_parity() {
     [ -f "$work_bash/$rel" ] || fail "VM/Bash $rel parity: $name: Bash did not create expected output file"
     assert_same "$work_vm/$rel" "$work_bash/$rel" "VM/Bash $rel parity: $name"
   done
+}
+
+assert_parity() {
+  local name="$1" fixture="$2" expected_status="$3" expected_stdout="$4"; shift 4
+  local vm_work="$TMP/${name}_vm_work"
+  local bash_work="$TMP/${name}_bash_work"
+  local script="$TMP/${name}.sh"
+  mkdir -p "$vm_work" "$bash_work"
+
+  run_ok "${name}_check" "$DS" check "$fixture"
+  capture_in_dir "${name}_vm" "$vm_work" "$DS" run "$fixture" "$@"
+  run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
+  run_ok "${name}_bash_n" bash -n "$script"
+  assert_not_matches "$script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' "$name emitted Bash does not call ds"
+  capture_in_dir "${name}_bash" "$bash_work" bash "$script" "$@"
+
+  assert_status "${name}_vm" "$expected_status"
+  assert_status "${name}_bash" "$expected_status"
+  assert_same_text "$expected_stdout" "$TMP/${name}_vm.out" "$name VM stdout"
+  assert_same_text "$expected_stdout" "$TMP/${name}_bash.out" "$name Bash stdout"
+  if [ "$expected_status" = 0 ]; then
+    assert_same "$TMP/${name}_vm.err" "$TMP/${name}_bash.err" "$name stderr parity"
+  else
+    pass "$name non-zero stderr checked by focused assertions when required"
+  fi
+}
+
+assert_parity_same() {
+  local name="$1" fixture="$2" expected_status="$3"; shift 3
+  local vm_work="$TMP/${name}_vm_work"
+  local bash_work="$TMP/${name}_bash_work"
+  local script="$TMP/${name}.sh"
+  mkdir -p "$vm_work" "$bash_work"
+
+  run_ok "${name}_check" "$DS" check "$fixture"
+  capture_in_dir "${name}_vm" "$vm_work" "$DS" run "$fixture" "$@"
+  run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
+  run_ok "${name}_bash_n" bash -n "$script"
+  assert_not_matches "$script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' "$name emitted Bash does not call ds"
+  capture_in_dir "${name}_bash" "$bash_work" bash "$script" "$@"
+
+  assert_status "${name}_vm" "$expected_status"
+  assert_status "${name}_bash" "$expected_status"
+  assert_same "$TMP/${name}_vm.out" "$TMP/${name}_bash.out" "$name stdout parity"
+  if [ "$expected_status" = 0 ]; then
+    assert_same "$TMP/${name}_vm.err" "$TMP/${name}_bash.err" "$name stderr parity"
+  else
+    pass "$name non-zero stderr checked by focused assertions when required"
+  fi
+}
+
+assert_parity_file() {
+  local name="$1" fixture="$2" expected_status="$3" expected_stdout="$4" rel_file="$5" expected_file_text="$6"; shift 6
+  local vm_work="$TMP/${name}_vm_work"
+  local bash_work="$TMP/${name}_bash_work"
+  local script="$TMP/${name}.sh"
+  mkdir -p "$vm_work" "$bash_work"
+
+  run_ok "${name}_check" "$DS" check "$fixture"
+  capture_in_dir "${name}_vm" "$vm_work" "$DS" run "$fixture" "$@"
+  run_ok "${name}_emit" "$DS" emit bash "$fixture" -o "$script"
+  run_ok "${name}_bash_n" bash -n "$script"
+  assert_not_matches "$script" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)' "$name emitted Bash does not call ds"
+  capture_in_dir "${name}_bash" "$bash_work" bash "$script" "$@"
+
+  assert_status "${name}_vm" "$expected_status"
+  assert_status "${name}_bash" "$expected_status"
+  assert_same_text "$expected_stdout" "$TMP/${name}_vm.out" "$name VM stdout"
+  assert_same_text "$expected_stdout" "$TMP/${name}_bash.out" "$name Bash stdout"
+  assert_same_text "$expected_file_text" "$vm_work/$rel_file" "$name VM side effect"
+  assert_same_text "$expected_file_text" "$bash_work/$rel_file" "$name Bash side effect"
+  assert_same "$vm_work/$rel_file" "$bash_work/$rel_file" "$name side-effect parity"
 }
