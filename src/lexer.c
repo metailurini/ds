@@ -2,34 +2,32 @@
 
 #include <ctype.h>
 
+typedef struct {
+    const char *text;
+    size_t len;
+    DsTokenKind kind;
+} Keyword;
+
+static const Keyword k_keywords[] = {
+#define DS_TOKEN(name)
+#define DS_KEYWORD(name, text) {text, sizeof(text) - 1, DS_TOK_##name},
+#include "token_kinds.def"
+#undef DS_KEYWORD
+#undef DS_TOKEN
+};
+
+static const char *const k_token_kind_names[] = {
+#define DS_TOKEN(name) [DS_TOK_##name] = #name,
+#define DS_KEYWORD(name, text) [DS_TOK_##name] = #name,
+#include "token_kinds.def"
+#undef DS_KEYWORD
+#undef DS_TOKEN
+};
+
 static DsTokenKind keyword_kind(const char *text, size_t len) {
-    if (len == 3 && strncmp(text, "let", 3) == 0) return DS_TOK_LET;
-    if (len == 2 && strncmp(text, "if", 2) == 0) return DS_TOK_IF;
-    if (len == 4 && strncmp(text, "else", 4) == 0) return DS_TOK_ELSE;
-    if (len == 6 && strncmp(text, "script", 6) == 0) return DS_TOK_SCRIPT;
-    if (len == 6 && strncmp(text, "import", 6) == 0) return DS_TOK_IMPORT;
-    if (len == 3 && strncmp(text, "arg", 3) == 0) return DS_TOK_ARG;
-    if (len == 6 && strncmp(text, "option", 6) == 0) return DS_TOK_OPTION;
-    if (len == 4 && strncmp(text, "flag", 4) == 0) return DS_TOK_FLAG;
-    if (len == 3 && strncmp(text, "run", 3) == 0) return DS_TOK_RUN;
-    if (len == 6 && strncmp(text, "string", 6) == 0) return DS_TOK_TYPE_STRING;
-    if (len == 3 && strncmp(text, "int", 3) == 0) return DS_TOK_TYPE_INT;
-    if (len == 4 && strncmp(text, "bool", 4) == 0) return DS_TOK_TYPE_BOOL;
-    if (len == 4 && strncmp(text, "true", 4) == 0) return DS_TOK_TRUE;
-    if (len == 5 && strncmp(text, "false", 5) == 0) return DS_TOK_FALSE;
-    if (len == 2 && strncmp(text, "fn", 2) == 0) return DS_TOK_FN;
-    if (len == 3 && strncmp(text, "for", 3) == 0) return DS_TOK_FOR;
-    if (len == 2 && strncmp(text, "in", 2) == 0) return DS_TOK_IN;
-    if (len == 7 && strncmp(text, "matches", 7) == 0) return DS_TOK_MATCHES;
-    if (len == 5 && strncmp(text, "while", 5) == 0) return DS_TOK_WHILE;
-    if (len == 5 && strncmp(text, "break", 5) == 0) return DS_TOK_BREAK;
-    if (len == 8 && strncmp(text, "continue", 8) == 0) return DS_TOK_CONTINUE;
-    if (len == 4 && strncmp(text, "case", 4) == 0) return DS_TOK_CASE;
-    if (len == 4 && strncmp(text, "test", 4) == 0) return DS_TOK_TEST;
-    if (len == 6 && strncmp(text, "assert", 6) == 0) return DS_TOK_ASSERT;
-    if (len == 6 && strncmp(text, "return", 6) == 0) return DS_TOK_RETURN;
-    if (len == 5 && strncmp(text, "defer", 5) == 0) return DS_TOK_DEFER;
-    if (len == 4 && strncmp(text, "trap", 4) == 0) return DS_TOK_TRAP;
+    for (size_t i = 0; i < DS_ARRAY_LEN(k_keywords); i++) {
+        if (len == k_keywords[i].len && memcmp(text, k_keywords[i].text, len) == 0) return k_keywords[i].kind;
+    }
     return DS_TOK_IDENT;
 }
 
@@ -45,77 +43,7 @@ static void add_token(DsTokenVec *out, const DsSource *source, DsTokenKind kind,
 }
 
 const char *ds_token_kind_name(DsTokenKind kind) {
-    switch (kind) {
-        case DS_TOK_EOF: return "EOF";
-        case DS_TOK_NEWLINE: return "NEWLINE";
-        case DS_TOK_IDENT: return "IDENT";
-        case DS_TOK_INT: return "INT";
-        case DS_TOK_STRING: return "STRING";
-        case DS_TOK_DOLLAR_IDENT: return "DOLLAR_IDENT";
-        case DS_TOK_LET: return "LET";
-        case DS_TOK_IF: return "IF";
-        case DS_TOK_ELSE: return "ELSE";
-        case DS_TOK_SCRIPT: return "SCRIPT";
-        case DS_TOK_IMPORT: return "IMPORT";
-        case DS_TOK_ARG: return "ARG";
-        case DS_TOK_OPTION: return "OPTION";
-        case DS_TOK_FLAG: return "FLAG";
-        case DS_TOK_RUN: return "RUN";
-        case DS_TOK_TYPE_STRING: return "TYPE_STRING";
-        case DS_TOK_TYPE_INT: return "TYPE_INT";
-        case DS_TOK_TYPE_BOOL: return "TYPE_BOOL";
-        case DS_TOK_TRUE: return "TRUE";
-        case DS_TOK_FALSE: return "FALSE";
-        case DS_TOK_FN: return "FN";
-        case DS_TOK_FOR: return "FOR";
-        case DS_TOK_IN: return "IN";
-        case DS_TOK_MATCHES: return "MATCHES";
-        case DS_TOK_WHILE: return "WHILE";
-        case DS_TOK_BREAK: return "BREAK";
-        case DS_TOK_CONTINUE: return "CONTINUE";
-        case DS_TOK_CASE: return "CASE";
-        case DS_TOK_PIPE: return "PIPE";
-        case DS_TOK_AND_AND: return "AND_AND";
-        case DS_TOK_OR_OR: return "OR_OR";
-        case DS_TOK_TEST: return "TEST";
-        case DS_TOK_ASSERT: return "ASSERT";
-        case DS_TOK_RETURN: return "RETURN";
-        case DS_TOK_DEFER: return "DEFER";
-        case DS_TOK_TRAP: return "TRAP";
-        case DS_TOK_COLON: return "COLON";
-        case DS_TOK_COMMA: return "COMMA";
-        case DS_TOK_EQUAL: return "EQUAL";
-        case DS_TOK_EQUAL_EQUAL: return "EQUAL_EQUAL";
-        case DS_TOK_BANG: return "BANG";
-        case DS_TOK_BANG_EQUAL: return "BANG_EQUAL";
-        case DS_TOK_GREATER: return "GREATER";
-        case DS_TOK_GREATER_EQUAL: return "GREATER_EQUAL";
-        case DS_TOK_LESS: return "LESS";
-        case DS_TOK_LESS_EQUAL: return "LESS_EQUAL";
-        case DS_TOK_PLUS: return "PLUS";
-        case DS_TOK_MINUS: return "MINUS";
-        case DS_TOK_STAR: return "STAR";
-        case DS_TOK_STAR_STAR: return "STAR_STAR";
-        case DS_TOK_SLASH: return "SLASH";
-        case DS_TOK_PERCENT: return "PERCENT";
-        case DS_TOK_DOT: return "DOT";
-        case DS_TOK_DOT_DOT: return "DOT_DOT";
-        case DS_TOK_REGEX: return "REGEX";
-        case DS_TOK_REDIRECT_OUT: return "REDIRECT_OUT";
-        case DS_TOK_REDIRECT_OUT_APPEND: return "REDIRECT_OUT_APPEND";
-        case DS_TOK_REDIRECT_ERR: return "REDIRECT_ERR";
-        case DS_TOK_REDIRECT_ERR_APPEND: return "REDIRECT_ERR_APPEND";
-        case DS_TOK_REDIRECT_ALL: return "REDIRECT_ALL";
-        case DS_TOK_REDIRECT_ALL_APPEND: return "REDIRECT_ALL_APPEND";
-        case DS_TOK_LBRACE: return "LBRACE";
-        case DS_TOK_RBRACE: return "RBRACE";
-        case DS_TOK_LBRACKET: return "LBRACKET";
-        case DS_TOK_RBRACKET: return "RBRACKET";
-        case DS_TOK_LPAREN: return "LPAREN";
-        case DS_TOK_RPAREN: return "RPAREN";
-        case DS_TOK_UNKNOWN: return "UNKNOWN";
-    }
-    return "UNKNOWN";
+    return (unsigned)kind < DS_ARRAY_LEN(k_token_kind_names) ? k_token_kind_names[kind] : "UNKNOWN";
 }
 
 bool ds_lex(const DsSource *source, DsTokenVec *out, DsDiag *diag) {
