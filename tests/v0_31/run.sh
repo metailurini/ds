@@ -17,14 +17,6 @@ if [[ "${DS_SKIP_BUILD:-0}" != "1" ]]; then
   make -C "$ROOT" >/dev/null
 fi
 
-write_fixture() {
-  local name="$1"
-  local path="$FIX/$name.ds"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-  printf '%s' "$path"
-}
-
 
 copy_seed() {
   local from="$1" to="$2"
@@ -32,16 +24,6 @@ copy_seed() {
   if [ -d "$from" ]; then
     cp -a "$from/." "$to/"
   fi
-}
-
-capture_cmd() {
-  local name="$1"
-  shift
-  set +e
-  "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
 }
 
 
@@ -76,14 +58,6 @@ pick_non_c_locale() {
   ')
   [ -n "$candidate" ] || return 1
   printf '%s' "$candidate"
-}
-
-assert_no_ds_call() {
-  local script="$1" name="$2"
-  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
-  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
-  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
-  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
 }
 
 emit_checked() {

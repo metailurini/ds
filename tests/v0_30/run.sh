@@ -16,14 +16,6 @@ if [[ "${DS_SKIP_BUILD:-0}" != "1" ]]; then
   make -C "$ROOT" >/dev/null
 fi
 
-write_fixture() {
-  local name="$1"
-  local path="$FIX/$name.ds"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-  printf '%s' "$path"
-}
-
 assert_text() {
   local name="$1" expected="$2" actual_file="$3"
   local expected_file="$TMP/${name}.expected"
@@ -36,24 +28,6 @@ assert_file_equals() {
   local expected_file="$TMP/${name//[^A-Za-z0-9_]/_}.expected"
   printf '%s' "$expected" >"$expected_file"
   assert_same "$expected_file" "$path" "$name"
-}
-
-capture_cmd() {
-  local name="$1"
-  shift
-  set +e
-  "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
-}
-
-assert_no_ds_call() {
-  local script="$1" name="$2"
-  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
-  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
-  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
-  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
 }
 
 run_parity() {

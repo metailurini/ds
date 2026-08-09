@@ -22,36 +22,6 @@ write_fixture() {
   cat >"$path"
 }
 
-capture_in_dir() {
-  local name="$1" dir="$2"; shift 2
-  mkdir -p "$dir"
-  set +e
-  (cd "$dir" && "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
-}
-
-assert_matches() {
-  local file="$1" regex="$2" name="$3"
-  grep -E -- "$regex" "$file" >/dev/null || {
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected to match /$regex/"
-  }
-  pass "$name"
-}
-
-assert_not_matches() {
-  local file="$1" regex="$2" name="$3"
-  if grep -E -- "$regex" "$file" >/dev/null; then
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected not to match /$regex/"
-  fi
-  pass "$name"
-}
-
 assert_diag_shape() {
   local file="$1" path_fragment="$2" severity="$3" text="$4" name="$5"
   assert_contains "$file" "$path_fragment:" "$name path"

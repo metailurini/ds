@@ -39,14 +39,6 @@ assert_file_equals() {
   assert_same "$expected_file" "$path" "$name"
 }
 
-assert_no_ds_call() {
-  local script="$1" name="$2"
-  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
-  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
-  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
-  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
-}
-
 assert_helper_present() {
   local script="$1" helper="$2" name="$3"
   assert_contains "$script" "$helper" "$name helper present"
@@ -63,16 +55,6 @@ assert_helper_count() {
   count=$(grep -c -- "$pattern" "$script" || true)
   [ "$count" = "$expected" ] || fail "$name: expected $expected, got $count"
   pass "$name"
-}
-
-capture_cmd() {
-  local name="$1"
-  shift
-  set +e
-  "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
 }
 
 run_parity() {

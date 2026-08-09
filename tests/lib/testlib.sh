@@ -13,6 +13,14 @@ pass() {
   echo "ok $pass_count - $*"
 }
 
+write_fixture() {
+  local name="$1"
+  local path="$FIX/$name.ds"
+  mkdir -p "$(dirname "$path")"
+  cat >"$path"
+  printf '%s' "$path"
+}
+
 run_ok() {
   local name="$1"; shift
   "$@" >"$TMP/$name.out" 2>"$TMP/$name.err" || {
@@ -37,6 +45,26 @@ capture_status() {
   local name="$1"; shift
   set +e
   "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"
+  local rc=$?
+  set -e
+  printf '%s' "$rc" >"$TMP/$name.rc"
+}
+
+capture_cmd() {
+  local name="$1"
+  shift
+  set +e
+  "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"
+  local rc=$?
+  set -e
+  printf '%s' "$rc" >"$TMP/$name.rc"
+}
+
+capture_in_dir() {
+  local name="$1" dir="$2"; shift 2
+  mkdir -p "$dir"
+  set +e
+  (cd "$dir" && "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
   local rc=$?
   set -e
   printf '%s' "$rc" >"$TMP/$name.rc"
@@ -91,6 +119,33 @@ assert_not_contains() {
   pass "$name"
 }
 
+assert_matches() {
+  local file="$1" regex="$2" name="$3"
+  grep -E -- "$regex" "$file" >/dev/null || {
+    echo "--- $file" >&2
+    cat "$file" >&2 || true
+    fail "$name: expected to match /$regex/"
+  }
+  pass "$name"
+}
+
+assert_not_matches() {
+  local file="$1" regex="$2" name="$3"
+  if grep -E -- "$regex" "$file" >/dev/null; then
+    echo "--- $file" >&2
+    cat "$file" >&2 || true
+    fail "$name: expected not to match /$regex/"
+  fi
+  pass "$name"
+}
+
+assert_diag() {
+  local file="$1" fragment="$2" name="$3"
+  assert_contains "$file" ': error:' "$name severity"
+  assert_contains "$file" "$fragment" "$name text"
+  assert_contains "$file" '^' "$name caret"
+}
+
 assert_same() {
   local expected="$1"
   local actual="$2"
@@ -123,6 +178,25 @@ assert_file_missing_or_empty() {
     fail "$name: expected no output artifact or an empty file"
   fi
   pass "$name"
+}
+
+assert_check_fails() {
+  local name="$1" fixture="$2" fragment="$3"
+  run_fail "${name}_check" "$DS" check "$fixture"
+  assert_diag "$TMP/${name}_check.err" "$fragment" "$name check diagnostic"
+}
+
+assert_emit_fails() {
+  local name="$1" fixture="$2" fragment="$3"
+  run_fail "${name}_emit" "$DS" emit bash "$fixture" -o "$TMP/${name}.sh"
+  assert_diag "$TMP/${name}_emit.err" "$fragment" "$name emit diagnostic"
+  assert_file_missing_or_empty "$TMP/${name}.sh" "$name no partial Bash"
+}
+
+assert_rejected() {
+  local name="$1" file="$2" needle="$3"
+  assert_check_fails "$name" "$file" "$needle"
+  assert_emit_fails "$name" "$file" "$needle"
 }
 
 assert_golden() {

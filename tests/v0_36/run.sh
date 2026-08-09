@@ -19,42 +19,6 @@ if [[ "${DS_SKIP_BUILD:-0}" != "1" ]]; then
   make -C "$ROOT" >/dev/null
 fi
 
-write_fixture() {
-  local name="$1"
-  local path="$FIX/$name.ds"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-  printf '%s' "$path"
-}
-
-
-capture_cmd() {
-  local name="$1"
-  shift
-  set +e
-  "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
-}
-
-assert_no_ds_call() {
-  local script="$1" name="$2"
-  assert_not_contains "$script" "$ROOT/ds" "$name omits repo ds path"
-  assert_not_contains "$script" './ds ' "$name omits ./ds invocation"
-  assert_not_contains "$script" ' ds run ' "$name omits ds run invocation"
-  assert_not_contains "$script" ' ds emit ' "$name omits ds emit invocation"
-}
-
-assert_no_duplicate_helpers() {
-  local script="$1" name="$2" defs dups
-  defs="$TMP/${name//[^A-Za-z0-9_]/_}_helper_defs.txt"
-  dups="$TMP/${name//[^A-Za-z0-9_]/_}_helper_dups.txt"
-  grep -E '^__ds_[A-Za-z0-9_]+\(\)' "$script" | sed 's/(.*//' | sort >"$defs" || true
-  uniq -d "$defs" >"$dups"
-  [ ! -s "$dups" ] || { cat "$dups" >&2; fail "$name has duplicate helper definitions"; }
-  pass "$name has no duplicate helper definitions"
-}
 
 assert_helper_count() {
   local script="$1" helper="$2" expected="$3" name="$4" count

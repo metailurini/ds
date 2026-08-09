@@ -22,56 +22,6 @@ write_fixture() {
   cat >"$path"
 }
 
-capture_in_dir() {
-  local name="$1" dir="$2"; shift 2
-  mkdir -p "$dir"
-  set +e
-  (cd "$dir" && "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
-}
-
-assert_matches() {
-  local file="$1" regex="$2" name="$3"
-  grep -E -- "$regex" "$file" >/dev/null || {
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected to match /$regex/"
-  }
-  pass "$name"
-}
-
-assert_not_matches() {
-  local file="$1" regex="$2" name="$3"
-  if grep -E -- "$regex" "$file" >/dev/null; then
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected not to match /$regex/"
-  fi
-  pass "$name"
-}
-
-assert_diag() {
-  local file="$1" fragment="$2" name="$3"
-  assert_contains "$file" ': error:' "$name severity"
-  assert_contains "$file" "$fragment" "$name text"
-  assert_contains "$file" '^' "$name caret"
-}
-
-assert_check_fails() {
-  local name="$1" fixture="$2" fragment="$3"
-  run_fail "${name}_check" "$DS" check "$fixture"
-  assert_diag "$TMP/${name}_check.err" "$fragment" "$name check diagnostic"
-}
-
-assert_emit_fails() {
-  local name="$1" fixture="$2" fragment="$3"
-  run_fail "${name}_emit" "$DS" emit bash "$fixture" -o "$TMP/${name}.sh"
-  assert_diag "$TMP/${name}_emit.err" "$fragment" "$name emit diagnostic"
-  assert_file_missing_or_empty "$TMP/${name}.sh" "$name no partial Bash"
-}
-
 assert_run_fails() {
   local name="$1" fixture="$2" fragment="$3"
   run_fail "${name}_run" "$DS" run "$fixture"

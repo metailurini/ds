@@ -96,16 +96,6 @@ run_in_dir() {
   (cd "$dir" && "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
 }
 
-capture_in_dir() {
-  local name="$1" dir="$2"; shift 2
-  mkdir -p "$dir"
-  set +e
-  (cd "$dir" && "$@") >"$TMP/$name.out" 2>"$TMP/$name.err"
-  local rc=$?
-  set -e
-  printf '%s' "$rc" >"$TMP/$name.rc"
-}
-
 assert_behavior_preserved_vm() {
   local fixture="$1" prefix="$2"; shift 2
   local original_work="$TMP/${prefix}_orig_work"

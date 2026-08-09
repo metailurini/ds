@@ -20,14 +20,6 @@ if [[ "${DS_SKIP_BUILD:-0}" != "1" ]]; then
   make -C "$ROOT" >/dev/null
 fi
 
-write_fixture() {
-  local name="$1"
-  local path="$FIX/$name.ds"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-  printf '%s' "$path"
-}
-
 
 capture_cmd() {
   local name="$1"
