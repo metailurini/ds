@@ -1,10 +1,6 @@
 #include "bash_internal.h"
 #include "ds_interpolation.h"
 
-void buf_append_len(EmitBuf *buf, const char *data, size_t len) {
-    ds_string_append_range(buf, data, len);
-}
-
 void buf_append(EmitBuf *buf, const char *text) {
     ds_string_append_cstr(buf, text);
 }
@@ -67,7 +63,7 @@ void bash_single_quote(EmitBuf *out, const char *data, size_t len) {
     buf_append(out, "'");
     for (size_t i = 0; i < len; i++) {
         if (data[i] == '\'') buf_append(out, "'\\''");
-        else buf_append_len(out, &data[i], 1);
+        else ds_string_append_range(out, &data[i], 1);
     }
     buf_append(out, "'");
 }
@@ -96,7 +92,7 @@ static bool emit_interpolation_var(BashEmitter *e, DsStr name, const char *field
     (void)e;
     buf_append(out, "${__ds_");
     buf_append_dsstr(out, name);
-    if (field) { buf_append(out, "_"); buf_append_len(out, field, field_len); }
+    if (field) { buf_append(out, "_"); ds_string_append_range(out, field, field_len); }
     buf_append(out, "}");
     return true;
 }
@@ -167,7 +163,7 @@ static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *deco
         size_t index_start = *j;
         if (decoded[*j] == '-') (*j)++;
         while (*j < len && decoded[*j] >= '0' && decoded[*j] <= '9') (*j)++;
-        buf_append_len(arg, decoded + index_start, *j - index_start);
+        ds_string_append_range(arg, decoded + index_start, *j - index_start);
     } else if (*j < len && ds_is_ident_start(decoded[*j])) {
         size_t index_start = *j;
         (*j)++;
@@ -252,7 +248,7 @@ static bool emit_interpolation_index(BashEmitter *e, const char *decoded, size_t
         buf_append(out, "__ds_array_get ");
         emit_var_name(out, name);
         buf_append(out, " ");
-        buf_append_len(out, decoded + index_start, *j - index_start);
+        ds_string_append_range(out, decoded + index_start, *j - index_start);
     } else if (*j < len && ds_is_ident_start(decoded[*j])) {
         size_t index_start = *j;
         (*j)++;
@@ -320,7 +316,7 @@ static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
     if (c >= '0' && c <= '9') {
         size_t start = p->pos++;
         while (p->pos < p->len && p->data[p->pos] >= '0' && p->data[p->pos] <= '9') p->pos++;
-        buf_append_len(out, p->data + start, p->pos - start);
+        ds_string_append_range(out, p->data + start, p->pos - start);
         return true;
     }
     if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
@@ -341,7 +337,7 @@ static bool bash_arith_parse_primary(BashArithParser *p, EmitBuf *out) {
                 while (p->pos < p->len && ds_is_ident_continue(p->data[p->pos])) p->pos++;
             }
             buf_append(out, "_");
-            buf_append_len(out, p->data + field_start, p->pos - field_start);
+            ds_string_append_range(out, p->data + field_start, p->pos - field_start);
         }
         buf_append(out, "\"");
         return true;
@@ -550,7 +546,7 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
             return false;
         }
         if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
-        buf_append_len(out, &c, 1);
+        ds_string_append_range(out, &c, 1);
     }
     buf_append(out, "\"");
     free(decoded);

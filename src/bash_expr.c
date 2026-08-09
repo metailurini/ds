@@ -213,7 +213,7 @@ static bool emit_double_quoted_literal(BashEmitter *e, const DsLowerExpr *expr, 
             continue;
         }
         if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
-        buf_append_len(out, &c, 1);
+        ds_string_append_range(out, &c, 1);
     }
     buf_append(out, "\"");
     free(decoded);

@@ -401,7 +401,7 @@ static void bash_emit_row_field_suffix(EmitBuf *out, DsStr field) {
     for (size_t i = 0; i < field.len; i++) {
         unsigned char c = (unsigned char)field.data[i];
         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-            buf_append_len(out, (const char *)&field.data[i], 1);
+            ds_string_append_range(out, (const char *)&field.data[i], 1);
         } else {
             char esc[4] = {'_', hex[c >> 4], hex[c & 0xf], 0};
             buf_append(out, esc);

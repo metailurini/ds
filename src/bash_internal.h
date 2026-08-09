@@ -26,7 +26,6 @@ typedef struct {
     bool needs_case_types;
 } BashEmitter;
 
-void buf_append_len(EmitBuf *buf, const char *data, size_t len);
 void buf_append(EmitBuf *buf, const char *text);
 
 static inline const char *emit_buf_data(const EmitBuf *buf) {
@@ -34,7 +33,7 @@ static inline const char *emit_buf_data(const EmitBuf *buf) {
 }
 
 static inline void buf_append_dsstr(EmitBuf *buf, DsStr value) {
-    buf_append_len(buf, ds_str_data(value), value.len);
+    ds_string_append_range(buf, ds_str_data(value), value.len);
 }
 
 static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const char *decl_flags) {
