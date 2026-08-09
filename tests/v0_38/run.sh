@@ -40,13 +40,6 @@ copy_seed() {
   fi
 }
 
-assert_helper_def_count() {
-  local script="$1" helper="$2" expected="$3" name="$4" count
-  count=$(grep -c -F -- "$helper()" "$script" || true)
-  [ "$count" = "$expected" ] || fail "$name: expected $helper definition count $expected, got $count"
-  pass "$name"
-}
-
 run_parity_seed() {
   local name="$1" file="$2" seed="$3" expected_stdout="$4" expected_status="${5:-0}"
   if [ "$#" -ge 5 ]; then

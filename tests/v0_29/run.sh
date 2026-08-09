@@ -32,13 +32,6 @@ assert_text() {
   assert_same "$expected_file" "$actual_file" "$name"
 }
 
-assert_file_equals() {
-  local path="$1" expected="$2" name="$3"
-  local expected_file="$TMP/${name//[^A-Za-z0-9_]/_}.expected"
-  printf '%s' "$expected" >"$expected_file"
-  assert_same "$expected_file" "$path" "$name"
-}
-
 assert_helper_present() {
   local script="$1" helper="$2" name="$3"
   assert_contains "$script" "$helper" "$name helper present"

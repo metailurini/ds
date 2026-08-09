@@ -23,13 +23,6 @@ assert_text() {
   assert_same "$expected_file" "$actual_file" "$name"
 }
 
-assert_file_equals() {
-  local path="$1" expected="$2" name="$3"
-  local expected_file="$TMP/${name//[^A-Za-z0-9_]/_}.expected"
-  printf '%s' "$expected" >"$expected_file"
-  assert_same "$expected_file" "$path" "$name"
-}
-
 run_parity() {
   local name="$1" file="$2" expected_stdout="$3" expected_status="${4:-0}" side_effects="${5:-}"
   local script="$TMP/$name.sh"

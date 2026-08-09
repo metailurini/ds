@@ -195,6 +195,18 @@ assert_text() {
   assert_same_text "$2" "$3" "$1"
 }
 
+assert_file_equals() {
+  local path="$1" expected="$2" name="$3"
+  local expected_file="$TMP/${name//[^A-Za-z0-9_]/_}.expected"
+  printf '%s' "$expected" >"$expected_file"
+  assert_same "$expected_file" "$path" "$name"
+}
+
+assert_exact_stdout() {
+  local name="$1" expected="$2"
+  assert_same_text "$expected" "$TMP/${name}.out" "$name stdout"
+}
+
 assert_file_missing_or_empty() {
   local path="$1"
   local name="$2"
@@ -263,6 +275,19 @@ assert_no_duplicate_helpers() {
   uniq -d "$defs" >"$dups"
   [ ! -s "$dups" ] || { cat "$dups" >&2; fail "$name has duplicate helper definitions"; }
   pass "$name has no duplicate helper definitions"
+}
+
+assert_helper_def_count() {
+  local script="$1" helper="$2" expected="$3" name="$4" count
+  count=$(grep -c -F -- "$helper()" "$script" || true)
+  [ "$count" = "$expected" ] || fail "$name: expected $helper definition count $expected, got $count"
+  pass "$name"
+}
+
+emit_basic() {
+  local name="$1" file="$2" script="$3"
+  run_ok "${name}_emit" "$DS" emit bash "$file" -o "$script"
+  run_ok "${name}_bash_n" bash -n "$script"
 }
 
 emit_checked() {

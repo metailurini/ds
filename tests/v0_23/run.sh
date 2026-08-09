@@ -27,11 +27,6 @@ assert_fmt_check_fails() {
   run_fail "${name}_fmt_check" "$DS" fmt --check "$fixture"
 }
 
-assert_exact_stdout() {
-  local name="$1" expected="$2"
-  assert_same_text "$expected" "$TMP/${name}.out" "$name stdout"
-}
-
 assert_parity() {
   local name="$1" fixture="$2" expected_status="$3" expected_stdout="$4"; shift 4
   local vm_work="$TMP/${name}_vm_work"

@@ -27,12 +27,6 @@ assert_helper_count() {
   pass "$name"
 }
 
-emit_basic() {
-  local name="$1" file="$2" script="$3"
-  run_ok "${name}_emit" "$DS" emit bash "$file" -o "$script"
-  run_ok "${name}_bash_n" bash -n "$script"
-}
-
 emit_checked() {
   local name="$1" file="$2" script="$3"
   emit_basic "$name" "$file" "$script"

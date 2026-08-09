@@ -20,12 +20,6 @@ if [[ "${DS_SKIP_BUILD:-0}" != "1" ]]; then
 fi
 
 
-emit_basic() {
-  local name="$1" file="$2" script="$3"
-  run_ok "${name}_emit" "$DS" emit bash "$file" -o "$script"
-  run_ok "${name}_bash_n" bash -n "$script"
-}
-
 run_parity() {
   local name="$1" file="$2" expected_stdout="$3" expected_status="${4:-0}"
   if [ "$#" -ge 4 ]; then shift 4; else shift "$#"; fi
@@ -152,13 +146,6 @@ assert_success_marker() {
   assert_text "${name}_stdout" "$expected_stdout" "$TMP/${name}_vm.out"
   assert_same_text "$expected_marker" "$vm_work/$marker" "$name VM marker content"
   assert_same_text "$expected_marker" "$bash_work/$marker" "$name Bash marker content"
-}
-
-assert_helper_def_count() {
-  local script="$1" helper="$2" expected="$3" name="$4" count
-  count=$(grep -c -F -- "$helper()" "$script" || true)
-  [ "$count" = "$expected" ] || fail "$name: expected $helper definition count $expected, got $count"
-  pass "$name"
 }
 
 assert_helper_present_once() { assert_helper_def_count "$1" "$2" 1 "$3"; }
