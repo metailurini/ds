@@ -139,6 +139,26 @@ assert_not_matches() {
   pass "$name"
 }
 
+assert_line_count() {
+  local expected="$1" file="$2" pattern="$3" name="$4"
+  local count
+  count="$(grep -E -c -- "$pattern" "$file" || true)"
+  [ "$count" = "$expected" ] || {
+    echo "--- $file" >&2
+    cat "$file" >&2 || true
+    fail "$name: expected $expected matching lines, got $count"
+  }
+  pass "$name"
+}
+
+assert_diag_span() {
+  local file="$1" fixture="$2" message="$3" name="$4"
+  assert_contains "$file" "$fixture:" "$name path"
+  assert_contains "$file" ': error:' "$name error shape"
+  assert_contains "$file" "$message" "$name message"
+  assert_contains "$file" '^' "$name caret"
+}
+
 assert_diag() {
   local file="$1" fragment="$2" name="$3"
   assert_contains "$file" ': error:' "$name severity"

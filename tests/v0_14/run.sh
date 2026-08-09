@@ -39,50 +39,6 @@ SH
   printf '%s' "$bin"
 }
 
-assert_matches() {
-  local file="$1"
-  local regex="$2"
-  local name="$3"
-  grep -E -- "$regex" "$file" >/dev/null || {
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected to match /$regex/"
-  }
-  pass "$name"
-}
-
-assert_not_matches() {
-  local file="$1"
-  local regex="$2"
-  local name="$3"
-  if grep -E -- "$regex" "$file" >/dev/null; then
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected not to match /$regex/"
-  fi
-  pass "$name"
-}
-
-assert_line_count() {
-  local expected="$1" file="$2" pattern="$3" name="$4"
-  local count
-  count="$(grep -E -c -- "$pattern" "$file" || true)"
-  [ "$count" = "$expected" ] || {
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected $expected matching lines, got $count"
-  }
-  pass "$name"
-}
-
-assert_diag_span() {
-  local file="$1" fixture="$2" message="$3" name="$4"
-  assert_contains "$file" "$fixture:" "$name path"
-  assert_contains "$file" ': error:' "$name error shape"
-  assert_contains "$file" "$message" "$name message"
-  assert_contains "$file" '^' "$name caret"
-}
-
 assert_test_summary() {
   local file="$1" total="$2" passed="$3" failed="$4" name="$5"
   assert_contains "$file" "$total tests, $passed passed, $failed failed" "$name summary"

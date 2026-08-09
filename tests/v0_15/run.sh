@@ -22,30 +22,6 @@ write_fixture() {
   cat >"$path"
 }
 
-assert_matches() {
-  local file="$1"
-  local regex="$2"
-  local name="$3"
-  grep -E -- "$regex" "$file" >/dev/null || {
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected to match /$regex/"
-  }
-  pass "$name"
-}
-
-assert_not_matches() {
-  local file="$1"
-  local regex="$2"
-  local name="$3"
-  if grep -E -- "$regex" "$file" >/dev/null; then
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected not to match /$regex/"
-  fi
-  pass "$name"
-}
-
 assert_no_trailing_ws() {
   local file="$1" name="$2"
   if grep -nE '[[:blank:]]+$' "$file" >/dev/null; then
