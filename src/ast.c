@@ -14,6 +14,19 @@ void ds_case_pattern_vec_free(DsCasePatternVec *patterns) {
     *patterns = (DsCasePatternVec){0};
 }
 
+static void print_command_stages(FILE *out, const DsCommand *command, int level) {
+    for (size_t s = 0; s < command->stages.len; s++) {
+        ds_fprint_indent(out, level);
+        fprintf(out, "Stage %zu\n", s);
+        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
+            ds_fprint_indent(out, level + 1);
+            fputs("Word ", out);
+            ds_fprint_str(out, command->stages.items[s].words.items[i].text);
+            fputc('\n', out);
+        }
+    }
+}
+
 static void print_expr(const DsExpr *expr, FILE *out, int level) {
     if (!expr) {
         ds_fprint_indent(out, level);
@@ -40,14 +53,7 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             break;
         case DS_EXPR_RUN:
             fputs("RunExpr\n", out);
-            for (size_t s = 0; s < expr->as.run.stages.len; s++) {
-                ds_fprint_indent(out, level + 1);
-                fprintf(out, "Stage %zu\n", s);
-                for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) {
-                    ds_fprint_indent(out, level + 2);
-                    fprintf(out, "Word %.*s\n", (int)expr->as.run.stages.items[s].words.items[i].text.len, expr->as.run.stages.items[s].words.items[i].text.data);
-                }
-            }
+            print_command_stages(out, &expr->as.run, level + 1);
             break;
         case DS_EXPR_FIELD:
             fprintf(out, "FieldExpr %.*s\n", (int)expr->as.field.field.len, expr->as.field.field.data);
@@ -140,15 +146,7 @@ static void print_stmt(const DsStmt *stmt, FILE *out, int level) {
             break;
         case DS_STMT_CMD:
             fputs("CmdStmt\n", out);
-            for (size_t s = 0; s < stmt->as.cmd_stmt.stages.len; s++) {
-                ds_fprint_indent(out, level + 1);
-                fprintf(out, "Stage %zu\n", s);
-                for (size_t i = 0; i < stmt->as.cmd_stmt.stages.items[s].words.len; i++) {
-                    ds_fprint_indent(out, level + 2);
-                    fprintf(out, "Word %.*s\n", (int)stmt->as.cmd_stmt.stages.items[s].words.items[i].text.len,
-                            stmt->as.cmd_stmt.stages.items[s].words.items[i].text.data);
-                }
-            }
+            print_command_stages(out, &stmt->as.cmd_stmt, level + 1);
             if (stmt->as.cmd_stmt.redirect.kind != DS_REDIRECT_NONE) {
                 ds_fprint_indent(out, level + 1);
                 fprintf(out, "Redirect %s %.*s\n", ds_redirect_source_op(stmt->as.cmd_stmt.redirect.kind),
