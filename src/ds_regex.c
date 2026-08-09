@@ -134,15 +134,3 @@ DsRegexStatus ds_regex_validate_replacement(DsStr replacement, size_t capture_co
     }
     return DS_REGEX_OK;
 }
-
-bool ds_regex_replacement_refs_capture(DsStr replacement, size_t capture_index) {
-    if (capture_index > 9) return false;
-    char want = (char)('0' + capture_index);
-    for (size_t i = 0; i + 1 < replacement.len; i++) {
-        if (replacement.data[i] == '$') {
-            if (replacement.data[i + 1] == want) return true;
-            i++;
-        }
-    }
-    return false;
-}

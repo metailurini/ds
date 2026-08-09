@@ -107,12 +107,6 @@ bool ds_value_map_init(DsValue *out) {
     return ds_map_init(&out->as.map);
 }
 
-DsValue ds_value_map(void) {
-    DsValue v;
-    ds_value_map_init(&v);
-    return v;
-}
-
 DsValue ds_value_string_take(DsString *string) {
     DsValue v = {.kind = DS_VALUE_STRING, .as.string = *string};
     *string = (DsString){0};

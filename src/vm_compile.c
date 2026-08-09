@@ -8,8 +8,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-void program_init(Program *p) { memset(p, 0, sizeof(*p)); }
-
 static void instr_free(Instr *ins) {
     free(ins->name);
     free(ins->value_name);
@@ -154,10 +152,6 @@ static LoopPatch *push_loop(Program *p, size_t start, int base_scope_depth) {
     loop->start = start;
     loop->base_scope_depth = base_scope_depth;
     return loop;
-}
-
-static LoopPatch *current_loop(Program *p) {
-    return p->loop_len ? &p->loop_stack[p->loop_len - 1] : NULL;
 }
 
 static void pop_loop(Program *p, size_t end) {
@@ -615,7 +609,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
         }
         case DS_LOWER_STMT_BREAK:
         case DS_LOWER_STMT_CONTINUE: {
-            LoopPatch *loop = current_loop(p);
+            LoopPatch *loop = p->loop_len ? &p->loop_stack[p->loop_len - 1] : NULL;
             if (stmt->kind == DS_LOWER_STMT_BREAK && loop && (p->instrs[loop->start].op == OP_FOR_ARRAY || p->instrs[loop->start].op == OP_FOR_MAP)) {
                 Instr reset = {0};
                 reset.op = OP_RESET_FOR;
@@ -773,7 +767,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
 
 bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag) {
     (void)diag;
-    program_init(p);
+    memset(p, 0, sizeof(*p));
     for (size_t i = 0; i < lowered->functions.len; i++) add_function_meta(p, &lowered->functions.items[i]);
     size_t jump_main_pos = 0;
     if (lowered->functions.len > 0) {

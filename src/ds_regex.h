@@ -23,6 +23,5 @@ bool ds_regex_decode_literal_pattern(DsStr pattern, DsString *out);
 DsRegexStatus ds_regex_validate_flags(DsStr flags, int *cflags_out);
 DsRegexStatus ds_regex_validate_pattern(DsStr pattern, size_t *capture_count_out);
 DsRegexStatus ds_regex_validate_replacement(DsStr replacement, size_t capture_count, bool capture_count_known);
-bool ds_regex_replacement_refs_capture(DsStr replacement, size_t capture_index);
 
 #endif

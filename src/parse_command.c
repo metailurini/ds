@@ -63,11 +63,6 @@ static void parse_stage_words(Parser *p, DsWordVec *words, DsSpan *span) {
     flush_word(words, &current, &current_cap, &have_current);
 }
 
-void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *span, bool reject_redirection) {
-    (void)reject_redirection;
-    parse_stage_words(p, words, span);
-}
-
 void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirection) {
     bool expect_stage = true;
     while (!parser_is_stmt_end(p)) {

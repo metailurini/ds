@@ -42,7 +42,6 @@ DsRedirectKind parser_redirect_kind_from_token(DsTokenKind kind);
 
 DsExpr *parse_expr(Parser *p);
 void parse_call_args(Parser *p, DsExprVec *args);
-void parse_command_words_until_end(Parser *p, DsWordVec *words, DsSpan *span, bool reject_redirection);
 void parse_command_pipeline(Parser *p, DsCommand *command, bool reject_redirection);
 DsExpr *parse_run_expr(Parser *p);
 DsStmt *parse_stmt(Parser *p);

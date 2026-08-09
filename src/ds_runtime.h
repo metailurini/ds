@@ -65,7 +65,6 @@ DsValue ds_value_null(void);
 DsValue ds_value_bool(bool value);
 DsValue ds_value_int(int64_t value);
 DsValue ds_value_array(void);
-DsValue ds_value_map(void);
 bool ds_value_map_init(DsValue *out);
 DsValue ds_value_string_take(DsString *string);
 DsValue ds_value_command_result_take(DsString *stdout_text, DsString *stderr_text, int64_t code);
