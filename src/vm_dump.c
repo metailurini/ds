@@ -218,12 +218,3 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
     program_free(&p);
     return true;
 }
-
-bool ds_bytecode_dump(const DsSource *source, const DsAst *ast, FILE *out, DsDiag *diag) {
-    DsLowerProgram *lowered = ds_lower_program(ast, diag);
-    if (!lowered) return false;
-    bool ok = ds_bytecode_dump_program(source, lowered, out, diag);
-    ds_lower_program_free(lowered);
-    return ok;
-}
-

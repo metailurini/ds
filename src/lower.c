@@ -116,10 +116,3 @@ DsLowerProgram *ds_lower_program(const DsAst *ast, DsDiag *diag) {
     }
     return program;
 }
-
-bool ds_lower_validate(const DsAst *ast, DsDiag *diag) {
-    DsLowerProgram *program = ds_lower_program(ast, diag);
-    if (!program) return false;
-    ds_lower_program_free(program);
-    return true;
-}

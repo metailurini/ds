@@ -833,11 +833,3 @@ int ds_vm_run_test(const DsSource *source, const DsLowerProgram *lowered, const 
     options.test_name = test->name;
     return ds_vm_run_program_args_options(source, &view, 0, NULL, diag, options);
 }
-
-int ds_vm_run(const DsSource *source, const DsAst *ast, DsDiag *diag) {
-    DsLowerProgram *lowered = ds_lower_program(ast, diag);
-    if (!lowered) return 1;
-    int rc = ds_vm_run_program(source, lowered, diag);
-    ds_lower_program_free(lowered);
-    return rc;
-}

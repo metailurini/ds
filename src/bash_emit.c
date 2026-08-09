@@ -324,11 +324,3 @@ cleanup:
     free(e.out.data);
     return ok;
 }
-
-bool ds_emit_bash(const DsSource *source, const DsAst *ast, const char *output_path, DsDiag *diag) {
-    DsLowerProgram *lowered = ds_lower_program(ast, diag);
-    if (!lowered) return false;
-    bool ok = ds_emit_bash_program(source, lowered, output_path, diag);
-    ds_lower_program_free(lowered);
-    return ok;
-}
