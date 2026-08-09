@@ -1095,34 +1095,26 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     FILE *out_fp = NULL;
     FILE *err_fp = NULL;
     int exec_error_pipe[2] = {-1, -1};
+    bool ok = false;
     spec->exec_error_fd = -1;
 
     trace_command_spec(vm, spec);
 
     if (!spec->capture && spec->redirect.kind != DS_REDIRECT_NONE) {
-        if (!open_redirect_target(vm, &spec->redirect, &redirect_fd)) return false;
+        if (!open_redirect_target(vm, &spec->redirect, &redirect_fd)) goto cleanup;
     }
 
     if (spec->capture) {
-        if (!process_capture_open(vm, spec->span, "command", &out_fp, &err_fp)) return false;
+        if (!process_capture_open(vm, spec->span, "command", &out_fp, &err_fp)) goto cleanup;
     }
 
-    if (!process_exec_error_pipe(vm, spec->span, spec->argv.items[0], exec_error_pipe)) {
-        if (redirect_fd >= 0) close(redirect_fd);
-        process_capture_close(&out_fp, &err_fp);
-        return false;
-    }
+    if (!process_exec_error_pipe(vm, spec->span, spec->argv.items[0], exec_error_pipe)) goto cleanup;
     spec->exec_error_fd = exec_error_pipe[1];
 
     pid_t pid = fork();
     if (pid < 0) {
         ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(errno));
-        if (redirect_fd >= 0) close(redirect_fd);
-        process_capture_close(&out_fp, &err_fp);
-        close(exec_error_pipe[0]);
-        close(exec_error_pipe[1]);
-        spec->exec_error_fd = -1;
-        return false;
+        goto cleanup;
     }
 
     if (pid == 0) {
@@ -1132,33 +1124,35 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     }
     setpgid(pid, pid);
 
-    close(exec_error_pipe[1]);
+    close(exec_error_pipe[1]); exec_error_pipe[1] = -1;
     spec->exec_error_fd = -1;
-    if (redirect_fd >= 0) close(redirect_fd);
+    if (redirect_fd >= 0) { close(redirect_fd); redirect_fd = -1; }
     int exec_errno = 0;
     ssize_t exec_error_len = read(exec_error_pipe[0], &exec_errno, sizeof(exec_errno));
-    close(exec_error_pipe[0]);
+    close(exec_error_pipe[0]); exec_error_pipe[0] = -1;
     int status = 0;
-    if (!vm_wait_foreground_child(vm, pid, pid, spec, &status)) {
-        process_capture_close(&out_fp, &err_fp);
-        return false;
-    }
+    if (!vm_wait_foreground_child(vm, pid, pid, spec, &status)) goto cleanup;
     result->code = process_status_code(status);
     result->terminated_by_sigpipe = process_status_is_signal(status, SIGPIPE);
 
     if (!spec->capture && exec_error_len == (ssize_t)sizeof(exec_errno)) {
         ds_diag_error(vm->diag, spec->span, "failed to launch command `%s`: %s", spec->argv.items[0], strerror(exec_errno));
-        return true;
+        ok = true;
+        goto cleanup;
     }
 
     if (spec->capture) {
-        if (!process_capture_read(vm, spec->span, "command", out_fp, err_fp, result)) {
-            process_capture_close(&out_fp, &err_fp);
-            return false;
-        }
-        process_capture_close(&out_fp, &err_fp);
+        if (!process_capture_read(vm, spec->span, "command", out_fp, err_fp, result)) goto cleanup;
     }
-    return true;
+    ok = true;
+
+cleanup:
+    if (exec_error_pipe[0] >= 0) close(exec_error_pipe[0]);
+    if (exec_error_pipe[1] >= 0) close(exec_error_pipe[1]);
+    if (redirect_fd >= 0) close(redirect_fd);
+    process_capture_close(&out_fp, &err_fp);
+    spec->exec_error_fd = -1;
+    return ok;
 }
 
 /* -------------------------------------------------------------------------
