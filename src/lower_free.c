@@ -1,5 +1,39 @@
 #include "lower_internal.h"
 
+static void lower_expr_vec_free(DsLowerExprVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) lower_expr_free(vec->items[i]);
+    free(vec->items);
+}
+
+static void lower_map_entry_vec_free(DsLowerMapEntryVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) {
+        free(vec->items[i].key.data);
+        lower_expr_free(vec->items[i].value);
+    }
+    free(vec->items);
+}
+
+static void lower_stmt_vec_free(DsLowerStmtVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) lower_stmt_free(vec->items[i]);
+    free(vec->items);
+}
+
+static void lower_case_arm_vec_free(DsLowerCaseArmVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) {
+        ds_case_pattern_vec_free(&vec->items[i].patterns);
+        lower_stmt_free(vec->items[i].body);
+    }
+    free(vec->items);
+}
+
+static void lower_fn_param_vec_free(DsLowerFnParamVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) {
+        free(vec->items[i].name.data);
+        lower_expr_free(vec->items[i].default_value);
+    }
+    free(vec->items);
+}
+
 void lower_expr_free(DsLowerExpr *expr) {
     if (!expr) return;
     switch (expr->kind) {
@@ -23,32 +57,35 @@ void lower_expr_free(DsLowerExpr *expr) {
             lower_expr_free(expr->as.unary.right);
             break;
         case DS_LOWER_EXPR_BINARY:
-            DS_FREE_PTR_PAIR(expr->as.binary.left, expr->as.binary.right, lower_expr_free);
+            lower_expr_free(expr->as.binary.left);
+            lower_expr_free(expr->as.binary.right);
             free(expr->as.binary.op.data);
             break;
         case DS_LOWER_EXPR_CALL:
             free(expr->as.call.name.data);
-            DS_FREE_PTR_VEC(expr->as.call.args, lower_expr_free);
+            lower_expr_vec_free(&expr->as.call.args);
             row_schema_free(&expr->as.call.row_schema);
             break;
         case DS_LOWER_EXPR_INTERP:
-            DS_FREE_PTR_VEC(expr->as.interp.parts, lower_expr_free);
+            lower_expr_vec_free(&expr->as.interp.parts);
             break;
         case DS_LOWER_EXPR_ARRAY:
-            DS_FREE_PTR_VEC(expr->as.array.elements, lower_expr_free);
+            lower_expr_vec_free(&expr->as.array.elements);
             row_schema_free(&expr->as.array.row_schema);
             break;
         case DS_LOWER_EXPR_MAP:
-            DS_FREE_KEYED_PTR_VEC(expr->as.map.entries, lower_expr_free);
+            lower_map_entry_vec_free(&expr->as.map.entries);
             row_schema_free(&expr->as.map.row_schema);
             break;
         case DS_LOWER_EXPR_INDEX:
-            DS_FREE_PTR_PAIR(expr->as.index.object, expr->as.index.index, lower_expr_free);
+            lower_expr_free(expr->as.index.object);
+            lower_expr_free(expr->as.index.index);
             free(expr->as.index.map_key.data);
             row_schema_free(&expr->as.index.row_schema);
             break;
         case DS_LOWER_EXPR_RANGE:
-            DS_FREE_PTR_PAIR(expr->as.range.start, expr->as.range.end, lower_expr_free);
+            lower_expr_free(expr->as.range.start);
+            lower_expr_free(expr->as.range.end);
             break;
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_ERROR:
@@ -76,17 +113,18 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             break;
         case DS_LOWER_STMT_IF:
             lower_expr_free(stmt->as.if_stmt.condition);
-            DS_FREE_PTR_PAIR(stmt->as.if_stmt.then_branch, stmt->as.if_stmt.else_branch, lower_stmt_free);
+            lower_stmt_free(stmt->as.if_stmt.then_branch);
+            lower_stmt_free(stmt->as.if_stmt.else_branch);
             break;
         case DS_LOWER_STMT_BLOCK:
-            DS_FREE_PTR_VEC(stmt->as.block_stmt.statements, lower_stmt_free);
+            lower_stmt_vec_free(&stmt->as.block_stmt.statements);
             break;
         case DS_LOWER_STMT_CMD:
             ds_command_free(&stmt->as.cmd_stmt);
             break;
         case DS_LOWER_STMT_CALL:
             free(stmt->as.call_stmt.name.data);
-            DS_FREE_PTR_VEC(stmt->as.call_stmt.args, lower_expr_free);
+            lower_expr_vec_free(&stmt->as.call_stmt.args);
             break;
         case DS_LOWER_STMT_FOR_ARRAY:
         case DS_LOWER_STMT_FOR_MAP:
@@ -106,7 +144,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             break;
         case DS_LOWER_STMT_CASE:
             lower_expr_free(stmt->as.case_stmt.selector);
-            DS_FREE_CASE_ARM_VEC(stmt->as.case_stmt.arms, lower_stmt_free);
+            lower_case_arm_vec_free(&stmt->as.case_stmt.arms);
             break;
         case DS_LOWER_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);
@@ -137,7 +175,7 @@ void ds_lower_program_free(DsLowerProgram *program) {
     free(program->script_decls.items);
     for (size_t i = 0; i < program->functions.len; i++) {
         free(program->functions.items[i].name.data);
-        DS_FREE_NAMED_DEFAULT_VEC(program->functions.items[i].params, lower_expr_free);
+        lower_fn_param_vec_free(&program->functions.items[i].params);
         lower_stmt_free(program->functions.items[i].body);
         row_schema_free(&program->functions.items[i].row_schema);
     }
@@ -147,6 +185,6 @@ void ds_lower_program_free(DsLowerProgram *program) {
         lower_stmt_free(program->tests.items[i].body);
     }
     free(program->tests.items);
-    DS_FREE_PTR_VEC(program->statements, lower_stmt_free);
+    lower_stmt_vec_free(&program->statements);
     free(program);
 }

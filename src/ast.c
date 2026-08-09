@@ -316,6 +316,42 @@ void ds_ast_print(const DsAst *ast, FILE *out) {
     }
 }
 
+static void free_expr_vec(DsExprVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) ds_expr_free(vec->items[i]);
+    free(vec->items);
+}
+
+static void free_map_entry_vec(DsMapEntryVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) {
+        free(vec->items[i].key.data);
+        ds_expr_free(vec->items[i].value);
+    }
+    free(vec->items);
+}
+
+static void free_fn_param_vec(DsFnParamVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) {
+        free(vec->items[i].name.data);
+        ds_expr_free(vec->items[i].default_value);
+    }
+    free(vec->items);
+}
+
+static void free_stmt(DsStmt *stmt);
+
+static void free_stmt_vec(DsStmtVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) free_stmt(vec->items[i]);
+    free(vec->items);
+}
+
+static void free_case_arm_vec(DsCaseArmVec *vec) {
+    for (size_t i = 0; i < vec->len; i++) {
+        ds_case_pattern_vec_free(&vec->items[i].patterns);
+        free_stmt(vec->items[i].body);
+    }
+    free(vec->items);
+}
+
 void ds_expr_free(DsExpr *expr) {
     if (!expr) return;
     switch (expr->kind) {
@@ -339,24 +375,27 @@ void ds_expr_free(DsExpr *expr) {
             ds_expr_free(expr->as.unary.right);
             break;
         case DS_EXPR_BINARY:
-            DS_FREE_PTR_PAIR(expr->as.binary.left, expr->as.binary.right, ds_expr_free);
+            ds_expr_free(expr->as.binary.left);
+            ds_expr_free(expr->as.binary.right);
             free(expr->as.binary.op.data);
             break;
         case DS_EXPR_CALL:
             free(expr->as.call.name.data);
-            DS_FREE_PTR_VEC(expr->as.call.args, ds_expr_free);
+            free_expr_vec(&expr->as.call.args);
             break;
         case DS_EXPR_ARRAY:
-            DS_FREE_PTR_VEC(expr->as.array.elements, ds_expr_free);
+            free_expr_vec(&expr->as.array.elements);
             break;
         case DS_EXPR_MAP:
-            DS_FREE_KEYED_PTR_VEC(expr->as.map.entries, ds_expr_free);
+            free_map_entry_vec(&expr->as.map.entries);
             break;
         case DS_EXPR_INDEX:
-            DS_FREE_PTR_PAIR(expr->as.index.object, expr->as.index.index, ds_expr_free);
+            ds_expr_free(expr->as.index.object);
+            ds_expr_free(expr->as.index.index);
             break;
         case DS_EXPR_RANGE:
-            DS_FREE_PTR_PAIR(expr->as.range.start, expr->as.range.end, ds_expr_free);
+            ds_expr_free(expr->as.range.start);
+            ds_expr_free(expr->as.range.end);
             break;
         case DS_EXPR_BOOL:
         case DS_EXPR_ERROR:
@@ -382,10 +421,11 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_IF:
             ds_expr_free(stmt->as.if_stmt.condition);
-            DS_FREE_PTR_PAIR(stmt->as.if_stmt.then_branch, stmt->as.if_stmt.else_branch, free_stmt);
+            free_stmt(stmt->as.if_stmt.then_branch);
+            free_stmt(stmt->as.if_stmt.else_branch);
             break;
         case DS_STMT_BLOCK:
-            DS_FREE_PTR_VEC(stmt->as.block_stmt.statements, free_stmt);
+            free_stmt_vec(&stmt->as.block_stmt.statements);
             break;
         case DS_STMT_IMPORT:
             free(stmt->as.import_stmt.path.data);
@@ -395,12 +435,12 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_FN:
             free(stmt->as.fn_stmt.name.data);
-            DS_FREE_NAMED_DEFAULT_VEC(stmt->as.fn_stmt.params, ds_expr_free);
+            free_fn_param_vec(&stmt->as.fn_stmt.params);
             free_stmt(stmt->as.fn_stmt.body);
             break;
         case DS_STMT_CALL:
             free(stmt->as.call_stmt.name.data);
-            DS_FREE_PTR_VEC(stmt->as.call_stmt.args, ds_expr_free);
+            free_expr_vec(&stmt->as.call_stmt.args);
             break;
         case DS_STMT_FOR:
             free(stmt->as.for_stmt.key_name.data);
@@ -417,7 +457,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_CASE:
             ds_expr_free(stmt->as.case_stmt.selector);
-            DS_FREE_CASE_ARM_VEC(stmt->as.case_stmt.arms, free_stmt);
+            free_case_arm_vec(&stmt->as.case_stmt.arms);
             break;
         case DS_STMT_PUSH:
             free(stmt->as.push_stmt.name.data);
@@ -444,7 +484,11 @@ static void free_stmt(DsStmt *stmt) {
 
 void ds_ast_free(DsAst *ast) {
     if (!ast) return;
-    DS_FREE_NAMED_DEFAULT_VEC(ast->script.declarations, ds_expr_free);
-    DS_FREE_PTR_VEC(ast->statements, free_stmt);
+    for (size_t i = 0; i < ast->script.declarations.len; i++) {
+        free(ast->script.declarations.items[i].name.data);
+        ds_expr_free(ast->script.declarations.items[i].default_value);
+    }
+    free(ast->script.declarations.items);
+    free_stmt_vec(&ast->statements);
     free(ast);
 }
