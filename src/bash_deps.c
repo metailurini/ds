@@ -132,7 +132,7 @@ static bool scalar_stdlib_call_needs_capture(const DsLowerExpr *expr) {
 }
 
 static bool expr_needs_type_tags_for_truthiness(const DsLowerExpr *expr) {
-    while (expr && expr->kind == DS_LOWER_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "!")) {
+    while (expr && expr->kind == DS_LOWER_EXPR_UNARY && expr->as.unary.op == DS_UNARY_NOT) {
         expr = expr->as.unary.right;
     }
     return expr && (expr->kind == DS_LOWER_EXPR_IDENT || expr->kind == DS_LOWER_EXPR_INDEX);
@@ -182,13 +182,13 @@ static void collect_expr(BashDeps *deps, const DsLowerExpr *expr, ExprScan scan)
             for (size_t i = 0; i < expr->as.map.entries.len; i++) collect_expr(deps, expr->as.map.entries.items[i].value, scan);
             return;
         case DS_LOWER_EXPR_UNARY:
-            deps->uses_int_helpers |= ds_str_eq_cstr(expr->as.unary.op, "-");
+            deps->uses_int_helpers |= expr->as.unary.op == DS_UNARY_NEGATE;
             collect_expr(deps, expr->as.unary.right, scan);
             return;
         case DS_LOWER_EXPR_BINARY:
             deps->uses_int_helpers |= ds_binary_op_is_arithmetic(expr->as.binary.op);
-            if (scan.run_and_membership) deps->uses_membership |= ds_str_eq_cstr(expr->as.binary.op, "in");
-            if (ds_str_eq_cstr(expr->as.binary.op, "matches") && expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX) {
+            if (scan.run_and_membership) deps->uses_membership |= expr->as.binary.op == DS_BINARY_IN;
+            if (expr->as.binary.op == DS_BINARY_MATCHES && expr->as.binary.right->kind != DS_LOWER_EXPR_REGEX) {
                 deps->uses_regex_base_helpers = true;
             }
             collect_expr(deps, expr->as.binary.left, scan);

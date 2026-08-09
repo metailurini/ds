@@ -428,7 +428,7 @@ static void lower_apply_let_schema(Lower *lower, Scope *definition_scope, DsLowe
 }
 
 static bool expr_is_negative_int_literal(const DsExpr *expr) {
-    return expr && expr->kind == DS_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "-") &&
+    return expr && expr->kind == DS_EXPR_UNARY && expr->as.unary.op == DS_UNARY_NEGATE &&
            expr->as.unary.right && expr->as.unary.right->kind == DS_EXPR_INT;
 }
 

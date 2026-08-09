@@ -44,6 +44,31 @@ typedef struct {
     size_t cap;
 } DsMapEntryVec;
 
+typedef enum {
+    DS_UNARY_NOT,
+    DS_UNARY_NEGATE
+} DsUnaryOp;
+
+typedef enum {
+    DS_BINARY_ADD,
+    DS_BINARY_SUB,
+    DS_BINARY_MUL,
+    DS_BINARY_DIV,
+    DS_BINARY_MOD,
+    DS_BINARY_POW,
+    DS_BINARY_AND,
+    DS_BINARY_OR,
+    DS_BINARY_EQ,
+    DS_BINARY_NE,
+    DS_BINARY_GT,
+    DS_BINARY_GE,
+    DS_BINARY_LT,
+    DS_BINARY_LE,
+    DS_BINARY_IN,
+    DS_BINARY_MATCHES,
+    DS_BINARY_INVALID
+} DsBinaryOp;
+
 struct DsExpr {
     DsExprKind kind;
     DsSpan span;
@@ -53,8 +78,8 @@ struct DsExpr {
         DsStr regex;
         DsCommand run;
         struct { DsExpr *object; DsStr field; } field;
-        struct { DsStr op; DsExpr *right; } unary;
-        struct { DsExpr *left; DsStr op; DsExpr *right; } binary;
+        struct { DsUnaryOp op; DsExpr *right; } unary;
+        struct { DsExpr *left; DsBinaryOp op; DsExpr *right; } binary;
         struct { DsStr name; DsExprVec args; } call;
         struct { DsExprVec elements; } array;
         struct { DsMapEntryVec entries; } map;
@@ -63,11 +88,13 @@ struct DsExpr {
     } as;
 };
 
-bool ds_binary_op_is_arithmetic(DsStr op);
-bool ds_binary_op_is_logical(DsStr op);
-bool ds_binary_op_is_comparison(DsStr op);
-bool ds_binary_op_is_strict_comparison(DsStr op);
-bool ds_binary_op_is_comparison_like(DsStr op);
+const char *ds_unary_op_name(DsUnaryOp op);
+const char *ds_binary_op_name(DsBinaryOp op);
+DsBinaryOp ds_binary_op_from_text(DsStr text);
+bool ds_binary_op_is_arithmetic(DsBinaryOp op);
+bool ds_binary_op_is_logical(DsBinaryOp op);
+bool ds_binary_op_is_comparison(DsBinaryOp op);
+bool ds_binary_op_is_comparison_like(DsBinaryOp op);
 DsExpr *ds_expr_new(DsExprKind kind, DsSpan span);
 
 typedef enum {

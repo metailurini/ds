@@ -491,11 +491,11 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
             return infer_none();
         }
         case DS_EXPR_UNARY:
-            if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
+            if (expr->as.unary.op == DS_UNARY_NEGATE) {
                 infer_constrain_expr(ctx, env, expr->as.unary.right, DS_LOWER_VALUE_INT, "unary `-`");
                 return infer_kind(DS_LOWER_VALUE_INT);
             }
-            if (ds_str_eq_cstr(expr->as.unary.op, "!")) {
+            if (expr->as.unary.op == DS_UNARY_NOT) {
                 infer_constrain_expr(ctx, env, expr->as.unary.right, DS_LOWER_VALUE_BOOL, "`!`");
                 return infer_kind(DS_LOWER_VALUE_BOOL);
             }
@@ -511,7 +511,7 @@ static InferBinding infer_expr_binding(InferCtx *ctx, InferEnv *env, const DsExp
                 infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_BOOL, "logical operator");
                 return infer_kind(DS_LOWER_VALUE_BOOL);
             }
-            if (ds_str_eq_cstr(expr->as.binary.op, "matches")) {
+            if (expr->as.binary.op == DS_BINARY_MATCHES) {
                 infer_constrain_expr(ctx, env, expr->as.binary.left, DS_LOWER_VALUE_STRING, "`matches`");
                 if (expr->as.binary.right && expr->as.binary.right->kind != DS_EXPR_REGEX) {
                     infer_constrain_expr(ctx, env, expr->as.binary.right, DS_LOWER_VALUE_STRING, "`matches`");
@@ -840,13 +840,13 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
             *kind_out = DS_LOWER_VALUE_BOOL;
             return true;
         case DS_EXPR_UNARY:
-            if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
+            if (expr->as.unary.op == DS_UNARY_NEGATE) {
                 DsLowerValueKind right = DS_LOWER_VALUE_UNKNOWN;
                 if (!ast_expr_kind_known(lower, env, expr->as.unary.right, &right) || right != DS_LOWER_VALUE_INT) return false;
                 *kind_out = DS_LOWER_VALUE_INT;
                 return true;
             }
-            if (ds_str_eq_cstr(expr->as.unary.op, "!")) {
+            if (expr->as.unary.op == DS_UNARY_NOT) {
                 *kind_out = DS_LOWER_VALUE_BOOL;
                 return true;
             }
@@ -861,7 +861,7 @@ static bool ast_expr_kind_known(Lower *lower, const AstKindEnv *env, const DsExp
                 *kind_out = DS_LOWER_VALUE_INT;
                 return true;
             }
-            if (ds_binary_op_is_strict_comparison(expr->as.binary.op)) {
+            if (ds_binary_op_is_comparison(expr->as.binary.op)) {
                 *kind_out = DS_LOWER_VALUE_BOOL;
                 return true;
             }

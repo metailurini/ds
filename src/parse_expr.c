@@ -261,7 +261,7 @@ static DsExpr *parse_unary(Parser *p) {
         DsToken *op = parser_previous(p);
         DsExpr *right = parse_unary(p);
         DsExpr *expr = ds_expr_new(DS_EXPR_UNARY, (DsSpan){op->span.start, right ? right->span.end : op->span.end, op->span.source});
-        expr->as.unary.op = parser_copy_token_text(op);
+        expr->as.unary.op = op->kind == DS_TOK_BANG ? DS_UNARY_NOT : DS_UNARY_NEGATE;
         expr->as.unary.right = right;
         return expr;
     }
@@ -288,7 +288,7 @@ static DsExpr *parse_expr_prec(Parser *p, int min_prec) {
         }
         DsExpr *binary = ds_expr_new(DS_EXPR_BINARY, span);
         binary->as.binary.left = left;
-        binary->as.binary.op = parser_copy_token_text(op);
+        binary->as.binary.op = ds_binary_op_from_text(op->text);
         binary->as.binary.right = right;
         left = binary;
     }

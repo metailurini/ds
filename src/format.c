@@ -33,15 +33,13 @@ static int expr_prec(const DsExpr *expr) {
     if (!expr) return 99;
     switch (expr->kind) {
         case DS_EXPR_BINARY:
-            if (ds_str_eq_cstr(expr->as.binary.op, "||") || ds_str_eq_cstr(expr->as.binary.op, "&&")) return 0;
-            if (ds_str_eq_cstr(expr->as.binary.op, "in") || ds_str_eq_cstr(expr->as.binary.op, "matches") ||
-                ds_str_eq_cstr(expr->as.binary.op, "==") || ds_str_eq_cstr(expr->as.binary.op, "!=")) return 1;
-            if (ds_str_eq_cstr(expr->as.binary.op, ">") || ds_str_eq_cstr(expr->as.binary.op, "<") ||
-                ds_str_eq_cstr(expr->as.binary.op, ">=") || ds_str_eq_cstr(expr->as.binary.op, "<=")) return 2;
-            if (ds_str_eq_cstr(expr->as.binary.op, "+") || ds_str_eq_cstr(expr->as.binary.op, "-")) return 3;
-            if (ds_str_eq_cstr(expr->as.binary.op, "*") || ds_str_eq_cstr(expr->as.binary.op, "/") ||
-                ds_str_eq_cstr(expr->as.binary.op, "%")) return 4;
-            if (ds_str_eq_cstr(expr->as.binary.op, "**")) return 5;
+            if (ds_binary_op_is_logical(expr->as.binary.op)) return 0;
+            if (expr->as.binary.op == DS_BINARY_IN || expr->as.binary.op == DS_BINARY_MATCHES ||
+                expr->as.binary.op == DS_BINARY_EQ || expr->as.binary.op == DS_BINARY_NE) return 1;
+            if (ds_binary_op_is_comparison(expr->as.binary.op)) return 2;
+            if (expr->as.binary.op == DS_BINARY_ADD || expr->as.binary.op == DS_BINARY_SUB) return 3;
+            if (expr->as.binary.op >= DS_BINARY_MUL && expr->as.binary.op <= DS_BINARY_MOD) return 4;
+            if (expr->as.binary.op == DS_BINARY_POW) return 5;
             return 1;
         case DS_EXPR_RANGE: return 2;
         case DS_EXPR_UNARY: return 5;
@@ -122,14 +120,14 @@ static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec
             append_str(fmt, expr->as.field.field);
             break;
         case DS_EXPR_UNARY:
-            append_str(fmt, expr->as.unary.op);
+            append_cstr(fmt, ds_unary_op_name(expr->as.unary.op));
             format_expr_prec(fmt, expr->as.unary.right, prec);
             break;
         case DS_EXPR_BINARY:
             if (expr_binary_op_is_logical(expr)) format_logical_operand(fmt, expr->as.binary.left, prec);
             else format_expr_prec(fmt, expr->as.binary.left, prec);
             append_cstr(fmt, " ");
-            append_str(fmt, expr->as.binary.op);
+            append_cstr(fmt, ds_binary_op_name(expr->as.binary.op));
             append_cstr(fmt, " ");
             if (expr_binary_op_is_logical(expr)) format_logical_operand(fmt, expr->as.binary.right, prec + 1);
             else format_expr_prec(fmt, expr->as.binary.right, prec + 1);

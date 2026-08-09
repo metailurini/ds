@@ -117,7 +117,7 @@ static DsExpr *parse_interp_primary(const char *s, size_t len, size_t *i, DsSpan
         int_expr->as.text = (DsStr){ds_str_dup_range(s + start, *i - start), *i - start};
         if (!neg) return int_expr;
         DsExpr *unary = ds_expr_new(DS_EXPR_UNARY, span);
-        unary->as.unary.op = (DsStr){ds_str_dup_range("-", 1), 1};
+        unary->as.unary.op = DS_UNARY_NEGATE;
         unary->as.unary.right = int_expr;
         return unary;
     }
@@ -176,26 +176,26 @@ static DsExpr *parse_interp_postfix(const char *s, size_t len, size_t *i, DsSpan
     return left;
 }
 
-static bool interp_peek_op(const char *s, size_t len, size_t i, DsStr *op, int *left_bp, int *right_bp) {
+static bool interp_peek_op(const char *s, size_t len, size_t i, DsBinaryOp *op, int *left_bp, int *right_bp) {
     ds_skip_ascii_ws(s, len, &i);
     if (i >= len) return false;
     if (i + 1 < len) {
-        if (s[i] == '|' && s[i + 1] == '|') { *op = (DsStr){"||", 2}; *left_bp = 1; *right_bp = 2; return true; }
-        if (s[i] == '&' && s[i + 1] == '&') { *op = (DsStr){"&&", 2}; *left_bp = 2; *right_bp = 3; return true; }
-        if (s[i] == '*' && s[i + 1] == '*') { *op = (DsStr){"**", 2}; *left_bp = 7; *right_bp = 6; return true; }
-        if (s[i] == '=' && s[i + 1] == '=') { *op = (DsStr){"==", 2}; *left_bp = 3; *right_bp = 4; return true; }
-        if (s[i] == '!' && s[i + 1] == '=') { *op = (DsStr){"!=", 2}; *left_bp = 3; *right_bp = 4; return true; }
-        if (s[i] == '>' && s[i + 1] == '=') { *op = (DsStr){">=", 2}; *left_bp = 3; *right_bp = 4; return true; }
-        if (s[i] == '<' && s[i + 1] == '=') { *op = (DsStr){"<=", 2}; *left_bp = 3; *right_bp = 4; return true; }
+        if (s[i] == '|' && s[i + 1] == '|') { *op = DS_BINARY_OR; *left_bp = 1; *right_bp = 2; return true; }
+        if (s[i] == '&' && s[i + 1] == '&') { *op = DS_BINARY_AND; *left_bp = 2; *right_bp = 3; return true; }
+        if (s[i] == '*' && s[i + 1] == '*') { *op = DS_BINARY_POW; *left_bp = 7; *right_bp = 6; return true; }
+        if (s[i] == '=' && s[i + 1] == '=') { *op = DS_BINARY_EQ; *left_bp = 3; *right_bp = 4; return true; }
+        if (s[i] == '!' && s[i + 1] == '=') { *op = DS_BINARY_NE; *left_bp = 3; *right_bp = 4; return true; }
+        if (s[i] == '>' && s[i + 1] == '=') { *op = DS_BINARY_GE; *left_bp = 3; *right_bp = 4; return true; }
+        if (s[i] == '<' && s[i + 1] == '=') { *op = DS_BINARY_LE; *left_bp = 3; *right_bp = 4; return true; }
     }
-    if (s[i] == '*' || s[i] == '/' || s[i] == '%') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 5; *right_bp = 6; return true; }
-    if (s[i] == '+' || s[i] == '-') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 4; *right_bp = 5; return true; }
-    if (s[i] == '>' || s[i] == '<') { *op = (DsStr){(char *)s + i, 1}; *left_bp = 3; *right_bp = 4; return true; }
+    if (s[i] == '*' || s[i] == '/' || s[i] == '%') { *op = ds_binary_op_from_text((DsStr){(char *)s + i, 1}); *left_bp = 5; *right_bp = 6; return true; }
+    if (s[i] == '+' || s[i] == '-') { *op = ds_binary_op_from_text((DsStr){(char *)s + i, 1}); *left_bp = 4; *right_bp = 5; return true; }
+    if (s[i] == '>' || s[i] == '<') { *op = ds_binary_op_from_text((DsStr){(char *)s + i, 1}); *left_bp = 3; *right_bp = 4; return true; }
     if (i + 2 <= len && memcmp(s + i, "in", 2) == 0 && (i == 0 || !ds_is_ident_continue(s[i - 1])) && (i + 2 == len || !ds_is_ident_continue(s[i + 2]))) {
-        *op = (DsStr){"in", 2}; *left_bp = 3; *right_bp = 4; return true;
+        *op = DS_BINARY_IN; *left_bp = 3; *right_bp = 4; return true;
     }
     if (i + 7 <= len && memcmp(s + i, "matches", 7) == 0 && (i == 0 || !ds_is_ident_continue(s[i - 1])) && (i + 7 == len || !ds_is_ident_continue(s[i + 7]))) {
-        *op = (DsStr){"matches", 7}; *left_bp = 3; *right_bp = 4; return true;
+        *op = DS_BINARY_MATCHES; *left_bp = 3; *right_bp = 4; return true;
     }
     return false;
 }
@@ -207,7 +207,7 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
         (*i)++;
         DsExpr *right = parse_interp_expr_bp(s, len, i, span, 8);
         left = ds_expr_new(DS_EXPR_UNARY, span);
-        left->as.unary.op = (DsStr){ds_str_dup_range("-", 1), 1};
+        left->as.unary.op = DS_UNARY_NEGATE;
         left->as.unary.right = right;
     } else {
         left = parse_interp_postfix(s, len, i, span);
@@ -215,17 +215,17 @@ static DsExpr *parse_interp_expr_bp(const char *s, size_t len, size_t *i, DsSpan
     if (!left) return NULL;
     while (*i < len) {
         size_t op_i = *i;
-        DsStr op = {0};
+        DsBinaryOp op = DS_BINARY_INVALID;
         int left_bp = 0, right_bp = 0;
         if (!interp_peek_op(s, len, op_i, &op, &left_bp, &right_bp) || left_bp < min_bp) break;
         ds_skip_ascii_ws(s, len, &op_i);
-        op_i += op.len;
+        op_i += strlen(ds_binary_op_name(op));
         *i = op_i;
         DsExpr *right = parse_interp_expr_bp(s, len, i, span, right_bp);
         if (!right) break;
         DsExpr *bin = ds_expr_new(DS_EXPR_BINARY, span);
         bin->as.binary.left = left;
-        bin->as.binary.op = (DsStr){ds_str_dup_range(op.data, op.len), op.len};
+        bin->as.binary.op = op;
         bin->as.binary.right = right;
         left = bin;
     }

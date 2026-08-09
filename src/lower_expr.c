@@ -229,11 +229,11 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     SymKind right_kind = SYM_UNKNOWN;
     DsLowerExpr *left = lower_expr(lower, expr->as.binary.left, &left_kind);
     DsLowerExpr *right = NULL;
-    if (ds_str_eq_cstr(expr->as.binary.op, "matches") && expr->as.binary.right->kind == DS_EXPR_REGEX) right = lower_regex_expr(lower, expr->as.binary.right, &right_kind, true);
+    if (expr->as.binary.op == DS_BINARY_MATCHES && expr->as.binary.right->kind == DS_EXPR_REGEX) right = lower_regex_expr(lower, expr->as.binary.right, &right_kind, true);
     else right = lower_expr(lower, expr->as.binary.right, &right_kind);
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_BINARY, expr->span);
     out->as.binary.left = left;
-    out->as.binary.op = ds_str_clone(expr->as.binary.op);
+    out->as.binary.op = expr->as.binary.op;
     out->as.binary.right = right;
     out->as.binary.left_kind = lower_value_kind_from_sym(left_kind);
     out->as.binary.right_kind = lower_value_kind_from_sym(right_kind);
@@ -241,7 +241,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         (ast_binary_op_is_comparison_like(expr->as.binary.left) || ast_binary_op_is_comparison_like(expr->as.binary.right))) {
         ds_diag_error(lower->diag, expr->span, "ambiguous comparison chain in v0.23.0; add parentheses around `in`, `matches`, or comparison operands");
     }
-    if (ds_str_eq_cstr(expr->as.binary.op, "in")) {
+    if (expr->as.binary.op == DS_BINARY_IN) {
         if (right_kind != SYM_ARRAY && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "right operand of `in` must be an array in v0.23.0");
         SymKind element_kind = infer_array_element_kind(lower, right);
         bool empty_array_literal = right && right->kind == DS_LOWER_EXPR_ARRAY && right->as.array.elements.len == 0;
@@ -253,7 +253,7 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         *kind_out = SYM_BOOL;
         return out;
     }
-    if (ds_str_eq_cstr(expr->as.binary.op, "matches")) {
+    if (expr->as.binary.op == DS_BINARY_MATCHES) {
         if (left_kind != SYM_STRING && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "left operand of `matches` must be a string in v0.32.0");
         if (right->kind == DS_LOWER_EXPR_STRING && expr->as.binary.right->kind == DS_EXPR_STRING) {
             DsStr decoded = {0};
@@ -269,15 +269,15 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
     }
     if (ds_binary_op_is_logical(expr->as.binary.op)) {
         if (left_kind == SYM_ARRAY || left_kind == SYM_MAP || left_kind == SYM_COMMAND_RESULT) {
-            ds_diag_error(lower->diag, expr->as.binary.left->span, "logical operator `%.*s` requires scalar operands in v0.23.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+            ds_diag_error(lower->diag, expr->as.binary.left->span, "logical operator `%s` requires scalar operands in v0.23.0", ds_binary_op_name(expr->as.binary.op));
         }
         if (right_kind == SYM_ARRAY || right_kind == SYM_MAP || right_kind == SYM_COMMAND_RESULT) {
-            ds_diag_error(lower->diag, expr->as.binary.right->span, "logical operator `%.*s` requires scalar operands in v0.23.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+            ds_diag_error(lower->diag, expr->as.binary.right->span, "logical operator `%s` requires scalar operands in v0.23.0", ds_binary_op_name(expr->as.binary.op));
         }
         *kind_out = SYM_BOOL;
         return out;
     }
-    if (ds_str_eq_cstr(expr->as.binary.op, "+")) {
+    if (expr->as.binary.op == DS_BINARY_ADD) {
         if (left_kind == SYM_INT && right_kind == SYM_INT) *kind_out = SYM_INT;
         else if (left_kind == SYM_STRING && right_kind == SYM_STRING) {
             ds_diag_error(lower->diag, expr->span, "string binary `+` cannot be emitted to standalone Bash with parity in v0.17.0; use interpolation instead");
@@ -288,8 +288,8 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         return out;
     }
     if (ds_binary_op_is_arithmetic(expr->as.binary.op)) {
-        if (left_kind != SYM_INT && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "operator `%.*s` requires integer operands in v0.21.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
-        if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "operator `%.*s` requires integer operands in v0.21.0", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+        if (left_kind != SYM_INT && left_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.left->span, "operator `%s` requires integer operands in v0.21.0", ds_binary_op_name(expr->as.binary.op));
+        if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.binary.right->span, "operator `%s` requires integer operands in v0.21.0", ds_binary_op_name(expr->as.binary.op));
         *kind_out = SYM_INT;
         return out;
     }
@@ -298,8 +298,8 @@ DsLowerExpr *lower_binary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_o
         return out;
     }
     ds_diag_error(lower->diag, expr->span,
-                  "this expression cannot be emitted as a Bash assignment in v0.2.0; unsupported operator `%.*s` in v0.3.0",
-                  (int)expr->as.binary.op.len, expr->as.binary.op.data);
+                  "this expression cannot be emitted as a Bash assignment in v0.2.0; unsupported operator `%s` in v0.3.0",
+                  ds_binary_op_name(expr->as.binary.op));
     *kind_out = SYM_UNKNOWN;
     return out;
 }
@@ -446,19 +446,19 @@ DsLowerExpr *lower_field_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
 DsLowerExpr *lower_unary_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
     SymKind right_kind = SYM_UNKNOWN;
     DsLowerExpr *right = lower_expr(lower, expr->as.unary.right, &right_kind);
-    if (!ds_str_eq_cstr(expr->as.unary.op, "!")) {
-        if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
+    if (expr->as.unary.op != DS_UNARY_NOT) {
+        if (expr->as.unary.op == DS_UNARY_NEGATE) {
             if (right_kind != SYM_INT && right_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->span, "unary `-` requires an integer operand in v0.21.0");
             *kind_out = SYM_INT;
         } else {
-            ds_diag_error(lower->diag, expr->span, "unsupported unary operator `%.*s` in v0.3.0", (int)expr->as.unary.op.len, expr->as.unary.op.data);
+            ds_diag_error(lower->diag, expr->span, "unsupported unary operator `%s` in v0.3.0", ds_unary_op_name(expr->as.unary.op));
             *kind_out = SYM_UNKNOWN;
         }
     } else {
         *kind_out = SYM_BOOL;
     }
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_UNARY, expr->span);
-    out->as.unary.op = ds_str_clone(expr->as.unary.op);
+    out->as.unary.op = expr->as.unary.op;
     out->as.unary.right = right;
     return out;
 }
@@ -824,7 +824,7 @@ DsLowerExpr *lower_index_expr(Lower *lower, const DsExpr *expr, SymKind *kind_ou
             lower_validate_portable_collection_index(lower, index, false, expr->as.index.index->span);
         }
         if (idx_kind != SYM_INT && idx_kind != SYM_UNKNOWN) ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be an int in v0.10.0");
-        if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && ds_str_eq_cstr(expr->as.index.index->as.unary.op, "-") &&
+        if (expr->as.index.index && expr->as.index.index->kind == DS_EXPR_UNARY && expr->as.index.index->as.unary.op == DS_UNARY_NEGATE &&
             expr->as.index.index->as.unary.right && expr->as.index.index->as.unary.right->kind == DS_EXPR_INT) {
             ds_diag_error(lower->diag, expr->as.index.index->span, "array index must be non-negative in v0.10.0");
         }
@@ -883,7 +883,7 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_REGEX: return SYM_UNKNOWN;
         case DS_LOWER_EXPR_RUN: return SYM_COMMAND_RESULT;
         case DS_LOWER_EXPR_UNARY:
-            return ds_str_eq_cstr(expr->as.unary.op, "-") ? SYM_INT : SYM_BOOL;
+            return expr->as.unary.op == DS_UNARY_NEGATE ? SYM_INT : SYM_BOOL;
         case DS_LOWER_EXPR_BINARY:
             if (ds_binary_op_is_arithmetic(expr->as.binary.op)) return SYM_INT;
             if (ds_binary_op_is_comparison_like(expr->as.binary.op) || ds_binary_op_is_logical(expr->as.binary.op)) return SYM_BOOL;

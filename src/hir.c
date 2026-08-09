@@ -160,11 +160,11 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
             dump_expr(out, expr->as.field.object, level + 1);
             break;
         case DS_LOWER_EXPR_UNARY:
-            fputs("Unary ", out); ds_fprint_str(out, expr->as.unary.op); print_span(out, expr->span); fputc('\n', out);
+            fprintf(out, "Unary %s", ds_unary_op_name(expr->as.unary.op)); print_span(out, expr->span); fputc('\n', out);
             dump_expr(out, expr->as.unary.right, level + 1);
             break;
         case DS_LOWER_EXPR_BINARY:
-            fputs("Binary ", out); ds_fprint_str(out, expr->as.binary.op); print_span(out, expr->span); fputc('\n', out);
+            fprintf(out, "Binary %s", ds_binary_op_name(expr->as.binary.op)); print_span(out, expr->span); fputc('\n', out);
             dump_expr(out, expr->as.binary.left, level + 1);
             dump_expr(out, expr->as.binary.right, level + 1);
             break;

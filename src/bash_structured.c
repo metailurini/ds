@@ -28,8 +28,8 @@ const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
                 ? ds_lower_value_kind_name(DS_LOWER_VALUE_INT)
                 : ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
         case DS_LOWER_EXPR_UNARY:
-            if (ds_str_eq_cstr(expr->as.unary.op, "!")) return ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
-            if (ds_str_eq_cstr(expr->as.unary.op, "-")) return ds_lower_value_kind_name(DS_LOWER_VALUE_INT);
+            if (expr->as.unary.op == DS_UNARY_NOT) return ds_lower_value_kind_name(DS_LOWER_VALUE_BOOL);
+            if (expr->as.unary.op == DS_UNARY_NEGATE) return ds_lower_value_kind_name(DS_LOWER_VALUE_INT);
             return ds_lower_value_kind_name(DS_LOWER_VALUE_UNKNOWN);
         case DS_LOWER_EXPR_CALL:
             return ds_lower_value_kind_name(expr->as.call.return_kind);

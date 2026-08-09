@@ -53,13 +53,11 @@ void lower_expr_free(DsLowerExpr *expr) {
             free(expr->as.field.field.data);
             break;
         case DS_LOWER_EXPR_UNARY:
-            free(expr->as.unary.op.data);
             lower_expr_free(expr->as.unary.right);
             break;
         case DS_LOWER_EXPR_BINARY:
             lower_expr_free(expr->as.binary.left);
             lower_expr_free(expr->as.binary.right);
-            free(expr->as.binary.op.data);
             break;
         case DS_LOWER_EXPR_CALL:
             free(expr->as.call.name.data);

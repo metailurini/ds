@@ -85,7 +85,6 @@ typedef struct {
     int target;
     char *name;
     OpCmp cmp_enum;
-    char *cmp;
     char *field;
     int *args;
     size_t arg_count;

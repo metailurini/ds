@@ -107,7 +107,7 @@ static void test_lower_unary_binary_and_scope(void) {
     DsLowerStmt *nested = ifs->as.if_stmt.else_branch->as.block_stmt.statements.items[1];
     assert(nested->kind == DS_LOWER_STMT_IF);
     assert(nested->as.if_stmt.condition->kind == DS_LOWER_EXPR_BINARY);
-    assert(str_eq(nested->as.if_stmt.condition->as.binary.op, "=="));
+    assert(strcmp(ds_binary_op_name(nested->as.if_stmt.condition->as.binary.op), "==") == 0);
     ds_lower_program_free(program);
 
     lower_fail("if true { let hidden = \"x\" }\necho $hidden\n");

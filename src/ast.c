@@ -1,25 +1,42 @@
 #include "ds_ast.h"
 
-bool ds_binary_op_is_arithmetic(DsStr op) {
-    return ds_str_eq_cstr(op, "+") || ds_str_eq_cstr(op, "-") || ds_str_eq_cstr(op, "*") ||
-           ds_str_eq_cstr(op, "/") || ds_str_eq_cstr(op, "%") || ds_str_eq_cstr(op, "**");
+static const char *const k_unary_op_names[] = {"!", "-"};
+static const char *const k_binary_op_names[] = {
+    "+", "-", "*", "/", "%", "**",
+    "&&", "||",
+    "==", "!=", ">", ">=", "<", "<=",
+    "in", "matches"
+};
+
+const char *ds_unary_op_name(DsUnaryOp op) {
+    return (unsigned)op < DS_ARRAY_LEN(k_unary_op_names) ? k_unary_op_names[op] : "?";
 }
 
-bool ds_binary_op_is_logical(DsStr op) {
-    return ds_str_eq_cstr(op, "&&") || ds_str_eq_cstr(op, "||");
+const char *ds_binary_op_name(DsBinaryOp op) {
+    return (unsigned)op < DS_ARRAY_LEN(k_binary_op_names) ? k_binary_op_names[op] : "?";
 }
 
-bool ds_binary_op_is_comparison(DsStr op) {
-    return ds_str_eq_cstr(op, "==") || ds_str_eq_cstr(op, "!=") || ds_str_eq_cstr(op, ">") ||
-           ds_str_eq_cstr(op, ">=") || ds_str_eq_cstr(op, "<") || ds_str_eq_cstr(op, "<=");
+DsBinaryOp ds_binary_op_from_text(DsStr text) {
+    for (size_t i = 0; i < DS_ARRAY_LEN(k_binary_op_names); i++) {
+        if (ds_str_eq_cstr(text, k_binary_op_names[i])) return (DsBinaryOp)i;
+    }
+    return DS_BINARY_INVALID;
 }
 
-bool ds_binary_op_is_strict_comparison(DsStr op) {
-    return ds_binary_op_is_comparison(op) || ds_str_eq_cstr(op, "===") || ds_str_eq_cstr(op, "!==");
+bool ds_binary_op_is_arithmetic(DsBinaryOp op) {
+    return op >= DS_BINARY_ADD && op <= DS_BINARY_POW;
 }
 
-bool ds_binary_op_is_comparison_like(DsStr op) {
-    return ds_binary_op_is_comparison(op) || ds_str_eq_cstr(op, "in") || ds_str_eq_cstr(op, "matches");
+bool ds_binary_op_is_logical(DsBinaryOp op) {
+    return op >= DS_BINARY_AND && op <= DS_BINARY_OR;
+}
+
+bool ds_binary_op_is_comparison(DsBinaryOp op) {
+    return op >= DS_BINARY_EQ && op <= DS_BINARY_LE;
+}
+
+bool ds_binary_op_is_comparison_like(DsBinaryOp op) {
+    return ds_binary_op_is_comparison(op) || op == DS_BINARY_IN || op == DS_BINARY_MATCHES;
 }
 
 DsExpr *ds_expr_new(DsExprKind kind, DsSpan span) {
@@ -96,11 +113,11 @@ static void print_expr(const DsExpr *expr, FILE *out, int level) {
             print_expr(expr->as.field.object, out, level + 1);
             break;
         case DS_EXPR_UNARY:
-            fprintf(out, "UnaryExpr %.*s\n", (int)expr->as.unary.op.len, expr->as.unary.op.data);
+            fprintf(out, "UnaryExpr %s\n", ds_unary_op_name(expr->as.unary.op));
             print_expr(expr->as.unary.right, out, level + 1);
             break;
         case DS_EXPR_BINARY:
-            fprintf(out, "BinaryExpr %.*s\n", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+            fprintf(out, "BinaryExpr %s\n", ds_binary_op_name(expr->as.binary.op));
             print_expr(expr->as.binary.left, out, level + 1);
             print_expr(expr->as.binary.right, out, level + 1);
             break;
@@ -371,13 +388,11 @@ void ds_expr_free(DsExpr *expr) {
             free(expr->as.field.field.data);
             break;
         case DS_EXPR_UNARY:
-            free(expr->as.unary.op.data);
             ds_expr_free(expr->as.unary.right);
             break;
         case DS_EXPR_BINARY:
             ds_expr_free(expr->as.binary.left);
             ds_expr_free(expr->as.binary.right);
-            free(expr->as.binary.op.data);
             break;
         case DS_EXPR_CALL:
             free(expr->as.call.name.data);

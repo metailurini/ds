@@ -11,7 +11,6 @@
 static void instr_free(Instr *ins) {
     free(ins->name);
     free(ins->value_name);
-    free(ins->cmp);
     free(ins->field);
     free(ins->args);
     ds_free_str_array(ins->words, ins->word_count);
@@ -257,12 +256,11 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             int right = compile_expr(p, expr->as.unary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            if (expr->as.unary.op.len == 1 && expr->as.unary.op.data[0] == '-') {
+            if (expr->as.unary.op == DS_UNARY_NEGATE) {
                 int zero = compile_const(p, expr->span, ds_value_int(0));
                 ins.op = OP_BINARY;
                 ins.b = right;
-                ins.cmp = ds_str_dup_range("-", 1);
-            ins.cmp_enum = OP_CMP_SUB;
+                ins.cmp_enum = OP_CMP_SUB;
                 ins.a = zero;
             } else {
                 ins.op = OP_NOT;
@@ -274,8 +272,8 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             return r;
         }
         case DS_LOWER_EXPR_BINARY: {
-            if (ds_str_eq_cstr(expr->as.binary.op, "&&") || ds_str_eq_cstr(expr->as.binary.op, "||")) {
-                bool is_and = expr->as.binary.op.data[0] == '&';
+            if (ds_binary_op_is_logical(expr->as.binary.op)) {
+                bool is_and = expr->as.binary.op == DS_BINARY_AND;
                 int r = new_reg(p);
                 int left = compile_expr(p, expr->as.binary.left);
                 Instr left_false = {0};
@@ -328,7 +326,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             }
             int left = compile_expr(p, expr->as.binary.left);
             int right = -1;
-            bool regex_literal_rhs = ds_str_eq_cstr(expr->as.binary.op, "matches") &&
+            bool regex_literal_rhs = expr->as.binary.op == DS_BINARY_MATCHES &&
                                      expr->as.binary.right->kind == DS_LOWER_EXPR_REGEX;
             bool regex_insensitive = false;
             if (regex_literal_rhs) {
@@ -342,17 +340,16 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             if (right < 0) right = compile_expr(p, expr->as.binary.right);
             int r = new_reg(p);
             Instr ins = {0};
-            if (ds_str_eq_cstr(expr->as.binary.op, "in")) ins.op = OP_MEMBERSHIP;
-            else if (ds_str_eq_cstr(expr->as.binary.op, "matches")) ins.op = OP_REGEX_MATCH;
-            else ins.op = (expr->as.binary.op.len == 1 && (expr->as.binary.op.data[0] == '+' || expr->as.binary.op.data[0] == '-' || expr->as.binary.op.data[0] == '*' || expr->as.binary.op.data[0] == '/' || expr->as.binary.op.data[0] == '%')) ||
-                     ds_str_eq_cstr(expr->as.binary.op, "**") ? OP_BINARY : OP_COMPARE;
+            if (expr->as.binary.op == DS_BINARY_IN) ins.op = OP_MEMBERSHIP;
+            else if (expr->as.binary.op == DS_BINARY_MATCHES) ins.op = OP_REGEX_MATCH;
+            else ins.op = ds_binary_op_is_arithmetic(expr->as.binary.op) ? OP_BINARY : OP_COMPARE;
             ins.span = expr->span;
             ins.dst = r;
             ins.a = left;
             ins.b = right;
             ins.regex_case_insensitive = regex_insensitive;
-            ins.cmp = ds_str_dup_range(expr->as.binary.op.data, expr->as.binary.op.len);
-            ins.cmp_enum = op_cmp_from_str(expr->as.binary.op.data, expr->as.binary.op.len);
+            const char *op_name = ds_binary_op_name(expr->as.binary.op);
+            ins.cmp_enum = op_cmp_from_str(op_name, strlen(op_name));
             emit_instr(p, ins);
             return r;
         }
@@ -499,7 +496,6 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                 bin.a = left;
                 bin.b = right;
                 const char *op = ds_assign_binary_op(stmt->as.assign_stmt.op);
-                bin.cmp = ds_str_dup_cstr(op);
                 bin.cmp_enum = op_cmp_from_str(op, strlen(op));
                 emit_instr(p, bin);
             }
@@ -665,7 +661,6 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     cmp.dst = cmp_reg;
                     cmp.a = selector;
                     cmp.b = lit;
-                    cmp.cmp = ds_str_dup_range("===", 3);
                     cmp.cmp_enum = OP_CMP_EQ_EQ_EQ;
                     emit_instr(p, cmp);
                     Instr jif = {0};

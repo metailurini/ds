@@ -326,8 +326,9 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         case DS_LOWER_EXPR_BINARY:
             if (ds_binary_op_is_arithmetic(expr->as.binary.op)) {
+                const char *op = ds_binary_op_name(expr->as.binary.op);
                 buf_append(out, "\"$(__ds_int_bin ");
-                bash_single_quote(out, expr->as.binary.op.data, expr->as.binary.op.len);
+                bash_single_quote(out, op, strlen(op));
                 buf_append(out, " ");
                 if (!emit_value_expr(e, expr->as.binary.left, out)) return false;
                 buf_append(out, " ");
@@ -335,11 +336,7 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, ")\"");
                 return true;
             }
-            if (ds_str_eq_cstr(expr->as.binary.op, "==") || ds_str_eq_cstr(expr->as.binary.op, "!=") ||
-                ds_str_eq_cstr(expr->as.binary.op, ">") || ds_str_eq_cstr(expr->as.binary.op, ">=") ||
-                ds_str_eq_cstr(expr->as.binary.op, "<") || ds_str_eq_cstr(expr->as.binary.op, "<=") ||
-                ds_str_eq_cstr(expr->as.binary.op, "in") || ds_str_eq_cstr(expr->as.binary.op, "matches") ||
-                ds_str_eq_cstr(expr->as.binary.op, "&&") || ds_str_eq_cstr(expr->as.binary.op, "||")) {
+            if (ds_binary_op_is_comparison_like(expr->as.binary.op) || ds_binary_op_is_logical(expr->as.binary.op)) {
                 buf_append(out, "$(if ");
                 if (!emit_condition(e, expr, out)) return false;
                 buf_append(out, "; then printf true; else printf false; fi)");
@@ -347,13 +344,13 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             }
             return bash_invariant_fail(e, expr->span, "binary value expression should be supported or rejected by lowering");
         case DS_LOWER_EXPR_UNARY:
-            if (ds_str_eq_cstr(expr->as.unary.op, "!")) {
+            if (expr->as.unary.op == DS_UNARY_NOT) {
                 buf_append(out, "$(if ");
                 if (!emit_condition(e, expr, out)) return false;
                 buf_append(out, "; then printf true; else printf false; fi)");
                 return true;
             }
-            if (ds_str_eq_cstr(expr->as.unary.op, "-")) {
+            if (expr->as.unary.op == DS_UNARY_NEGATE) {
                 buf_append(out, "\"$(__ds_int_neg ");
                 if (!emit_value_expr(e, expr->as.unary.right, out)) return false;
                 buf_append(out, ")\"");
@@ -586,7 +583,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             return true;
         }
     }
-    if (expr->kind == DS_LOWER_EXPR_UNARY && ds_str_eq_cstr(expr->as.unary.op, "!")) {
+    if (expr->kind == DS_LOWER_EXPR_UNARY && expr->as.unary.op == DS_UNARY_NOT) {
         buf_append(out, "! ");
         return emit_condition(e, expr->as.unary.right, out);
     }
@@ -594,36 +591,27 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         const char *source_op = NULL;
         const char *op = NULL;
         bool negate = false;
-        if (ds_str_eq_cstr(expr->as.binary.op, "==")) source_op = "==";
-        else if (ds_str_eq_cstr(expr->as.binary.op, "!=")) source_op = "!=";
-        else if (ds_str_eq_cstr(expr->as.binary.op, ">")) source_op = ">";
-        else if (ds_str_eq_cstr(expr->as.binary.op, ">=")) source_op = ">=";
-        else if (ds_str_eq_cstr(expr->as.binary.op, "<")) source_op = "<";
-        else if (ds_str_eq_cstr(expr->as.binary.op, "<=")) source_op = "<=";
+        if (ds_binary_op_is_comparison(expr->as.binary.op)) source_op = ds_binary_op_name(expr->as.binary.op);
         bool int_compare = source_op && expr->as.binary.left_kind == DS_LOWER_VALUE_INT && expr->as.binary.right_kind == DS_LOWER_VALUE_INT;
         if (int_compare) op = source_op;
-        else if (ds_str_eq_cstr(expr->as.binary.op, "==")) op = "==";
-        else if (ds_str_eq_cstr(expr->as.binary.op, "!=")) op = "!=";
-        else if (ds_str_eq_cstr(expr->as.binary.op, ">")) op = ">";
-        else if (ds_str_eq_cstr(expr->as.binary.op, ">=")) {
-            op = "<";
-            negate = true;
-        } else if (ds_str_eq_cstr(expr->as.binary.op, "<")) op = "<";
-        else if (ds_str_eq_cstr(expr->as.binary.op, "<=")) {
-            op = ">";
-            negate = true;
+        else if (source_op) {
+            switch (expr->as.binary.op) {
+                case DS_BINARY_GE: op = "<"; negate = true; break;
+                case DS_BINARY_LE: op = ">"; negate = true; break;
+                default: op = source_op; break;
+            }
         }
         if (!op) {
-            if (ds_str_eq_cstr(expr->as.binary.op, "&&") || ds_str_eq_cstr(expr->as.binary.op, "||")) {
+            if (ds_binary_op_is_logical(expr->as.binary.op)) {
                 buf_append(out, "{ ");
                 if (!emit_condition(e, expr->as.binary.left, out)) return false;
-                buf_append(out, ds_str_eq_cstr(expr->as.binary.op, "&&") ? "; } && { " : "; } || { ");
+                buf_append(out, expr->as.binary.op == DS_BINARY_AND ? "; } && { " : "; } || { ");
                 if (!emit_condition(e, expr->as.binary.right, out)) return false;
                 buf_append(out, "; }");
                 return true;
             }
-            if (ds_str_eq_cstr(expr->as.binary.op, "in")) return emit_membership_condition(e, expr, out);
-            if (ds_str_eq_cstr(expr->as.binary.op, "matches")) {
+            if (expr->as.binary.op == DS_BINARY_IN) return emit_membership_condition(e, expr, out);
+            if (expr->as.binary.op == DS_BINARY_MATCHES) {
                 char left_temp_buf[64];
                 char right_temp_buf[64];
                 DsStr left_temp = {0};
@@ -660,7 +648,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
                 buf_append(out, "; }");
                 return true;
             }
-            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition operator `%.*s` should be emitted or rejected by lowering", (int)expr->as.binary.op.len, expr->as.binary.op.data);
+            ds_diag_error(e->diag, expr->span, "internal Bash invariant failed: condition operator `%s` should be emitted or rejected by lowering", ds_binary_op_name(expr->as.binary.op));
             return false;
         }
         if (negate) buf_append(out, "! ");
