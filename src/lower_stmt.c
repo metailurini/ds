@@ -122,7 +122,7 @@ typedef struct {
 } RunMaterializeCtx;
 
 static DsLowerValueKind lower_infer_collection_element_kind(Lower *lower, const DsLowerExpr *expr, SymKind kind);
-static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span);
+static void lower_apply_let_schema(Lower *lower, Scope *definition_scope, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span);
 
 static DsLowerStmt *lower_materialize_run_in_stmt(Lower *lower, const DsCommand *command, DsSpan span, Scope *temp_scope, Scope **saved_scope, DsCommand *command_copy) {
     ds_command_clone(command_copy, command);
@@ -146,14 +146,14 @@ static DsExpr lower_run_copy_expr(const DsExpr *source, DsCommand command) {
     return expr;
 }
 
-static DsLowerStmt *lower_let_with_value(Lower *lower, const DsStmt *stmt, const DsExpr *value) {
+static DsLowerStmt *lower_let_with_value(Lower *lower, Scope *definition_scope, const DsStmt *stmt, const DsExpr *value) {
     SymKind kind = SYM_UNKNOWN;
     DsLowerStmt *out = stmt_new(DS_LOWER_STMT_LET, stmt->span);
     out->as.let_stmt.name = ds_str_clone(stmt->as.let_stmt.name);
     out->as.let_stmt.value = lower_expr(lower, value, &kind);
     out->as.let_stmt.value_kind = lower_value_kind_from_sym(kind);
     out->as.let_stmt.element_kind = lower_infer_collection_element_kind(lower, out->as.let_stmt.value, kind);
-    lower_apply_let_schema(lower, out, stmt->as.let_stmt.name, kind, stmt->span);
+    lower_apply_let_schema(lower, definition_scope, out, stmt->as.let_stmt.name, kind, stmt->span);
     return out;
 }
 
@@ -371,7 +371,7 @@ static DsLowerValueKind lower_infer_collection_element_kind(Lower *lower, const 
     return DS_LOWER_VALUE_UNKNOWN;
 }
 
-static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span) {
+static void lower_apply_let_schema(Lower *lower, Scope *definition_scope, DsLowerStmt *out, DsStr name, SymKind kind, DsSpan span) {
     const DsLowerRowSchema *schema = NULL;
     bool is_collection = (kind == SYM_ARRAY || kind == SYM_MAP);
     if (out->as.let_stmt.value && out->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
@@ -385,13 +385,13 @@ static void lower_apply_let_schema(Lower *lower, DsLowerStmt *out, DsStr name, S
         if (is_array) out->as.let_stmt.is_row_array = true;
         else out->as.let_stmt.is_row = true;
         row_schema_clone(schema, &out->as.let_stmt.row_schema);
-        if (is_array) scope_define_row_array(lower, lower->scope, name, out->as.let_stmt.row_schema, span);
-        else scope_define_row(lower, lower->scope, name, out->as.let_stmt.row_schema, span);
+        if (is_array) scope_define_row_array(lower, definition_scope, name, out->as.let_stmt.row_schema, span);
+        else scope_define_row(lower, definition_scope, name, out->as.let_stmt.row_schema, span);
     } else {
         SymKind element_kind = is_collection ? (kind == SYM_ARRAY ? infer_array_element_kind(lower, out->as.let_stmt.value) :
                                                                    infer_map_value_kind(lower, out->as.let_stmt.value)) : SYM_UNKNOWN;
-        scope_define_array(lower, lower->scope, name, kind, element_kind, span);
-        Symbol *sym = scope_find_current(lower->scope, name);
+        scope_define_array(lower, definition_scope, name, kind, element_kind, span);
+        Symbol *sym = scope_find_current(definition_scope, name);
         if (sym && kind == SYM_ARRAY && out->as.let_stmt.value && out->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY &&
             out->as.let_stmt.value->as.array.elements.len > 0 && !out->as.let_stmt.value->as.array.is_row_array) {
             sym->saw_scalar_array_value = true;
@@ -542,7 +542,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 DsLowerStmt *block = lower_materialize_run_in_stmt(lower, &stmt->as.let_stmt.value->as.run, stmt->span, &temp_scope, &saved_scope, &command_copy);
                 if (block) {
                     DsExpr fake = lower_run_copy_expr(stmt->as.let_stmt.value, command_copy);
-                    DsLowerStmt *out = lower_let_with_value(lower, stmt, &fake);
+                    DsLowerStmt *out = lower_let_with_value(lower, saved_scope, stmt, &fake);
                     lower_temp_scope_end(lower, &temp_scope, saved_scope);
                     DS_VEC_PUSH(&block->as.block_stmt.statements, out, 16);
                     ds_command_free(&command_copy);
@@ -550,7 +550,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
                 }
                 ds_command_free(&command_copy);
             }
-            return lower_let_with_value(lower, stmt, stmt->as.let_stmt.value);
+            return lower_let_with_value(lower, lower->scope, stmt, stmt->as.let_stmt.value);
         }
         case DS_STMT_ASSIGN: {
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_ASSIGN, stmt->span);
