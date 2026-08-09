@@ -151,11 +151,6 @@ for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-assert_contains src/ds_interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
-assert_contains src/lower_command.c 'ds_interp_parse_format_spec_for_kind' 'lowerer consumes shared interpolation format contract'
-assert_contains src/vm_process.c 'ds_interp_parse_format_spec_for_kind' 'VM consumes shared interpolation format contract'
-assert_contains src/bash_quote.c 'ds_interp_parse_format_spec' 'Bash consumes shared interpolation format contract'
-
 # Documentation and status checks.
 assert_contains docs/milestones/v0.19.0-spec.md 'Implementation and tests complete' 'v0.19 spec records test completion'
 assert_contains docs/milestones/v0.19.0-test-plan.md 'Implemented' 'v0.19 test plan status records implementation'

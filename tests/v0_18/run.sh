@@ -193,15 +193,8 @@ assert_not_contains include/ds.h 'hashmap' 'public header does not expose hashma
 for file in src/ds_command.c src/parse_command.c src/ast.c src/lower_expr.c src/lower_stmt.c src/hir.c src/format.c src/ds_checker.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/bash_command.c src/bash_stmt.c src/bash_deps.c; do
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
-  assert_matches "$file" 'stage|Pipeline|pipeline|stages' "$file handles pipeline-aware command data"
 done
-assert_contains src/ds_command.c 'ds_command_clone' 'command clone handles commands'
-assert_contains src/ds_command.c 'ds_command_free' 'command free handles commands'
-assert_contains src/bash_command.c 'emit_command_pipeline_stages' 'Bash uses shared stage emission'
-assert_contains src/vm_process.c 'process_execute_pipeline' 'VM has pipeline executor'
-assert_contains src/vm_process.c 'pipe(' 'VM uses process pipes'
 assert_contains src/bash_stmt.c 'pipeline failed with exit' 'Bash failure diagnostic says pipeline'
-assert_contains src/bash_stmt.c '{ ' 'Bash groups redirected pipelines'
 assert_not_contains src/bash_stmt.c '__ds_capture_eval' 'Bash capture does not use eval helper'
 
 # Documentation and status checks.

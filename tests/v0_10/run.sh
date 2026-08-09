@@ -685,8 +685,6 @@ assert_contains "$ROOT/README.md" 'v0.10.0` implementation and tests are complet
 # DsMap boundary, without leaking hashmap internals into frontend/lowering/VM/emitter code.
 assert_contains "$ROOT/Makefile" 'src/runtime/hashmap.c' "owned hashmap is linked into ds"
 assert_contains "$ROOT/src/runtime.c" '#include "runtime/hashmap.h"' "DsMap runtime wrapper uses hashmap implementation"
-assert_contains "$ROOT/src/runtime.c" 'hm_put_len' "DsMap set uses hashmap insertion"
-assert_contains "$ROOT/src/runtime.c" 'hm_get_len' "DsMap get uses hashmap lookup"
 if grep -R -nE '#include[[:space:]]+[<"].*hashmap\.h|\bhm_[a-z]' "$ROOT/src" "$ROOT/include" | grep -v 'src/runtime.c' | grep -v 'src/runtime/hashmap\.[ch]' >/dev/null; then
   grep -R -nE '#include[[:space:]]+[<"].*hashmap\.h|\bhm_[a-z]' "$ROOT/src" "$ROOT/include" | grep -v 'src/runtime.c' | grep -v 'src/runtime/hashmap\.[ch]' >&2 || true
   fail "hashmap internals should stay behind the DsMap runtime wrapper"

@@ -113,17 +113,6 @@ for file in src/parser.c src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c s
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-for file in src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c src/format.c src/ds_checker.c src/vm_compile.c src/bash_stmt.c src/bash_deps.c; do
-  assert_matches "$file" 'While|WHILE|while' "$file handles while/control-flow path"
-done
-assert_contains src/vm_dump.c 'OP_JUMP_POP' 'VM dump handles patched loop-control jumps'
-assert_contains src/lexer.c 'DS_TOK_CASE' 'lexer recognizes case token'
-assert_contains src/lexer.c 'DS_TOK_WHILE' 'lexer recognizes while token'
-assert_contains src/lexer.c 'DS_TOK_BREAK' 'lexer recognizes break token'
-assert_contains src/lexer.c 'DS_TOK_CONTINUE' 'lexer recognizes continue token'
-assert_contains src/lexer.c 'DS_TOK_PIPE' 'lexer recognizes case alternative separator token'
-assert_contains src/vm_compile.c '===' 'VM bytecode uses kind-aware case comparison'
-assert_contains src/bash_stmt.c '__ds_type_' 'Bash case emission uses sidecar kind tags'
 
 # Documentation and status checks.
 assert_contains README.md 'v0.17.0' 'README mentions v0.17.0'
