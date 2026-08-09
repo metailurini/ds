@@ -148,7 +148,7 @@ DsValue ds_value_copy(const DsValue *value) {
                 DsValue *item = (DsValue *)value->as.array.items[i];
                 DsValue *copy = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
                 *copy = ds_value_copy(item);
-                ds_array_push(&out.as.array, copy);
+                DS_VEC_PUSH(&out.as.array, copy, 8);
             }
             break;
         case DS_VALUE_MAP:
@@ -281,10 +281,6 @@ int ds_value_compare(const DsValue *left, const DsValue *right) {
 
 void ds_array_init(DsArray *array) {
     *array = (DsArray){0};
-}
-
-void ds_array_push(DsArray *array, void *item) {
-    DS_VEC_PUSH(array, item, 8);
 }
 
 void ds_array_clear(DsArray *array) {

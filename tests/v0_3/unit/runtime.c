@@ -124,7 +124,7 @@ static void test_array(void) {
     int values[64];
     for (int i = 0; i < 64; i++) {
         values[i] = i;
-        ds_array_push(&array, &values[i]);
+        DS_VEC_PUSH(&array, &values[i], 8);
         assert(array.len == (size_t)i + 1);
     }
     for (int i = 0; i < 64; i++) assert(*(int *)array.items[i] == i);

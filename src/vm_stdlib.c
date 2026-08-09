@@ -108,7 +108,7 @@ static void array_push_string(DsValue *array, const char *data, size_t len) {
     ds_string_from_range(&s, data ? data : "", len);
     DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
     *item = ds_value_string_take(&s);
-    ds_array_push(&array->as.array, item);
+    DS_VEC_PUSH(&array->as.array, item, 8);
 }
 
 static int cmp_cstr_ptr(const void *a, const void *b) {
@@ -837,7 +837,7 @@ static bool stdlib_rowarray_sort_by(Vm *vm, Instr *ins, DsValue *out) {
         DsValue *item = (DsValue *)array->as.array.items[i];
         DsValue *copy = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
         *copy = ds_value_copy(item);
-        ds_array_push(&result.as.array, copy);
+        DS_VEC_PUSH(&result.as.array, copy, 8);
     }
 
     for (size_t i = 1; i < result.as.array.len; i++) {

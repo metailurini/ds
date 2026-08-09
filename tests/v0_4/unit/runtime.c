@@ -39,15 +39,15 @@ static void test_array_clear_reuse_borrowed_items(void) {
     ds_array_init(&array);
     int first = 1;
     int second = 2;
-    ds_array_push(&array, &first);
-    ds_array_push(&array, &second);
+    DS_VEC_PUSH(&array, &first, 8);
+    DS_VEC_PUSH(&array, &second, 8);
     assert(array.len == 2);
     size_t cap = array.cap;
     ds_array_clear(&array);
     assert(array.len == 0);
     assert(array.cap == cap);
     assert(array.items != NULL);
-    ds_array_push(&array, &second);
+    DS_VEC_PUSH(&array, &second, 8);
     assert(array.len == 1);
     assert(*(int *)array.items[0] == 2);
     ds_array_free(&array);

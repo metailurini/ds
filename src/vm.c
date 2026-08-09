@@ -540,7 +540,7 @@ dispatch_loop:
                 for (size_t i = 0; i < ins->arg_count; i++) {
                     DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
                     *item = ds_value_copy(&vm.regs[ins->args[i]]);
-                    ds_array_push(&array.as.array, item);
+                    DS_VEC_PUSH(&array.as.array, item, 8);
                 }
                 set_reg(&vm, ins->dst, array);
                 ip++;
@@ -606,7 +606,7 @@ dispatch_loop:
                 if (array->kind != DS_VALUE_ARRAY) { ds_diag_error(diag, ins->span, "internal VM invariant failed: array push target should be an array after lowering"); rc = 1; goto done; }
                 DsValue *item = (DsValue *)ds_xcalloc(1, sizeof(DsValue));
                 *item = ds_value_copy(&vm.regs[ins->a]);
-                ds_array_push(&array->as.array, item);
+                DS_VEC_PUSH(&array->as.array, item, 8);
                 ip++;
                 break;
             }
