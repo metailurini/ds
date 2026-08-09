@@ -15,10 +15,6 @@ typedef enum {
     VM_PATH_KIND_DIR
 } VmPathKind;
 
-static bool helper_is(const Instr *ins, const char *name) {
-    return ins->name && strcmp(ins->name, name) == 0;
-}
-
 static const char *ins_name_or(const Instr *ins, const char *fallback) {
     return ins->name ? ins->name : fallback;
 }
@@ -450,14 +446,14 @@ static bool stdlib_file_write_or_append(Vm *vm, Instr *ins, bool append) {
     return ok;
 }
 
-static bool stdlib_path_part(Vm *vm, Instr *ins, DsValue *out) {
+static bool stdlib_path_part(Vm *vm, Instr *ins, DsStdlibId id, DsValue *out) {
     char *path = vm_string_arg_dup(vm, ins, 0);
     if (!path) return false;
 
     char *result = NULL;
-    if (helper_is(ins, "path.basename")) {
+    if (id == DS_STDLIB_ID_PATH_BASENAME) {
         result = ds_str_dup_cstr(ds_path_basename(path));
-    } else if (helper_is(ins, "path.dirname")) {
+    } else if (id == DS_STDLIB_ID_PATH_DIRNAME) {
         result = ds_path_dirname_dup(path);
     } else {
         char *base = strrchr(path, '/');
@@ -494,19 +490,19 @@ static bool command_exists_on_path(const char *cmd) {
     return found;
 }
 
-static bool stdlib_cmd(Vm *vm, Instr *ins, DsValue *out) {
+static bool stdlib_cmd(Vm *vm, Instr *ins, DsStdlibId id, DsValue *out) {
     char *cmd = vm_string_arg_dup(vm, ins, 0);
     if (!cmd) return false;
 
     bool found = command_exists_on_path(cmd);
-    if (!found && helper_is(ins, "cmd.require")) {
+    if (!found && id == DS_STDLIB_ID_CMD_REQUIRE) {
         ds_diag_error(vm->diag, ins->span, "required command `%s` was not found on PATH", cmd);
         free(cmd);
         return false;
     }
 
     free(cmd);
-    *out = helper_is(ins, "cmd.exists") ? ds_value_bool(found) : ds_value_null();
+    *out = id == DS_STDLIB_ID_CMD_EXISTS ? ds_value_bool(found) : ds_value_null();
     return true;
 }
 
@@ -582,14 +578,14 @@ static bool stdlib_env_unset(Vm *vm, Instr *ins) {
     return true;
 }
 
-static bool stdlib_glob(Vm *vm, Instr *ins, DsValue *out) {
+static bool stdlib_glob(Vm *vm, Instr *ins, DsStdlibId id, DsValue *out) {
     char *pattern = vm_string_arg_dup(vm, ins, 0);
     if (!pattern) return false;
 
     DsStr pattern_str = {pattern, strlen(pattern)};
     if (ds_glob_pattern_contains_recursive(pattern_str)) {
         bool ok = stdlib_recursive_glob(vm, ins, pattern, out);
-        if (ok && helper_is(ins, "glob!") && out->kind == DS_VALUE_ARRAY && out->as.array.len == 0) {
+        if (ok && id == DS_STDLIB_ID_GLOB_REQUIRED && out->kind == DS_VALUE_ARRAY && out->as.array.len == 0) {
             ds_diag_error(vm->diag, ins->span, "required glob `%s` had no matches", pattern);
             ds_value_free(out);
             ok = false;
@@ -605,7 +601,7 @@ static bool stdlib_glob(Vm *vm, Instr *ins, DsValue *out) {
     DsValue array = ds_value_array();
 
     if (grc == GLOB_NOMATCH) {
-        if (helper_is(ins, "glob!")) {
+        if (id == DS_STDLIB_ID_GLOB_REQUIRED) {
             ds_diag_error(vm->diag, ins->span, "required glob `%s` had no matches", pattern);
             free(pattern);
             globfree(&g);
@@ -730,11 +726,11 @@ static bool vm_dir_walk_collect(Vm *vm, Instr *ins, const char *dir, const VmStr
     return true;
 }
 
-static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsValue *out) {
+static bool stdlib_dir_walk(Vm *vm, Instr *ins, DsStdlibId id, DsValue *out) {
     char *root = vm_string_arg_dup(vm, ins, 0);
     if (!root) return false;
-    const bool with_ext = helper_is(ins, "dir.walk_ext") || helper_is(ins, "dir.walk_ext!");
-    const bool required = helper_is(ins, "dir.walk!") || helper_is(ins, "dir.walk_ext!");
+    const bool with_ext = id == DS_STDLIB_ID_DIR_WALK_EXT || id == DS_STDLIB_ID_DIR_WALK_EXT_REQUIRED;
+    const bool required = id == DS_STDLIB_ID_DIR_WALK_REQUIRED || id == DS_STDLIB_ID_DIR_WALK_EXT_REQUIRED;
 
     struct stat st;
     if (lstat(root, &st) != 0 || !S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) {
@@ -894,51 +890,51 @@ static size_t count_non_overlapping_bytes(const char *s, size_t len, const char 
     return count;
 }
 
-static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
+static bool string_method(Vm *vm, Instr *ins, DsStdlibId id, DsValue *out) {
     const char *s = NULL; size_t len = 0;
     if (!vm_string_arg(vm, ins, 0, &s, &len)) return false;
-    if (helper_is(ins, "string.len")) {
+    if (id == DS_STDLIB_ID_STRING_LEN) {
         int64_t n = 0;
         if (!size_to_vm_int(vm, ins, len, &n)) return false;
         *out = ds_value_int(n); return true;
     }
-    if (helper_is(ins, "string.trim")) {
+    if (id == DS_STDLIB_ID_STRING_TRIM) {
         size_t a = 0, b = 0; vm_ascii_trim_bounds(s, len, &a, &b);
         DsString r; ds_string_from_range(&r, s + a, b - a); *out = ds_value_string_take(&r); return true;
     }
-    if (helper_is(ins, "string.upper") || helper_is(ins, "string.lower")) {
+    if (id == DS_STDLIB_ID_STRING_UPPER || id == DS_STDLIB_ID_STRING_LOWER) {
         DsString r; ds_string_from_range(&r, s, len);
         for (size_t i = 0; i < r.len; i++) {
-            if (helper_is(ins, "string.upper") && r.data[i] >= 'a' && r.data[i] <= 'z') r.data[i] = (char)(r.data[i] - 'a' + 'A');
-            if (helper_is(ins, "string.lower") && r.data[i] >= 'A' && r.data[i] <= 'Z') r.data[i] = (char)(r.data[i] - 'A' + 'a');
+            if (id == DS_STDLIB_ID_STRING_UPPER && r.data[i] >= 'a' && r.data[i] <= 'z') r.data[i] = (char)(r.data[i] - 'a' + 'A');
+            if (id == DS_STDLIB_ID_STRING_LOWER && r.data[i] >= 'A' && r.data[i] <= 'Z') r.data[i] = (char)(r.data[i] - 'A' + 'a');
         }
         *out = ds_value_string_take(&r); return true;
     }
-    if (helper_is(ins, "string.contains") || helper_is(ins, "string.starts_with") || helper_is(ins, "string.ends_with")) {
+    if (id == DS_STDLIB_ID_STRING_CONTAINS || id == DS_STDLIB_ID_STRING_STARTS_WITH || id == DS_STDLIB_ID_STRING_ENDS_WITH) {
         const char *sub = NULL; size_t sub_len = 0;
         if (!vm_string_arg(vm, ins, 1, &sub, &sub_len)) return false;
         bool ok = false;
-        if (helper_is(ins, "string.contains")) ok = contains_bytes(s, len, sub, sub_len);
-        else if (helper_is(ins, "string.starts_with")) ok = sub_len <= len && memcmp(s, sub, sub_len) == 0;
+        if (id == DS_STDLIB_ID_STRING_CONTAINS) ok = contains_bytes(s, len, sub, sub_len);
+        else if (id == DS_STDLIB_ID_STRING_STARTS_WITH) ok = sub_len <= len && memcmp(s, sub, sub_len) == 0;
         else ok = sub_len <= len && memcmp(s + len - sub_len, sub, sub_len) == 0;
         *out = ds_value_bool(ok); return true;
     }
-    if (helper_is(ins, "string.index_of") || helper_is(ins, "string.last_index_of") || helper_is(ins, "string.count")) {
+    if (id == DS_STDLIB_ID_STRING_INDEX_OF || id == DS_STDLIB_ID_STRING_LAST_INDEX_OF || id == DS_STDLIB_ID_STRING_COUNT) {
         const char *sub = NULL; size_t sub_len = 0;
         if (!vm_string_arg(vm, ins, 1, &sub, &sub_len)) return false;
         int64_t n = -1;
-        if (helper_is(ins, "string.count")) {
+        if (id == DS_STDLIB_ID_STRING_COUNT) {
             if (!size_to_vm_int(vm, ins, count_non_overlapping_bytes(s, len, sub, sub_len), &n)) return false;
         } else {
             size_t pos = 0;
-            bool found = helper_is(ins, "string.index_of")
+            bool found = id == DS_STDLIB_ID_STRING_INDEX_OF
                 ? find_first_bytes(s, len, sub, sub_len, &pos)
                 : find_last_bytes(s, len, sub, sub_len, &pos);
             if (found && !size_to_vm_int(vm, ins, pos, &n)) return false;
         }
         *out = ds_value_int(n); return true;
     }
-    if (helper_is(ins, "string.char_at")) {
+    if (id == DS_STDLIB_ID_STRING_CHAR_AT) {
         int64_t idx = 0;
         if (!vm_int_arg(vm, ins, 1, &idx)) return false;
         if (idx < 0 || (uint64_t)idx >= (uint64_t)len) {
@@ -947,7 +943,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         }
         DsString r; ds_string_from_range(&r, s + idx, 1); *out = ds_value_string_take(&r); return true;
     }
-    if (helper_is(ins, "string.slice")) {
+    if (id == DS_STDLIB_ID_STRING_SLICE) {
         int64_t start = 0, end = 0;
         if (!vm_int_arg(vm, ins, 1, &start) || !vm_int_arg(vm, ins, 2, &end)) return false;
         if (start < 0 || end < 0 || (uint64_t)start > (uint64_t)len || (uint64_t)end > (uint64_t)len) {
@@ -960,7 +956,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         }
         DsString r; ds_string_from_range(&r, s + start, (size_t)(end - start)); *out = ds_value_string_take(&r); return true;
     }
-    if (helper_is(ins, "string.replace")) {
+    if (id == DS_STDLIB_ID_STRING_REPLACE) {
         const char *from = NULL, *to = NULL; size_t from_len = 0, to_len = 0;
         if (!vm_string_arg(vm, ins, 1, &from, &from_len) || !vm_string_arg(vm, ins, 2, &to, &to_len)) return false;
         if (from_len == 0) { ds_diag_error(vm->diag, ins->span, "replace with an empty runtime source is rejected in v0.19.0"); return false; }
@@ -972,7 +968,7 @@ static bool string_method(Vm *vm, Instr *ins, DsValue *out) {
         }
         *out = ds_value_string_take(&r); return true;
     }
-    if (helper_is(ins, "string.split")) {
+    if (id == DS_STDLIB_ID_STRING_SPLIT) {
         const char *sep = NULL; size_t sep_len = 0;
         if (!vm_string_arg(vm, ins, 1, &sep, &sep_len)) return false;
         if (sep_len == 0) { ds_diag_error(vm->diag, ins->span, "split with an empty runtime separator is rejected in v0.19.0"); return false; }
@@ -1167,7 +1163,7 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
     *out = ds_value_null();
 
     const char *name = ins_name_or(ins, "");
-    if (helper_is(ins, "rowarray.sort_by")) return stdlib_rowarray_sort_by(vm, ins, out);
+    if (strcmp(name, "rowarray.sort_by") == 0) return stdlib_rowarray_sort_by(vm, ins, out);
     DsStr helper_name = {(char *)name, strlen(name)};
     const DsStdlibHelper *helper = ds_stdlib_lookup(helper_name);
     if (!helper) {
@@ -1175,14 +1171,14 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
         return false;
     }
 
-    if (helper_is(ins, "file.exists")) return stdlib_path_status(vm, ins, out, VM_PATH_KIND_EXISTS);
-    if (helper_is(ins, "file.is_file")) return stdlib_path_status(vm, ins, out, VM_PATH_KIND_FILE);
-    if (helper_is(ins, "dir.exists")) return stdlib_path_status(vm, ins, out, VM_PATH_KIND_DIR);
-    if (helper_is(ins, "file.read")) return stdlib_file_read(vm, ins, out);
-    if (helper_is(ins, "file.write")) return stdlib_file_write_or_append(vm, ins, false);
-    if (helper_is(ins, "file.append")) return stdlib_file_write_or_append(vm, ins, true);
+    if (helper->id == DS_STDLIB_ID_FILE_EXISTS) return stdlib_path_status(vm, ins, out, VM_PATH_KIND_EXISTS);
+    if (helper->id == DS_STDLIB_ID_FILE_IS_FILE) return stdlib_path_status(vm, ins, out, VM_PATH_KIND_FILE);
+    if (helper->id == DS_STDLIB_ID_DIR_EXISTS) return stdlib_path_status(vm, ins, out, VM_PATH_KIND_DIR);
+    if (helper->id == DS_STDLIB_ID_FILE_READ) return stdlib_file_read(vm, ins, out);
+    if (helper->id == DS_STDLIB_ID_FILE_WRITE) return stdlib_file_write_or_append(vm, ins, false);
+    if (helper->id == DS_STDLIB_ID_FILE_APPEND) return stdlib_file_write_or_append(vm, ins, true);
 
-    if (helper_is(ins, "path.cwd")) {
+    if (helper->id == DS_STDLIB_ID_PATH_CWD) {
         char *cwd = getcwd(NULL, 0);
         if (!cwd) {
             ds_diag_error(vm->diag, ins->span, "failed to get current directory: %s", strerror(errno));
@@ -1191,26 +1187,26 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
         value_string_from_owned_cstr(out, cwd);
         return true;
     }
-    if (helper_is(ins, "path.join")) {
+    if (helper->id == DS_STDLIB_ID_PATH_JOIN) {
         char *joined = path_join_parts(vm, ins);
         if (!joined) return false;
         value_string_from_owned_cstr(out, joined);
         return true;
     }
-    if (helper_is(ins, "path.basename") || helper_is(ins, "path.dirname") || helper_is(ins, "path.ext")) {
-        return stdlib_path_part(vm, ins, out);
+    if (helper->id == DS_STDLIB_ID_PATH_BASENAME || helper->id == DS_STDLIB_ID_PATH_DIRNAME || helper->id == DS_STDLIB_ID_PATH_EXT) {
+        return stdlib_path_part(vm, ins, helper->id, out);
     }
 
-    if (helper_is(ins, "cmd.exists") || helper_is(ins, "cmd.require")) return stdlib_cmd(vm, ins, out);
-    if (ds_stdlib_is_string_helper(helper_name)) return string_method(vm, ins, out);
-    if (helper_is(ins, "env.get")) return stdlib_env_get(vm, ins, out);
-    if (helper_is(ins, "env.set")) return stdlib_env_set(vm, ins);
-    if (helper_is(ins, "env.unset")) return stdlib_env_unset(vm, ins);
-    if (helper_is(ins, "regex.match")) return stdlib_regex_match(vm, ins, out);
-    if (helper_is(ins, "regex.replace")) return stdlib_regex_replace(vm, ins, out);
-    if (ds_stdlib_is_glob_helper(helper_name)) return stdlib_glob(vm, ins, out);
-    if (ds_stdlib_is_dir_walk_helper(helper_name)) return stdlib_dir_walk(vm, ins, out);
-    if (helper_is(ins, "lines")) return stdlib_lines(vm, ins, out);
+    if (helper->id == DS_STDLIB_ID_CMD_EXISTS || helper->id == DS_STDLIB_ID_CMD_REQUIRE) return stdlib_cmd(vm, ins, helper->id, out);
+    if (helper->id >= DS_STDLIB_ID_STRING_TRIM && helper->id <= DS_STDLIB_ID_STRING_SLICE) return string_method(vm, ins, helper->id, out);
+    if (helper->id == DS_STDLIB_ID_ENV_GET) return stdlib_env_get(vm, ins, out);
+    if (helper->id == DS_STDLIB_ID_ENV_SET) return stdlib_env_set(vm, ins);
+    if (helper->id == DS_STDLIB_ID_ENV_UNSET) return stdlib_env_unset(vm, ins);
+    if (helper->id == DS_STDLIB_ID_REGEX_MATCH) return stdlib_regex_match(vm, ins, out);
+    if (helper->id == DS_STDLIB_ID_REGEX_REPLACE) return stdlib_regex_replace(vm, ins, out);
+    if (helper->id == DS_STDLIB_ID_GLOB || helper->id == DS_STDLIB_ID_GLOB_REQUIRED) return stdlib_glob(vm, ins, helper->id, out);
+    if (helper->id >= DS_STDLIB_ID_DIR_WALK && helper->id <= DS_STDLIB_ID_DIR_WALK_EXT_REQUIRED) return stdlib_dir_walk(vm, ins, helper->id, out);
+    if (helper->id == DS_STDLIB_ID_LINES) return stdlib_lines(vm, ins, out);
 
     ds_diag_error(vm->diag, ins->span, "internal VM stdlib invariant failed: unknown standard-library helper `%s` after lowering", name);
     return false;

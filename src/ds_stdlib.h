@@ -60,7 +60,15 @@ enum {
     DS_STDLIB_HELPER_DIR_WALK_EXT = 1u << 2,
 };
 
+typedef enum {
+#define DS_STDLIB_HELPER(id, ...) DS_STDLIB_ID_##id,
+#include "stdlib_helpers.def"
+#undef DS_STDLIB_HELPER
+    DS_STDLIB_ID_UNKNOWN
+} DsStdlibId;
+
 typedef struct {
+    DsStdlibId id;
     const char *name;
     const char *bash_name;
     size_t min_arity;

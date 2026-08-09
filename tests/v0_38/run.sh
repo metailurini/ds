@@ -191,7 +191,7 @@ assert_direct_accept() {
 assert_contains Makefile '0-38' 'Makefile wires v0.38 suite'
 assert_not_contains src/lexer.c 'walk' 'v0.38 did not add walk syntax keywords'
 assert_not_contains src/parser.c 'walk_ext' 'v0.38 did not add parser grammar for walk helpers'
-dir_helpers=$(grep -o '{"dir\.[^"]*"' src/ds_stdlib.c | sed 's/^{"//; s/"$//' | LC_ALL=C sort | tr '\n' ' ')
+dir_helpers=$(grep -o '"dir\.[^"]*"' src/stdlib_helpers.def | tr -d '"' | LC_ALL=C sort | tr '\n' ' ')
 [ "$dir_helpers" = 'dir.exists dir.walk dir.walk! dir.walk_ext dir.walk_ext! ' ] || fail "unexpected dir namespace helper surface: $dir_helpers"
 pass 'dir namespace public helper surface is scoped'
 

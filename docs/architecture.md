@@ -115,7 +115,7 @@ Project headers are declaration boundaries, not implementation containers. In
 particular, project-owned `.h` files do not carry `static inline` function
 bodies or specialized cleanup/workflow macros. The deliberate exceptions are
 `DS_VEC_PUSH`, which needs the caller's C element type, and declarative X-macro
-lists for token metadata and VM opcodes. Domain helpers
+lists for token/stdlib metadata and VM opcodes. Domain helpers
 should wrap those primitives only when they add ownership, validation, state
 transition, representation hiding, or another meaningful contract; pure
 pass-through push/grow aliases should be inlined at their caller.
