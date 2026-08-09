@@ -84,21 +84,15 @@ DsStdlibNamespace ds_stdlib_namespace(DsStr name) {
 
 const char *ds_stdlib_string_method_names(void) {
     static char names[256];
-    static bool initialized;
-    if (initialized) return names;
-
+    if (names[0]) return names;
     size_t len = 0;
     for (size_t i = 0; i < DS_ARRAY_LEN(HELPERS); i++) {
         const char *name = HELPERS[i].name;
         if (strncmp(name, "string.", 7) != 0) continue;
-        const char *method = name + 7;
-        if (len) names[len++] = ',', names[len++] = ' ';
-        size_t method_len = strlen(method);
-        memcpy(names + len, method, method_len);
-        len += method_len;
+        int written = snprintf(names + len, sizeof(names) - len, "%s%s", len ? ", " : "", name + 7);
+        if (written < 0 || (size_t)written >= sizeof(names) - len) break;
+        len += (size_t)written;
     }
-    names[len] = '\0';
-    initialized = true;
     return names;
 }
 
