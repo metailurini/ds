@@ -9,71 +9,8 @@ TMP="${TMPDIR:-/tmp}/ds_v0_1_tests.$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
-pass_count=0
-
-fail() {
-  echo "FAIL: $*" >&2
-  exit 1
-}
-
-pass() {
-  pass_count=$((pass_count + 1))
-  echo "ok $pass_count - $*"
-}
-
-run_ok() {
-  local name="$1"; shift
-  "$@" >"$TMP/$name.out" 2>"$TMP/$name.err" || {
-    cat "$TMP/$name.out" >&2 || true
-    cat "$TMP/$name.err" >&2 || true
-    fail "$name: expected success"
-  }
-  pass "$name"
-}
-
-run_fail() {
-  local name="$1"; shift
-  if "$@" >"$TMP/$name.out" 2>"$TMP/$name.err"; then
-    cat "$TMP/$name.out" >&2 || true
-    cat "$TMP/$name.err" >&2 || true
-    fail "$name: expected failure"
-  fi
-  pass "$name"
-}
-
-assert_contains() {
-  local file="$1"
-  local text="$2"
-  local name="$3"
-  grep -F -- "$text" "$file" >/dev/null || {
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected to contain [$text]"
-  }
-  pass "$name"
-}
-
-assert_not_contains() {
-  local file="$1"
-  local text="$2"
-  local name="$3"
-  if grep -F -- "$text" "$file" >/dev/null; then
-    echo "--- $file" >&2
-    cat "$file" >&2 || true
-    fail "$name: expected not to contain [$text]"
-  fi
-  pass "$name"
-}
-
-assert_same() {
-  local expected="$1"
-  local actual="$2"
-  local name="$3"
-  if ! diff -u "$expected" "$actual"; then
-    fail "$name: output mismatch"
-  fi
-  pass "$name"
-}
+# shellcheck source=tests/lib/testlib.sh
+source "$ROOT/tests/lib/testlib.sh"
 
 write_fixture() {
   local path="$1"
