@@ -102,10 +102,14 @@ the umbrella where possible:
 - `src/ds_command.h` owns command words, redirections, captured/plain command
   metadata, and command-result field descriptors.
 - `src/ds_ast.h` owns parser AST nodes and script/function/test declaration
-  shapes.
+  shapes. AST expression/statement kinds, union payloads, and payload cleanup
+  ownership are declared once in `src/ast_nodes.def`; the C generator
+  `tools/gen_nodes.c` emits the corresponding structural `.inc` files under
+  `src/generated/`.
 - `src/frontend.h` owns token, lexer, parser, and AST-debug entrypoints.
 - `src/ds_hir.h` owns the lowered HIR contract consumed by VM, Bash emission,
-  formatter/checker support, and debug output.
+  formatter/checker support, and debug output. The same structural generation
+  boundary is used for HIR via `src/hir_nodes.def`.
 - `src/ds_runtime.h` owns runtime values, strings, arrays, and `DsMap`.
 - `src/ds_stdlib.h` owns standard-library helper metadata.
 - `src/ds_checker.h` owns the narrow checker warning entrypoint.
@@ -119,6 +123,14 @@ lists for token/stdlib metadata and VM opcodes. Domain helpers
 should wrap those primitives only when they add ownership, validation, state
 transition, representation hiding, or another meaningful contract; pure
 pass-through push/grow aliases should be inlined at their caller.
+
+AST/HIR structural boilerplate follows a separate generated-source boundary.
+`src/ast_nodes.def` and `src/hir_nodes.def` are the human-edited source of truth
+for node kinds, payload layouts, and owned fields. `tools/gen_nodes.c` is a
+standalone C99 build tool; `make generate` refreshes the committed `.inc`
+outputs and `make check-generated` verifies that they are current. Semantic
+passes such as parsing, lowering, checking, VM compilation, and Bash emission
+remain handwritten and must not be encoded into the node generator.
 
 - `src/ds_stdlib.c` owns the table of supported standard-library helpers: public
   helper name, Bash helper name, arity, return kind, statement-only status,

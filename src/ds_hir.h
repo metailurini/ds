@@ -21,22 +21,7 @@ typedef struct {
 } DsLowerScriptDeclVec;
 
 typedef enum {
-    DS_LOWER_EXPR_IDENT,
-    DS_LOWER_EXPR_STRING,
-    DS_LOWER_EXPR_INT,
-    DS_LOWER_EXPR_BOOL,
-    DS_LOWER_EXPR_REGEX,
-    DS_LOWER_EXPR_RUN,
-    DS_LOWER_EXPR_FIELD,
-    DS_LOWER_EXPR_UNARY,
-    DS_LOWER_EXPR_BINARY,
-    DS_LOWER_EXPR_CALL,
-    DS_LOWER_EXPR_INTERP,
-    DS_LOWER_EXPR_ARRAY,
-    DS_LOWER_EXPR_MAP,
-    DS_LOWER_EXPR_INDEX,
-    DS_LOWER_EXPR_RANGE,
-    DS_LOWER_EXPR_ERROR
+#include "generated/hir_expr_kinds.inc"
 } DsLowerExprKind;
 
 typedef struct DsLowerExpr DsLowerExpr;
@@ -86,42 +71,12 @@ struct DsLowerExpr {
     DsLowerExprKind kind;
     DsSpan span;
     union {
-        DsStr text;
-        bool boolean;
-        DsStr regex;
-        DsCommand run;
-        struct { DsLowerExpr *object; DsStr field; DsLowerValueKind field_kind; } field;
-        struct { DsUnaryOp op; DsLowerExpr *right; } unary;
-        struct { DsLowerExpr *left; DsBinaryOp op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_kind; DsLowerValueKind right_element_kind; } binary;
-        struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; bool returns_row; bool returns_row_array; DsLowerRowSchema row_schema; } call;
-        struct { DsLowerExprVec parts; } interp;
-        struct { DsLowerExprVec elements; bool is_row_array; DsLowerRowSchema row_schema; } array;
-        struct { DsLowerMapEntryVec entries; bool is_row; DsLowerRowSchema row_schema; } map;
-        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; bool returns_row; DsLowerRowSchema row_schema; } index;
-        struct { DsLowerExpr *start; DsLowerExpr *end; } range;
+#include "generated/hir_expr_union.inc"
     } as;
 };
 
 typedef enum {
-    DS_LOWER_STMT_LET,
-    DS_LOWER_STMT_ASSIGN,
-    DS_LOWER_STMT_INDEX_ASSIGN,
-    DS_LOWER_STMT_IF,
-    DS_LOWER_STMT_BLOCK,
-    DS_LOWER_STMT_CMD,
-    DS_LOWER_STMT_CALL,
-    DS_LOWER_STMT_FOR_ARRAY,
-    DS_LOWER_STMT_FOR_MAP,
-    DS_LOWER_STMT_FOR_RANGE,
-    DS_LOWER_STMT_WHILE,
-    DS_LOWER_STMT_BREAK,
-    DS_LOWER_STMT_CONTINUE,
-    DS_LOWER_STMT_CASE,
-    DS_LOWER_STMT_PUSH,
-    DS_LOWER_STMT_ASSERT
-    ,DS_LOWER_STMT_RETURN,
-    DS_LOWER_STMT_DEFER,
-    DS_LOWER_STMT_TRAP
+#include "generated/hir_stmt_kinds.inc"
 } DsLowerStmtKind;
 
 typedef struct DsLowerStmt DsLowerStmt;
@@ -202,27 +157,7 @@ struct DsLowerStmt {
     DsLowerStmtKind kind;
     DsSpan span;
     union {
-        struct { DsStr name; DsLowerExpr *value; DsLowerValueKind value_kind; DsLowerValueKind element_kind; bool is_row; bool is_row_array; DsLowerRowSchema row_schema; } let_stmt;
-        struct { DsStr name; DsLowerAssignOp op; DsLowerExpr *value; } assign_stmt;
-        struct {
-            DsStr name;
-            DsLowerExpr *index;
-            DsLowerExpr *value;
-            bool target_is_array;
-            bool target_is_map;
-            DsLowerValueKind value_kind;
-        } index_assign_stmt;
-        struct { DsLowerExpr *condition; DsLowerStmt *then_branch; DsLowerStmt *else_branch; } if_stmt;
-        struct { DsLowerStmtVec statements; bool scoped; } block_stmt;
-        struct { DsStr name; DsLowerExprVec args; } call_stmt;
-        struct { DsStr name; DsStr value_name; DsLowerExpr *iterable; DsLowerStmt *body; DsLowerValueKind element_kind; bool iterates_row_array; DsLowerRowSchema row_schema; } for_stmt;
-        struct { DsLowerExpr *condition; DsLowerStmt *body; } while_stmt;
-        struct { DsLowerExpr *selector; DsLowerCaseArmVec arms; } case_stmt;
-        struct { DsStr name; DsLowerExpr *value; bool target_is_row_array; DsLowerRowSchema row_schema; } push_stmt;
-        struct { DsLowerExpr *condition; } assert_stmt;
-        struct { DsLowerExpr *value; DsLowerValueKind return_kind; bool returns_row_array; DsLowerRowSchema row_schema; } return_stmt;
-        struct { DsHandlerSignal signal; DsLowerStmt *body; } handler_stmt;
-        DsCommand cmd_stmt;
+#include "generated/hir_stmt_union.inc"
     } as;
 };
 

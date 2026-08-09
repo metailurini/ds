@@ -6,27 +6,53 @@ CPPFLAGS += $(DS_FEATURE_CPPFLAGS)
 
 SRC := src/main.c src/cli_program.c src/ds_common.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/parse_expr.c src/parse_command.c src/parse_script.c src/parse_function.c src/parse_stmt.c src/lower.c src/lower_symbols.c src/lower_expr.c src/lower_interpolation.c src/lower_collection.c src/lower_command.c src/lower_stmt.c src/lower_stdlib.c src/lower_functions.c src/lower_free.c src/hir.c src/format.c src/ds_checker.c src/ds_command.c src/ds_command_facts.c src/ds_interpolation.c src/ds_signal.c src/runtime.c src/runtime/hashmap.c src/ds_stdlib.c src/ds_regex.c src/vm.c src/vm_args.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/bash_helpers.c src/bash_quote.c src/bash_structured.c src/bash_expr.c src/bash_command.c src/bash_function.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
-PRIVATE_HEADERS := $(wildcard src/*.h src/*.def src/runtime/*.h)
+PRIVATE_HEADERS := $(wildcard src/*.h src/*.def src/generated/*.inc src/runtime/*.h)
 PROJECT_HEADERS := $(wildcard include/*.h src/*.h src/runtime/*.h)
+NODE_GENERATOR := build/gen_nodes
+NODE_SCHEMAS := src/ast_nodes.def src/hir_nodes.def
+NODE_GENERATED := src/generated/ast_expr_kinds.inc src/generated/ast_expr_union.inc src/generated/ast_expr_free.inc \
+	src/generated/ast_stmt_kinds.inc src/generated/ast_stmt_union.inc src/generated/ast_stmt_free.inc \
+	src/generated/hir_expr_kinds.inc src/generated/hir_expr_union.inc src/generated/hir_expr_free.inc \
+	src/generated/hir_stmt_kinds.inc src/generated/hir_stmt_union.inc src/generated/hir_stmt_free.inc
 BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17 0-18 0-19 0-20 0-21 0-22 0-23 0-24 0-25 0-26 0-27 0-29 0-30 0-31 0-32 0-33 0-34 0-35 0-36 0-37 0-38
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
-.PHONY: all clean check check-compile-flags check-header-boundaries smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
+.PHONY: all clean generate check-generated check check-compile-flags check-header-boundaries smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
 
 all: $(BIN)
+
+generate: $(NODE_GENERATOR)
+	./$(NODE_GENERATOR)
+
+check-generated: $(NODE_GENERATOR)
+	@tmp=$$(mktemp -d); \
+	./$(NODE_GENERATOR) --output-dir "$$tmp"; \
+	status=0; \
+	diff -ru --exclude='.stamp' src/generated "$$tmp" || status=$$?; \
+	rm -rf "$$tmp"; \
+	exit $$status
+
+$(NODE_GENERATOR): tools/gen_nodes.c | build
+	$(CC) $(CFLAGS) $< -o $@
+
+src/generated/.stamp: $(NODE_GENERATOR) $(NODE_SCHEMAS)
+	./$(NODE_GENERATOR)
+	@touch $@
+
+$(NODE_GENERATED): src/generated/.stamp
 
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) -o $@
 
-build/%.o: src/%.c include/ds.h $(PRIVATE_HEADERS) | build
+build/%.o: src/%.c include/ds.h $(PRIVATE_HEADERS) $(NODE_GENERATED) | build
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 build:
 	mkdir -p build
 
-check: check-compile-flags check-header-boundaries $(BIN)
+check: check-generated check-compile-flags check-header-boundaries $(BIN)
 	./$(BIN) check examples/basic.ds
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
 
@@ -83,4 +109,4 @@ smoke: $(BIN)
 	./$(BIN) check examples/basic.ds
 
 clean:
-	rm -rf build $(BIN)
+	rm -rf build $(BIN) src/generated/.stamp

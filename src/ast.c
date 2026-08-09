@@ -372,49 +372,7 @@ static void free_case_arm_vec(DsCaseArmVec *vec) {
 void ds_expr_free(DsExpr *expr) {
     if (!expr) return;
     switch (expr->kind) {
-        case DS_EXPR_IDENT:
-        case DS_EXPR_STRING:
-        case DS_EXPR_INT:
-            free(expr->as.text.data);
-            break;
-        case DS_EXPR_REGEX:
-            free(expr->as.regex.data);
-            break;
-        case DS_EXPR_RUN:
-            ds_command_free(&expr->as.run);
-            break;
-        case DS_EXPR_FIELD:
-            ds_expr_free(expr->as.field.object);
-            free(expr->as.field.field.data);
-            break;
-        case DS_EXPR_UNARY:
-            ds_expr_free(expr->as.unary.right);
-            break;
-        case DS_EXPR_BINARY:
-            ds_expr_free(expr->as.binary.left);
-            ds_expr_free(expr->as.binary.right);
-            break;
-        case DS_EXPR_CALL:
-            free(expr->as.call.name.data);
-            free_expr_vec(&expr->as.call.args);
-            break;
-        case DS_EXPR_ARRAY:
-            free_expr_vec(&expr->as.array.elements);
-            break;
-        case DS_EXPR_MAP:
-            free_map_entry_vec(&expr->as.map.entries);
-            break;
-        case DS_EXPR_INDEX:
-            ds_expr_free(expr->as.index.object);
-            ds_expr_free(expr->as.index.index);
-            break;
-        case DS_EXPR_RANGE:
-            ds_expr_free(expr->as.range.start);
-            ds_expr_free(expr->as.range.end);
-            break;
-        case DS_EXPR_BOOL:
-        case DS_EXPR_ERROR:
-            break;
+#include "generated/ast_expr_free.inc"
     }
     free(expr);
 }
@@ -422,77 +380,7 @@ void ds_expr_free(DsExpr *expr) {
 static void free_stmt(DsStmt *stmt) {
     if (!stmt) return;
     switch (stmt->kind) {
-        case DS_STMT_LET:
-            free(stmt->as.let_stmt.name.data);
-            ds_expr_free(stmt->as.let_stmt.value);
-            break;
-        case DS_STMT_ASSIGN:
-            free(stmt->as.assign_stmt.name.data);
-            ds_expr_free(stmt->as.assign_stmt.value);
-            break;
-        case DS_STMT_INDEX_ASSIGN:
-            ds_expr_free(stmt->as.index_assign_stmt.target);
-            ds_expr_free(stmt->as.index_assign_stmt.value);
-            break;
-        case DS_STMT_IF:
-            ds_expr_free(stmt->as.if_stmt.condition);
-            free_stmt(stmt->as.if_stmt.then_branch);
-            free_stmt(stmt->as.if_stmt.else_branch);
-            break;
-        case DS_STMT_BLOCK:
-            free_stmt_vec(&stmt->as.block_stmt.statements);
-            break;
-        case DS_STMT_IMPORT:
-            free(stmt->as.import_stmt.path.data);
-            break;
-        case DS_STMT_CMD:
-            ds_command_free(&stmt->as.cmd_stmt);
-            break;
-        case DS_STMT_FN:
-            free(stmt->as.fn_stmt.name.data);
-            free_fn_param_vec(&stmt->as.fn_stmt.params);
-            free_stmt(stmt->as.fn_stmt.body);
-            break;
-        case DS_STMT_CALL:
-            free(stmt->as.call_stmt.name.data);
-            free_expr_vec(&stmt->as.call_stmt.args);
-            break;
-        case DS_STMT_FOR:
-            free(stmt->as.for_stmt.key_name.data);
-            free(stmt->as.for_stmt.value_name.data);
-            ds_expr_free(stmt->as.for_stmt.iterable);
-            free_stmt(stmt->as.for_stmt.body);
-            break;
-        case DS_STMT_WHILE:
-            ds_expr_free(stmt->as.while_stmt.condition);
-            free_stmt(stmt->as.while_stmt.body);
-            break;
-        case DS_STMT_BREAK:
-        case DS_STMT_CONTINUE:
-            break;
-        case DS_STMT_CASE:
-            ds_expr_free(stmt->as.case_stmt.selector);
-            free_case_arm_vec(&stmt->as.case_stmt.arms);
-            break;
-        case DS_STMT_PUSH:
-            free(stmt->as.push_stmt.name.data);
-            ds_expr_free(stmt->as.push_stmt.value);
-            break;
-        case DS_STMT_TEST:
-            free(stmt->as.test_stmt.name.data);
-            free_stmt(stmt->as.test_stmt.body);
-            break;
-        case DS_STMT_ASSERT:
-            ds_expr_free(stmt->as.assert_stmt.condition);
-            break;
-        case DS_STMT_RETURN:
-            ds_expr_free(stmt->as.return_stmt.value);
-            break;
-        case DS_STMT_DEFER:
-        case DS_STMT_TRAP:
-            free(stmt->as.handler_stmt.signal_text.data);
-            free_stmt(stmt->as.handler_stmt.body);
-            break;
+#include "generated/ast_stmt_free.inc"
     }
     free(stmt);
 }

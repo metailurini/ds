@@ -1,4 +1,5 @@
 build/
+src/generated/.stamp
 .codegraph/
 ds
 *.o

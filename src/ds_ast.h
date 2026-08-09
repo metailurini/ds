@@ -4,21 +4,7 @@
 #include "ds_command.h"
 
 typedef enum {
-    DS_EXPR_IDENT,
-    DS_EXPR_STRING,
-    DS_EXPR_INT,
-    DS_EXPR_BOOL,
-    DS_EXPR_REGEX,
-    DS_EXPR_RUN,
-    DS_EXPR_FIELD,
-    DS_EXPR_UNARY,
-    DS_EXPR_BINARY,
-    DS_EXPR_CALL,
-    DS_EXPR_ARRAY,
-    DS_EXPR_MAP,
-    DS_EXPR_INDEX,
-    DS_EXPR_RANGE,
-    DS_EXPR_ERROR
+#include "generated/ast_expr_kinds.inc"
 } DsExprKind;
 
 typedef struct DsExpr DsExpr;
@@ -73,18 +59,7 @@ struct DsExpr {
     DsExprKind kind;
     DsSpan span;
     union {
-        DsStr text;
-        bool boolean;
-        DsStr regex;
-        DsCommand run;
-        struct { DsExpr *object; DsStr field; } field;
-        struct { DsUnaryOp op; DsExpr *right; } unary;
-        struct { DsExpr *left; DsBinaryOp op; DsExpr *right; } binary;
-        struct { DsStr name; DsExprVec args; } call;
-        struct { DsExprVec elements; } array;
-        struct { DsMapEntryVec entries; } map;
-        struct { DsExpr *object; DsExpr *index; } index;
-        struct { DsExpr *start; DsExpr *end; } range;
+#include "generated/ast_expr_union.inc"
     } as;
 };
 
@@ -98,26 +73,7 @@ bool ds_binary_op_is_comparison_like(DsBinaryOp op);
 DsExpr *ds_expr_new(DsExprKind kind, DsSpan span);
 
 typedef enum {
-    DS_STMT_LET,
-    DS_STMT_ASSIGN,
-    DS_STMT_INDEX_ASSIGN,
-    DS_STMT_IF,
-    DS_STMT_BLOCK,
-    DS_STMT_CMD,
-    DS_STMT_IMPORT,
-    DS_STMT_FN,
-    DS_STMT_CALL,
-    DS_STMT_FOR,
-    DS_STMT_WHILE,
-    DS_STMT_BREAK,
-    DS_STMT_CONTINUE,
-    DS_STMT_CASE,
-    DS_STMT_PUSH,
-    DS_STMT_TEST,
-    DS_STMT_ASSERT
-    ,DS_STMT_RETURN,
-    DS_STMT_DEFER,
-    DS_STMT_TRAP
+#include "generated/ast_stmt_kinds.inc"
 } DsStmtKind;
 
 typedef enum {
@@ -233,23 +189,7 @@ struct DsStmt {
     DsStmtKind kind;
     DsSpan span;
     union {
-        struct { DsStr name; DsExpr *value; } let_stmt;
-        struct { DsStr name; DsAssignOp op; DsExpr *value; } assign_stmt;
-        struct { DsExpr *target; DsAssignOp op; DsExpr *value; } index_assign_stmt;
-        struct { DsExpr *condition; DsStmt *then_branch; DsStmt *else_branch; } if_stmt;
-        struct { DsStmtVec statements; } block_stmt;
-        DsCommand cmd_stmt;
-        struct { DsStr path; } import_stmt;
-        struct { DsStr name; DsFnParamVec params; DsStmt *body; } fn_stmt;
-        struct { DsStr name; DsExprVec args; } call_stmt;
-        struct { DsStr key_name; DsStr value_name; bool has_value_name; DsExpr *iterable; DsStmt *body; } for_stmt;
-        struct { DsExpr *condition; DsStmt *body; } while_stmt;
-        struct { DsExpr *selector; DsCaseArmVec arms; } case_stmt;
-        struct { DsStr name; DsExpr *value; } push_stmt;
-        struct { DsStr name; DsStmt *body; } test_stmt;
-        struct { DsExpr *condition; } assert_stmt;
-        struct { DsExpr *value; } return_stmt;
-        struct { DsHandlerSignal signal; DsStr signal_text; DsStmt *body; } handler_stmt;
+#include "generated/ast_stmt_union.inc"
     } as;
 };
 
