@@ -72,7 +72,7 @@ void bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const Ds
 bool bash_emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, const DsLowerExpr *row, int indent);
 bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *index_expr, const DsLowerRowSchema *schema, int indent, bool local_decl);
-bool bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl);
+void bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr *value, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr *call, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value, const DsLowerRowSchema *schema, DsSpan span, int indent);

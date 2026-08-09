@@ -606,7 +606,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     if (!emit_capture_command(e, &stmt->as.let_stmt.value->as.run, &e->out, stmt->as.let_stmt.value->span)) return false;
                 }
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                if (!bash_emit_row_array_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.text, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                bash_emit_row_array_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.text, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0);
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
                 if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, DS_LOWER_VALUE_MAP, indent)) return false;
                 bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent);

@@ -210,17 +210,16 @@ static bool parse_interpolation_array_index_arg(BashEmitter *e, const char *deco
     return true;
 }
 
-static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsStr name, DsSpan span, EmitBuf *out, bool *handled) {
-    *handled = false;
+static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const char *decoded, size_t len, size_t *j, DsStr name, DsSpan span, EmitBuf *out) {
     size_t pos = *j;
     EmitBuf index_arg = {0};
     if (!parse_interpolation_array_index_arg(e, decoded, len, &pos, span, &index_arg)) {
         free(index_arg.data);
-        return true;
+        return false;
     }
     if (pos >= len || decoded[pos] != '.') {
         free(index_arg.data);
-        return true;
+        return false;
     }
     pos++;
     size_t field_start = pos;
@@ -236,7 +235,6 @@ static bool emit_row_array_field_interpolation_if_present(BashEmitter *e, const 
     buf_append(out, " )");
     free(index_arg.data);
     *j = pos;
-    *handled = true;
     return true;
 }
 
@@ -515,14 +513,10 @@ bool emit_interpolated_string(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *
                     const char *field = NULL; size_t field_len = 0;
                     bool indexed_interp = false;
                     if (decoded[j] == '[') {
-                        bool handled_row_field = false;
-                        if (!emit_row_array_field_interpolation_if_present(e, decoded, len, &j, name, expr->span, out, &handled_row_field)) { free(decoded); return false; }
-                        if (!handled_row_field) {
+                        if (!emit_row_array_field_interpolation_if_present(e, decoded, len, &j, name, expr->span, out)) {
                             if (!emit_interpolation_index(e, decoded, len, &j, name, expr->span, out)) { free(decoded); return false; }
-                            indexed_interp = true;
-                        } else {
-                            indexed_interp = true;
                         }
+                        indexed_interp = true;
                     } else if (decoded[j] == '.') {
                         size_t field_start = ++j;
                         if (j < len && ((decoded[j] >= 'A' && decoded[j] <= 'Z') || (decoded[j] >= 'a' && decoded[j] <= 'z') || decoded[j] == '_')) {

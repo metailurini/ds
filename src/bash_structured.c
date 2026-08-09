@@ -620,7 +620,7 @@ bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *ind
     return true;
 }
 
-bool bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl) {
+void bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl) {
     bash_emit_row_array_decls(e, dest, schema, indent, local_decl);
     emit_indent(&e->out, indent);
     emit_var_name(&e->out, dest);
@@ -639,13 +639,13 @@ bool bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLow
         bash_emit_row_field_array_name(&e->out, src, schema->items[i].name);
         buf_append(&e->out, "[@]}\")\n");
     }
-    return true;
 }
 
 bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr *value, const DsLowerRowSchema *schema, int indent, bool local_decl) {
     if (!value) return false;
     if (value->kind == DS_LOWER_EXPR_IDENT) {
-        return bash_emit_row_array_copy(e, dest, value->as.text, schema, indent, local_decl);
+        bash_emit_row_array_copy(e, dest, value->as.text, schema, indent, local_decl);
+        return true;
     }
     if (value->kind == DS_LOWER_EXPR_ARRAY) {
         return bash_emit_row_array_literal(e, dest, value, schema, indent, local_decl);
