@@ -342,12 +342,12 @@ static int ds_str_key_cmp(const void *a, const void *b) {
     return 0;
 }
 
-bool ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len) {
+void ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len) {
     *out_keys = NULL;
     *out_len = 0;
-    if (!map->impl) return true;
+    if (!map->impl) return;
     size_t len = ds_map_len(map);
-    if (len == 0) return true;
+    if (len == 0) return;
     DsStr *keys = (DsStr *)ds_xcalloc(len, sizeof(DsStr));
     const char *key = NULL;
     size_t key_len = 0;
@@ -363,7 +363,6 @@ bool ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len) {
     *out_len = i;
     qsort(keys, i, sizeof(DsStr), ds_str_key_cmp);
     *out_keys = keys;
-    return true;
 }
 
 void ds_map_sorted_keys_free(DsStr *keys, size_t len) {

@@ -163,8 +163,8 @@ static int cli_inspect(const char *cmd, const char *path) {
         if (rc == 0) {
             if (strcmp(cmd, "hir") == 0) {
                 if (!ds_hir_dump_program(program.lowered, stdout)) rc = 1;
-            } else if (!ds_bytecode_dump_program(&program.source, program.lowered, stdout, &program.diag)) {
-                rc = 1;
+            } else {
+                ds_bytecode_dump_program(&program.source, program.lowered, stdout);
             }
         }
     }

@@ -158,7 +158,7 @@ typedef struct {
 } Vm;
 
 void program_free(Program *p);
-bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag);
+void compile_program(const DsLowerProgram *lowered, Program *p);
 bool decode_string_text(DsStr text, DsString *out);
 
 const char *op_name(OpCode op);

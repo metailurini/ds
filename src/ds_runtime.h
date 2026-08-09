@@ -82,7 +82,7 @@ bool ds_map_init(DsMap *map);
 bool ds_map_set(DsMap *map, DsStr key, DsValue value);
 DsValue *ds_map_get(DsMap *map, DsStr key);
 size_t ds_map_len(const DsMap *map);
-bool ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len);
+void ds_map_sorted_keys(const DsMap *map, DsStr **out_keys, size_t *out_len);
 void ds_map_sorted_keys_free(DsStr *keys, size_t len);
 void ds_map_clear(DsMap *map);
 void ds_map_free(DsMap *map);

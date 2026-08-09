@@ -21,7 +21,7 @@ static void test_empty_map_sorted_keys(void) {
 
     DsStr *keys = (DsStr *)1;
     size_t len = 99;
-    assert(ds_map_sorted_keys(&map, &keys, &len));
+    ds_map_sorted_keys(&map, &keys, &len);
     assert(len == 0);
     assert(keys == NULL);
 
@@ -40,7 +40,7 @@ static void test_sorted_keys_are_bytewise(void) {
 
     DsStr *keys = NULL;
     size_t len = 0;
-    assert(ds_map_sorted_keys(&map, &keys, &len));
+    ds_map_sorted_keys(&map, &keys, &len);
     assert(len == 5);
     expect_key(keys[0], "1");
     expect_key(keys[1], "10");

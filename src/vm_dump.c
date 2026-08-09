@@ -81,11 +81,9 @@ static void print_value_literal(FILE *out, const DsValue *v) {
     }
 }
 
-bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowered, FILE *out, DsDiag *diag) {
+void ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowered, FILE *out) {
     Program p;
-    if (!compile_program(lowered, &p, diag)) {
-        return false;
-    }
+    compile_program(lowered, &p);
 
     fputs("args:\n", out);
     if (!lowered->has_script || lowered->script_decls.len == 0) {
@@ -216,5 +214,4 @@ bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
         print_span_comment(out, source, ins->span);
     }
     program_free(&p);
-    return true;
 }

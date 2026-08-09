@@ -764,8 +764,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
     }
 }
 
-bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag) {
-    (void)diag;
+void compile_program(const DsLowerProgram *lowered, Program *p) {
     memset(p, 0, sizeof(*p));
     for (size_t i = 0; i < lowered->functions.len; i++) add_function_meta(p, &lowered->functions.items[i]);
     size_t jump_main_pos = 0;
@@ -790,5 +789,4 @@ bool compile_program(const DsLowerProgram *lowered, Program *p, DsDiag *diag) {
     ret.target = 0;
     ret.span = lowered->span;
     emit_instr(p, ret);
-    return true;
 }

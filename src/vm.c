@@ -161,11 +161,10 @@ static bool value_exact_equal(const DsValue *a, const DsValue *b) {
     return ds_value_compare(a, b) == 0;
 }
 
-static bool ensure_regs(Vm *vm) {
+static void ensure_regs(Vm *vm) {
     if (vm->program->next_reg <= 0) vm->program->next_reg = 1;
     vm->regs = (DsValue *)ds_xcalloc((size_t)vm->program->next_reg, sizeof(DsValue));
     for (int i = 0; i < vm->program->next_reg; i++) vm->regs[i] = ds_value_null();
-    return true;
 }
 
 
@@ -217,9 +216,7 @@ static bool check_div_zero_and_overflow(DsDiag *diag, DsSpan span,
 int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag, DsVmOptions options) {
     (void)source;
     Program p;
-    if (!compile_program(lowered, &p, diag)) {
-        return 1;
-    }
+    compile_program(lowered, &p);
     Vm vm;
     memset(&vm, 0, sizeof(vm));
     vm.program = &p;
@@ -631,10 +628,7 @@ dispatch_loop:
                     ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);
                     ins->loop_keys = NULL;
                     ins->loop_key_count = 0;
-                    if (!ds_map_sorted_keys(&iter->as.map, &ins->loop_keys, &ins->loop_key_count)) {
-                        ds_diag_error(diag, ins->span, "failed to prepare sorted map keys");
-                        rc = 1; goto done;
-                    }
+                    ds_map_sorted_keys(&iter->as.map, &ins->loop_keys, &ins->loop_key_count);
                 }
                 if (ins->loop_index >= ins->loop_key_count) {
                     ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);
