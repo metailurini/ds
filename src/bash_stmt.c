@@ -832,11 +832,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_FOR_ARRAY: {
             emit_indent(&e->out, indent);
             if (stmt->as.for_stmt.iterates_row_array) {
+                char iter_buf[64];
                 DsStr iter_name = {0};
                 if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) {
                     iter_name = stmt->as.for_stmt.iterable->as.text;
                 } else if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_CALL && stmt->as.for_stmt.iterable->as.call.returns_row_array) {
-                    char iter_buf[64];
                     bash_temp_ds_name(iter_buf, sizeof(iter_buf), "row_iter", e->temp_counter++);
                     iter_name = (DsStr){iter_buf, strlen(iter_buf)};
                     if (!bash_emit_row_array_expr_into(e, iter_name, stmt->as.for_stmt.iterable, &stmt->as.for_stmt.row_schema, indent, e->function_depth > 0)) return false;
