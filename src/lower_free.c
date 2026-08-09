@@ -23,9 +23,8 @@ void lower_expr_free(DsLowerExpr *expr) {
             lower_expr_free(expr->as.unary.right);
             break;
         case DS_LOWER_EXPR_BINARY:
-            lower_expr_free(expr->as.binary.left);
+            DS_FREE_PTR_PAIR(expr->as.binary.left, expr->as.binary.right, lower_expr_free);
             free(expr->as.binary.op.data);
-            lower_expr_free(expr->as.binary.right);
             break;
         case DS_LOWER_EXPR_CALL:
             free(expr->as.call.name.data);
@@ -44,14 +43,12 @@ void lower_expr_free(DsLowerExpr *expr) {
             row_schema_free(&expr->as.map.row_schema);
             break;
         case DS_LOWER_EXPR_INDEX:
-            lower_expr_free(expr->as.index.object);
-            lower_expr_free(expr->as.index.index);
+            DS_FREE_PTR_PAIR(expr->as.index.object, expr->as.index.index, lower_expr_free);
             free(expr->as.index.map_key.data);
             row_schema_free(&expr->as.index.row_schema);
             break;
         case DS_LOWER_EXPR_RANGE:
-            lower_expr_free(expr->as.range.start);
-            lower_expr_free(expr->as.range.end);
+            DS_FREE_PTR_PAIR(expr->as.range.start, expr->as.range.end, lower_expr_free);
             break;
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_ERROR:
@@ -79,8 +76,7 @@ void lower_stmt_free(DsLowerStmt *stmt) {
             break;
         case DS_LOWER_STMT_IF:
             lower_expr_free(stmt->as.if_stmt.condition);
-            lower_stmt_free(stmt->as.if_stmt.then_branch);
-            lower_stmt_free(stmt->as.if_stmt.else_branch);
+            DS_FREE_PTR_PAIR(stmt->as.if_stmt.then_branch, stmt->as.if_stmt.else_branch, lower_stmt_free);
             break;
         case DS_LOWER_STMT_BLOCK:
             DS_FREE_PTR_VEC(stmt->as.block_stmt.statements, lower_stmt_free);

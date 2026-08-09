@@ -303,9 +303,8 @@ void ds_expr_free(DsExpr *expr) {
             ds_expr_free(expr->as.unary.right);
             break;
         case DS_EXPR_BINARY:
-            ds_expr_free(expr->as.binary.left);
+            DS_FREE_PTR_PAIR(expr->as.binary.left, expr->as.binary.right, ds_expr_free);
             free(expr->as.binary.op.data);
-            ds_expr_free(expr->as.binary.right);
             break;
         case DS_EXPR_CALL:
             free(expr->as.call.name.data);
@@ -318,12 +317,10 @@ void ds_expr_free(DsExpr *expr) {
             DS_FREE_KEYED_PTR_VEC(expr->as.map.entries, ds_expr_free);
             break;
         case DS_EXPR_INDEX:
-            ds_expr_free(expr->as.index.object);
-            ds_expr_free(expr->as.index.index);
+            DS_FREE_PTR_PAIR(expr->as.index.object, expr->as.index.index, ds_expr_free);
             break;
         case DS_EXPR_RANGE:
-            ds_expr_free(expr->as.range.start);
-            ds_expr_free(expr->as.range.end);
+            DS_FREE_PTR_PAIR(expr->as.range.start, expr->as.range.end, ds_expr_free);
             break;
         case DS_EXPR_BOOL:
         case DS_EXPR_ERROR:
@@ -349,8 +346,7 @@ static void free_stmt(DsStmt *stmt) {
             break;
         case DS_STMT_IF:
             ds_expr_free(stmt->as.if_stmt.condition);
-            free_stmt(stmt->as.if_stmt.then_branch);
-            free_stmt(stmt->as.if_stmt.else_branch);
+            DS_FREE_PTR_PAIR(stmt->as.if_stmt.then_branch, stmt->as.if_stmt.else_branch, free_stmt);
             break;
         case DS_STMT_BLOCK:
             DS_FREE_PTR_VEC(stmt->as.block_stmt.statements, free_stmt);
