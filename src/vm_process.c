@@ -106,13 +106,9 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
         return ds_string_append_cstr(out, buf);
     }
     int prec = parsed.precision < 0 ? 6 : parsed.precision;
-    char ibuf[64];
-    snprintf(ibuf, sizeof(ibuf), "%lld", (long long)value->as.integer);
-
     DsString tmp;
     ds_string_init(&tmp);
-    ds_string_append_cstr(&tmp, ibuf);
-    ds_string_append_char(&tmp, '.');
+    ds_string_appendf(&tmp, "%lld.", (long long)value->as.integer);
     for (int i = 0; i < prec; i++) ds_string_append_char(&tmp, '0');
 
     if (parsed.width > (int)tmp.len) {
@@ -349,9 +345,7 @@ static bool append_arithmetic_interpolation(Vm *vm, const char *data, size_t len
     arithmetic_skip_ws(&parser);
     if (parser.pos != parser.len) return false;
 
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%lld", (long long)result);
-    return ds_string_append_cstr(out, buf);
+    return ds_string_appendf(out, "%lld", (long long)result);
 }
 
 static bool interp_parse_int_literal(const char *data, size_t len, size_t *i, int64_t *out) {

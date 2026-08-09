@@ -235,7 +235,6 @@ bool ds_value_truthy(const DsValue *value, bool *out) {
 }
 
 bool ds_value_to_string(const DsValue *value, DsString *out) {
-    char buf[64];
     ds_string_init(out);
     switch (value->kind) {
         case DS_VALUE_NULL:
@@ -243,8 +242,7 @@ bool ds_value_to_string(const DsValue *value, DsString *out) {
         case DS_VALUE_BOOL:
             return ds_string_append_cstr(out, value->as.boolean ? "true" : "false");
         case DS_VALUE_INT:
-            snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
-            return ds_string_append_cstr(out, buf);
+            return ds_string_appendf(out, "%lld", (long long)value->as.integer);
         case DS_VALUE_STRING:
             return ds_string_append_range(out, ds_string_data(&value->as.string), value->as.string.len);
         case DS_VALUE_COMMAND_RESULT:
