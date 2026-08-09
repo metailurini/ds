@@ -687,6 +687,14 @@ Parity tests should compare:
 - emitted Bash stderr shape where practical;
 - emitted Bash exit code.
 
+Regression suites should prefer observable behavior and architectural boundaries
+over implementation shape. Tests may enforce boundaries such as private hashmap
+access, narrow public headers, or the no-implementation-in-headers rule, but they
+should not require private helper names, exact source-file placement, or a
+particular internal call chain. Renaming, inlining, merging, or moving an internal
+implementation should not require test changes when behavior and boundaries stay
+the same.
+
 ## Debug commands
 
 Debug commands are not just nice-to-have. They are part of making the language easy to develop.
