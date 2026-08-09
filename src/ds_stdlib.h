@@ -87,6 +87,7 @@ bool ds_stdlib_is_name(DsStr name);
 bool ds_stdlib_is_namespace(DsStr name);
 bool ds_stdlib_arity_ok(const DsStdlibHelper *helper, size_t argc);
 DsStdlibNamespace ds_stdlib_namespace(DsStr name);
+const char *ds_stdlib_string_method_names(void);
 bool ds_stdlib_is_string_helper(DsStr name);
 bool ds_stdlib_is_glob_helper(DsStr name);
 bool ds_stdlib_is_dir_walk_helper(DsStr name);

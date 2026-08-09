@@ -52,8 +52,6 @@ typedef struct {
     size_t map_loop_cap;
 } Lower;
 
-#define DS_STRING_METHODS "trim, upper, lower, replace, contains, split, starts_with, ends_with, len, index_of, last_index_of, count, char_at, slice"
-
 static inline bool lower_sym_kind_is_scalar(SymKind kind) {
     return kind == SYM_STRING || kind == SYM_INT || kind == SYM_BOOL;
 }
@@ -94,8 +92,8 @@ static inline void lower_diag_unknown_stdlib_helper(Lower *lower, DsSpan span, D
     ds_diag_error(lower->diag, span, "unknown standard-library helper `%.*s`", (int)name.len, name.data);
 }
 static inline void lower_diag_unknown_string_method(Lower *lower, DsSpan span, DsStr member) {
-    ds_diag_error(lower->diag, span, "unknown string method `%.*s`; supported methods are " DS_STRING_METHODS,
-                  (int)member.len, member.data);
+    ds_diag_error(lower->diag, span, "unknown string method `%.*s`; supported methods are %s",
+                  (int)member.len, member.data, ds_stdlib_string_method_names());
 }
 static inline DsLowerValueKind lower_fn_param_expected_kind(const DsLowerFnParam *param) {
     if (!param) return DS_LOWER_VALUE_UNKNOWN;

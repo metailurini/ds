@@ -82,6 +82,26 @@ DsStdlibNamespace ds_stdlib_namespace(DsStr name) {
     return DS_STDLIB_NAMESPACE_UNKNOWN;
 }
 
+const char *ds_stdlib_string_method_names(void) {
+    static char names[256];
+    static bool initialized;
+    if (initialized) return names;
+
+    size_t len = 0;
+    for (size_t i = 0; i < DS_ARRAY_LEN(HELPERS); i++) {
+        const char *name = HELPERS[i].name;
+        if (strncmp(name, "string.", 7) != 0) continue;
+        const char *method = name + 7;
+        if (len) names[len++] = ',', names[len++] = ' ';
+        size_t method_len = strlen(method);
+        memcpy(names + len, method, method_len);
+        len += method_len;
+    }
+    names[len] = '\0';
+    initialized = true;
+    return names;
+}
+
 bool ds_stdlib_is_string_helper(DsStr name) {
     return ds_stdlib_lookup(name) && ds_stdlib_namespace(name) == DS_STDLIB_NAMESPACE_STRING;
 }
