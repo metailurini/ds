@@ -58,6 +58,14 @@ bool ds_source_read(const char *path, DsSource *out, DsDiag *diag) {
 
     bool ok = false;
     char *data = NULL;
+    struct stat st;
+    if (fstat(fileno(fp), &st) != 0) {
+        goto read_error;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        errno = EISDIR;
+        goto read_error;
+    }
     if (fseek(fp, 0, SEEK_END) != 0) {
         goto read_error;
     }
