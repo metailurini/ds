@@ -335,9 +335,8 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
                 DsStr raw_pattern = {0};
                 if (ds_regex_literal_parts(expr->as.binary.right->as.regex, &raw_pattern, &regex_insensitive)) {
                     DsString decoded;
-                    if (ds_regex_decode_literal_pattern(raw_pattern, &decoded)) {
-                        right = compile_const(p, expr->as.binary.right->span, ds_value_string_take(&decoded));
-                    }
+                    ds_regex_decode_literal_pattern(raw_pattern, &decoded);
+                    right = compile_const(p, expr->as.binary.right->span, ds_value_string_take(&decoded));
                 }
             }
             if (right < 0) right = compile_expr(p, expr->as.binary.right);

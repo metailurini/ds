@@ -25,20 +25,19 @@ void ds_string_init(DsString *s) {
     *s = (DsString){0};
 }
 
-bool ds_string_append_range(DsString *s, const char *data, size_t len) {
+void ds_string_append_range(DsString *s, const char *data, size_t len) {
     ds_reserve_char_buffer(&s->data, &s->cap, ds_size_add3_or_oom(s->len, len, 1), 16);
     if (len > 0) memcpy(s->data + s->len, data, len);
     s->len += len;
     s->data[s->len] = '\0';
-    return true;
 }
 
-bool ds_string_append_cstr(DsString *s, const char *text) {
-    return ds_string_append_range(s, text, strlen(text));
+void ds_string_append_cstr(DsString *s, const char *text) {
+    ds_string_append_range(s, text, strlen(text));
 }
 
-bool ds_string_append_char(DsString *s, char c) {
-    return ds_string_append_range(s, &c, 1);
+void ds_string_append_char(DsString *s, char c) {
+    ds_string_append_range(s, &c, 1);
 }
 
 bool ds_string_appendf(DsString *s, const char *fmt, ...) {
@@ -56,29 +55,29 @@ bool ds_string_appendf(DsString *s, const char *fmt, ...) {
     return true;
 }
 
-bool ds_string_append_escaped(DsString *s, const char *data, size_t len) {
+void ds_string_append_escaped(DsString *s, const char *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         char c = data[i];
         if (c == '\n') {
-            if (!ds_string_append_range(s, "\\n", 2)) return false;
+            ds_string_append_range(s, "\\n", 2);
         } else if (c == '\t') {
-            if (!ds_string_append_range(s, "\\t", 2)) return false;
+            ds_string_append_range(s, "\\t", 2);
         } else if (c == '"' || c == '\\') {
-            if (!ds_string_append_char(s, '\\') || !ds_string_append_char(s, c)) return false;
-        } else if (!ds_string_append_char(s, c)) {
-            return false;
+            ds_string_append_char(s, '\\');
+            ds_string_append_char(s, c);
+        } else {
+            ds_string_append_char(s, c);
         }
     }
-    return true;
 }
 
-bool ds_string_from_range(DsString *s, const char *data, size_t len) {
+void ds_string_from_range(DsString *s, const char *data, size_t len) {
     ds_string_init(s);
-    return ds_string_append_range(s, data, len);
+    ds_string_append_range(s, data, len);
 }
 
-bool ds_string_from_cstr(DsString *s, const char *text) {
-    return ds_string_from_range(s, text, strlen(text));
+void ds_string_from_cstr(DsString *s, const char *text) {
+    ds_string_from_range(s, text, strlen(text));
 }
 
 void ds_string_free(DsString *s) {
@@ -236,19 +235,25 @@ bool ds_value_to_string(const DsValue *value, DsString *out) {
     ds_string_init(out);
     switch (value->kind) {
         case DS_VALUE_NULL:
-            return ds_string_append_cstr(out, "null");
+            ds_string_append_cstr(out, "null");
+            return true;
         case DS_VALUE_BOOL:
-            return ds_string_append_cstr(out, value->as.boolean ? "true" : "false");
+            ds_string_append_cstr(out, value->as.boolean ? "true" : "false");
+            return true;
         case DS_VALUE_INT:
             return ds_string_appendf(out, "%lld", (long long)value->as.integer);
         case DS_VALUE_STRING:
-            return ds_string_append_range(out, ds_string_data(&value->as.string), value->as.string.len);
+            ds_string_append_range(out, ds_string_data(&value->as.string), value->as.string.len);
+            return true;
         case DS_VALUE_COMMAND_RESULT:
-            return ds_string_append_cstr(out, "[command result]");
+            ds_string_append_cstr(out, "[command result]");
+            return true;
         case DS_VALUE_ARRAY:
-            return ds_string_append_cstr(out, "[array]");
+            ds_string_append_cstr(out, "[array]");
+            return true;
         case DS_VALUE_MAP:
-            return ds_string_append_cstr(out, "[map]");
+            ds_string_append_cstr(out, "[map]");
+            return true;
     }
     return false;
 }

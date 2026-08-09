@@ -17,7 +17,7 @@ static void expect_value_string(const DsValue *value, const char *expected) {
 
 static void test_string_take_and_copy_are_independent(void) {
     DsString source;
-    assert(ds_string_from_cstr(&source, "owned"));
+    ds_string_from_cstr(&source, "owned");
     char *original = source.data;
     DsValue taken = ds_value_string_take(&source);
     assert(source.data == NULL);
@@ -60,14 +60,14 @@ static void test_map_key_copy_update_clear_and_reuse(void) {
 
     char mutable_key[] = "alpha";
     DsString value;
-    assert(ds_string_from_cstr(&value, "first"));
+    ds_string_from_cstr(&value, "first");
     assert(ds_map_set(&map, view(mutable_key), ds_value_string_take(&value)));
     mutable_key[0] = 'X';
     DsValue *found = ds_map_get(&map, view("alpha"));
     assert(found != NULL);
     expect_value_string(found, "first");
 
-    assert(ds_string_from_cstr(&value, "second"));
+    ds_string_from_cstr(&value, "second");
     assert(ds_map_set(&map, view("alpha"), ds_value_string_take(&value)));
     found = ds_map_get(&map, view("alpha"));
     assert(found != NULL);

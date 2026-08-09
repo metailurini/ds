@@ -25,15 +25,15 @@ static void test_string(void) {
     assert(s.len == 0);
     assert(s.cap == 0);
 
-    assert(ds_string_append_cstr(&s, "hello"));
-    assert(ds_string_append_char(&s, ' '));
-    assert(ds_string_append_range(&s, "world", 5));
+    ds_string_append_cstr(&s, "hello");
+    ds_string_append_char(&s, ' ');
+    ds_string_append_range(&s, "world", 5);
     expect_string(&s, "hello world");
 
-    assert(ds_string_append_range(&s, "", 0));
+    ds_string_append_range(&s, "", 0);
     expect_string(&s, "hello world");
 
-    for (int i = 0; i < 128; i++) assert(ds_string_append_char(&s, 'x'));
+    for (int i = 0; i < 128; i++) ds_string_append_char(&s, 'x');
     assert(s.len == strlen("hello world") + 128);
     assert(s.data[s.len] == '\0');
     ds_string_free(&s);
@@ -41,18 +41,18 @@ static void test_string(void) {
     assert(s.len == 0);
     assert(s.cap == 0);
 
-    assert(ds_string_from_cstr(&s, "$HOME $(echo bad) `bad` {name} \\ \""));
+    ds_string_from_cstr(&s, "$HOME $(echo bad) `bad` {name} \\ \"");
     expect_string(&s, "$HOME $(echo bad) `bad` {name} \\ \"");
     ds_string_free(&s);
 
     const char bytes[] = {'a', '\0', 'b'};
-    assert(ds_string_from_range(&s, bytes, sizeof(bytes)));
+    ds_string_from_range(&s, bytes, sizeof(bytes));
     assert(s.len == 3);
     assert(memcmp(s.data, bytes, 3) == 0);
     assert(s.data[3] == '\0');
     ds_string_free(&s);
 
-    assert(ds_string_from_range(&s, NULL, 0));
+    ds_string_from_range(&s, NULL, 0);
     assert(s.len == 0);
     assert(s.data != NULL);
     assert(s.data[0] == '\0');
@@ -87,7 +87,7 @@ static void test_values(void) {
     ds_string_free(&out);
 
     DsString source;
-    assert(ds_string_from_cstr(&source, "owned string"));
+    ds_string_from_cstr(&source, "owned string");
     DsValue sv = ds_value_string_take(&source);
     assert(source.data == NULL && source.len == 0);
     assert(ds_value_truthy(&sv, &truth) && truth == true);

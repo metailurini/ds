@@ -7,19 +7,16 @@
 
 typedef struct {
     DsString out;
-    bool ok;
 } Formatter;
 
 static void format_expr_prec(Formatter *fmt, const DsExpr *expr, int parent_prec);
 
 static void append_str(Formatter *fmt, DsStr s) {
-    if (!fmt->ok) return;
-    fmt->ok = ds_string_append_range(&fmt->out, s.data, s.len);
+    ds_string_append_range(&fmt->out, s.data, s.len);
 }
 
 static void append_cstr(Formatter *fmt, const char *s) {
-    if (!fmt->ok) return;
-    fmt->ok = ds_string_append_cstr(&fmt->out, s);
+    ds_string_append_cstr(&fmt->out, s);
 }
 
 static void indent(Formatter *fmt, int level) {
@@ -28,7 +25,7 @@ static void indent(Formatter *fmt, int level) {
 
 static void append_quoted(Formatter *fmt, DsStr value) {
     append_cstr(fmt, "\"");
-    if (fmt->ok) fmt->ok = ds_string_append_escaped(&fmt->out, value.data, value.len);
+    ds_string_append_escaped(&fmt->out, value.data, value.len);
     append_cstr(fmt, "\"");
 }
 
@@ -450,7 +447,6 @@ bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, D
 
     Formatter fmt = {0};
     ds_string_init(&fmt.out);
-    fmt.ok = true;
 
     bool wrote_group = false;
     if (ast->has_script) {
@@ -483,11 +479,6 @@ bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, D
     }
 
     if (fmt.out.len > 0 && fmt.out.data[fmt.out.len - 1] != '\n') append_cstr(&fmt, "\n");
-    if (!fmt.ok) {
-        ds_string_free(&fmt.out);
-        ds_diag_error(diag, ast->span, "failed to format source");
-        return false;
-    }
     *out = fmt.out;
     return true;
 }

@@ -12,8 +12,8 @@ static void expect_string(const DsValue *value, const char *expected) {
 static void test_command_result_take_copy_and_free(void) {
     DsString out;
     DsString err;
-    assert(ds_string_from_cstr(&out, "stdout"));
-    assert(ds_string_from_cstr(&err, "stderr"));
+    ds_string_from_cstr(&out, "stdout");
+    ds_string_from_cstr(&err, "stderr");
     char *out_ptr = out.data;
     char *err_ptr = err.data;
     DsValue value = ds_value_command_result_take(&out, &err, 7);
@@ -63,8 +63,8 @@ static void test_large_command_result_copy(void) {
     ds_string_init(&out);
     ds_string_init(&err);
     for (int i = 0; i < 1024; i++) {
-        assert(ds_string_append_cstr(&out, "0123456789"));
-        assert(ds_string_append_cstr(&err, "abcdefghij"));
+        ds_string_append_cstr(&out, "0123456789");
+        ds_string_append_cstr(&err, "abcdefghij");
     }
     DsValue value = ds_value_command_result_take(&out, &err, 2);
     DsValue copy = ds_value_copy(&value);

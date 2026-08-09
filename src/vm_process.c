@@ -40,8 +40,11 @@ static void ascii_transform_string(const DsString *in, DsString *out, DsInterpFo
     }
 }
 
-static bool append_padded(DsString *out, const char *data, size_t len, int width, char align) {
-    if (width <= (int)len) return ds_string_append_range(out, data, len);
+static void append_padded(DsString *out, const char *data, size_t len, int width, char align) {
+    if (width <= (int)len) {
+        ds_string_append_range(out, data, len);
+        return;
+    }
     int pad = width - (int)len;
     int left = 0, right = 0;
     if (align == '<') right = pad;
@@ -50,7 +53,6 @@ static bool append_padded(DsString *out, const char *data, size_t len, int width
     for (int i = 0; i < left; i++) ds_string_append_char(out, ' ');
     ds_string_append_range(out, data, len);
     for (int i = 0; i < right; i++) ds_string_append_char(out, ' ');
-    return true;
 }
 
 static DsInterpValueKind interp_kind_from_value(const DsValue *value) {
@@ -85,25 +87,32 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
     }
     if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT || parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT || parsed.kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
         char align = parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT ? '<' : parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT ? '>' : '^';
-        return append_padded(out, ds_string_data(&value->as.string), value->as.string.len, parsed.width, align);
+        append_padded(out, ds_string_data(&value->as.string), value->as.string.len, parsed.width, align);
+        return true;
     }
     char buf[64];
     if (parsed.kind == DS_INTERP_FORMAT_INT_DECIMAL) {
         snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
         size_t len = strlen(buf);
-        if (parsed.width <= (int)len) return ds_string_append_cstr(out, buf);
+        if (parsed.width <= (int)len) {
+            ds_string_append_cstr(out, buf);
+            return true;
+        }
         int pad = parsed.width - (int)len;
         if (parsed.zero_pad) {
             if (buf[0] == '-') {
                 ds_string_append_char(out, '-');
                 for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
-                return ds_string_append_cstr(out, buf + 1);
+                ds_string_append_cstr(out, buf + 1);
+                return true;
             }
             for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
-            return ds_string_append_cstr(out, buf);
+            ds_string_append_cstr(out, buf);
+            return true;
         }
         for (int i = 0; i < pad; i++) ds_string_append_char(out, ' ');
-        return ds_string_append_cstr(out, buf);
+        ds_string_append_cstr(out, buf);
+        return true;
     }
     int prec = parsed.precision < 0 ? 6 : parsed.precision;
     DsString tmp;

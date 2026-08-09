@@ -48,18 +48,17 @@ bool ds_regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive) {
     return true;
 }
 
-bool ds_regex_decode_literal_pattern(DsStr pattern, DsString *out) {
+void ds_regex_decode_literal_pattern(DsStr pattern, DsString *out) {
     ds_string_init(out);
     for (size_t i = 0; i < pattern.len; i++) {
         char c = pattern.data[i];
         if (c == '\\' && i + 1 < pattern.len && pattern.data[i + 1] == '/') {
-            if (!ds_string_append_char(out, '/')) return false;
+            ds_string_append_char(out, '/');
             i++;
-        } else if (!ds_string_append_char(out, c)) {
-            return false;
+        } else {
+            ds_string_append_char(out, c);
         }
     }
-    return true;
 }
 
 DsRegexStatus ds_regex_validate_flags(DsStr flags, int *cflags_out) {

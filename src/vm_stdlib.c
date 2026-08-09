@@ -91,16 +91,11 @@ static bool vm_require_env_name(Vm *vm, Instr *ins, const char *name) {
     return false;
 }
 
-static bool value_string_from_owned_cstr(DsValue *out, char *text) {
+static void value_string_from_owned_cstr(DsValue *out, char *text) {
     DsString s;
-    ds_string_init(&s);
-    if (!ds_string_from_cstr(&s, text ? text : "")) {
-        free(text);
-        return false;
-    }
+    ds_string_from_cstr(&s, text ? text : "");
     free(text);
     *out = ds_value_string_take(&s);
-    return true;
 }
 
 static void array_push_string(DsValue *array, const char *data, size_t len) {
@@ -473,7 +468,8 @@ static bool stdlib_path_part(Vm *vm, Instr *ins, DsValue *out) {
     }
 
     free(path);
-    return value_string_from_owned_cstr(out, result);
+    value_string_from_owned_cstr(out, result);
+    return true;
 }
 
 static bool command_exists_on_path(const char *cmd) {
@@ -1081,7 +1077,7 @@ static bool stdlib_regex_match(Vm *vm, Instr *ins, DsValue *out) {
 static bool regex_expand_replacement(Vm *vm, Instr *ins, DsString *out, const char *replacement, size_t replacement_len, const char *base, const regmatch_t *matches, size_t capture_count) {
     for (size_t i = 0; i < replacement_len; i++) {
         if (replacement[i] != '$') {
-            if (!ds_string_append_char(out, replacement[i])) return false;
+            ds_string_append_char(out, replacement[i]);
             continue;
         }
         if (i + 1 >= replacement_len) {
@@ -1090,7 +1086,7 @@ static bool regex_expand_replacement(Vm *vm, Instr *ins, DsString *out, const ch
         }
         char n = replacement[++i];
         if (n == '$') {
-            if (!ds_string_append_char(out, '$')) return false;
+            ds_string_append_char(out, '$');
             continue;
         }
         if (n < '0' || n > '9') {
@@ -1103,7 +1099,7 @@ static bool regex_expand_replacement(Vm *vm, Instr *ins, DsString *out, const ch
             return false;
         }
         if (matches[ref].rm_so >= 0 && matches[ref].rm_eo >= matches[ref].rm_so) {
-            if (!ds_string_append_range(out, base + matches[ref].rm_so, (size_t)(matches[ref].rm_eo - matches[ref].rm_so))) return false;
+            ds_string_append_range(out, base + matches[ref].rm_so, (size_t)(matches[ref].rm_eo - matches[ref].rm_so));
         }
     }
     return true;
@@ -1192,12 +1188,14 @@ bool ds_vm_stdlib_call(Vm *vm, Instr *ins, DsValue *out) {
             ds_diag_error(vm->diag, ins->span, "failed to get current directory: %s", strerror(errno));
             return false;
         }
-        return value_string_from_owned_cstr(out, cwd);
+        value_string_from_owned_cstr(out, cwd);
+        return true;
     }
     if (helper_is(ins, "path.join")) {
         char *joined = path_join_parts(vm, ins);
         if (!joined) return false;
-        return value_string_from_owned_cstr(out, joined);
+        value_string_from_owned_cstr(out, joined);
+        return true;
     }
     if (helper_is(ins, "path.basename") || helper_is(ins, "path.dirname") || helper_is(ins, "path.ext")) {
         return stdlib_path_part(vm, ins, out);

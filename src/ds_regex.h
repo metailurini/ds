@@ -19,7 +19,7 @@ typedef enum {
 
 const char *ds_regex_status_message(DsRegexStatus status);
 bool ds_regex_literal_parts(DsStr lit, DsStr *pattern, bool *insensitive);
-bool ds_regex_decode_literal_pattern(DsStr pattern, DsString *out);
+void ds_regex_decode_literal_pattern(DsStr pattern, DsString *out);
 DsRegexStatus ds_regex_validate_flags(DsStr flags, int *cflags_out);
 DsRegexStatus ds_regex_validate_pattern(DsStr pattern, size_t *capture_count_out);
 DsRegexStatus ds_regex_validate_replacement(DsStr replacement, size_t capture_count, bool capture_count_known);

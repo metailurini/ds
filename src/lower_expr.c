@@ -340,7 +340,7 @@ static void validate_regex_literal(Lower *lower, const DsExpr *expr) {
     }
     (void)insensitive;
     DsString decoded;
-    if (!ds_regex_decode_literal_pattern(pat, &decoded)) return;
+    ds_regex_decode_literal_pattern(pat, &decoded);
     size_t captures = 0;
     DsRegexStatus status = ds_regex_validate_pattern((DsStr){decoded.data, decoded.len}, &captures);
     (void)captures;
@@ -519,10 +519,7 @@ static DsLowerExpr *lower_regex_helper_call_expr(Lower *lower, const DsExpr *exp
                 continue;
             }
             DsString decoded;
-            if (!ds_regex_decode_literal_pattern(pat, &decoded)) {
-                DS_VEC_PUSH(&out->as.call.args, expr_new(DS_LOWER_EXPR_ERROR, arg->span), 8);
-                continue;
-            }
+            ds_regex_decode_literal_pattern(pat, &decoded);
             DsRegexStatus status = ds_regex_validate_pattern((DsStr){decoded.data, decoded.len}, &pattern_capture_count);
             pattern_capture_count_known = status == DS_REGEX_OK;
             if (status != DS_REGEX_OK) ds_diag_error(lower->diag, arg->span, "%s", ds_regex_status_message(status));
