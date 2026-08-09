@@ -22,7 +22,7 @@ void ds_string_init(DsString *s) {
 }
 
 bool ds_string_append_range(DsString *s, const char *data, size_t len) {
-    ds_reserve_char_buffer(&s->data, &s->cap, s->len + len + 1, 16);
+    ds_reserve_char_buffer(&s->data, &s->cap, ds_size_add3_or_oom(s->len, len, 1), 16);
     if (len > 0) memcpy(s->data + s->len, data, len);
     s->len += len;
     s->data[s->len] = '\0';
@@ -45,7 +45,7 @@ bool ds_string_appendf(DsString *s, const char *fmt, ...) {
     int n = vsnprintf(NULL, 0, fmt, copy);
     va_end(copy);
     if (n < 0) { va_end(args); return false; }
-    ds_reserve_char_buffer(&s->data, &s->cap, s->len + (size_t)n + 1, 16);
+    ds_reserve_char_buffer(&s->data, &s->cap, ds_size_add3_or_oom(s->len, (size_t)n, 1), 16);
     vsnprintf(s->data + s->len, (size_t)n + 1, fmt, args);
     va_end(args);
     s->len += (size_t)n;

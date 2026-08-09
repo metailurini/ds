@@ -52,7 +52,7 @@ static void parse_stage_words(Parser *p, DsWordVec *words, DsSpan *span) {
             have_current = true;
         }
         ds_reserve_char_buffer(&current.text.data, &current_cap,
-                               current.text.len + tok->text.len + 1, 16);
+                               ds_size_add3_or_oom(current.text.len, tok->text.len, 1), 16);
         memcpy(current.text.data + current.text.len, tok->text.data, tok->text.len);
         current.text.len += tok->text.len;
         current.text.data[current.text.len] = '\0';

@@ -60,6 +60,14 @@ static void assert_clone_result_contracts(void) {
 }
 
 int main(void) {
+    assert(!ds_size_add_overflows(7, 9));
+    assert(ds_size_add_overflows(SIZE_MAX, 1));
+    assert(!ds_size_mul_overflows(7, 9));
+    assert(ds_size_mul_overflows(SIZE_MAX, 2));
+    assert(ds_growth_capacity(0, 1, 16) == 16);
+    assert(ds_growth_capacity(16, 17, 16) == 32);
+    assert(ds_growth_capacity(SIZE_MAX - 1, SIZE_MAX, 16) == SIZE_MAX);
+
     assert_clone_result_contracts();
     DsCommand original;
     ds_command_init(&original, DS_COMMAND_CAPTURE, span_at(1, 1));

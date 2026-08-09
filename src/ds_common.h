@@ -100,10 +100,35 @@ static inline void ds_skip_ascii_ws(const char *data, size_t len, size_t *index)
     }
 }
 
+static inline bool ds_size_add_overflows(size_t a, size_t b) {
+    return a > SIZE_MAX - b;
+}
+
+static inline bool ds_size_mul_overflows(size_t a, size_t b) {
+    return b != 0 && a > SIZE_MAX / b;
+}
+
+static inline size_t ds_size_add_or_oom(size_t a, size_t b) {
+    if (ds_size_add_overflows(a, b)) ds_fatal_oom();
+    return a + b;
+}
+
+static inline size_t ds_size_add3_or_oom(size_t a, size_t b, size_t c) {
+    return ds_size_add_or_oom(ds_size_add_or_oom(a, b), c);
+}
+
+static inline size_t ds_growth_capacity(size_t current, size_t need, size_t initial_cap) {
+    size_t next = current ? current : (initial_cap ? initial_cap : 1);
+    while (next < need) {
+        if (next > SIZE_MAX / 2) return need;
+        next *= 2;
+    }
+    return next;
+}
+
 static inline void ds_reserve_char_buffer(char **data, size_t *cap, size_t need, size_t initial_cap) {
     if (need <= *cap) return;
-    size_t next = *cap ? *cap : initial_cap;
-    while (next < need) next *= 2;
+    size_t next = ds_growth_capacity(*cap, need, initial_cap);
     *data = (char *)ds_xrealloc(*data, next);
     *cap = next;
 }
@@ -128,14 +153,6 @@ static inline bool ds_parse_int_range(DsStr text, int min, int max, int *out) {
     if (value < min || value > max) return false;
     *out = (int)value;
     return true;
-}
-
-static inline bool ds_size_add_overflows(size_t a, size_t b) {
-    return a > (size_t)-1 - b;
-}
-
-static inline bool ds_size_mul_overflows(size_t a, size_t b) {
-    return b != 0 && a > (size_t)-1 / b;
 }
 
 static inline DsStr ds_str_clone(DsStr value) {
@@ -256,8 +273,10 @@ static inline void ds_fprint_indent(FILE *out, int level) {
 
 #define DS_GROW_ARRAY(items, len, cap, initial_cap) do { \
     if ((len) == (cap)) { \
-        (cap) = (cap) ? (cap) * 2 : (initial_cap); \
-        (items) = ds_xrealloc((items), (cap) * sizeof(*(items))); \
+        size_t ds_next_cap = ds_growth_capacity((cap), ds_size_add_or_oom((len), 1), (initial_cap)); \
+        if (ds_size_mul_overflows(ds_next_cap, sizeof(*(items)))) ds_fatal_oom(); \
+        (items) = ds_xrealloc((items), ds_next_cap * sizeof(*(items))); \
+        (cap) = ds_next_cap; \
     } \
 } while (0)
 
