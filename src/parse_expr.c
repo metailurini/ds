@@ -27,7 +27,7 @@ static int precedence(DsTokenKind kind) {
 static DsExpr *parse_expr_prec(Parser *p, int min_prec);
 DsExpr *parse_expr(Parser *p);
 void parse_call_args(Parser *p, DsExprVec *args);
-typedef bool (*ParseCollectionItemFn)(Parser *p, DsExpr *expr);
+static bool parse_map_entry(Parser *p, DsExpr *expr);
 
 static DsExpr *parser_new_text_expr(DsExprKind kind, const DsToken *token) {
     DsExpr *expr = ds_expr_new(kind, token->span);
@@ -35,7 +35,7 @@ static DsExpr *parser_new_text_expr(DsExprKind kind, const DsToken *token) {
     return expr;
 }
 
-static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, ParseCollectionItemFn parse_item) {
+static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind) {
     bool map = kind == DS_EXPR_MAP;
     DsTokenKind closing = map ? DS_TOK_RBRACE : DS_TOK_RBRACKET;
     const char *trailing_message = map ? "expected map entry after `,`" : "expected array element after `,`";
@@ -47,7 +47,11 @@ static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, ParseCollect
         ds_diag_error(p->diag, parser_peek(p)->span, "empty map literals are deferred in v0.10.0");
     } else {
         while (!parser_at_end(p) && !parser_at(p, closing)) {
-            if (!parse_item(p, expr)) break;
+            if (map) {
+                if (!parse_map_entry(p, expr)) break;
+            } else {
+                DS_VEC_PUSH(&expr->as.array.elements, parse_expr(p), 8);
+            }
             parser_skip_newlines(p);
             if (!parser_advance_if(p, DS_TOK_COMMA)) break;
             parser_skip_newlines(p);
@@ -56,11 +60,6 @@ static DsExpr *parse_collection_literal(Parser *p, DsExprKind kind, ParseCollect
     }
     if (parser_expect(p, closing, closing_message)) expr->span.end = parser_previous(p)->span.end;
     return expr;
-}
-
-static bool parse_array_element(Parser *p, DsExpr *expr) {
-    DS_VEC_PUSH(&expr->as.array.elements, parse_expr(p), 8);
-    return true;
 }
 
 static bool parse_map_entry(Parser *p, DsExpr *expr) {
@@ -130,10 +129,10 @@ static DsExpr *parse_primary(Parser *p) {
         return expr;
     }
     if (parser_advance_if(p, DS_TOK_LBRACKET)) {
-        return parse_collection_literal(p, DS_EXPR_ARRAY, parse_array_element);
+        return parse_collection_literal(p, DS_EXPR_ARRAY);
     }
     if (parser_advance_if(p, DS_TOK_LBRACE)) {
-        return parse_collection_literal(p, DS_EXPR_MAP, parse_map_entry);
+        return parse_collection_literal(p, DS_EXPR_MAP);
     }
 
     ds_diag_error(p->diag, tok->span, "expected expression");
