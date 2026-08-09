@@ -58,19 +58,19 @@ typedef struct {
 } DsCommand;
 
 void ds_word_vec_init(DsWordVec *vec);
-void ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src);
+bool ds_word_vec_clone(DsWordVec *dst, const DsWordVec *src);
 void ds_word_vec_free(DsWordVec *vec);
 void ds_command_stage_init(DsCommandStage *stage);
-void ds_command_stage_clone(DsCommandStage *dst, const DsCommandStage *src);
+bool ds_command_stage_clone(DsCommandStage *dst, const DsCommandStage *src);
 void ds_command_stage_free(DsCommandStage *stage);
 void ds_command_stage_vec_init(DsCommandStageVec *vec);
-void ds_command_stage_vec_clone(DsCommandStageVec *dst, const DsCommandStageVec *src);
+bool ds_command_stage_vec_clone(DsCommandStageVec *dst, const DsCommandStageVec *src);
 void ds_command_stage_vec_free(DsCommandStageVec *vec);
 void ds_redirect_init(DsRedirect *redirect);
-void ds_redirect_clone(DsRedirect *dst, const DsRedirect *src);
+bool ds_redirect_clone(DsRedirect *dst, const DsRedirect *src);
 void ds_redirect_free(DsRedirect *redirect);
 void ds_command_init(DsCommand *command, DsCommandKind kind, DsSpan span);
-void ds_command_clone(DsCommand *dst, const DsCommand *src);
+bool ds_command_clone(DsCommand *dst, const DsCommand *src);
 void ds_command_free(DsCommand *command);
 
 #endif
