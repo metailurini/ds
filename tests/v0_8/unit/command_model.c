@@ -50,7 +50,17 @@ static void append_empty_stage(DsCommand *cmd, int column) {
     cmd->stages.items[idx].span = span_at(1, column);
 }
 
+static void assert_clone_result_contracts(void) {
+    bool (*word_vec_clone)(DsWordVec *, const DsWordVec *) = ds_word_vec_clone;
+    bool (*stage_clone)(DsCommandStage *, const DsCommandStage *) = ds_command_stage_clone;
+    bool (*stage_vec_clone)(DsCommandStageVec *, const DsCommandStageVec *) = ds_command_stage_vec_clone;
+    bool (*redirect_clone)(DsRedirect *, const DsRedirect *) = ds_redirect_clone;
+    bool (*command_clone)(DsCommand *, const DsCommand *) = ds_command_clone;
+    assert(word_vec_clone && stage_clone && stage_vec_clone && redirect_clone && command_clone);
+}
+
 int main(void) {
+    assert_clone_result_contracts();
     DsCommand original;
     ds_command_init(&original, DS_COMMAND_CAPTURE, span_at(1, 1));
     append_word(&original, word("printf", 1));
