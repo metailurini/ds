@@ -110,6 +110,10 @@ assert_same_text() {
   assert_same "$expected_file" "$actual_file" "$name"
 }
 
+assert_text() {
+  assert_same_text "$2" "$3" "$1"
+}
+
 assert_file_missing_or_empty() {
   local path="$1"
   local name="$2"

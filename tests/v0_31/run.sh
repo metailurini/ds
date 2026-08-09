@@ -25,12 +25,6 @@ write_fixture() {
   printf '%s' "$path"
 }
 
-write_expected() {
-  local name="$1" text="$2"
-  local path="$TMP/$name.expected"
-  printf '%s' "$text" >"$path"
-  printf '%s' "$path"
-}
 
 copy_seed() {
   local from="$1" to="$2"
@@ -50,12 +44,6 @@ capture_cmd() {
   printf '%s' "$rc" >"$TMP/$name.rc"
 }
 
-assert_text() {
-  local name="$1" expected="$2" actual="$3"
-  local exp
-  exp=$(write_expected "$name" "$expected")
-  assert_same "$exp" "$actual" "$name"
-}
 
 assert_no_duplicate_lines() {
   local file="$1" name="$2"
