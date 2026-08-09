@@ -56,7 +56,7 @@ void bash_emit_command_result_storage_decl(BashEmitter *e, DsStr name, int inden
 DsStr bash_command_result_field_storage_name(DsStr field);
 bool bash_command_result_field_is_bool(DsStr field);
 void bash_emit_command_result_copy_to_return(BashEmitter *e, DsStr source, int indent);
-bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl);
+void bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl);
 void bash_emit_expr_type_value(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 void bash_emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl);
 void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl);
@@ -67,8 +67,8 @@ bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSp
 void bash_emit_row_field_array_name(EmitBuf *out, DsStr array_name, DsStr field);
 void bash_emit_return_row_field_array_name(EmitBuf *out, DsStr field);
 const DsLowerMapEntry *bash_row_map_entry(const DsLowerExpr *row, DsStr field);
-bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
-bool bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent);
+void bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
+void bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent);
 bool bash_emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, const DsLowerExpr *row, int indent);
 bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *index_expr, const DsLowerRowSchema *schema, int indent, bool local_decl);

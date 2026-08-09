@@ -130,7 +130,7 @@ void bash_emit_command_result_copy_to_return(BashEmitter *e, DsStr source, int i
     }
 }
 
-bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl) {
+void bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKind kind, int indent, bool local_decl) {
     switch (kind) {
         case DS_LOWER_VALUE_ARRAY:
             emit_indent(&e->out, indent);
@@ -141,7 +141,7 @@ bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKi
             buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
             bash_emit_elem_type_var_name(&e->out, name);
             buf_append(&e->out, "=()\n");
-            return true;
+            return;
         case DS_LOWER_VALUE_MAP:
             emit_indent(&e->out, indent);
             buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
@@ -151,16 +151,16 @@ bool bash_emit_structured_target_decl(BashEmitter *e, DsStr name, DsLowerValueKi
             buf_append(&e->out, local_decl ? "local -A " : "declare -A ");
             bash_emit_map_value_type_var_name(&e->out, name);
             buf_append(&e->out, "=()\n");
-            return true;
+            return;
         case DS_LOWER_VALUE_COMMAND_RESULT:
             bash_emit_command_result_storage_decl(e, name, indent, local_decl);
-            return true;
+            return;
         default:
             emit_indent(&e->out, indent);
             if (local_decl) buf_append(&e->out, "local ");
             emit_var_name(&e->out, name);
             buf_append(&e->out, "=\"\"\n");
-            return true;
+            return;
     }
 }
 
@@ -417,7 +417,7 @@ void bash_emit_return_row_field_array_name(EmitBuf *out, DsStr field) {
     bash_emit_row_field_suffix(out, field);
 }
 
-bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
+void bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr *value, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr *call, const DsLowerRowSchema *schema, int indent, bool local_decl);
@@ -436,7 +436,7 @@ bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value
         } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && ds_str_eq_cstr(value->as.call.name, "rowarray.sort_by")) {
             if (!bash_emit_row_array_sort_call(e, source, value, schema, indent, true)) return false;
         } else if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && value->as.call.is_user_function) {
-            if (!bash_emit_row_array_decls(e, source, schema, indent, true)) return false;
+            bash_emit_row_array_decls(e, source, schema, indent, true);
             if (!bash_emit_user_function_value_call_into(e, source, value, indent)) return false;
         } else {
             return bash_invariant_fail(e, span, "unsupported row-array return expression after lowering");
@@ -467,7 +467,7 @@ const DsLowerMapEntry *bash_row_map_entry(const DsLowerExpr *row, DsStr field) {
     return NULL;
 }
 
-bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl) {
+void bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent, bool local_decl) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, local_decl ? "local -a " : "declare -a ");
     emit_var_name(&e->out, name);
@@ -482,7 +482,6 @@ bool bash_emit_row_array_decls(BashEmitter *e, DsStr name, const DsLowerRowSchem
         bash_emit_row_field_array_name(&e->out, name, schema->items[i].name);
         buf_append(&e->out, "=()\n");
     }
-    return true;
 }
 
 static void emit_row_map_field_ref(EmitBuf *out, DsStr row_name, DsStr field) {
@@ -493,7 +492,7 @@ static void emit_row_map_field_ref(EmitBuf *out, DsStr row_name, DsStr field) {
     buf_append(out, "]}");
 }
 
-bool bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent) {
+void bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, int indent) {
     for (size_t i = 0; schema && i < schema->len; i++) {
         const DsLowerRowField *field = &schema->items[i];
         if (!is_safe_identifier(field->name)) continue;
@@ -505,7 +504,6 @@ bool bash_emit_row_scalar_sidecars_from_map(BashEmitter *e, DsStr name, const Ds
         emit_row_map_field_ref(&e->out, name, field->name);
         buf_append(&e->out, "\"\n");
     }
-    return true;
 }
 
 bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerRowSchema *schema, const DsLowerExpr *row, int indent) {
@@ -556,7 +554,7 @@ bool bash_emit_row_array_push_literal(BashEmitter *e, DsStr name, const DsLowerR
 }
 
 bool bash_emit_row_array_literal(BashEmitter *e, DsStr name, const DsLowerExpr *array, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!bash_emit_row_array_decls(e, name, schema, indent, local_decl)) return false;
+    bash_emit_row_array_decls(e, name, schema, indent, local_decl);
     for (size_t i = 0; array && i < array->as.array.elements.len; i++) {
         if (!bash_emit_row_array_push_literal(e, name, schema, array->as.array.elements.items[i], indent)) return false;
     }
@@ -623,7 +621,7 @@ bool bash_emit_row_from_index(BashEmitter *e, DsStr dest, const DsLowerExpr *ind
 }
 
 bool bash_emit_row_array_copy(BashEmitter *e, DsStr dest, DsStr src, const DsLowerRowSchema *schema, int indent, bool local_decl) {
-    if (!bash_emit_row_array_decls(e, dest, schema, indent, local_decl)) return false;
+    bash_emit_row_array_decls(e, dest, schema, indent, local_decl);
     emit_indent(&e->out, indent);
     emit_var_name(&e->out, dest);
     buf_append(&e->out, "=(\"${");
@@ -656,7 +654,7 @@ bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr
         return bash_emit_row_array_sort_call(e, dest, value, schema, indent, local_decl);
     }
     if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.returns_row_array && value->as.call.is_user_function) {
-        if (!bash_emit_row_array_decls(e, dest, schema, indent, local_decl)) return false;
+        bash_emit_row_array_decls(e, dest, schema, indent, local_decl);
         return bash_emit_user_function_value_call_into(e, dest, value, indent);
     }
     return bash_invariant_fail(e, value->span, "unsupported row-array expression after lowering");
@@ -692,7 +690,7 @@ bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr
         src = (DsStr){source_buf, strlen(source_buf)};
         if (!bash_emit_row_array_expr_into(e, src, source_expr, schema, indent, local_decl)) { free(field_data); free(dir_data); return false; }
     }
-    if (!bash_emit_row_array_decls(e, dest, schema, indent, local_decl)) { free(field_data); free(dir_data); return false; }
+    bash_emit_row_array_decls(e, dest, schema, indent, local_decl);
     emit_indent(&e->out, indent);
     ds_string_appendf(&e->out, "%s -a __ds_sort_%zu=(\"${!", e->function_depth > 0 ? "local" : "declare", id);
     emit_var_name(&e->out, src);

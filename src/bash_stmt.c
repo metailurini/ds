@@ -496,7 +496,7 @@ static void emit_map_loop_copy_ident(BashEmitter *e, DsStr source, DsStr raw_map
 }
 
 static bool emit_map_loop_materialize(BashEmitter *e, const DsLowerStmt *stmt, DsStr raw_map, int indent, size_t loop_id) {
-    if (!bash_emit_structured_target_decl(e, raw_map, DS_LOWER_VALUE_MAP, indent, e->function_depth > 0)) return false;
+    bash_emit_structured_target_decl(e, raw_map, DS_LOWER_VALUE_MAP, indent, e->function_depth > 0);
     if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT) {
         emit_map_loop_copy_ident(e, stmt->as.for_stmt.iterable->as.text, raw_map, indent, loop_id);
         return true;
@@ -609,7 +609,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 if (!bash_emit_row_array_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.text, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
                 if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, DS_LOWER_VALUE_MAP, indent)) return false;
-                if (!bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent)) return false;
+                bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent);
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT &&
                        (stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_ARRAY || stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_MAP)) {
                 if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, stmt->as.let_stmt.value_kind, indent)) return false;
@@ -659,14 +659,14 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, " ");
                 if (!emit_stdlib_call(e, stmt->as.let_stmt.value, &e->out)) return false;
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
-                if (!bash_emit_row_array_decls(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
+                bash_emit_row_array_decls(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0);
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
-                if (!bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, DS_LOWER_VALUE_MAP, indent, e->function_depth > 0)) return false;
+                bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, DS_LOWER_VALUE_MAP, indent, e->function_depth > 0);
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
-                if (!bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent)) return false;
+                bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent);
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stmt->as.let_stmt.value->as.call.is_user_function) {
-                if (!bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.call.return_kind, indent, e->function_depth > 0)) return false;
+                bash_emit_structured_target_decl(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.call.return_kind, indent, e->function_depth > 0);
                 if (!bash_emit_user_function_value_call_into(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_MAP) {
                 emit_bash_decl_prefix(&e->out, e->function_depth, "-A");
@@ -913,7 +913,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 char iter_buf[64];
                 bash_temp_ds_name(iter_buf, sizeof(iter_buf), "array_iter", e->temp_counter++);
                 user_iter_name = (DsStr){iter_buf, strlen(iter_buf)};
-                if (!bash_emit_structured_target_decl(e, user_iter_name, DS_LOWER_VALUE_ARRAY, indent, e->function_depth > 0)) return false;
+                bash_emit_structured_target_decl(e, user_iter_name, DS_LOWER_VALUE_ARRAY, indent, e->function_depth > 0);
                 if (!bash_emit_user_function_value_call_into(e, user_iter_name, stmt->as.for_stmt.iterable, indent)) return false;
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, "for ");

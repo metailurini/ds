@@ -30,10 +30,9 @@ static bool emit_int_comparison(BashEmitter *e, const DsLowerExpr *left, const D
     return true;
 }
 
-static bool emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+static void emit_user_call_arg_type(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     buf_append(out, " ");
     bash_emit_expr_type_value(e, expr, out);
-    return true;
 }
 
 static bool expr_is_stdlib_array_call(const DsLowerExpr *expr) {
@@ -742,7 +741,7 @@ bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *ou
     for (size_t i = 0; i < args->len; i++) {
         buf_append(out, " ");
         if (!emit_call_arg_expr(e, args->items[i], out)) return false;
-        if (!emit_user_call_arg_type(e, args->items[i], out)) return false;
+        emit_user_call_arg_type(e, args->items[i], out);
     }
     return true;
 }

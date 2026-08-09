@@ -113,37 +113,37 @@ bool decode_string_literal(DsDiag *diag, const DsLowerExpr *expr, char **out_dat
     return true;
 }
 
-static bool emit_interpolation_var(BashEmitter *e, DsStr name, const char *field, size_t field_len, EmitBuf *out) {
-    (void)e;
+static void emit_interpolation_var(DsStr name, const char *field, size_t field_len, EmitBuf *out) {
     buf_append(out, "${__ds_");
     buf_append_dsstr(out, name);
     if (field) { buf_append(out, "_"); ds_string_append_range(out, field, field_len); }
     buf_append(out, "}");
-    return true;
 }
 
-static bool emit_interpolation_var_quoted(BashEmitter *e, DsStr name, const char *field, size_t field_len, EmitBuf *out) {
+static void emit_interpolation_var_quoted(DsStr name, const char *field, size_t field_len, EmitBuf *out) {
     buf_append(out, "\"");
-    emit_interpolation_var(e, name, field, field_len, out);
+    emit_interpolation_var(name, field, field_len, out);
     buf_append(out, "\"");
-    return true;
 }
 
 static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char *field, size_t field_len, const char *spec, size_t spec_len, DsSpan span, EmitBuf *out) {
-    if (spec_len == 0) return emit_interpolation_var(e, name, field, field_len, out);
+    if (spec_len == 0) {
+        emit_interpolation_var(name, field, field_len, out);
+        return true;
+    }
     DsInterpFormatSpec parsed;
     if (!ds_interp_parse_format_spec((DsStr){(char *)spec, spec_len}, &parsed)) {
         ds_diag_error(e->diag, span, "internal Bash interpolation invariant failed: unsupported format specifier `%.*s` after lowering", (int)spec_len, spec);
         return false;
     }
     if (parsed.kind == DS_INTERP_FORMAT_UPPER) {
-        buf_append(out, "$(__ds_string_upper "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
+        buf_append(out, "$(__ds_string_upper "); emit_interpolation_var_quoted(name, field, field_len, out); buf_append(out, ")"); return true;
     }
     if (parsed.kind == DS_INTERP_FORMAT_LOWER) {
-        buf_append(out, "$(__ds_string_lower "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
+        buf_append(out, "$(__ds_string_lower "); emit_interpolation_var_quoted(name, field, field_len, out); buf_append(out, ")"); return true;
     }
     if (parsed.kind == DS_INTERP_FORMAT_TRIM) {
-        buf_append(out, "$(__ds_string_trim "); emit_interpolation_var_quoted(e, name, field, field_len, out); buf_append(out, ")"); return true;
+        buf_append(out, "$(__ds_string_trim "); emit_interpolation_var_quoted(name, field, field_len, out); buf_append(out, ")"); return true;
     }
     if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT || parsed.kind == DS_INTERP_FORMAT_ALIGN_RIGHT || parsed.kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
         char width_buf[32];
@@ -152,14 +152,14 @@ static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char 
             buf_append(out, "$(__ds_format_center ");
             buf_append(out, width_buf);
             buf_append(out, " ");
-            emit_interpolation_var_quoted(e, name, field, field_len, out);
+            emit_interpolation_var_quoted(name, field, field_len, out);
             buf_append(out, ")");
             return true;
         }
         buf_append(out, "$(printf '");
         if (parsed.kind == DS_INTERP_FORMAT_ALIGN_LEFT) { buf_append(out, "%-"); buf_append(out, width_buf); buf_append(out, "s' "); }
         else { buf_append(out, "%"); buf_append(out, width_buf); buf_append(out, "s' "); }
-        emit_interpolation_var_quoted(e, name, field, field_len, out);
+        emit_interpolation_var_quoted(name, field, field_len, out);
         buf_append(out, ")");
         return true;
     }
@@ -175,7 +175,7 @@ static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char 
         buf_append(out, "f");
     }
     buf_append(out, "' ");
-    emit_interpolation_var_quoted(e, name, field, field_len, out);
+    emit_interpolation_var_quoted(name, field, field_len, out);
     buf_append(out, ")");
     return true;
 }
