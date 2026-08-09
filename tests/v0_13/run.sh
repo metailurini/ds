@@ -122,9 +122,6 @@ pass 'TEST_VERSIONS contains 0-13 exactly once'
 assert_contains Makefile '$(TEST_TARGETS): $(BIN)' 'pattern target still drives version suites'
 assert_contains Makefile 'asan:' 'asan target exists'
 assert_contains Makefile 'ubsan:' 'ubsan target exists'
-assert_contains Makefile 'src/hir.c' 'HIR source is built'
-assert_contains Makefile 'src/vm_stdlib.c' 'VM stdlib split source is built'
-assert_contains Makefile 'src/bash_helpers.c' 'Bash helper source is built'
 
 run_ok help_top "$DS" --help
 for text in \

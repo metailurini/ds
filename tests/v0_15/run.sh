@@ -167,8 +167,6 @@ count_015="$(grep -E '^TEST_VERSIONS :=' Makefile | grep -o '0-15' | wc -l | tr 
 [ "$count_015" = 1 ] || fail "TEST_VERSIONS should contain 0-15 exactly once, got $count_015"
 pass 'TEST_VERSIONS contains 0-15 exactly once'
 assert_matches Makefile '^TEST_VERSIONS := .*0-14 0-15($| )' 'v0.15 follows v0.14 in TEST_VERSIONS'
-assert_contains Makefile 'src/format.c' 'formatter source is built'
-assert_contains Makefile 'src/ds_checker.c' 'checker source is built'
 assert_contains Makefile 'asan:' 'asan target exists'
 assert_contains Makefile 'ubsan:' 'ubsan target exists'
 

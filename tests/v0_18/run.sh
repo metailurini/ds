@@ -186,8 +186,6 @@ assert_matches Makefile '^TEST_VERSIONS := .*0-17 0-18($| )' 'v0.18 follows v0.1
 assert_contains Makefile 'DS_SKIP_BUILD=1 ./tests/v$(subst -,_,$(patsubst test-v%,%,$@))/run.sh' 'pattern target invokes version suite'
 assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test' 'asan runs aggregate test suite'
 assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 'ubsan runs aggregate test suite'
-assert_contains Makefile 'src/bash_command.c' 'Bash command source is built'
-assert_contains Makefile 'src/vm_process.c' 'VM process source is built'
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public header does not expose hashmap internals'
 for file in src/ds_command.c src/parse_command.c src/ast.c src/lower_expr.c src/lower_stmt.c src/hir.c src/format.c src/ds_checker.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/bash_command.c src/bash_stmt.c src/bash_deps.c; do

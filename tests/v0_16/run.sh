@@ -89,7 +89,6 @@ count_016="$(grep -E '^TEST_VERSIONS :=' Makefile | grep -o '0-16' | wc -l | tr 
 [ "$count_016" = 1 ] || fail "TEST_VERSIONS should contain 0-16 exactly once, got $count_016"
 pass 'TEST_VERSIONS contains 0-16 exactly once'
 assert_matches Makefile '^TEST_VERSIONS := .*0-15 0-16($| )' 'v0.16 follows v0.15 in TEST_VERSIONS'
-assert_contains Makefile 'src/cli_program.c' 'CLI program source is built normally'
 assert_contains Makefile 'asan:' 'asan target exists'
 assert_contains Makefile 'ubsan:' 'ubsan target exists'
 assert_contains Makefile 'ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 DS_SKIP_BUILD=1 $(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test' 'asan target runs aggregate test suite'

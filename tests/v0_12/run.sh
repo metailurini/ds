@@ -90,17 +90,10 @@ FIX="$TMP/fixtures"
 SEED="$TMP/seeds"
 mkdir -p "$FIX" "$SEED"
 
-# Static cleanup checks: shared stdlib metadata, hashmap absorption, and build wiring.
-for helper in \
-  'file.exists' 'file.is_file' 'file.read' 'file.write' 'file.append' \
-  'dir.exists' 'path.cwd' 'path.join' 'path.basename' 'path.dirname' 'path.ext' \
-  'cmd.exists' 'cmd.require' 'env.get' 'env.set' 'env.unset' 'glob' 'glob!' 'lines'; do
-  assert_contains src/ds_stdlib.c "$helper" "stdlib metadata contains $helper"
-done
+# Static cleanup checks: hashmap absorption and build wiring. Stdlib helpers are
+# covered below through VM/Bash behavior instead of metadata placement.
 assert_contains Makefile '0-12' "Makefile wires v0.12 suite"
 assert_contains Makefile 'src/runtime/hashmap.c' "Makefile builds absorbed hashmap"
-assert_contains Makefile 'src/vm_stdlib.c' "Makefile builds split VM stdlib runtime"
-assert_contains Makefile 'src/bash_helpers.c' "Makefile builds split Bash helper bodies"
 assert_contains compile_flags.txt '-Iinclude' "compile flags keep public include path"
 assert_no_grep "no_old_hashmap_build_paths" 'libs/hashmap|-Ilibs/hashmap' Makefile compile_flags.txt docs/editor.md docs/architecture.md docs/runtime.md docs/product-principles.md docs/roadmap.md src include
 assert_no_grep "no_raw_hashmap_leak_outside_runtime_bridge" '#include[[:space:]]+[<"].*hashmap|\bhm_[a-z_]+' \

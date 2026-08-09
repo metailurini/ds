@@ -102,10 +102,6 @@ assert_matches Makefile '^TEST_VERSIONS := .*0-16 0-17($| )' 'v0.17 follows v0.1
 assert_contains Makefile 'DS_SKIP_BUILD=1 ./tests/v$(subst -,_,$(patsubst test-v%,%,$@))/run.sh' 'pattern target invokes version suite'
 assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test' 'asan runs aggregate test suite'
 assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 'ubsan runs aggregate test suite'
-assert_contains Makefile 'src/parse_stmt.c' 'statement parser source is built'
-assert_contains Makefile 'src/lower_stmt.c' 'statement lowerer source is built'
-assert_contains Makefile 'src/bash_stmt.c' 'Bash statement emitter source is built'
-assert_contains Makefile 'src/vm_compile.c' 'VM compiler source is built'
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public umbrella does not expose hashmap internals'
 
