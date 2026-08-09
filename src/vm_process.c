@@ -27,20 +27,17 @@ static void print_trace_escaped(FILE *out, const char *data) {
  * Interpolation rendering
  * ------------------------------------------------------------------------- */
 
-static bool ascii_transform_string(const DsString *in, DsString *out, const char *spec) {
+static void ascii_transform_string(const DsString *in, DsString *out, DsInterpFormatKind kind) {
     ds_string_init(out);
     size_t a = 0, b = in->len;
-    if (strcmp(spec, "trim") == 0) {
-        vm_ascii_trim_bounds(in->data, in->len, &a, &b);
-    }
+    if (kind == DS_INTERP_FORMAT_TRIM) vm_ascii_trim_bounds(in->data, in->len, &a, &b);
     ds_string_append_range(out, in->data ? in->data + a : "", b - a);
-    if (strcmp(spec, "upper") == 0 || strcmp(spec, "lower") == 0) {
+    if (kind == DS_INTERP_FORMAT_UPPER || kind == DS_INTERP_FORMAT_LOWER) {
         for (size_t i = 0; i < out->len; i++) {
-            if (strcmp(spec, "upper") == 0 && out->data[i] >= 'a' && out->data[i] <= 'z') out->data[i] = (char)(out->data[i] - 'a' + 'A');
-            if (strcmp(spec, "lower") == 0 && out->data[i] >= 'A' && out->data[i] <= 'Z') out->data[i] = (char)(out->data[i] - 'A' + 'a');
+            if (kind == DS_INTERP_FORMAT_UPPER && out->data[i] >= 'a' && out->data[i] <= 'z') out->data[i] = (char)(out->data[i] - 'a' + 'A');
+            if (kind == DS_INTERP_FORMAT_LOWER && out->data[i] >= 'A' && out->data[i] <= 'Z') out->data[i] = (char)(out->data[i] - 'A' + 'a');
         }
     }
-    return true;
 }
 
 static bool append_padded(DsString *out, const char *data, size_t len, int width, char align) {
@@ -81,8 +78,7 @@ static bool append_formatted_value(Vm *vm, DsValue *value, const char *spec, siz
     }
     if (parsed.kind == DS_INTERP_FORMAT_UPPER || parsed.kind == DS_INTERP_FORMAT_LOWER || parsed.kind == DS_INTERP_FORMAT_TRIM) {
         DsString rendered;
-        const char *op = parsed.kind == DS_INTERP_FORMAT_UPPER ? "upper" : parsed.kind == DS_INTERP_FORMAT_LOWER ? "lower" : "trim";
-        ascii_transform_string(&value->as.string, &rendered, op);
+        ascii_transform_string(&value->as.string, &rendered, parsed.kind);
         ds_string_append_range(out, ds_string_data(&rendered), rendered.len);
         ds_string_free(&rendered);
         return true;
