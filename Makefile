@@ -1,7 +1,8 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -g
 CPPFLAGS ?= -Iinclude
-CPPFLAGS += -D_XOPEN_SOURCE=700 -D_POSIX_C_SOURCE=200809L
+include config/feature_flags.mk
+CPPFLAGS += $(DS_FEATURE_CPPFLAGS)
 
 SRC := src/main.c src/cli_program.c src/source.c src/diag.c src/lexer.c src/ast.c src/parser.c src/parse_expr.c src/parse_command.c src/parse_script.c src/parse_function.c src/parse_stmt.c src/lower.c src/lower_symbols.c src/lower_expr.c src/lower_interpolation.c src/lower_collection.c src/lower_command.c src/lower_stmt.c src/lower_stdlib.c src/lower_functions.c src/lower_free.c src/hir.c src/format.c src/ds_checker.c src/ds_command.c src/ds_command_facts.c src/ds_interpolation.c src/ds_signal.c src/runtime.c src/runtime/hashmap.c src/ds_stdlib.c src/ds_regex.c src/vm.c src/vm_args.c src/vm_compile.c src/vm_dump.c src/vm_process.c src/vm_scope.c src/vm_stdlib.c src/bash_helpers.c src/bash_quote.c src/bash_structured.c src/bash_expr.c src/bash_command.c src/bash_function.c src/bash_deps.c src/bash_stmt.c src/bash_emit.c
 OBJ := $(SRC:src/%.c=build/%.o)
@@ -10,7 +11,7 @@ BIN := ds
 TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0-8 0-9 0-10 0-11 0-12 0-13 0-14 0-15 0-16 0-17 0-18 0-19 0-20 0-21 0-22 0-23 0-24 0-25 0-26 0-27 0-29 0-30 0-31 0-32 0-33 0-34 0-35 0-36 0-37 0-38
 TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))
 
-.PHONY: all clean check smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
+.PHONY: all clean check check-compile-flags smoke test $(TEST_TARGETS) test-v0-22-signal-runtime asan ubsan test-asan test-ubsan
 
 all: $(BIN)
 
@@ -24,9 +25,17 @@ build/%.o: src/%.c include/ds.h $(PRIVATE_HEADERS) | build
 build:
 	mkdir -p build
 
-check: $(BIN)
+check: check-compile-flags $(BIN)
 	./$(BIN) check examples/basic.ds
 	! ./$(BIN) check examples/bad.ds >/tmp/ds_bad.out 2>&1
+
+check-compile-flags:
+	@for flag in $(DS_FEATURE_CPPFLAGS); do \
+		grep -Fqx -- "$$flag" compile_flags.txt || { \
+			echo "compile_flags.txt is missing $$flag" >&2; \
+			exit 1; \
+		}; \
+	done
 
 test: $(BIN)
 	@for version in $(TEST_VERSIONS); do \

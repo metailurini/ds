@@ -69,9 +69,10 @@ ds_source_group() {
 
 ds_compile_unit() {
   local root="$1" group="$2" unit="$3" output="$4"
-  local -a sources
+  local -a sources feature_flags
   mapfile -t sources < <(ds_source_group "$root" "$group")
-  cc -std=c99 -Wall -Wextra -Wpedantic -D_XOPEN_SOURCE=700 -D_POSIX_C_SOURCE=200809L ${DS_UNIT_EXTRA_CFLAGS:-} \
+  read -r -a feature_flags <<< "$(sed -n 's/^DS_FEATURE_CPPFLAGS[[:space:]]*:=[[:space:]]*//p' "$root/config/feature_flags.mk")"
+  cc -std=c99 -Wall -Wextra -Wpedantic "${feature_flags[@]}" ${DS_UNIT_EXTRA_CFLAGS:-} \
     -I"$root/include" -I"$root/src" \
     "$unit" "${sources[@]}" \
     -o "$output"

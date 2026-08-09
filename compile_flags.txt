@@ -2,4 +2,6 @@
 -Wall
 -Wextra
 -Wpedantic
+-D_XOPEN_SOURCE=700
+-D_POSIX_C_SOURCE=200809L
 -Iinclude
