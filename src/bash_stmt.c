@@ -824,7 +824,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "[$((${#");
                 emit_var_name(&e->out, stmt->as.push_stmt.name);
                 buf_append(&e->out, "[@]} - 1))]=");
-                bash_emit_collection_element_type_value(e, stmt->as.push_stmt.value, &e->out);
+                bash_emit_expr_type_value(e, stmt->as.push_stmt.value, &e->out);
                 buf_append(&e->out, "\n\n");
             }
             return true;

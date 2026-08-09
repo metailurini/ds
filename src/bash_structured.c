@@ -286,10 +286,6 @@ void bash_emit_type_assignment_for_expr_required(BashEmitter *e, DsStr name, con
     bash_emit_type_assignment_for_expr_impl(e, name, value, indent, local_decl);
 }
 
-void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *value, EmitBuf *out) {
-    bash_emit_expr_type_value(e, value, out);
-}
-
 void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_return_type=");

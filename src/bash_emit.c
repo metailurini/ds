@@ -134,14 +134,6 @@ static void emit_plain_temp_cleanup_trap(BashEmitter *e) {
     buf_append(&e->out, "trap '__ds_rc=$?; __ds_temp_cleanup; exit \"$__ds_rc\"' EXIT\n\n");
 }
 
-static void emit_string_helpers(BashEmitter *e, unsigned helper_mask) {
-    buf_append(&e->out, ds_bash_string_helpers_source(helper_mask));
-}
-
-static void emit_glob_helpers(BashEmitter *e, bool recursive) {
-    buf_append(&e->out, recursive ? ds_bash_recursive_glob_helpers_source() : ds_bash_glob_helpers_source());
-}
-
 static void emit_regex_helpers(BashEmitter *e, bool needs_match, bool needs_replace) {
     buf_append(&e->out, ds_bash_regex_helpers_source());
     if (needs_match) buf_append(&e->out, ds_bash_regex_match_helpers_source());
@@ -299,8 +291,10 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     if (needs_dynamic_index_helper) emit_helper_source(&e, ds_bash_dynamic_index_helper_source());
     if (needs_stdlib) emit_helper_source(&e, ds_bash_stdlib_helpers_source());
     else if (needs_stdlib_capture) emit_helper_source(&e, ds_bash_stdlib_capture_helper_source());
-    if (string_helper_mask) emit_string_helpers(&e, string_helper_mask);
-    if (needs_glob_helpers) emit_glob_helpers(&e, needs_recursive_glob_helpers);
+    if (string_helper_mask) emit_helper_source(&e, ds_bash_string_helpers_source(string_helper_mask));
+    if (needs_glob_helpers) {
+        emit_helper_source(&e, needs_recursive_glob_helpers ? ds_bash_recursive_glob_helpers_source() : ds_bash_glob_helpers_source());
+    }
     if (needs_regex_helpers) emit_regex_helpers(&e, needs_regex_match_helpers, needs_regex_replace_helpers);
 
     for (size_t i = 0; i < lowered->functions.len; i++) {

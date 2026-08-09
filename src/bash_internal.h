@@ -61,7 +61,6 @@ void bash_emit_expr_type_value(BashEmitter *e, const DsLowerExpr *expr, EmitBuf 
 void bash_emit_type_assignment(BashEmitter *e, DsStr name, const char *type, int indent, bool local_decl);
 void bash_emit_type_assignment_for_expr(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl);
 void bash_emit_type_assignment_for_expr_required(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl);
-void bash_emit_collection_element_type_value(BashEmitter *e, const DsLowerExpr *value, EmitBuf *out);
 void bash_emit_return_type(BashEmitter *e, DsLowerValueKind kind, int indent);
 bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
 bool bash_emit_map_return_payload(BashEmitter *e, const DsLowerExpr *value, DsSpan span, int indent);
@@ -88,7 +87,6 @@ bool emit_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
 bool emit_stdlib_call(BashEmitter *e, const DsLowerExpr *call, EmitBuf *out);
 bool stdlib_array_call_uses_nul_records(const DsLowerExpr *call);
 bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *out);
-bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 
 bool bash_is_user_function_call_expr(const DsLowerExpr *expr);
 void bash_temp_ds_name(char *buf, size_t cap, const char *prefix, size_t id);

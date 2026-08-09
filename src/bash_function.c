@@ -195,7 +195,7 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
         emit_var_name(&e->out, param->name);
         buf_append(&e->out, "=");
         if (param->has_default) {
-            if (!emit_function_default(e, param->default_value, &e->out)) {
+            if (!emit_value_expr(e, param->default_value, &e->out)) {
                 symbols_truncate(&e->symbols, symbol_mark);
                 return false;
             }

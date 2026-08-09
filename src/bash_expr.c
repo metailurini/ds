@@ -747,6 +747,3 @@ bool emit_user_call_args(BashEmitter *e, const DsLowerExprVec *args, EmitBuf *ou
     return true;
 }
 
-bool emit_function_default(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
-    return emit_value_expr(e, expr, out);
-}

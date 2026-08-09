@@ -12,10 +12,6 @@ static bool int_literal_in_range(DsStr text) {
     return memcmp(text.data + start, max_text, len) <= 0;
 }
 
-bool text_contains_recursive_glob(DsStr text) {
-    return ds_glob_pattern_contains_recursive(text);
-}
-
 void validate_glob_pattern_arg(Lower *lower, DsStr helper_name, const DsExpr *arg) {
     if (!(ds_str_eq_cstr(helper_name, "glob") || ds_str_eq_cstr(helper_name, "glob!"))) return;
     if (!arg || arg->kind != DS_EXPR_STRING) return;
