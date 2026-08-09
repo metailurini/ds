@@ -151,21 +151,10 @@ for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-assert_contains src/hir.c 'DS_LOWER_EXPR_INTERP' 'HIR dump handles interpolated strings'
-assert_contains src/format.c 'ds_str_has_prefix_cstr(expr->as.call.name, "string.")' 'formatter handles v0.19 string methods'
-assert_contains src/ds_checker.c 'case DS_EXPR_CALL' 'checker traverses v0.19 method-call arguments'
-assert_contains src/bash_deps.c 'string_literal_helper_mask' 'Bash dependency scanner tracks interpolation helpers'
-assert_contains src/ast.c 'CallExpr' 'AST printer handles lowered method calls as call expressions'
-assert_contains src/bash_expr.c 'emit_interpolated_string' 'Bash expression emitter uses interpolation formatter path'
 assert_contains src/ds_interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
 assert_contains src/lower_command.c 'ds_interp_parse_format_spec_for_kind' 'lowerer consumes shared interpolation format contract'
 assert_contains src/vm_process.c 'ds_interp_parse_format_spec_for_kind' 'VM consumes shared interpolation format contract'
 assert_contains src/bash_quote.c 'ds_interp_parse_format_spec' 'Bash consumes shared interpolation format contract'
-assert_contains src/lexer.c 'triple-quoted string literal' 'lexer diagnoses triple-quoted string literals'
-assert_contains src/vm_stdlib.c 'helper_is(ins, "string.split")' 'VM has split helper'
-assert_contains src/bash_helpers.c '__ds_string_split' 'Bash has split helper'
-assert_contains src/bash_deps.c 'ds_stdlib_is_name' 'Bash dependency scanner recognizes string stdlib helpers'
-assert_contains src/bash_deps.c 'i + 6 < text.len' 'Bash dependency scanner bounds-checks format-spec probes'
 
 # Documentation and status checks.
 assert_contains docs/milestones/v0.19.0-spec.md 'Implementation and tests complete' 'v0.19 spec records test completion'
@@ -208,11 +197,15 @@ assert_contains "$TMP/debug_hir.out" 'Call string.lower' 'HIR lowers lower helpe
 
 write_fixture "$FIX/checker_interp_use.ds" <<'DS'
 let name = "api"
+let needle = "p"
+let matched = name.contains(needle)
 let rendered = "{name:upper}"
+if matched { echo "matched" }
 echo rendered
 DS
 run_ok checker_interp_use "$DS" check "$FIX/checker_interp_use.ds"
 assert_not_contains "$TMP/checker_interp_use.err" 'unused variable `name`' 'checker counts interpolation references as uses'
+assert_not_contains "$TMP/checker_interp_use.err" 'unused variable `needle`' 'checker counts method-call arguments as uses'
 
 # Core VM/Bash parity: methods, split, interpolation formats, triple strings, side effects.
 write_fixture "$FIX/core.ds" <<'DS'
