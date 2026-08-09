@@ -123,6 +123,16 @@ echo result.stdout
 DS
 run_parity captured_run_interp "$TMP/fixtures/captured_run_interp.ds" 'hello'
 
+write_fixture "$TMP/fixtures/materialized_run_binding_scope.ds" <<'DS'
+fn word(value = "hello") {
+  return value.upper()
+}
+let first = run "printf" "%s" "{word()}"
+let second = run "printf" "%s" "{word("world")}"
+echo "{first.stdout}:{second.stdout}"
+DS
+run_parity materialized_run_binding_scope "$TMP/fixtures/materialized_run_binding_scope.ds" 'HELLO:WORLD'
+
 write_fixture "$TMP/fixtures/return_run_interp.ds" <<'DS'
 fn word() {
   return "hello"
