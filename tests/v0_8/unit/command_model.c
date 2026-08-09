@@ -51,11 +51,11 @@ static void append_empty_stage(DsCommand *cmd, int column) {
 }
 
 static void assert_clone_result_contracts(void) {
-    bool (*word_vec_clone)(DsWordVec *, const DsWordVec *) = ds_word_vec_clone;
-    bool (*stage_clone)(DsCommandStage *, const DsCommandStage *) = ds_command_stage_clone;
-    bool (*stage_vec_clone)(DsCommandStageVec *, const DsCommandStageVec *) = ds_command_stage_vec_clone;
-    bool (*redirect_clone)(DsRedirect *, const DsRedirect *) = ds_redirect_clone;
-    bool (*command_clone)(DsCommand *, const DsCommand *) = ds_command_clone;
+    void (*word_vec_clone)(DsWordVec *, const DsWordVec *) = ds_word_vec_clone;
+    void (*stage_clone)(DsCommandStage *, const DsCommandStage *) = ds_command_stage_clone;
+    void (*stage_vec_clone)(DsCommandStageVec *, const DsCommandStageVec *) = ds_command_stage_vec_clone;
+    void (*redirect_clone)(DsRedirect *, const DsRedirect *) = ds_redirect_clone;
+    void (*command_clone)(DsCommand *, const DsCommand *) = ds_command_clone;
     assert(word_vec_clone && stage_clone && stage_vec_clone && redirect_clone && command_clone);
 }
 
@@ -95,7 +95,7 @@ int main(void) {
     original.redirect.target_span = span_at(1, 18);
 
     DsCommand clone;
-    assert(ds_command_clone(&clone, &original));
+    ds_command_clone(&clone, &original);
     assert(clone.kind == DS_COMMAND_CAPTURE);
     assert(clone.stages.len == 1);
     assert(clone.stages.items[0].words.len == 2);
