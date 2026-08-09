@@ -110,7 +110,7 @@ void scope_define_array(Lower *lower, Scope *scope, DsStr name, SymKind kind, Sy
         ds_diag_error(lower->diag, span, "duplicate variable `%.*s` in this scope", (int)name.len, name.data);
         return;
     }
-    DS_GROW_ARRAY(scope->items, scope->len, scope->cap, 16);
+    scope->items = ds_grow_array(scope->items, scope->len, &scope->cap, sizeof(*scope->items), 16);
     scope->items[scope->len].name = ds_str_dup_range(name.data, name.len);
     scope->items[scope->len].kind = kind;
     scope->items[scope->len].element_kind = element_kind;

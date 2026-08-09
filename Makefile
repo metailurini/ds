@@ -45,7 +45,7 @@ check-header-boundaries:
 	fi
 	@bad_macros=$$(grep -hE '^#define [A-Za-z0-9_]+.*\\$$' $(PROJECT_HEADERS) | \
 		sed -E 's/^#define ([A-Za-z0-9_]+).*/\1/' | \
-		grep -vE '^(DS_GROW_ARRAY|DS_VEC_PUSH|DS_VM_OPCODE_LIST)$$' || true); \
+		grep -vE '^(DS_VEC_PUSH|DS_VM_OPCODE_LIST)$$' || true); \
 	if [ -n "$$bad_macros" ]; then \
 		echo "unexpected multiline implementation macros in project headers: $$bad_macros" >&2; \
 		exit 1; \

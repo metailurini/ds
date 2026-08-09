@@ -72,7 +72,7 @@ void program_free(Program *p) {
 static int new_reg(Program *p) { return p->next_reg++; }
 
 static int add_const(Program *p, DsValue value) {
-    DS_GROW_ARRAY(p->consts, p->const_len, p->const_cap, 16);
+    p->consts = ds_grow_array(p->consts, p->const_len, &p->const_cap, sizeof(*p->consts), 16);
     p->consts[p->const_len] = value;
     return (int)p->const_len++;
 }
@@ -101,7 +101,7 @@ static DsValue literal_default_value(const DsLowerExpr *expr) {
 }
 
 static int add_function_meta(Program *p, const DsLowerFn *fn) {
-    DS_GROW_ARRAY(p->functions, p->function_len, p->function_cap, 8);
+    p->functions = ds_grow_array(p->functions, p->function_len, &p->function_cap, sizeof(*p->functions), 8);
     FnMeta *meta = &p->functions[p->function_len];
     memset(meta, 0, sizeof(*meta));
     meta->name = ds_str_dup_range(fn->name.data, fn->name.len);
@@ -125,7 +125,7 @@ static int find_function_meta(Program *p, DsStr name) {
 }
 
 static size_t emit_instr(Program *p, Instr ins) {
-    DS_GROW_ARRAY(p->instrs, p->instr_len, p->instr_cap, 32);
+    p->instrs = ds_grow_array(p->instrs, p->instr_len, &p->instr_cap, sizeof(*p->instrs), 32);
     p->instrs[p->instr_len] = ins;
     return p->instr_len++;
 }
@@ -146,7 +146,7 @@ static int compile_const(Program *p, DsSpan span, DsValue value) {
 }
 
 static LoopPatch *push_loop(Program *p, size_t start, int base_scope_depth) {
-    DS_GROW_ARRAY(p->loop_stack, p->loop_len, p->loop_cap, 4);
+    p->loop_stack = ds_grow_array(p->loop_stack, p->loop_len, &p->loop_cap, sizeof(*p->loop_stack), 4);
     LoopPatch *loop = &p->loop_stack[p->loop_len++];
     memset(loop, 0, sizeof(*loop));
     loop->start = start;
@@ -625,10 +625,10 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             size_t pos = emit_instr(p, jump);
             if (loop) {
                 if (stmt->kind == DS_LOWER_STMT_BREAK) {
-                    DS_GROW_ARRAY(loop->breaks, loop->break_len, loop->break_cap, 4);
+                    loop->breaks = ds_grow_array(loop->breaks, loop->break_len, &loop->break_cap, sizeof(*loop->breaks), 4);
                     loop->breaks[loop->break_len++] = pos;
                 } else {
-                    DS_GROW_ARRAY(loop->continues, loop->continue_len, loop->continue_cap, 4);
+                    loop->continues = ds_grow_array(loop->continues, loop->continue_len, &loop->continue_cap, sizeof(*loop->continues), 4);
                     loop->continues[loop->continue_len++] = pos;
                 }
             }
@@ -679,7 +679,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     end_jump.op = OP_JUMP;
                     end_jump.span = arm->span;
                     size_t end_pos = emit_instr(p, end_jump);
-                    DS_GROW_ARRAY(end_jumps, end_len, end_cap, 4);
+                    end_jumps = ds_grow_array(end_jumps, end_len, &end_cap, sizeof(*end_jumps), 4);
                     end_jumps[end_len++] = end_pos;
                     p->instrs[false_pos].target = (int)p->instr_len;
                 }
@@ -689,7 +689,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
                     end_jump.op = OP_JUMP;
                     end_jump.span = arm->span;
                     size_t end_pos = emit_instr(p, end_jump);
-                    DS_GROW_ARRAY(end_jumps, end_len, end_cap, 4);
+                    end_jumps = ds_grow_array(end_jumps, end_len, &end_cap, sizeof(*end_jumps), 4);
                     end_jumps[end_len++] = end_pos;
                 }
                 next_arm_target = 0;

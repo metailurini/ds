@@ -39,8 +39,8 @@ the same.
 ### `ds_common.h` ownership boundary
 
 `ds_common.h` is now a declaration/type boundary with executable common helpers in
-`ds_common.c`. Keep it that way. The type-generic `DS_GROW_ARRAY` and `DS_VEC_PUSH`
-macros are deliberate C-level exceptions; non-trivial helpers should live in an
+`ds_common.c`. Keep it that way. The type-generic `DS_VEC_PUSH` macro is a deliberate
+C-level exception; non-trivial helpers should live in an
 existing implementation module rather than returning to the header or creating a new
 single-purpose utility module.
 
@@ -49,7 +49,7 @@ single-purpose utility module.
 The shared growth primitives are useful only if callers do not rebuild layers of
 one-line aliases around them. Keep a domain helper when it adds ownership, validation,
 state transition, representation hiding, or meaningful multi-step construction. Inline
-helpers that merely rename `DS_VEC_PUSH`/`DS_GROW_ARRAY`, and avoid boolean return values
+helpers that merely rename `DS_VEC_PUSH`/`ds_grow_array()`, and avoid boolean return values
 for operations whose only failure mode is the project's fatal allocation path.
 
 ### Hashmap wrapper inlining (RR9)

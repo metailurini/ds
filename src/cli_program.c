@@ -32,7 +32,7 @@ void ds_cli_program_free(DsCliProgram *program) {
 }
 
 static void import_stack_push(DsCliProgram *program, const char *path) {
-    DS_GROW_ARRAY(program->stack, program->stack_len, program->stack_cap, 8);
+    program->stack = ds_grow_array(program->stack, program->stack_len, &program->stack_cap, sizeof(*program->stack), 8);
     program->stack[program->stack_len++] = ds_str_dup_cstr(path);
 }
 
@@ -146,7 +146,7 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         return true;
     }
 
-    DS_GROW_ARRAY(program->loaded_paths, program->loaded_len, program->loaded_cap, 8);
+    program->loaded_paths = ds_grow_array(program->loaded_paths, program->loaded_len, &program->loaded_cap, sizeof(*program->loaded_paths), 8);
     program->loaded_paths[program->loaded_len++] = ds_str_dup_cstr(normalized);
     import_stack_push(program, normalized);
 
@@ -172,7 +172,7 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         program->source = unit->source;
     }
     if (ok) process_ast_statements(program, unit, is_root, composed);
-    DS_GROW_ARRAY(program->units, program->units_len, program->units_cap, 8);
+    program->units = ds_grow_array(program->units, program->units_len, &program->units_cap, sizeof(*program->units), 8);
     program->units[program->units_len++] = unit;
 
     import_stack_pop(program);

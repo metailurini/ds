@@ -68,6 +68,7 @@ bool ds_size_mul_overflows(size_t a, size_t b);
 size_t ds_size_add_or_oom(size_t a, size_t b);
 size_t ds_size_add3_or_oom(size_t a, size_t b, size_t c);
 size_t ds_growth_capacity(size_t current, size_t need, size_t initial_cap);
+void *ds_grow_array(void *items, size_t len, size_t *cap, size_t item_size, size_t initial_cap);
 void ds_reserve_char_buffer(char **data, size_t *cap, size_t need, size_t initial_cap);
 bool ds_parse_int_range(DsStr text, int min, int max, int *out);
 DsStr ds_str_clone(DsStr value);
@@ -92,19 +93,10 @@ typedef enum {
 void ds_fprint_escaped(FILE *out, const char *data, size_t len, DsEscapeMode mode);
 void ds_fprint_indent(FILE *out, int level);
 
-#define DS_GROW_ARRAY(items, len, cap, initial_cap) do { \
-    if ((len) == (cap)) { \
-        size_t ds_next_cap = ds_growth_capacity((cap), ds_size_add_or_oom((len), 1), (initial_cap)); \
-        if (ds_size_mul_overflows(ds_next_cap, sizeof(*(items)))) ds_fatal_oom(); \
-        (items) = ds_xrealloc((items), ds_next_cap * sizeof(*(items))); \
-        (cap) = ds_next_cap; \
-    } \
-} while (0)
-
 #define DS_ARRAY_LEN(items) (sizeof(items) / sizeof((items)[0]))
 
 #define DS_VEC_PUSH(vec, value, initial_cap) do { \
-    DS_GROW_ARRAY((vec)->items, (vec)->len, (vec)->cap, initial_cap); \
+    (vec)->items = ds_grow_array((vec)->items, (vec)->len, &(vec)->cap, sizeof(*(vec)->items), (initial_cap)); \
     (vec)->items[(vec)->len++] = (value); \
 } while (0)
 

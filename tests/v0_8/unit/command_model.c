@@ -68,6 +68,21 @@ int main(void) {
     assert(ds_growth_capacity(16, 17, 16) == 32);
     assert(ds_growth_capacity(SIZE_MAX - 1, SIZE_MAX, 16) == SIZE_MAX);
 
+    int *grown = NULL;
+    size_t grown_len = 0;
+    size_t grown_cap = 0;
+    grown = ds_grow_array(grown, grown_len, &grown_cap, sizeof(*grown), 4);
+    assert(grown_cap == 4);
+    for (; grown_len < grown_cap; grown_len++) grown[grown_len] = (int)grown_len;
+    grown = ds_grow_array(grown, grown_len, &grown_cap, sizeof(*grown), 4);
+    assert(grown_cap == 8);
+    assert(grown[0] == 0 && grown[3] == 3);
+    grown_len = 1;
+    int *previous = grown;
+    grown = ds_grow_array(grown, grown_len, &grown_cap, sizeof(*grown), 4);
+    assert(grown == previous && grown_cap == 8);
+    free(grown);
+
     assert_clone_result_contracts();
     DsCommand original;
     ds_command_init(&original, DS_COMMAND_CAPTURE, span_at(1, 1));

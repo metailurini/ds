@@ -74,6 +74,14 @@ size_t ds_growth_capacity(size_t current, size_t need, size_t initial_cap) {
     return next;
 }
 
+void *ds_grow_array(void *items, size_t len, size_t *cap, size_t item_size, size_t initial_cap) {
+    if (len < *cap) return items;
+    size_t next = ds_growth_capacity(*cap, ds_size_add_or_oom(len, 1), initial_cap);
+    if (ds_size_mul_overflows(next, item_size)) ds_fatal_oom();
+    *cap = next;
+    return ds_xrealloc(items, next * item_size);
+}
+
 void ds_reserve_char_buffer(char **data, size_t *cap, size_t need, size_t initial_cap) {
     if (need <= *cap) return;
     size_t next = ds_growth_capacity(*cap, need, initial_cap);

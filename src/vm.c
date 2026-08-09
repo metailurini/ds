@@ -183,7 +183,7 @@ static void vm_register_handler(Vm *vm, DsHandlerSignal signal, size_t target, b
             }
         }
     }
-    DS_GROW_ARRAY(vm->handlers, vm->handler_len, vm->handler_cap, 8);
+    vm->handlers = ds_grow_array(vm->handlers, vm->handler_len, &vm->handler_cap, sizeof(*vm->handlers), 8);
     vm->handlers[vm->handler_len++] = (VmHandler){signal, target, is_trap};
 }
 

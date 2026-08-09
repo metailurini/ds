@@ -765,7 +765,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             bool pushed_map_loop_symbol = false;
             if (out->kind == DS_LOWER_STMT_FOR_MAP && map_loop_symbol && map_loop_symbol->kind == SYM_MAP) {
-                DS_GROW_ARRAY(lower->map_loop_symbols, lower->map_loop_len, lower->map_loop_cap, 4);
+                lower->map_loop_symbols = ds_grow_array(lower->map_loop_symbols, lower->map_loop_len, &lower->map_loop_cap, sizeof(*lower->map_loop_symbols), 4);
                 lower->map_loop_symbols[lower->map_loop_len++] = map_loop_symbol;
                 pushed_map_loop_symbol = true;
             }

@@ -40,7 +40,7 @@ void vm_pop_scope(Vm *vm) {
 }
 
 static void vm_push_return(Vm *vm, size_t ip, int dst, VmScope *caller_scope) {
-    DS_GROW_ARRAY(vm->returns, vm->return_len, vm->return_cap, 8);
+    vm->returns = ds_grow_array(vm->returns, vm->return_len, &vm->return_cap, sizeof(*vm->returns), 8);
     vm->returns[vm->return_len++] = (VmReturnFrame){ip, dst, caller_scope};
 }
 
