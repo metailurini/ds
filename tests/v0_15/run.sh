@@ -310,6 +310,10 @@ cp "$FIX/basic_messy.ds" "$FIX/write_target.ds"
 chmod 754 "$FIX/write_target.ds"
 run_ok fmt_write "$DS" fmt --write "$FIX/write_target.ds"
 assert_same "$FIX/basic_expected.ds" "$FIX/write_target.ds" 'fmt --write rewrites file'
+if find "$FIX" -maxdepth 1 -name 'write_target.ds.tmp.*' -print -quit | grep -q .; then
+  fail 'fmt --write should not leave temporary files behind'
+fi
+pass 'fmt --write removes temporary file'
 if perm="$(stat -c '%a' "$FIX/write_target.ds" 2>/dev/null)"; then
   :
 else

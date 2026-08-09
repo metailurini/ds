@@ -107,22 +107,43 @@ bool ds_file_write_atomic(const char *path, const char *data, size_t len) {
     struct stat st;
     mode_t mode = stat(path, &st) == 0 ? st.st_mode & 0777 : 0644;
     size_t path_len = strlen(path);
-    char *tmp = (char *)ds_xcalloc(path_len + 32, 1);
-    snprintf(tmp, path_len + 32, "%s.tmp.%ld", path, (long)getpid());
-    FILE *out = fopen(tmp, "wb");
-    if (!out) {
-        fprintf(stderr, "error: failed to write `%s`: %s\n", tmp, strerror(errno));
+    size_t tmp_len = path_len + sizeof(".tmp.XXXXXX");
+    char *tmp = (char *)ds_xmalloc(tmp_len);
+    snprintf(tmp, tmp_len, "%s.tmp.XXXXXX", path);
+
+    int fd = mkstemp(tmp);
+    if (fd < 0) {
+        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(errno));
         free(tmp);
         return false;
     }
-    bool ok = len == 0 || fwrite(data, 1, len, out) == len;
-    if (fclose(out) != 0) ok = false;
-    if (ok && chmod(tmp, mode) != 0) ok = false;
-    if (ok && rename(tmp, path) != 0) ok = false;
-    if (!ok) {
-        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(errno));
+    if (fchmod(fd, mode) != 0) {
+        int saved_errno = errno;
+        close(fd);
+        unlink(tmp);
+        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(saved_errno));
+        free(tmp);
+        return false;
+    }
+
+    FILE *out = fdopen(fd, "wb");
+    if (!out) {
+        int saved_errno = errno;
+        close(fd);
+        unlink(tmp);
+        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(saved_errno));
+        free(tmp);
+        return false;
+    }
+
+    int saved_errno = 0;
+    if (len > 0 && fwrite(data, 1, len, out) != len) saved_errno = errno ? errno : EIO;
+    if (fclose(out) != 0 && saved_errno == 0) saved_errno = errno;
+    if (saved_errno == 0 && rename(tmp, path) != 0) saved_errno = errno;
+    if (saved_errno != 0) {
+        fprintf(stderr, "error: failed to write `%s`: %s\n", path, strerror(saved_errno));
         unlink(tmp);
     }
     free(tmp);
-    return ok;
+    return saved_errno == 0;
 }
