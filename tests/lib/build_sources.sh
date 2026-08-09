@@ -30,6 +30,7 @@ ds_project_library_sources() {
 ds_runtime_unit_sources() {
   local root="$1"
   printf '%s\n' \
+    "$root/src/ds_common.c" \
     "$root/src/runtime.c" \
     "$root/src/source.c" \
     "$root/src/diag.c" \
@@ -39,6 +40,7 @@ ds_runtime_unit_sources() {
 ds_command_model_unit_sources() {
   local root="$1"
   printf '%s\n' \
+    "$root/src/ds_common.c" \
     "$root/src/ds_command.c" \
     "$root/src/ds_command_facts.c" \
     "$root/src/source.c" \
@@ -48,6 +50,7 @@ ds_command_model_unit_sources() {
 ds_command_result_unit_sources() {
   local root="$1"
   printf '%s\n' \
+    "$root/src/ds_common.c" \
     "$root/src/ds_command_facts.c" \
     "$root/src/source.c" \
     "$root/src/diag.c"
