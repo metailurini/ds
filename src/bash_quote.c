@@ -5,16 +5,16 @@ void buf_append(EmitBuf *buf, const char *text) {
     ds_string_append_cstr(buf, text);
 }
 
-void symbol_vec_push(SymbolVec *vec, DsStr name) {
-    DS_VEC_PUSH(vec, name, 16);
-}
-
 bool symbol_exists(const SymbolVec *symbols, DsStr name) {
     for (size_t i = 0; i < symbols->len; i++) {
         DsStr existing = symbols->items[i];
         if (ds_str_eq(existing, name)) return true;
     }
     return false;
+}
+
+void bash_register_symbol(BashEmitter *e, DsStr name) {
+    DS_VEC_PUSH(&e->symbols, ds_str_clone(name), 16);
 }
 
 void free_symbols(SymbolVec *symbols) {

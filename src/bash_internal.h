@@ -52,7 +52,6 @@ static inline void emit_bash_decl_prefix(EmitBuf *out, int function_depth, const
     buf_append(out, " ");
 }
 
-void symbol_vec_push(SymbolVec *vec, DsStr name);
 static inline bool bash_invariant_fail(BashEmitter *e, DsSpan span, const char *message) {
     ds_diag_error(e->diag, span, "internal Bash invariant failed: %s", message);
     return false;
@@ -146,10 +145,7 @@ static inline bool bash_emit_user_call_to_temp(BashEmitter *e, const DsLowerExpr
     return true;
 }
 
-static inline void bash_register_symbol(BashEmitter *e, DsStr name) {
-    DsStr copy = {ds_str_dup_range(name.data, name.len), name.len};
-    symbol_vec_push(&e->symbols, copy);
-}
+void bash_register_symbol(BashEmitter *e, DsStr name);
 
 bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out);
 bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span);

@@ -279,9 +279,8 @@ void ds_array_init(DsArray *array) {
     *array = (DsArray){0};
 }
 
-bool ds_array_push(DsArray *array, void *item) {
+void ds_array_push(DsArray *array, void *item) {
     DS_VEC_PUSH(array, item, 8);
-    return true;
 }
 
 void ds_array_clear(DsArray *array) {

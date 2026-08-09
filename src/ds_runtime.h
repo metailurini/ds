@@ -78,7 +78,7 @@ bool ds_value_to_string(const DsValue *value, DsString *out);
 int ds_value_compare(const DsValue *left, const DsValue *right);
 
 void ds_array_init(DsArray *array);
-bool ds_array_push(DsArray *array, void *item);
+void ds_array_push(DsArray *array, void *item);
 void ds_array_clear(DsArray *array);
 void ds_array_free(DsArray *array);
 

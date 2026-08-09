@@ -361,13 +361,6 @@ static DsLowerCasePattern lower_case_pattern(const DsCasePattern *pattern) {
     return out;
 }
 
-static bool lower_push_map_loop_symbol(Lower *lower, Symbol *symbol) {
-    if (!symbol) return false;
-    DS_GROW_ARRAY(lower->map_loop_symbols, lower->map_loop_len, lower->map_loop_cap, 4);
-    lower->map_loop_symbols[lower->map_loop_len++] = symbol;
-    return true;
-}
-
 static void lower_pop_map_loop_symbol(Lower *lower) {
     if (lower->map_loop_len == 0) return;
     lower->map_loop_len--;
@@ -772,7 +765,8 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             bool pushed_map_loop_symbol = false;
             if (out->kind == DS_LOWER_STMT_FOR_MAP && map_loop_symbol && map_loop_symbol->kind == SYM_MAP) {
-                lower_push_map_loop_symbol(lower, map_loop_symbol);
+                DS_GROW_ARRAY(lower->map_loop_symbols, lower->map_loop_len, lower->map_loop_cap, 4);
+                lower->map_loop_symbols[lower->map_loop_len++] = map_loop_symbol;
                 pushed_map_loop_symbol = true;
             }
             out->as.for_stmt.body = lower_block(lower, stmt->as.for_stmt.body, false);

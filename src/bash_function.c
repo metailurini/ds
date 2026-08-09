@@ -144,8 +144,7 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
     for (size_t i = 0; i < fn->params.len; i++) {
         const DsLowerFnParam *param = &fn->params.items[i];
         DsLowerValueKind expected_kind = param->has_default ? param->default_kind : param->inferred_kind;
-        DsStr copy = {ds_str_dup_range(param->name.data, param->name.len), param->name.len};
-        symbol_vec_push(&e->symbols, copy);
+        bash_register_symbol(e, param->name);
 
         emit_indent(&e->out, 1);
         buf_append(&e->out, "local ");

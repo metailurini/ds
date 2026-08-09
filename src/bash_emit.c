@@ -273,13 +273,11 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered,
     }
 
     for (size_t i = 0; i < lowered->script_decls.len; i++) {
-        DsStr copy = {ds_str_dup_range(lowered->script_decls.items[i].name.data, lowered->script_decls.items[i].name.len), lowered->script_decls.items[i].name.len};
-        symbol_vec_push(&e.symbols, copy);
+        bash_register_symbol(&e, lowered->script_decls.items[i].name);
     }
     for (size_t i = 0; i < lowered->statements.len; i++) {
         if (lowered->statements.items[i]->kind == DS_LOWER_STMT_LET && !symbol_exists(&e.symbols, lowered->statements.items[i]->as.let_stmt.name)) {
-            DsStr copy = {ds_str_dup_range(lowered->statements.items[i]->as.let_stmt.name.data, lowered->statements.items[i]->as.let_stmt.name.len), lowered->statements.items[i]->as.let_stmt.name.len};
-            symbol_vec_push(&e.symbols, copy);
+            bash_register_symbol(&e, lowered->statements.items[i]->as.let_stmt.name);
         }
     }
 
