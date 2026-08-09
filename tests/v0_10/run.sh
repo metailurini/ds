@@ -677,9 +677,6 @@ assert_contains "$ROOT/Makefile" 'TEST_VERSIONS := 0-1 0-2 0-3 0-4 0-5 0-6 0-7 0
 assert_contains "$ROOT/Makefile" 'TEST_TARGETS := $(addprefix test-v,$(TEST_VERSIONS))' "Makefile derives per-version test targets"
 assert_contains "$ROOT/Makefile" '$(TEST_TARGETS): $(BIN)' "Makefile exposes generated per-version test targets"
 assert_contains "$ROOT/Makefile" 'tests/v$(subst -,_,$(patsubst test-v%,%,$@))/run.sh' "Makefile maps test target names to suite directories"
-assert_contains "$ROOT/docs/milestones/v0.10.0-spec.md" 'Tests added' "v0.10 spec completion review records tests"
-assert_contains "$ROOT/docs/milestones/v0.10.0-spec.md" 'tests/v0_10/run.sh' "v0.10 spec names test suite"
-assert_contains "$ROOT/README.md" 'v0.10.0` implementation and tests are complete' "README status is current for v0.10"
 
 # Map runtime architecture: language maps must use the owned hashmap through the
 # DsMap boundary, without leaking hashmap internals into frontend/lowering/VM/emitter code.

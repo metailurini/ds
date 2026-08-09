@@ -187,40 +187,13 @@ assert_direct_accept() {
   assert_text "${name}_direct_stdout" "$expected_stdout" "$TMP/${name}_direct.out"
 }
 
-assert_doc_contains() { assert_contains "$1" "$2" "$3"; }
-assert_doc_not_contains() { assert_not_contains "$1" "$2" "$3"; }
-
-# 1. Planning, docs, and scope guard.
-[ -f docs/milestones/v0.38.0-spec.md ] || fail 'missing v0.38 spec'
-pass 'v0.38 spec exists'
-[ -f docs/milestones/v0.38.0-test-plan.md ] || fail 'missing v0.38 test plan'
-pass 'v0.38 test plan exists'
-for needle in 'dir.walk' 'dir.walk_ext' 'dir.walk!' 'dir.walk_ext!'; do
-  assert_doc_contains docs/milestones/v0.38.0-spec.md "$needle" "v0.38 spec names $needle"
-done
-assert_doc_contains docs/roadmap.md 'v0.38.0 — Recursive Walk Helpers and DX Integration Cleanup' 'roadmap lists v0.38 recursive walk cleanup'
-assert_doc_contains docs/language.ds 'dir.walk_ext("src", [".c", ".h"])' 'language docs show dir.walk_ext'
-assert_doc_contains docs/runtime.md 'skip hidden descendants and symlinks' 'runtime docs describe hidden/symlink walk behavior'
-assert_doc_contains docs/runtime.md 'readable non-symlink directory' 'runtime docs describe invalid/unreadable walk roots'
-assert_doc_contains docs/runtime.md 'transient filesystem races' 'runtime docs describe disappearing walk children'
-assert_doc_contains docs/status.md 'dir.walk(root)' 'status docs mark dir.walk supported'
-assert_doc_contains docs/status.md 'Invalid or unreadable roots fail' 'status docs document walk root failures'
-assert_doc_contains docs/parity-contracts.md 'Recursive filesystem walk helpers' 'parity contracts cover walk helpers'
-assert_doc_contains docs/diagnostics.md 'runtime `dir.walk*` roots/extensions' 'diagnostics docs cover runtime walk diagnostics'
-assert_doc_contains docs/dx-issues.md 'recursive file walking' 'DX issues resolved section includes recursive walking'
-assert_doc_contains Makefile '0-38' 'Makefile wires v0.38 suite'
-assert_doc_not_contains src/lexer.c 'walk' 'v0.38 did not add walk syntax keywords'
-assert_doc_not_contains src/parser.c 'walk_ext' 'v0.38 did not add parser grammar for walk helpers'
+# 1. Scope guard.
+assert_contains Makefile '0-38' 'Makefile wires v0.38 suite'
+assert_not_contains src/lexer.c 'walk' 'v0.38 did not add walk syntax keywords'
+assert_not_contains src/parser.c 'walk_ext' 'v0.38 did not add parser grammar for walk helpers'
 dir_helpers=$(grep -o '{"dir\.[^"]*"' src/ds_stdlib.c | sed 's/^{"//; s/"$//' | LC_ALL=C sort | tr '\n' ' ')
 [ "$dir_helpers" = 'dir.exists dir.walk dir.walk! dir.walk_ext dir.walk_ext! ' ] || fail "unexpected dir namespace helper surface: $dir_helpers"
 pass 'dir namespace public helper surface is scoped'
-for f in docs/language.ds docs/runtime.md docs/status.md docs/parity-contracts.md docs/diagnostics.md docs/dx-issues.md; do
-  assert_not_contains "$f" 'supports hidden traversal flags' "$f does not overclaim hidden traversal flags"
-  assert_not_contains "$f" 'supports symlink following' "$f does not overclaim symlink following"
-  assert_not_contains "$f" 'supports max depth' "$f does not overclaim max depth"
-  assert_not_contains "$f" 'metadata rows are returned' "$f does not overclaim metadata rows"
-  assert_not_contains "$f" 'streaming iterators are supported' "$f does not overclaim streaming iterators"
-done
 
 # 2. Parser, formatter, and debug visibility.
 parse_calls=$(write_fixture parse_calls <<'DS'
@@ -826,11 +799,6 @@ DS
 run_parity_seed analyzer_smoke "$analyzer" "$analyzer_seed" $'.h\tlib.h\tproject/src/lib.h\n.c\tmain.c\tproject/src/main.c\n.c\tutil.c\tproject/src/nested/util.c\n'
 
 # 18. Documentation cleanup checks.
-for needle in 'literal braces' 'broken-pipe quieting' 'direct indexing' 'function parameter kind inference' 'lightweight row arrays' 'recursive file walking'; do
-  assert_doc_contains docs/dx-issues.md "$needle" "DX resolved section includes $needle"
-done
-assert_doc_contains docs/dx-issues.md 'Open DX issues' 'DX open section remains present'
-assert_doc_contains docs/dx-issues.md 'regex capture ergonomics' 'open regex ergonomics remains honest'
 if find examples -type f -print0 | xargs -0 grep -nE "find .*\(-name '\\*\.c' -o -name '\\*\.h'\)|printf .*\{\}|dummy default|delimiter" >"$TMP/example_workarounds.txt" 2>/dev/null; then
   cat "$TMP/example_workarounds.txt" >&2
   fail 'examples contain obsolete DX-wave workaround patterns'

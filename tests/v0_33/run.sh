@@ -251,9 +251,6 @@ assert_rejected() {
   assert_emit_fails "$name" "$file" "$needle"
 }
 
-assert_doc_contains() { assert_contains "$1" "$2" "$3"; }
-assert_doc_not_contains() { assert_not_contains "$1" "$2" "$3"; }
-
 make_glob_seed() {
   local dir="$1"
   mkdir -p "$dir/src/nested" "$dir/src/space dir" "$dir/src/[literal]" "$dir/src/.hidden" "$dir/.config/sub" "$dir/many/a" "$dir/many/b"
@@ -282,42 +279,9 @@ make_glob_seed() {
   done
 }
 
-# 1. Planning, docs, and scope guards.
-for doc in \
-  docs/milestones/v0.33.0-spec.md \
-  docs/milestones/v0.33.0-test-plan.md \
-  docs/roadmap.md \
-  docs/status.md \
-  docs/language.ds \
-  docs/runtime.md \
-  docs/parity-contracts.md \
-  docs/diagnostics.md \
-  docs/source-map.md \
-  docs/concept-map.md \
-  docs/technical-debt.md \
-  docs/release-checklist.md; do
-  [ -f "$doc" ] || fail "missing required doc $doc"
-  pass "required doc exists: $doc"
-done
-assert_doc_contains docs/milestones/v0.33.0-spec.md 'cleanup/stabilization release' 'spec identifies cleanup/stabilization scope'
-assert_doc_contains docs/milestones/v0.33.0-spec.md 'no new syntax' 'spec forbids new syntax surface'
-assert_doc_contains docs/roadmap.md 'v0.33.0' 'roadmap lists v0.33.0'
-assert_doc_contains docs/roadmap.md 'Collection, Glob, and Regex Stabilization' 'roadmap keeps v0.33 stabilization milestone'
-assert_doc_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap keeps deliberate v0.34 after v0.33'
 run_ok cli_help "$DS" --help
 assert_contains "$TMP/cli_help.out" 'ds v0.38.0' 'CLI help reports current version'
 assert_contains "$TMP/cli_help.out" 'emit bash' 'CLI help keeps known command surface'
-assert_doc_contains docs/status.md 'v0.33.0' 'status mentions v0.33.0'
-assert_doc_contains docs/language.ds 'recursive `**`' 'language docs mention recursive glob support'
-assert_doc_contains docs/runtime.md 'regex.match' 'runtime docs mention regex.match support'
-assert_doc_contains docs/parity-contracts.md 'ascending bytewise/ASCII order' 'parity docs mention map iteration order'
-assert_doc_contains docs/diagnostics.md 'lowerer' 'diagnostics docs mention lowerer ownership'
-assert_doc_contains docs/source-map.md 'bash_deps.c' 'source map names Bash helper dependency scanner'
-assert_doc_contains docs/concept-map.md 'regex' 'concept map names regex ownership'
-assert_doc_contains docs/technical-debt.md 'v0.33 H1' 'technical debt records v0.33 H1 audit'
-assert_doc_contains docs/technical-debt.md 'v0.33 H8' 'technical debt records v0.33 H8 audit'
-assert_doc_not_contains docs/release-checklist.md 'recursive glob remains deferred' 'release checklist no longer defers recursive glob'
-assert_doc_not_contains docs/release-checklist.md 'regex replacement remains deferred' 'release checklist no longer defers regex replacement'
 
 # 2. Collection contract stabilization.
 collection_return=$(write_fixture collection_return <<'DS'
@@ -1130,21 +1094,6 @@ cleanup:1
 ' 0
 
 # 6. Documentation/examples reconciliation.
-for doc in docs/status.md docs/language.ds docs/runtime.md docs/parity-contracts.md docs/diagnostics.md docs/source-map.md docs/concept-map.md docs/technical-debt.md docs/release-checklist.md; do
-  assert_doc_not_contains "$doc" 'recursive glob remains deferred' "current doc does not defer recursive glob: $doc"
-  assert_doc_not_contains "$doc" 'runtime regex strings remain deferred' "current doc does not defer runtime regex strings: $doc"
-  assert_doc_not_contains "$doc" 'regex captures remain deferred' "current doc does not defer regex captures: $doc"
-  assert_doc_not_contains "$doc" 'regex replacement remains deferred' "current doc does not defer regex replacement: $doc"
-  assert_doc_not_contains "$doc" 'map iteration remains deferred' "current doc does not defer map iteration: $doc"
-  assert_doc_not_contains "$doc" 'index assignment remains deferred' "current doc does not defer index assignment: $doc"
-  assert_doc_not_contains "$doc" 'structured returns remain deferred' "current doc does not defer structured returns: $doc"
-done
-assert_doc_contains docs/runtime.md 'flat scalar collection boundary' 'runtime docs describe flat collection boundary'
-assert_doc_contains docs/runtime.md 'structured function returns' 'runtime docs describe structured returns'
-assert_doc_contains docs/runtime.md 'command-result' 'runtime docs describe command-result fields'
-assert_doc_contains docs/runtime.md 'recursive `**`' 'runtime docs describe recursive glob contract'
-assert_doc_contains docs/runtime.md 'runtime string patterns' 'runtime docs describe runtime regex strings'
-assert_doc_contains docs/release-checklist.md 'v0.36.0' 'release checklist records current DX pass'
 
 run_example_parity() {
   local name="$1" file="$2"
@@ -1196,13 +1145,5 @@ DS
 assert_rejected structured_guard "$structured_guard" 'contains plain command statements'
 
 # 8. Manual review evidence markers.
-assert_doc_contains docs/technical-debt.md 'helper scanning remains discovery-only' 'H1 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'runtime concern mix remains concentrated in `src/vm_stdlib.c`' 'H2 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'generated-helper catalog remains broad' 'H3 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'collection portability gates remain lowerer-owned' 'H4 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'standalone Bash intentionally duplicates regex validation' 'H5 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'examples and release checklist were reconciled' 'H6 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'large dispatchers were not broadened' 'H7 reviewer note recorded'
-assert_doc_contains docs/technical-debt.md 'aggregate regression runtime remains a known operational risk' 'H8 reviewer note recorded'
 
 echo "v0.33.0 tests passed ($pass_count checks)"

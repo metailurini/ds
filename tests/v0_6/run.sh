@@ -194,13 +194,6 @@ fi
 pass "staged hashmap API remains outside production API"
 assert_not_contains "$TMP/import_basic.sh" ' ds ' "generated Bash does not call ds"
 
-# Documentation/status checks.
-assert_contains "$ROOT/README.md" 'import "./lib.ds"' "README documents import syntax"
-assert_contains "$ROOT/docs/language.ds" 'import "./lib.ds"' "language catalog documents imports"
-assert_contains "$ROOT/docs/roadmap.md" 'v0.6.0' "roadmap mentions v0.6.0"
-assert_contains "$ROOT/docs/milestones/v0.6.0-spec.md" 'Imports / Includes' "v0.6 spec title present"
-assert_contains "$ROOT/docs/milestones/v0.6.0-test-plan.md" 'make test-v0-6' "v0.6 test plan has target"
-assert_contains "$ROOT/docs/runtime.md" 'imported files cannot declare their own script blocks' "runtime docs mention script/import interaction"
 [ -f "$ROOT/examples/import-main.ds" ] || fail "README import example exists"
 pass "import example exists"
 

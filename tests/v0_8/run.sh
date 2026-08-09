@@ -226,9 +226,6 @@ assert_not_contains "$ROOT/src/ds_checker.c" '#include "backend.h"' "checker doe
 assert_contains "$ROOT/src/ds_checker.h" "ds_check_warnings_ast" "checker warning entrypoint has a narrow header"
 assert_not_contains "$ROOT/src/backend.h" "ds_check_warnings_ast" "backend façade no longer exposes checker warnings"
 assert_not_contains "$ROOT/src/bash_emit.c" "hashmap" "Bash backend does not depend on staged hashmap internals"
-assert_contains "$ROOT/docs/architecture.md" 'v0.8.0 command cleanup' "architecture documents v0.8 cleanup"
-assert_contains "$ROOT/docs/runtime.md" 'process spec/result wrapper' "runtime documents process wrapper"
-assert_contains "$ROOT/docs/language.ds" 'let result = run npm test' "language doc keeps v0.7 syntax, not new v0.8 syntax"
 
 # Makefile integration for this dedicated suite. Avoid recursively invoking the
 # target from inside itself; the full validation invokes the target directly.

@@ -227,37 +227,6 @@ assert_piped_runtime_failure() {
   fi
 }
 
-# 1. Planning, docs, and scope guard.
-for doc in \
-  docs/milestones/v0.34.0-spec.md \
-  docs/milestones/v0.34.0-test-plan.md \
-  docs/language.ds \
-  docs/runtime.md \
-  docs/diagnostics.md \
-  docs/status.md \
-  docs/dx-issues.md; do
-  [ -f "$doc" ] || fail "missing required doc $doc"
-  pass "required doc exists: $doc"
-done
-assert_contains docs/milestones/v0.34.0-spec.md 'literal braces' 'v0.34 spec mentions literal braces'
-assert_contains docs/milestones/v0.34.0-spec.md 'broken-pipe' 'v0.34 spec mentions broken-pipe DX'
-assert_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap lists v0.34 DX milestone'
-assert_contains docs/roadmap.md 'v0.35.0 — Core String Parsing Helpers' 'roadmap keeps v0.35 DX wave'
-assert_contains docs/roadmap.md 'v0.36.0 — Function Parameter Kind Inference' 'roadmap keeps v0.36 DX wave'
-assert_contains docs/roadmap.md 'v0.37.0 — Lightweight Rows and In-Memory Data Processing' 'roadmap keeps v0.37 DX wave'
-assert_contains docs/roadmap.md 'v0.38.0 — Recursive Walk Helpers and DX Integration Cleanup' 'roadmap keeps v0.38 DX wave'
-assert_contains docs/roadmap.md 'richer signal/job-control work postponed' 'roadmap postpones old signal/job-control wave'
-assert_not_contains docs/roadmap.md '### v0.34.0 — Richer cleanup' 'old v0.34 signal scope not immediate'
-for broad in 'raw strings' 'heredocs' 'JSON literals' 'background jobs' 'arbitrary signal handler context'; do
-  assert_contains docs/milestones/v0.34.0-spec.md "$broad" "v0.34 spec keeps $broad out of scope"
-done
-assert_contains docs/milestones/v0.34.0-spec.md 'regex' 'v0.34 spec does not grow regex APIs'
-assert_contains docs/milestones/v0.34.0-spec.md 'glob' 'v0.34 spec does not grow glob APIs'
-assert_contains docs/language.ds '{{' 'language docs mention doubled open brace'
-assert_contains docs/runtime.md 'closed-stdout' 'runtime docs mention closed-stdout quieting'
-assert_contains docs/diagnostics.md 'rejecting lone `}`' 'diagnostics docs mention unmatched close brace'
-assert_contains docs/status.md 'v0.34.0' 'status docs mention v0.34.0'
-assert_contains docs/dx-issues.md 'addressed in v0.34.0 implementation' 'DX issues mark v0.34 addressed items'
 run_ok cli_help "$DS" --help
 assert_contains "$TMP/cli_help.out" 'ds v0.38.0' 'CLI help reports current v0.38.0 identity'
 
@@ -662,10 +631,6 @@ echo after
 DS
 )
 assert_piped_runtime_failure cleanup_redirected_pipeline_141_pipe "$cleanup_redirected_pipeline_141_pipe" '141' cleaned
-assert_contains docs/runtime.md 'inability to distinguish explicit `exit 141` from real `SIGPIPE`' 'runtime docs record emitted Bash 141 limitation'
-assert_contains docs/milestones/v0.34.0-spec.md 'portability limitation' 'spec records Bash inherited-pipe ambiguity'
-assert_not_contains docs/runtime.md 'background jobs are supported' 'docs do not introduce background job support'
-assert_not_contains docs/status.md 'wait primitives are supported' 'status docs do not introduce wait primitives'
 
 # 12. Regression and examples smoke from the v0.34 suite.
 examples=(examples/basic.ds)

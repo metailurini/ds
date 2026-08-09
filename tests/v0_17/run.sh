@@ -110,20 +110,6 @@ for file in src/parser.c src/parse_stmt.c src/ast.c src/lower_stmt.c src/hir.c s
   pass "$file exists"
 done
 
-# Documentation and status checks.
-assert_contains README.md 'v0.17.0' 'README mentions v0.17.0'
-assert_contains README.md 'implementation and tests are complete for scoped control flow' 'README marks v0.17 tests complete'
-assert_contains docs/status.md 'implementation and test pass' 'status identifies post-test-pass state'
-for phrase in 'while' 'break' 'continue' 'case selector' 'scalar reassignment' 'kind-aware' 'case target' 'case $target' 'until' 'loop `else`' 'function `return`' 'map iteration' 'ranges' 'pipelines' 'string methods' 'Comment-preserving'; do
-  assert_contains docs/status.md "$phrase" "status documents $phrase"
-done
-assert_contains docs/language.ds '`while`, `break`, `continue`, scalar reassignment, and expression-style' 'language marks v0.17 control flow implemented'
-assert_contains docs/language.ds 'case target' 'language uses expression-style case'
-assert_contains docs/runtime.md 'kind-aware exact' 'runtime documents exact case matching'
-assert_contains docs/architecture.md 'sidecar type tags' 'architecture documents Bash kind tags for case'
-assert_contains docs/milestones/v0.17.0-spec.md 'Tests complete' 'spec completion review records tests complete'
-assert_contains docs/milestones/v0.17.0-test-plan.md 'Implemented' 'test plan status records implementation'
-
 # Public command help.
 run_ok help_top "$DS" --help
 assert_contains "$TMP/help_top.out" 'ds v0.38.0' 'help reports current version'

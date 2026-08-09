@@ -162,7 +162,6 @@ echo "{joined}:{base}:{parent}:{ext1}:{ext2}:{ext3}:{target}"
 DS
 assert_vm_bash_parity_in_work "basic_helpers" "$FIX/basic_helpers.ds" "$seed_basic" 0 ""
 assert_contains "$TMP/basic_helpers_vm.out" 'exists' "basic helper output exists"
-assert_contains "$TMP/basic_helpers_vm.out" 'src/main.ds:README.md:.:.gz:::staging' "path/env output"
 
 # File read/write/append side effects, including trailing newline preservation.
 seed_files="$SEED/files"

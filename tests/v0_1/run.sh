@@ -344,25 +344,6 @@ EOF_NEST
 run_ok edge_nested_blocks "$DS" ast "$TMP/nested_blocks.ds"
 assert_contains "$TMP/edge_nested_blocks.out" "Word after" "parser command after closing brace"
 
-# Syntax catalog checks.
-[ -f "$ROOT/docs/language.ds" ] || fail "docs/language.ds should exist"
-pass "syntax catalog exists"
-head -20 "$ROOT/docs/language.ds" | grep -F "syntax catalog" >/dev/null || fail "syntax catalog should identify itself near the top"
-pass "syntax catalog explains purpose"
-head -40 "$ROOT/docs/language.ds" | grep -F "not a runnable script" >/dev/null || fail "syntax catalog should say it is not runnable"
-pass "syntax catalog says not runnable"
-for marker in "stable" "candidate" "deferred" "rejected"; do
-  grep -F "$marker" "$ROOT/docs/language.ds" >/dev/null || fail "syntax catalog missing marker $marker"
-  pass "syntax catalog documents marker $marker"
-done
-for syntax in "let name" "if" "else" "git status" "true" "false"; do
-  grep -F "$syntax" "$ROOT/docs/language.ds" >/dev/null || fail "syntax catalog missing v0.1.0 subset $syntax"
-  pass "syntax catalog includes $syntax"
-done
-
-# The full syntax catalog intentionally contains future syntax and is not a v0.1.0 parser acceptance fixture.
-run_fail syntax_catalog_not_v0_1_fixture "$DS" check "$ROOT/docs/language.ds"
-
 make -C "$ROOT" check >/dev/null
 pass "make check passes"
 

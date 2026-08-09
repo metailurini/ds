@@ -201,12 +201,6 @@ assert_rejected_literal() {
   assert_emit_fails "$name" "$file" "$needle"
 }
 
-assert_repo_doc_contains() {
-  local needle="$1" name="$2"
-  grep -R -F -- "$needle" docs README.md >/dev/null || fail "$name: docs should contain [$needle]"
-  pass "$name"
-}
-
 make_basic_seed() {
   local dir="$1"
   mkdir -p "$dir/src/nested" "$dir/src/nested2" "$dir/tests"
@@ -220,43 +214,6 @@ make_basic_seed() {
   : >"$dir/src/nested2/test-extra.ds"
   : >"$dir/tests/unit.ds"
 }
-
-# 1. Planning and docs checks.
-for doc in \
-  docs/milestones/v0.31.0-spec.md \
-  docs/milestones/v0.31.0-test-plan.md \
-  docs/roadmap.md \
-  docs/status.md \
-  docs/language.ds \
-  docs/runtime.md \
-  docs/parity-contracts.md \
-  docs/diagnostics.md \
-  docs/concept-map.md \
-  docs/source-map.md; do
-  [ -f "$doc" ] || fail "missing required doc $doc"
-  pass "required doc exists: $doc"
-done
-assert_repo_doc_contains 'recursive glob' 'docs document recursive glob support'
-assert_repo_doc_contains 'glob("src/**/*.c")' 'docs show recursive glob through glob'
-assert_repo_doc_contains 'glob!' 'docs document required recursive glob through glob!'
-assert_repo_doc_contains 'complete `**` path segment' 'docs document complete-segment `**` rule'
-assert_repo_doc_contains 'one recursive `**` segment' 'docs document single recursive segment limit'
-assert_repo_doc_contains 'zero-or-more directory' 'docs document zero-or-more directory semantics'
-assert_repo_doc_contains 'sorted duplicate-free string results' 'docs document sorted duplicate-free strings'
-assert_repo_doc_contains 'glob` no-match returns an empty collection' 'docs document glob no-match behavior'
-assert_repo_doc_contains 'glob!` no-match fails' 'docs document glob! no-match behavior'
-assert_repo_doc_contains 'hidden path components' 'docs document hidden path component policy'
-assert_repo_doc_contains 'directory symlinks are not followed' 'docs document directory symlink policy'
-assert_repo_doc_contains 'generated Bash remains standalone' 'docs document standalone Bash contract'
-assert_repo_doc_contains 'ambient shell' 'docs document no ambient shell option reliance'
-assert_repo_doc_contains 'custom glob flags' 'docs keep custom glob flags deferred'
-assert_repo_doc_contains 'multiple recursive `**` glob segments' 'docs keep multiple recursive segments deferred'
-assert_repo_doc_contains 'extglob' 'docs keep extglob deferred'
-assert_repo_doc_contains 'brace expansion' 'docs keep brace expansion deferred'
-assert_repo_doc_contains 'hidden traversal flags' 'docs keep hidden traversal flags deferred'
-assert_repo_doc_contains 'symlink-following traversal' 'docs keep symlink following deferred'
-assert_repo_doc_contains 'streaming' 'docs keep streaming iterators deferred'
-assert_repo_doc_contains 'regex expansion' 'docs keep regex expansion deferred'
 
 # 2. Parser, AST, HIR, bytecode, and formatting smoke tests.
 smoke=$(write_fixture smoke <<'DS'

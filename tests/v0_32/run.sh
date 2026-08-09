@@ -186,11 +186,6 @@ assert_rejected() {
   assert_emit_fails "$name" "$file" "$needle"
 }
 
-assert_doc_contains() {
-  local file="$1" needle="$2" name="$3"
-  assert_contains "$file" "$needle" "$name"
-}
-
 assert_helper_present() {
   local script="$1" helper="$2" name="$3"
   assert_contains "$script" "$helper" "$name"
@@ -201,34 +196,6 @@ assert_helper_absent() {
   local script="$1" helper="$2" name="$3"
   assert_not_contains "$script" "$helper" "$name"
 }
-
-# 1. Planning and docs checks.
-for doc in \
-  docs/milestones/v0.32.0-spec.md \
-  docs/milestones/v0.32.0-test-plan.md \
-  docs/roadmap.md \
-  docs/language.ds \
-  docs/status.md \
-  docs/runtime.md \
-  docs/parity-contracts.md \
-  docs/diagnostics.md \
-  docs/concept-map.md \
-  docs/source-map.md; do
-  [ -f "$doc" ] || fail "missing required doc $doc"
-  pass "required doc exists: $doc"
-done
-assert_doc_contains docs/language.ds 'runtime string patterns' 'docs mention runtime string regex patterns'
-assert_doc_contains docs/language.ds 'regex.match' 'docs mention regex.match'
-assert_doc_contains docs/language.ds 'regex.replace' 'docs mention regex.replace'
-assert_doc_contains docs/runtime.md 'matched' 'runtime docs mention match-result keys'
-assert_doc_contains docs/runtime.md 'Optional unmatched captures' 'runtime docs mention optional captures'
-assert_doc_contains docs/runtime.md '$0' 'runtime docs mention replacement $0'
-assert_doc_contains docs/runtime.md '$$' 'runtime docs mention replacement literal dollar'
-assert_doc_contains docs/runtime.md 'invalid runtime' 'runtime docs mention invalid dynamic regex diagnostics'
-assert_doc_contains docs/parity-contracts.md 'standalone Bash emission' 'parity docs mention standalone Bash'
-assert_doc_contains docs/concept-map.md 'named captures' 'concept docs keep named captures deferred'
-assert_doc_contains docs/concept-map.md 'lookaround' 'concept docs keep lookaround deferred'
-assert_doc_contains docs/concept-map.md 'replace-first/count' 'concept docs keep replace-first/count deferred'
 
 # 2. Parser, lexer, AST, formatter, and debug smoke tests.
 literal_shape=$(write_fixture literal_shape <<'DS'

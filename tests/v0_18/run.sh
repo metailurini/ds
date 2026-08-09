@@ -195,18 +195,6 @@ done
 assert_contains src/bash_stmt.c 'pipeline failed with exit' 'Bash failure diagnostic says pipeline'
 assert_not_contains src/bash_stmt.c '__ds_capture_eval' 'Bash capture does not use eval helper'
 
-# Documentation and status checks.
-assert_contains docs/milestones/v0.18.0-spec.md 'Implementation and tests complete' 'v0.18 spec records implementation completion'
-assert_contains docs/milestones/v0.18.0-spec.md 'whole-pipeline redirection' 'v0.18 spec records whole-pipeline redirection'
-assert_contains docs/milestones/v0.18.0-test-plan.md 'tests/v0_18/run.sh' 'v0.18 test plan names suite'
-assert_contains docs/status.md 'v0.21.0' 'status identifies current pipeline/string state'
-assert_contains docs/status.md 'captured `run` pipelines' 'status documents captured pipelines'
-assert_contains docs/status.md 'pipefail-style' 'status documents pipefail'
-assert_contains docs/status.md 'advanced pipeline forms remain' 'status keeps advanced forms deferred'
-assert_contains docs/language.ds 'Plain command pipelines are fail-fast' 'language marks pipelines implemented'
-assert_contains docs/language.ds 'Redirection suffixes apply to the whole plain pipeline' 'language documents whole pipeline redirection'
-assert_contains README.md 'v0.18.0' 'README mentions v0.18.0'
-assert_contains CHANGELOG.md 'v0.18.0' 'changelog mentions v0.18.0'
 assert_contains examples/pipeline.ds 'run printf' 'pipeline example has captured run pipeline'
 
 run_ok help_top "$DS" --help
@@ -571,7 +559,5 @@ printf 'done\n' >"$TMP/expected_repeated.out"
 assert_same "$TMP/expected_repeated.out" "$TMP/repeated_capture_vm.out" 'repeated captured pipelines complete without visible leaks/deadlock'
 
 # Completion status should be updated by this suite addition.
-assert_contains docs/milestones/v0.18.0-spec.md 'Tests complete' 'v0.18 spec completion records tests complete'
-assert_contains docs/milestones/v0.18.0-test-plan.md 'Implemented' 'v0.18 test plan status records implementation'
 
 printf 'v0.18.0 tests passed (%d assertions)\n' "$pass_count"

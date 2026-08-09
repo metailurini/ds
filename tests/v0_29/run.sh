@@ -138,42 +138,6 @@ assert_rejected() {
   assert_emit_fails "$name" "$file" "$needle"
 }
 
-assert_repo_doc_contains() {
-  local needle="$1" name="$2"
-  grep -R -F -- "$needle" docs README.md >/dev/null || fail "$name: docs should contain [$needle]"
-  pass "$name"
-}
-
-# 1. Planning and docs checks.
-for doc in \
-  docs/milestones/v0.29.0-spec.md \
-  docs/milestones/v0.29.0-test-plan.md \
-  docs/roadmap.md \
-  docs/status.md \
-  docs/language.ds \
-  docs/runtime.md \
-  docs/parity-contracts.md \
-  docs/diagnostics.md \
-  docs/concept-map.md \
-  docs/source-map.md; do
-  [ -f "$doc" ] || fail "missing required doc $doc"
-  pass "required doc exists: $doc"
-done
-assert_repo_doc_contains 'for key, value in map' 'docs document map-loop syntax'
-assert_repo_doc_contains 'v0.29.0 map iteration' 'docs document v0.29 map iteration support'
-assert_repo_doc_contains 'ascending bytewise/ASCII' 'docs document bytewise ASCII map-loop order'
-assert_repo_doc_contains 'scoped to the loop body' 'docs document map loop body scoping'
-assert_repo_doc_contains 'scalar value kind' 'docs document map value-kind preservation'
-assert_repo_doc_contains 'zero iterations' 'docs document empty-map zero-iteration behavior'
-assert_repo_doc_contains 'generated Bash is standalone' 'docs document standalone generated Bash'
-assert_repo_doc_contains 'index assignment' 'docs keep index assignment deferred'
-assert_repo_doc_contains 'nested collections' 'docs keep nested collections deferred'
-assert_repo_doc_contains 'custom iterator' 'docs keep custom iterators deferred'
-assert_repo_doc_contains 'command-result values are not maps' 'docs keep command-result map iteration deferred'
-assert_repo_doc_contains 'environment iteration' 'docs keep environment iteration deferred'
-assert_repo_doc_contains 'recursive `**` glob support' 'docs document recursive glob support'
-assert_repo_doc_contains 'regex captures' 'docs keep advanced regex deferred'
-
 # Low-level empty-map and bytewise-sort coverage where source-level empty map literals remain deferred.
 # The unit also builds HIR-level VM and emitted Bash map loops over an empty map
 # whose bodies contain unreachable `break`/`continue` control flow.

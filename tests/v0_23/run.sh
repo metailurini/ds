@@ -118,22 +118,6 @@ mkdir -p "$FIX"
 # Static wiring and documentation coverage.
 assert_contains Makefile '0-23' 'TEST_VERSIONS contains v0.23'
 assert_matches Makefile '^TEST_VERSIONS := .*0-22 0-23($| )' 'v0.23 follows v0.22 in TEST_VERSIONS'
-[ -f docs/milestones/v0.23.0-spec.md ] || fail 'v0.23 spec file exists'
-pass 'v0.23 spec file exists'
-[ -f docs/milestones/v0.23.0-test-plan.md ] || fail 'v0.23 test plan file exists'
-pass 'v0.23 test plan file exists'
-assert_contains docs/language.ds 'Membership operator is implemented in v0.23.0' 'language docs mention membership'
-assert_contains docs/language.ds 'Regex match is implemented in v0.23.0' 'language docs mention regex'
-assert_contains docs/language.ds 'Integer range loop sources are implemented in v0.23.0' 'language docs mention ranges'
-assert_contains docs/status.md 'exact `in` membership checks' 'status mentions membership subset'
-assert_contains docs/status.md 'conservative regex `matches` expressions' 'status mentions regex subset'
-assert_contains docs/status.md 'inclusive integer range loop sources' 'status mentions ranges subset'
-assert_contains docs/runtime.md 'Membership equality' 'runtime docs mention membership equality'
-assert_contains docs/runtime.md 'Range loop semantics' 'runtime docs mention range semantics'
-assert_contains docs/runtime.md 'Regex subset' 'runtime docs mention regex subset'
-assert_contains README.md 'docs/milestones/v0.23.0-spec.md' 'README important files include v0.23 spec'
-assert_contains README.md 'docs/milestones/v0.23.0-test-plan.md' 'README important files include v0.23 test plan'
-assert_contains CHANGELOG.md '# v0.23.0 - Regex, Ranges, and Membership' 'changelog records v0.23'
 
 # Lexer/parser/AST/HIR/bytecode shape.
 shape="$FIX/shape.ds"

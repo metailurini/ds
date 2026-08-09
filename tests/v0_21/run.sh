@@ -123,24 +123,6 @@ assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test' 'a
 assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 'ubsan includes aggregate suites'
 assert_not_matches src/lexer.c 'TOKEN_(LAMBDA|YIELD|DEFER|TRAP)' 'no deferred keyword tokens added'
 assert_not_matches src/parser.c 'TOKEN_(LAMBDA|YIELD|DEFER|TRAP)' 'parser has no deferred keyword handling'
-assert_not_matches 'docs/language.ds' 'typed .*parameter.*implemented|return annotation.*implemented|closure.*implemented|float.*implemented' 'docs do not claim out-of-scope features'
-assert_contains docs/runtime.md 'standalone Bash' 'runtime docs keep standalone Bash contract'
-
-# Documentation and milestone consistency.
-[ -f docs/milestones/v0.21.0-spec.md ] || fail 'v0.21 spec file exists'
-pass 'v0.21 spec file exists'
-[ -f docs/milestones/v0.21.0-test-plan.md ] || fail 'v0.21 test plan file exists'
-pass 'v0.21 test plan file exists'
-assert_contains docs/milestones/v0.21.0-spec.md 'Function Values' 'v0.21 spec identifies feature-foundation scope'
-for non_goal in 'typed function parameters' 'closures' 'multiple return values' 'floating-point arithmetic' 'arrays, maps' 'signal handling'; do
-  assert_contains docs/milestones/v0.21.0-spec.md "$non_goal" "v0.21 spec non-goal mentions $non_goal"
-done
-assert_contains docs/milestones/v0.21.0-spec.md 'VM/Bash parity' 'v0.21 spec acceptance mentions parity'
-assert_contains docs/milestones/v0.21.0-spec.md 'standalone Bash' 'v0.21 spec acceptance mentions standalone Bash'
-assert_contains docs/status.md 'v0.21.0' 'status mentions v0.21'
-assert_contains docs/language.ds 'return expr' 'language catalog documents return expr'
-assert_contains CHANGELOG.md 'v0.21.0' 'changelog has v0.21 entry'
-assert_contains README.md 'v0.21.0' 'README mentions v0.21 status'
 
 # Examples remain coherent, including the new v0.21 example.
 for example in basic args import-main command-result redirection functions collections control-flow pipeline strings stdlib vm function-values; do

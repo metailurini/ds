@@ -122,43 +122,6 @@ assert_rejected() {
   assert_emit_fails "$name" "$file" "$needle"
 }
 
-assert_repo_doc_contains() {
-  local needle="$1" name="$2"
-  grep -R -F -- "$needle" docs README.md >/dev/null || fail "$name: docs should contain [$needle]"
-  pass "$name"
-}
-
-# 1. Planning and docs checks.
-for doc in \
-  docs/milestones/v0.30.0-spec.md \
-  docs/milestones/v0.30.0-test-plan.md \
-  docs/roadmap.md \
-  docs/status.md \
-  docs/language.ds \
-  docs/runtime.md \
-  docs/parity-contracts.md \
-  docs/diagnostics.md \
-  docs/concept-map.md \
-  docs/source-map.md; do
-  [ -f "$doc" ] || fail "missing required doc $doc"
-  pass "required doc exists: $doc"
-done
-assert_repo_doc_contains 'index assignment is supported in v0.30' 'docs document v0.30 index assignment support'
-assert_repo_doc_contains 'items[index] = scalar' 'docs document array assignment syntax'
-assert_repo_doc_contains 'map[key] = scalar' 'docs document map assignment syntax'
-assert_repo_doc_contains 'replaces existing elements only' 'docs document array replacement-only behavior'
-assert_repo_doc_contains 'array.push' 'docs point append behavior to array.push'
-assert_repo_doc_contains 'inserts new keys' 'docs document map insertion behavior'
-assert_repo_doc_contains 'named flat collections' 'docs document named flat mutation targets'
-assert_repo_doc_contains 'flat scalar collection boundary' 'docs document scalar RHS boundary'
-assert_repo_doc_contains 'generated Bash remains standalone' 'docs document standalone Bash contract'
-assert_repo_doc_contains 'function-call result mutation' 'docs keep function-result mutation deferred'
-assert_repo_doc_contains 'field-style map assignment' 'docs keep field-style map assignment deferred'
-assert_repo_doc_contains 'sparse arrays' 'docs keep sparse arrays deferred'
-assert_repo_doc_contains 'slice assignment' 'docs keep slice assignment deferred'
-assert_repo_doc_contains 'deletion' 'docs keep deletion deferred'
-assert_repo_doc_contains 'references' 'docs keep references deferred'
-
 # 2. Basic array assignment parity.
 array_first=$(write_fixture array_replace_first <<'DS'
 let items = ["old", "keep"]

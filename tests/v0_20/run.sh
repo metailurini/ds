@@ -118,27 +118,8 @@ assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=address" test' 'a
 assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 'ubsan runs aggregate tests'
 assert_not_matches src/lexer.c 'TOKEN_(RETURN|UNTIL|TRAP)' 'no deferred keyword token added'
 assert_not_matches src/parser.c 'TOKEN_(RETURN|UNTIL|TRAP)' 'parser has no deferred keyword token handling'
-assert_not_contains docs/language.ds 'return expr.*[implemented]' 'language catalog does not mark return implemented'
-assert_not_contains docs/language.ds 'arithmetic.*[implemented]' 'language catalog does not mark Wave 3 arithmetic implemented'
 assert_not_contains include/ds.h 'hashmap' 'public header does not expose hashmap internals'
 assert_matches src/runtime/hashmap.c '__ds|hashmap|Ds' 'runtime hashmap remains private implementation file'
-
-# Documentation and milestone consistency.
-[ -f docs/milestones/v0.20.0-spec.md ] || fail 'v0.20 spec file exists'
-pass 'v0.20 spec file exists'
-[ -f docs/milestones/v0.20.0-test-plan.md ] || fail 'v0.20 test plan file exists'
-pass 'v0.20 test plan file exists'
-assert_contains docs/milestones/v0.20.0-spec.md 'cleanup/debt-repayment milestone' 'v0.20 spec identifies cleanup scope'
-assert_contains docs/milestones/v0.20.0-spec.md 'must not add new production syntax' 'v0.20 spec rejects syntax expansion'
-for deferred in 'return' 'arithmetic' 'signal' 'regex' 'ranges' 'map iteration' 'formatter comment/trivia preservation'; do
-  assert_contains docs/milestones/v0.20.0-spec.md "$deferred" "v0.20 spec mentions deferred $deferred"
-done
-assert_contains docs/milestones/v0.20.0-spec.md 'VM/Bash parity' 'v0.20 spec acceptance mentions parity'
-assert_contains docs/milestones/v0.20.0-spec.md 'standalone Bash' 'v0.20 spec acceptance mentions standalone Bash'
-assert_contains docs/milestones/v0.20.0-test-plan.md 'cleanup/stabilization' 'v0.20 test plan identifies cleanup scope'
-assert_contains docs/runtime.md 'standalone Bash' 'runtime docs keep standalone Bash contract'
-assert_contains docs/status.md 'v0.20.0' 'status mentions v0.20 after implementation'
-assert_contains README.md 'v0.20.0' 'README mentions v0.20 after implementation'
 
 # Examples remain coherent.
 for example in basic args import-main command-result redirection functions collections control-flow pipeline strings stdlib vm; do

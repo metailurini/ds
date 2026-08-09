@@ -666,8 +666,4 @@ assert_same "$TMP/old_run.out" "$TMP/old_bash.out" 'VM/Bash stdout parity remain
 assert_not_contains "$TMP/old_run.err" 'trace:' 'normal VM output has no trace'
 assert_not_contains "$TMP/old_bash.err" 'trace:' 'normal Bash output has no trace'
 
-# Documentation status should reflect the test pass after this suite is added.
-assert_contains docs/milestones/v0.13.0-spec.md 'v0.13.0' 'v0.13 spec exists'
-assert_contains docs/milestones/v0.13.0-test-plan.md 'tests/v0_13/run.sh' 'v0.13 test plan names suite'
-
 printf 'v0.13 tests passed: %d assertions\n' "$pass_count"

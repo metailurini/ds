@@ -275,16 +275,5 @@ for line in \
   "ds emit bash <file.ds> -o <file.sh>"; do
   assert_contains "$TMP/help_output.out" "$line" "help lists $line"
 done
-assert_contains "$ROOT/README.md" "./ds examples/basic.ds" "README documents direct execution"
-assert_contains "$ROOT/README.md" "./ds run examples/basic.ds" "README documents run command"
-assert_contains "$ROOT/README.md" "./ds tokens examples/basic.ds" "README documents tokens command"
-assert_contains "$ROOT/README.md" "./ds ast examples/basic.ds" "README documents ast command"
-assert_contains "$ROOT/README.md" "./ds check examples/basic.ds" "README documents check command"
-assert_contains "$ROOT/README.md" "./ds bytecode examples/basic.ds" "README documents bytecode command"
-assert_contains "$ROOT/README.md" "./ds emit bash examples/basic.ds -o /tmp/basic.sh" "README documents emit bash command"
-assert_contains "$ROOT/docs/architecture.md" "lowered" "architecture documents lowered pipeline"
-assert_contains "$ROOT/docs/runtime.md" "ownership" "runtime docs mention ownership"
-assert_contains "$ROOT/docs/language.ds" "future" "language catalog marks future syntax"
-assert_contains "$ROOT/README.md" "array/map literals" "README documents implemented arrays/maps"
 
 printf 'v0.4.0 tests passed: %d checks\n' "$pass_count"

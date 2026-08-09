@@ -255,61 +255,7 @@ assert_all_helper_defs_namespaced() {
 FIX="$TMP/fixtures with spaces"
 mkdir -p "$FIX"
 
-# 1. Documentation and release-planning checks.
-for file in \
-  docs/milestones/v0.24.0-spec.md \
-  docs/milestones/v0.24.0-test-plan.md \
-  docs/status.md \
-  docs/language.ds \
-  docs/runtime.md \
-  docs/roadmap.md \
-  docs/release-checklist.md \
-  README.md; do
-  [ -f "$file" ] || fail "$file exists"
-  pass "$file exists"
-done
 assert_contains Makefile '0-24' 'TEST_VERSIONS contains v0.24'
-assert_contains docs/status.md 'v0.23.0' 'status names latest feature surface'
-assert_contains docs/status.md 'v0.24.0' 'status names hardening pass'
-assert_contains docs/status.md 'Production language support intended for 1.0.0' 'status separates supported behavior'
-assert_contains docs/status.md 'Test-only syntax' 'status separates test-only behavior'
-assert_contains docs/status.md 'Deferred' 'status separates deferred behavior'
-assert_contains docs/status.md 'Rejected' 'status separates rejected behavior'
-assert_contains docs/status.md 'out-of-scope' 'status separates out-of-scope behavior'
-assert_contains docs/release-checklist.md '1.0.0 Release Checklist' 'release checklist exists'
-for text in \
-  'Supported language surface' \
-  'VM/Bash parity' \
-  'Generated Bash standalone' \
-  'Examples' \
-  'Docs' \
-  'Diagnostics' \
-  'Formatter/checker' \
-  'Sanitizer' \
-  'Deferred/rejected/out-of-scope' \
-  'Packaging and release notes' \
-  'Known limitations'; do
-  assert_contains docs/release-checklist.md "$text" "release checklist covers $text"
-done
-assert_contains docs/runtime.md 'VM/Bash parity' 'runtime documents VM/Bash parity'
-assert_contains docs/runtime.md 'function' 'runtime documents functions'
-assert_contains docs/runtime.md 'array' 'runtime documents collections'
-assert_contains docs/runtime.md 'pipeline' 'runtime documents pipelines'
-assert_contains docs/runtime.md 'cleanup' 'runtime documents cleanup'
-assert_contains docs/runtime.md 'Regex subset' 'runtime documents regex'
-assert_contains docs/runtime.md 'Range loop semantics' 'runtime documents ranges'
-assert_contains docs/runtime.md 'Membership equality' 'runtime documents membership'
-assert_contains docs/language.ds 'Status markers:' 'language docs include status markers'
-assert_contains README.md 'docs/milestones/v0.24.0-spec.md' 'README important files include v0.24 spec'
-assert_contains README.md 'docs/milestones/v0.24.0-test-plan.md' 'README important files include v0.24 test plan'
-assert_contains README.md 'standalone Bash' 'README states Bash emission is standalone'
-assert_contains docs/status.md 'must not call the `ds`' 'status states Bash must not call ds'
-assert_contains docs/milestones/v0.24.0-spec.md 'must not add new production syntax' 'v0.24 spec forbids new production syntax'
-assert_contains docs/status.md 'heredocs, here-strings, process substitution' 'status keeps shell syntax rejected'
-assert_contains docs/status.md '`v0.32.0` adds runtime regex strings, capture maps, and regex' 'status records v0.32 regex helpers'
-assert_contains docs/status.md 'first-class range values' 'status keeps range values deferred'
-assert_contains docs/status.md 'map iteration' 'status documents map iteration boundary'
-assert_contains docs/status.md 'additional shell backends or native compilation' 'status keeps alternate backends deferred'
 
 # 2. Examples audit.
 for example in \

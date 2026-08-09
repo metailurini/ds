@@ -144,21 +144,6 @@ assert_direct_accept() {
   assert_text "${name}_direct_stdout" "$expected_stdout" "$TMP/${name}_direct.out"
 }
 
-# 1. Planning, docs, and scope guard.
-[ -f docs/milestones/v0.37.0-spec.md ] || fail 'missing v0.37 spec'
-pass 'v0.37 spec exists'
-[ -f docs/milestones/v0.37.0-test-plan.md ] || fail 'missing v0.37 test plan'
-pass 'v0.37 test plan exists'
-for needle in 'flat row' 'row arrays' 'same-schema' 'push' 'field access' 'sort_by' 'VM/Bash parity' 'standalone Bash' 'nested' 'row-array parameters'; do
-  assert_contains docs/milestones/v0.37.0-spec.md "$needle" "v0.37 spec mentions $needle"
-done
-assert_contains docs/roadmap.md 'v0.37.0 — Lightweight Rows and In-Memory Data Processing' 'roadmap lists v0.37 rows'
-assert_contains docs/status.md 'lightweight rows and row arrays' 'status docs mention rows'
-assert_contains docs/status.md 'small in-memory analyzer/reporting datasets' 'status docs document row sort scale contract'
-assert_contains docs/language.ds 'rows.sort_by' 'language docs include row-array sort example'
-assert_contains docs/runtime.md 'row-array' 'runtime docs mention row-array representation'
-assert_contains docs/runtime.md 'small-data oriented' 'runtime docs document row sort performance contract'
-assert_contains README.md 'lightweight rows' 'README mentions v0.37 rows'
 assert_contains Makefile '0-37' 'Makefile wires v0.37 suite'
 
 scope_classes=$(write_fixture scope_classes <<'DS'

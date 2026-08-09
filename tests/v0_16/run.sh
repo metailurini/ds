@@ -104,21 +104,6 @@ hm_calls="$(grep -R --include='*.c' --include='*.h' -n '\bhm_[A-Za-z0-9_]*[[:spa
 pass 'raw hashmap calls stay inside runtime bridge/implementation'
 assert_not_contains src/cli_program.c '#include "../include/ds.h"' 'new CLI source does not reach through public umbrella path'
 
-# Status/documentation checks.
-[ -f docs/status.md ] || fail 'docs/status.md exists'
-pass 'docs/status.md exists'
-for phrase in \
-  'tokens' 'ast' 'check' 'fmt' 'hir' 'bytecode' 'run' 'test' 'direct script execution' 'emit bash' \
-  'standalone Bash' 'Test-only syntax' 'Comment-preserving formatting remains deferred' \
-  'while' 'break' 'continue' 'case' 'function return values' 'string methods' \
-  'regex' 'membership' 'environment append/prepend shorthand' 'recursive `**`' 'map iteration' 'nested collections' 'v0.17.0'; do
-  assert_contains docs/status.md "$phrase" "status documents $phrase"
-done
-assert_contains docs/architecture.md '`tokens` and `ast` are root-file frontend/debug views' 'architecture documents root-file command boundary'
-assert_contains docs/runtime.md 'Generated Bash must remain standalone' 'runtime docs document standalone Bash'
-assert_contains docs/language.ds '[deferred]' 'language catalog marks deferred syntax'
-assert_contains README.md 'keeps comment-preserving formatting deferred' 'README documents formatter comment deferral'
-
 # Help and usage remain current and do not execute scripts on usage errors.
 run_ok help_top "$DS" --help
 assert_contains "$TMP/help_top.out" 'ds v0.38.0' 'help reports current version'

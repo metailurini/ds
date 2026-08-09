@@ -167,26 +167,6 @@ assert_run_rejected_without_marker() {
   pass "$name did not create marker $marker"
 }
 
-# 1. Planning, docs, and scope guard.
-[ -f docs/milestones/v0.36.0-spec.md ] || fail 'missing v0.36 spec'
-pass 'v0.36 spec exists'
-[ -f docs/milestones/v0.36.0-test-plan.md ] || fail 'missing v0.36 test plan'
-pass 'v0.36 test plan exists'
-assert_contains docs/milestones/v0.36.0-spec.md 'usage-based scalar kind inference' 'v0.36 spec chooses usage-based scalar inference'
-assert_contains docs/milestones/v0.36.0-spec.md 'does **not** add public typed-parameter syntax' 'v0.36 spec rejects public typed params'
-assert_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap lists v0.34 DX start'
-assert_contains docs/roadmap.md 'v0.35.0 — Core String Parsing Helpers' 'roadmap lists v0.35 string helpers'
-assert_contains docs/roadmap.md 'v0.36.0 — Function Parameter Kind Inference' 'roadmap lists v0.36 inference'
-assert_contains docs/roadmap.md 'v0.37.0 — Lightweight Rows and In-Memory Data Processing' 'roadmap lists v0.37 rows'
-assert_contains docs/roadmap.md 'v0.38.0 — Recursive Walk Helpers and DX Integration Cleanup' 'roadmap lists v0.38 cleanup'
-assert_contains docs/language.ds 'required parameter scalar inference' 'language docs mention required parameter inference'
-assert_contains docs/language.ds 'typed parameters remain planned syntax' 'language docs keep typed params planned'
-assert_contains docs/status.md 'infers `string`, `int`, and `bool`' 'status docs mention inferred scalar kinds'
-assert_contains docs/runtime.md 'required parameters whose local usage infers `string`, `int`, or `bool`' 'runtime docs mention inferred parameter metadata'
-assert_contains docs/diagnostics.md 'wrong-kind call arguments' 'diagnostics docs mention wrong-kind calls'
-assert_contains docs/dx-issues.md 'addressed in v0.36.0 implementation' 'DX issues mark dummy-default issue addressed'
-assert_contains docs/parity-contracts.md 'inferred/defaulted scalar parameter' 'parity docs mention inferred/defaulted parameter metadata'
-
 typed_param=$(write_fixture scope_typed_param <<'DS'
 fn greet(name: string) {
   echo "{name}"

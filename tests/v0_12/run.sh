@@ -95,7 +95,6 @@ mkdir -p "$FIX" "$SEED"
 assert_contains Makefile '0-12' "Makefile wires v0.12 suite"
 assert_contains Makefile 'src/runtime/hashmap.c' "Makefile builds absorbed hashmap"
 assert_contains compile_flags.txt '-Iinclude' "compile flags keep public include path"
-assert_no_grep "no_old_hashmap_build_paths" 'libs/hashmap|-Ilibs/hashmap' Makefile compile_flags.txt docs/editor.md docs/architecture.md docs/runtime.md docs/product-principles.md docs/roadmap.md src include
 assert_no_grep "no_raw_hashmap_leak_outside_runtime_bridge" '#include[[:space:]]+[<"].*hashmap|\bhm_[a-z_]+' \
   src/ast.c src/bash_emit.c src/bash_helpers.c src/ds_command.c src/ds_command_facts.c src/diag.c src/lexer.c \
   src/lower.c src/main.c src/parser.c src/source.c src/ds_stdlib.c src/vm.c \

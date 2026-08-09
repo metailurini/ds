@@ -221,26 +221,8 @@ FIX="$TMP/fixtures with spaces"
 mkdir -p "$FIX"
 
 # Build wiring and docs for the staged v0.22 slices completed so far.
-[ -f docs/milestones/v0.22.0-spec.md ] || fail 'v0.22 spec exists'
-pass 'v0.22 spec exists'
-[ -f docs/milestones/v0.22.0-test-plan.md ] || fail 'v0.22 test plan exists'
-pass 'v0.22 test plan exists'
 assert_contains Makefile '0-22' 'TEST_VERSIONS contains v0.22'
 assert_matches Makefile '^TEST_VERSIONS := .*0-21 0-22($| )' 'v0.22 follows v0.21 in TEST_VERSIONS'
-assert_contains README.md 'v0.22.0-spec.md' 'README important files mention v0.22 spec'
-assert_contains README.md 'v0.22.0-test-plan.md' 'README important files mention v0.22 test plan'
-assert_contains docs/roadmap.md 'v0.22.1 — Cleanup Core Test Stabilization' 'roadmap names v0.22.1 slice'
-assert_contains docs/roadmap.md 'No real `SIGINT`/`SIGTERM` delivery tests' 'roadmap excludes real signals for v0.22.1'
-assert_contains docs/roadmap.md 'v0.22.2 — Signal Syntax and Diagnostic Surface' 'roadmap names v0.22.2 slice'
-assert_contains docs/roadmap.md 'No claim that foreground child commands are interrupted reliably yet' 'roadmap bounds v0.22.2 runtime claims'
-assert_contains docs/runtime.md 'Handler registration is process-scope' 'runtime docs document process-scope handlers'
-assert_contains docs/runtime.md 'Cleanup runs for normal completion' 'runtime docs document cleanup triggers'
-assert_contains docs/runtime.md 'Supported signal names are the string literals `"EXIT"`, `"INT"`, and `"TERM"`' 'runtime docs list supported signal literals'
-assert_contains docs/language.ds 'defer {' 'language catalog documents defer'
-assert_contains docs/language.ds 'trap "EXIT"' 'language catalog documents trap EXIT'
-assert_contains docs/language.ds 'trap "INT"' 'language catalog documents trap INT'
-assert_contains docs/language.ds 'trap "TERM"' 'language catalog documents trap TERM'
-assert_contains docs/language.ds 'function-local variables' 'language catalog documents local capture rejection'
 
 # Syntax shape and formatter checks without exercising real OS signals.
 write_fixture "$FIX/shape.ds" <<'DS'
@@ -368,20 +350,6 @@ assert_not_matches "$TMP/signal_shape.sh" '(^|[^A-Za-z0-9_./-])ds([[:space:]]|$)
 # v0.22.3 deterministic signal harness. This slice adds the reusable harness
 # and only the smallest direct-command TERM fixture for each backend. Broader
 # INT/TERM matrices, pipelines, and process-tree semantics are later slices.
-assert_contains docs/roadmap.md 'v0.22.3 — Deterministic Signal Harness' 'roadmap names v0.22.3 slice'
-assert_contains docs/roadmap.md 'signal the process group' 'roadmap documents process-group signal harnessing'
-assert_contains docs/roadmap.md 'v0.22.4 — Foreground Direct-Command Signal Runtime' 'roadmap names v0.22.4 slice'
-assert_contains docs/roadmap.md 'Preserve conventional final statuses: `130` for `INT`, `143` for `TERM`' 'roadmap documents direct-command signal statuses'
-assert_contains docs/roadmap.md 'v0.22.5 — Foreground Pipeline Signal Runtime' 'roadmap names v0.22.5 slice'
-assert_contains docs/roadmap.md 'Ensure the signal harness does not hang when pipeline children hold inherited' 'roadmap documents pipeline signal harness boundary'
-assert_contains docs/roadmap.md 'v0.22.6 — Handler Context and Final v0.22 Documentation' 'roadmap names v0.22.6 slice'
-assert_contains docs/runtime.md 'Handler context values such as a `$LINENO`-equivalent are explicitly deferred' 'runtime docs defer handler context'
-assert_contains docs/status.md '`v0.22.6` finalizes the v0.22 documentation contract' 'status documents v0.22.6 completion'
-assert_contains docs/status.md 'handler context values such as line numbers remain deferred' 'status documents deferred handler context'
-assert_contains docs/language.ds '$LINENO`-equivalent are not available yet' 'language catalog defers handler context'
-assert_contains docs/milestones/v0.22.6-completion.md 'Landed across v0.22.0 through v0.22.6' 'completion note summarizes landed v0.22 slices'
-assert_contains docs/milestones/v0.22.6-completion.md 'Handler context values such as a `$LINENO`-equivalent' 'completion note defers handler context'
-assert_contains docs/milestones/v0.22.0-spec.md 'Tests added: `tests/v0_22/run.sh`' 'v0.22 spec completion review records tests'
 
 write_fixture "$FIX/term_direct_command.ds" <<'DS'
 trap "TERM" {

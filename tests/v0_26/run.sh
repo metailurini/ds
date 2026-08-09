@@ -875,16 +875,5 @@ assert_parity import_all_structured "$FIX/import_all/main.ds" 0 $'web\napi:8080\
 pass 'import_all value helper emitted once'
 
 # 8. Docs and examples checks.
-[ -f docs/milestones/v0.26.0-spec.md ] || fail 'missing v0.26 spec'
-pass 'v0.26 spec exists'
-[ -f docs/milestones/v0.26.0-test-plan.md ] || fail 'missing v0.26 test plan'
-pass 'v0.26 test plan exists'
-assert_contains docs/roadmap.md 'v0.26.0 — Flat Collection and Command-Result Function Returns' 'roadmap lists v0.26'
-assert_contains docs/status.md 'scalar-array returns' 'status documents array returns'
-assert_contains docs/status.md 'command-result returns' 'status documents command-result returns'
-assert_contains docs/runtime.md 'private function-value boundary' 'runtime documents structured returns'
-assert_contains docs/language.ds 'Nested collections' 'language marks nested collections deferred'
-assert_contains docs/language.ds 'function-call interpolation is supported in expression-backed' 'language documents function interpolation support'
-assert_contains docs/status.md 'Generated Bash must not call' 'status documents standalone Bash'
 
 printf 'v0.26.0 tests passed (%d assertions)\n' "$pass_count"

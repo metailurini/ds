@@ -151,18 +151,11 @@ for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
-# Documentation and status checks.
-assert_contains docs/milestones/v0.19.0-spec.md 'Implementation and tests complete' 'v0.19 spec records test completion'
-assert_contains docs/milestones/v0.19.0-test-plan.md 'Implemented' 'v0.19 test plan status records implementation'
-assert_contains docs/status.md 'v0.21.0' 'status identifies v0.19 state'
-assert_contains docs/status.md 'ASCII string methods' 'status documents string methods'
-assert_contains docs/status.md 'formatted string interpolation' 'status documents formatted interpolation'
-assert_contains README.md 'v0.19.0` implementation and tests are complete' 'README marks v0.19 tests complete'
-assert_contains CHANGELOG.md 'Tests for v0.19.0 now cover' 'changelog records v0.19 tests'
-assert_contains docs/language.ds '# 27. String methods [v0.19.0] [implemented]' 'language marks string methods implemented'
-assert_contains docs/language.ds '# 28. String interpolation format specifiers [v0.19.0] [implemented]' 'language marks interpolation formats implemented'
-assert_contains docs/language.ds 'Regex must be carefully specified' 'language keeps regex deferred'
-assert_contains docs/language.ds 'Full printf format strings are not a goal' 'language keeps full format grammar deferred'
+assert_contains src/ds_interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
+assert_contains src/lower_command.c 'ds_interp_parse_format_spec_for_kind' 'lowerer consumes shared interpolation format contract'
+assert_contains src/vm_process.c 'ds_interp_parse_format_spec_for_kind' 'VM consumes shared interpolation format contract'
+assert_contains src/bash_quote.c 'ds_interp_parse_format_spec' 'Bash consumes shared interpolation format contract'
+
 assert_contains examples/strings.ds '.trim().lower().replace' 'strings example covers method chain'
 assert_contains examples/strings.ds '.split' 'strings example covers split'
 assert_contains examples/strings.ds ':05d' 'strings example covers integer format'

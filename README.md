@@ -1,30 +1,36 @@
 # ds
 
-`ds` is an experimental shell-native scripting language written in C. It keeps
-commands, pipes, environment access, and standalone Bash compatibility, but gives
-script logic a simpler language model than raw Bash.
+`ds` is an experimental shell-native scripting language written in C. It is
+designed for scripts that still need to feel like shell programs, but should be
+easier to read, validate, test, and refactor than large Bash scripts.
 
-The project is pre-`1.0.0`. The current implementation is the `v0.38.0` scoped
-surface: direct VM execution, checking/formatting/debug views, tests, and
-standalone Bash emission for the supported language subset.
+The project is pre-1.0. The current implementation reports itself as `v0.38.0`.
+The supported surface can run directly in the VM or emit standalone Bash for
+the same supported language subset.
 
-## Why this exists
+## What ds is for
 
-Bash is useful, but large scripts become fragile because quoting, arrays,
-conditionals, redirection, errors, and refactors are hard to reason about. `ds`
-tries to make those parts boring while still feeling like a shell.
+Use `ds` when a script needs normal shell operations such as commands, pipes,
+redirections, environment access, and filesystem helpers, but also benefits
+from clearer control flow and structured values.
 
-## Tiny example
+The project aims to keep these properties:
+
+- shell commands remain first-class language statements;
+- common scripting mistakes are rejected before execution when practical;
+- the VM and Bash emitter consume the same lowered program model;
+- emitted Bash is standalone and does not require the `ds` binary at runtime;
+- language and runtime behavior stay intentionally small before 1.0.
+
+## Example
 
 ```ds
 script {
   arg app: string
   option target: string = "staging"
-  flag force: bool = false
 }
 
 cmd.require("git")
-cmd.require("npm")
 
 if !file.exists("package.json") {
   fail "package.json not found"
@@ -42,117 +48,111 @@ if target == "production" {
 ./deploy.sh $app $target
 ```
 
-Emit standalone Bash:
+Run it directly:
+
+```sh
+./ds deploy.ds api --target production
+```
+
+Or emit standalone Bash:
 
 ```sh
 ./ds emit bash deploy.ds -o deploy.sh
-bash deploy.sh api --target production --force
+bash deploy.sh api --target production
 ```
 
-## What works today
+## Build and test
 
-The supported production surface includes:
-
-- `ds <file.ds>`, `ds run`, `ds check`, `ds fmt`, `ds test`, debug views, and
-  `ds emit bash`;
-- strings, integers, booleans, interpolation, `if`/`else`, `while`, `case`,
-  `break`, `continue`, and integer arithmetic;
-- shell commands, readable redirections, plain/captured pipelines, and captured
-  command-result fields, e.g. `let result = run npm test`; `&> "build.log"`
-  documents readable redirection;
-- script args/options/flags and local `import "./lib.ds"` composition;
-- top-level functions with defaults, statement calls, scalar returns, arrays,
-  maps, array/map literals, lightweight rows, and row arrays;
-- shell-oriented helpers for files, dirs, paths, commands, env, globs, recursive
-  file walks, lines, strings, and regex;
-- VM/Bash parity for the supported subset: emitted Bash should be standalone and
-  should not require the `ds` binary at runtime.
-
-Known `v0.2.0` Bash-emission limitation: the Bash emitter uses Bash `[[ ... ]]`
-string-style comparison semantics and does not perform type-aware numeric dispatch
-yet. `<`, `<=`, `>`, and `>=` are emitted with Bash-compatible string comparison
-shapes rather than selecting arithmetic comparison from tracked `ds` operand types.
-
-Current status: `v0.9.0` implementation and tests are complete for the scoped
-user-defined functions pass; `v0.10.0` implementation and tests are complete for
-the scoped arrays, maps, and array-loop pass; `v0.17.0` implementation and tests are complete for scoped control flow; `v0.18.0` implementation and tests are
-complete for scoped linear pipelines; `v0.19.0` implementation and tests are complete for scoped string methods, interpolation formatting, and triple-quoted strings; `v0.20.0` implementation and tests are complete for the scoped Wave 2
-stabilization cleanup; `v0.21.0` implementation and tests are complete for scoped
-scalar function values and integer arithmetic; `v0.22.0` implementation is
-complete for the initial scoped process cleanup and signal-handler pass. Later
-milestone slices through `v0.38.0` are complete for their scoped surfaces (regex,
-glob, collection mutation, lightweight rows, recursive file walks, and more).
-The `v0.5.0` script argument contract is complete. The current implementation is
-`v0.38.0`. The formatter keeps comment-preserving formatting deferred rather than
-rewriting comment-bearing files with dropped trivia.
-
-For exact guarantees, deferred items, and edge-case behavior, read
-[`docs/status.md`](docs/status.md).
-
-## Quick start
+The project builds with `make` and a C compiler:
 
 ```sh
 make
+make test
+```
+
+For a quick smoke check:
+
+```sh
 ./ds examples/basic.ds
-./ds run examples/basic.ds
 ./ds check examples/basic.ds
 ./ds emit bash examples/basic.ds -o /tmp/basic.sh
 bash -n /tmp/basic.sh
 bash /tmp/basic.sh
-make test-v0-38
 ```
 
-Useful commands:
+The Makefile also exposes per-milestone regression targets such as
+`make test-v0-38`.
 
-```sh
-./ds fmt --check examples/args.ds
-./ds hir examples/basic.ds
-./ds tokens examples/basic.ds
-./ds ast examples/basic.ds
-./ds bytecode examples/basic.ds
-./ds run --trace-cmd examples/basic.ds
-DS_TRACE_CMD=1 bash /tmp/basic.sh
+## CLI
+
+The current public command surface includes:
+
+```text
+ds <file.ds> [args...]
+ds run [--trace-cmd] [--trace-vm] <file.ds> [args...]
+ds test <file.ds>
+ds check <file.ds> [--warnings-as-errors] [--no-warnings]
+ds fmt <file.ds> [--check] [--write|-w]
+ds tokens <file.ds>
+ds ast <file.ds>
+ds hir <file.ds>
+ds bytecode <file.ds>
+ds emit bash <file.ds> -o <file.sh>
 ```
 
-Run everything:
+`tokens`, `ast`, `hir`, and `bytecode` are development and debugging views.
+For exact command behavior, supported syntax, deferred features, and edge cases,
+use the current-status documentation rather than milestone history.
 
-```sh
-make test
-```
+## Supported language shape
 
-## Repository map
+The current implementation includes shell commands and pipelines, command
+results, readable redirections, script arguments, local imports, functions,
+control flow, arrays, maps, lightweight rows, integer arithmetic, filesystem and
+path helpers, environment helpers, string helpers, globs, recursive walks,
+ranges, regex matching and replacement, cleanup handlers, and a test runner.
 
-- `src/` — lexer/parser, lowering, checker, formatter, VM, stdlib, Bash emitter,
-  and CLI implementation.
-- `include/` — public internal declarations.
-- `examples/` — small scripts for manual smoke checks.
-- `tests/` — milestone regression and parity suites.
-- `docs/` — language catalog, status, architecture, runtime notes, roadmap,
-  milestones, release checklist, and technical-debt DB.
+Support is deliberately scoped. Some syntax in the language catalog is planned
+or deferred rather than implemented. The formatter also rejects comment-bearing
+files instead of silently dropping comments.
 
-## Important docs
+See [`docs/status.md`](docs/status.md) for the authoritative support matrix.
 
-- [`docs/status.md`](docs/status.md) — current support matrix.
-- [`docs/language.ds`](docs/language.ds) — full planned syntax catalog.
-- [`docs/roadmap.md`](docs/roadmap.md) — milestone direction.
-- [`docs/architecture.md`](docs/architecture.md) — implementation boundaries.
-- [`docs/runtime.md`](docs/runtime.md) — runtime behavior and parity contracts.
-- [`docs/version-workflow.md`](docs/version-workflow.md) — milestone process.
-- [`docs/technical-debt.md`](docs/technical-debt.md) — known technical debt.
-- [`docs/milestones/v0.22.0-spec.md`](docs/milestones/v0.22.0-spec.md) and
-  [`docs/milestones/v0.22.0-test-plan.md`](docs/milestones/v0.22.0-test-plan.md) — v0.22 process cleanup/signal contract.
-- [`docs/milestones/v0.23.0-spec.md`](docs/milestones/v0.23.0-spec.md) and
-  [`docs/milestones/v0.23.0-test-plan.md`](docs/milestones/v0.23.0-test-plan.md) — v0.23 membership/range/regex contract.
-- [`docs/milestones/v0.24.0-spec.md`](docs/milestones/v0.24.0-spec.md) and
-  [`docs/milestones/v0.24.0-test-plan.md`](docs/milestones/v0.24.0-test-plan.md) — v0.24 pre-1.0 hardening contract.
+## Repository layout
 
-## Development model
+- `src/` contains the lexer, parser, lowering, checker, formatter, VM, Bash
+  emitter, standard library, and CLI implementation.
+- `include/` contains shared declarations used across implementation phases.
+- `examples/` contains small scripts for manual and regression checks.
+- `tests/` contains executable behavior and VM/Bash parity regressions.
+- `docs/` contains current language, runtime, architecture, diagnostics, and
+  contributor references, plus historical milestone records.
 
-Milestones are pre-`1.0.0` slices:
+## Documentation
 
-- `0.x.0` is a planned feature, integration, or cleanup pass.
-- `0.x.y` is a focused fix/test/doc pass for `0.x.0`.
-- `1.0.0` is the first stable release boundary.
+Start with these documents:
 
-Every completed milestone should leave specs, tests, docs, VM behavior, and Bash
-emission aligned for the scoped language surface.
+- [`docs/status.md`](docs/status.md): what works now and what is deferred.
+- [`docs/language.ds`](docs/language.ds): syntax catalog and language direction.
+- [`docs/architecture.md`](docs/architecture.md): compiler and backend boundaries.
+- [`docs/runtime.md`](docs/runtime.md): runtime representation and behavior.
+- [`docs/diagnostics.md`](docs/diagnostics.md): diagnostic ownership and rules.
+- [`docs/source-map.md`](docs/source-map.md): source-file responsibilities.
+- [`docs/concept-map.md`](docs/concept-map.md): cross-cutting concept ownership.
+- [`docs/roadmap.md`](docs/roadmap.md): future direction and release criteria.
+
+Files under `docs/milestones/` are historical implementation records. Runtime
+tests do not treat documentation wording as an executable contract.
+
+## Contributing
+
+Keep behavior changes aligned across lowering, VM execution, Bash emission, and
+tests. Prefer putting implementation logic in `.c` files and keeping headers
+focused on declarations and small representation-level definitions.
+
+Before adding a new helper or wrapper, check whether the existing phase owner
+already provides the needed operation. Prefer one clear reusable implementation
+over layers of pass-through wrappers.
+
+Run `make check` and the relevant regression suites before considering a change
+complete.

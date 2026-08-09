@@ -474,9 +474,6 @@ unset env.BAD-NAME
 DS
 assert_reject bad_env_unset_hyphen "$TMP/fixtures/bad_env_unset_hyphen.ds" 'invalid environment variable name `BAD-NAME`'
 
-assert_contains "status documents command interpolation" docs/status.md 'direct scalar value-returning function calls in quoted command'
-assert_contains "runtime documents pre-materialization" docs/runtime.md 'pre-materializing each interpolated call'
-assert_contains "language documents command interpolation" docs/language.ds 'quoted command words'
 assert_contains "Makefile includes v0.27" Makefile '0-27'
 
 printf 'v0.27.0 focused tests passed (%d assertions)\n' "$N"

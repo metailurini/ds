@@ -230,10 +230,4 @@ assert_contains "$TMP/missing_direct_path.err" 'failed to open source file' "dir
 run_fail no_contract_extra "$DS" run examples/basic.ds extra
 assert_contains "$TMP/no_contract_extra.err" 'unexpected script arguments' "no-contract extra args rejected"
 
-# Docs/status checks relevant to v0.5.
-assert_contains "$ROOT/README.md" "v0.5.0" "README mentions v0.5.0"
-assert_contains "$ROOT/docs/language.ds" "script" "language doc mentions script"
-assert_contains "$ROOT/docs/milestones/v0.5.0-test-plan.md" "First-Class CLI Args" "v0.5 test plan title present"
-assert_not_contains "$ROOT/README.md" "arrays are implemented" "README does not claim future arrays implemented"
-
 echo "v0.5.0 tests passed: $pass_count checks"

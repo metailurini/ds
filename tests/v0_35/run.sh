@@ -226,27 +226,6 @@ assert_helper_def_count() {
 assert_helper_present_once() { assert_helper_def_count "$1" "$2" 1 "$3"; }
 assert_helper_absent() { assert_helper_def_count "$1" "$2" 0 "$3"; }
 
-# 1. Planning, docs, and scope guard.
-[ -f docs/milestones/v0.35.0-spec.md ] || fail 'missing v0.35 spec'
-pass 'v0.35 spec exists'
-[ -f docs/milestones/v0.35.0-test-plan.md ] || fail 'missing v0.35 test plan'
-pass 'v0.35 test plan exists'
-for helper in len index_of last_index_of count char_at slice; do
-  assert_contains docs/milestones/v0.35.0-spec.md "$helper" "v0.35 spec names $helper"
-done
-assert_contains docs/roadmap.md 'v0.34.0 — Text Literal and Broken-Pipe DX' 'roadmap keeps v0.34 before v0.35'
-assert_contains docs/roadmap.md 'v0.35.0 — Core String Parsing Helpers' 'roadmap lists v0.35 string helpers'
-assert_contains docs/roadmap.md 'v0.36.0 — Function Parameter Kind Inference' 'roadmap keeps v0.36 after v0.35'
-assert_contains docs/roadmap.md 'v0.37.0 — Lightweight Rows and In-Memory Data Processing' 'roadmap keeps v0.37 after v0.36'
-assert_contains docs/roadmap.md 'v0.38.0 — Recursive Walk Helpers and DX Integration Cleanup' 'roadmap keeps v0.38 after v0.37'
-assert_contains docs/language.ds '.index_of()' 'language docs list index_of'
-assert_contains docs/language.ds 'byte-oriented' 'language docs mention byte-oriented helpers'
-assert_contains docs/status.md '.slice(start, end)' 'status docs list slice helper'
-assert_contains docs/runtime.md 'byte-oriented' 'runtime docs mention byte-oriented helper behavior'
-assert_contains docs/diagnostics.md 'char_at' 'diagnostics docs mention char_at'
-assert_contains docs/dx-issues.md '`v0.35.0` adds the core byte-oriented helpers' 'DX issues mark v0.35 helper issue addressed'
-assert_contains docs/parity-contracts.md 'Command words and interpolation' 'parity docs retain command interpolation contract'
-
 regex_split=$(write_fixture scope_regex_split <<'DS'
 let xs = regex.split("a,b", ",")
 DS

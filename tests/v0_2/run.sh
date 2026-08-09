@@ -268,8 +268,6 @@ assert_contains "$TMP/comparisons.sh" ' > ' "comparison emits >"
 assert_contains "$TMP/comparisons.sh" ' < ' "comparison emits <"
 assert_contains "$TMP/comparisons.sh" '! [[ "$__ds_b" < "$__ds_a" ]]' "comparison emits Bash-compatible >= shape"
 assert_contains "$TMP/comparisons.sh" '! [[ "$__ds_a" > "$__ds_b" ]]' "comparison emits Bash-compatible <= shape"
-assert_contains "$ROOT/docs/milestones/v0.2.0-spec.md" 'does not perform type-aware numeric dispatch yet' "comparison limitation documented in spec"
-assert_contains "$ROOT/README.md" 'Known `v0.2.0` Bash-emission limitation' "comparison limitation documented in README"
 run_ok bash_syntax_comparisons bash -n "$TMP/comparisons.sh"
 
 # Diagnostics for unsupported/unsafe emission cases and CLI behavior.
@@ -409,16 +407,6 @@ cat >"$TMP/array_syntax.expected" <<'EOF_EXPECT'
 1
 EOF_EXPECT
 assert_same "$TMP/array_syntax.expected" "$TMP/array_syntax_bash.out" "array syntax is supported after v0.10"
-
-test -f "$ROOT/docs/language.ds" || fail "docs/language.ds should exist"
-pass "syntax catalog exists"
-
-# Docs should reflect current project status while retaining the v0.2.0 records.
-assert_contains "$ROOT/README.md" 'Current status:' "README has current status"
-assert_contains "$ROOT/README.md" 'v0.9.0` implementation and tests are complete' "README status is current"
-assert_contains "$ROOT/docs/milestones/v0.2.0-spec.md" 'Implementation and tests complete' "spec status complete"
-assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" 'Command failure' "test plan command failure case retained"
-assert_contains "$ROOT/docs/milestones/v0.2.0-test-plan.md" '- [x] Edge cases are covered.' "test plan checklist marks edge cases covered"
 
 make -C "$ROOT" check >/dev/null
 pass "make check passes"

@@ -260,14 +260,6 @@ capture_status adjacent_redirect bash -c "cd '$TMP/adjacent' && '$DS' run '$TMP/
 assert_status adjacent_redirect 0
 assert_same_text 'ok' "$TMP/adjacent/all.txt" "adjacent redirection operator works"
 
-# Static architecture/documentation/status checks.
-assert_contains "$ROOT/README.md" 'let result = run' "README documents command-result syntax"
-assert_contains "$ROOT/README.md" '&> "build.log"' "README documents readable redirection"
-assert_contains "$ROOT/docs/language.ds" 'let result = run npm test' "language catalog documents run"
-assert_contains "$ROOT/docs/language.ds" 'npm run build &> "build.log"' "language catalog documents redirection"
-assert_contains "$ROOT/docs/architecture.md" 'command-result HIR' "architecture documents command-result boundary"
-assert_contains "$ROOT/docs/runtime.md" 'Command-result ownership' "runtime documents command-result ownership"
-assert_contains "$ROOT/CHANGELOG.md" 'Added `tests/v0_7/run.sh`' "changelog records v0.7 tests"
 [ -f "$ROOT/examples/command-result.ds" ] || fail "command-result example exists"
 [ -f "$ROOT/examples/redirection.ds" ] || fail "redirection example exists"
 pass "v0.7 examples exist"
