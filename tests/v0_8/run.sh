@@ -209,6 +209,9 @@ assert_vm_bash_parity v0_8_import_capture_again "$FIX/parity/import_capture.ds" 
 assert_vm_bash_parity v0_8_script_arg_metachar "$FIX/parity/script_args_capture.ds" 0 "" 'spaces $HOME `echo bad` ; {x}'
 run_ok script_help_unchanged "$DS" run "$FIX/parity/script_args_capture.ds" --help
 assert_contains "$TMP/script_help_unchanged.out" 'Usage:' "script help remains available"
+run_ok script_help_emit "$DS" emit bash "$FIX/parity/script_args_capture.ds" -o "$TMP/script_help.sh"
+run_ok script_help_bash bash "$TMP/script_help.sh" --help
+assert_same "$TMP/script_help_unchanged.out" "$TMP/script_help_bash.out" 'VM and emitted Bash share script help behavior'
 run_fail imported_script_rejected "$DS" check tests/v0_6/fixtures/imports_errors/imported_script_main.ds
 assert_contains "$TMP/imported_script_rejected.err" 'imported files cannot declare `script` blocks' "imported script block remains rejected"
 run_fail import_cycle_still_rejected "$DS" check tests/v0_6/fixtures/imports_errors/cycle_a.ds
@@ -249,10 +252,7 @@ assert_contains "$ROOT/src/lower_expr.c" "lower_validate_portable_collection_rec
 assert_contains "$ROOT/src/lower_stmt.c" "lower_collection_for_iterable_is_portable" "statement lowering consumes array iterable policy"
 assert_contains "$ROOT/src/ast.c" "ds_script_type_name" "script type labels have one AST-owned helper"
 assert_contains "$ROOT/src/hir.c" "ds_lower_value_kind_name" "lowered value-kind labels have one HIR-owned helper"
-assert_contains "$ROOT/src/hir.c" "ds_lower_program_script_help" "script help rendering has one lowered-program helper"
 assert_contains "$ROOT/src/hir.c" "ds_script_type_name" "shared script help consumes shared script type labels"
-assert_contains "$ROOT/src/bash_emit.c" "ds_lower_program_script_help" "Bash script help consumes shared script help rendering"
-assert_contains "$ROOT/src/vm_args.c" "ds_lower_program_script_help" "VM script help consumes shared script help rendering"
 assert_contains "$ROOT/src/bash_structured.c" "ds_lower_value_kind_name" "Bash structured ABI consumes shared lowered kind labels"
 assert_contains "$ROOT/src/ds_checker.c" '#include "ds_checker.h"' "checker uses its narrow façade"
 assert_not_contains "$ROOT/src/ds_checker.c" '#include "backend.h"' "checker does not include broad backend façade"
