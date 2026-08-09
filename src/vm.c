@@ -811,13 +811,9 @@ cleanup_done:
     program_free(&p);
     return rc;
 }
-int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *lowered, int argc, char **argv, DsDiag *diag) {
-    DsVmOptions options = {0};
-    return ds_vm_run_program_args_options(source, lowered, argc, argv, diag, options);
-}
-
 int ds_vm_run_program(const DsSource *source, const DsLowerProgram *lowered, DsDiag *diag) {
-    return ds_vm_run_program_args(source, lowered, 0, NULL, diag);
+    DsVmOptions options = {0};
+    return ds_vm_run_program_args_options(source, lowered, 0, NULL, diag, options);
 }
 
 int ds_vm_run_test(const DsSource *source, const DsLowerProgram *lowered, const DsLowerTest *test, DsDiag *diag) {

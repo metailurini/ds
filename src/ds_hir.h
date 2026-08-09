@@ -128,8 +128,6 @@ typedef struct DsLowerStmt DsLowerStmt;
 
 typedef DsAssignOp DsLowerAssignOp;
 
-const char *ds_lower_assign_op_name(DsLowerAssignOp op);
-
 typedef DsCasePattern DsLowerCasePattern;
 typedef DsCasePatternVec DsLowerCasePatternVec;
 

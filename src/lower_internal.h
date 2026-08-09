@@ -102,7 +102,6 @@ const DsLowerRowField *row_schema_find(const DsLowerRowSchema *schema, DsStr nam
 bool row_schema_equal(const DsLowerRowSchema *a, const DsLowerRowSchema *b);
 bool lower_expr_row_schema(const DsLowerExpr *expr, const DsLowerRowSchema **schema_out);
 bool lower_expr_row_array_schema(const DsLowerExpr *expr, const DsLowerRowSchema **schema_out);
-bool lower_expr_is_row(const DsLowerExpr *expr);
 bool lower_map_expr_schema(Lower *lower, const DsLowerExpr *expr, DsLowerRowSchema *schema_out);
 /*
  * M3.4 command-word ownership boundary:

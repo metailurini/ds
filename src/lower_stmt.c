@@ -844,7 +844,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             }
             SymKind value_kind = SYM_UNKNOWN;
             out->as.push_stmt.value = lower_expr(lower, stmt->as.push_stmt.value, &value_kind);
-            if (value_kind == SYM_MAP && lower_expr_is_row(out->as.push_stmt.value)) {
+            if (value_kind == SYM_MAP && lower_expr_row_schema(out->as.push_stmt.value, NULL)) {
                 const DsLowerRowSchema *schema = NULL;
                 lower_expr_row_schema(out->as.push_stmt.value, &schema);
                 if (sym) {

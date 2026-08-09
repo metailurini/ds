@@ -2,10 +2,6 @@
 #include "ds_runtime.h"
 #include "ds_signal.h"
 
-const char *ds_lower_assign_op_name(DsLowerAssignOp op) {
-    return ds_assign_op_name(op);
-}
-
 static void print_span(FILE *out, DsSpan span) {
     const DsSource *source = span.source;
     fprintf(out, " @ %s:%d:%d", source && source->path ? source->path : "<source>", span.start.line, span.start.column);
@@ -214,7 +210,7 @@ static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level) {
             dump_expr(out, stmt->as.let_stmt.value, level + 1);
             break;
         case DS_LOWER_STMT_ASSIGN: {
-            const char *op = ds_lower_assign_op_name(stmt->as.assign_stmt.op);
+            const char *op = ds_assign_op_name(stmt->as.assign_stmt.op);
             fprintf(out, "Assign "); ds_fprint_str(out, stmt->as.assign_stmt.name); fprintf(out, " %s", op); print_span(out, stmt->span); fputc('\n', out);
             dump_expr(out, stmt->as.assign_stmt.value, level + 1);
             break;

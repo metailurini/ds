@@ -184,7 +184,3 @@ bool lower_expr_row_array_schema(const DsLowerExpr *expr, const DsLowerRowSchema
     }
     return false;
 }
-
-bool lower_expr_is_row(const DsLowerExpr *expr) {
-    return lower_expr_row_schema(expr, NULL);
-}

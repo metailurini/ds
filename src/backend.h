@@ -23,7 +23,6 @@ bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *program,
 
 bool ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *program, FILE *out, DsDiag *diag);
 int ds_vm_run_program(const DsSource *source, const DsLowerProgram *program, DsDiag *diag);
-int ds_vm_run_program_args(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag);
 int ds_vm_run_program_args_options(const DsSource *source, const DsLowerProgram *program, int argc, char **argv, DsDiag *diag, DsVmOptions options);
 int ds_vm_run_test(const DsSource *source, const DsLowerProgram *program, const DsLowerTest *test, DsDiag *diag);
 
