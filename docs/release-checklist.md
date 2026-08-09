@@ -1,9 +1,7 @@
 # 1.0.0 Release Checklist
 
-This checklist is the executable release boundary created by the `v0.24.0`
-pre-1.0 hardening pass and refreshed through the `v0.36.0` parameter-inference
-DX pass. It does not mark the project stable by itself; it lists
-what must be signed off before tagging `1.0.0`.
+This checklist defines what must be signed off before tagging `1.0.0`. It does
+not mark the project stable by itself.
 
 ## Required sign-offs
 
@@ -21,8 +19,9 @@ what must be signed off before tagging `1.0.0`.
   runs, emits Bash, passes `bash -n`, and matches VM/emitted-Bash output where
   deterministic; `examples/bad.ds` remains a clear diagnostic fixture.
 - [ ] **Docs:** README, status, architecture, runtime, roadmap, language catalog,
-  editor notes, changelog, and milestone docs describe the same supported,
-  test-only, deferred, rejected, and out-of-scope behavior.
+  editor notes, and changelog agree on current supported, test-only, deferred,
+  rejected, and out-of-scope behavior. Historical milestone docs remain records
+  of the behavior and decisions at their milestone.
 - [ ] **Diagnostics:** malformed supported constructs and common unsupported
   constructs fail before execution or partial emission with source locations and
   messages that name the rejected feature where practical.

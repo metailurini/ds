@@ -84,12 +84,11 @@ DsProcessResult   command execution result
 DsRegex           regex wrapper, later
 ```
 
-Not every type needs to exist in `v0.1.0`. This list defines the intended foundation.
+This list defines the runtime foundation.
 
 ## Current value-kind contract
 
-The v0.12.0 cleanup keeps the user-facing language surface unchanged, but makes
-the internal value model explicit. Lowering and runtime currently reason about
+The internal value model is explicit. Lowering and runtime currently reason about
 these kinds:
 
 ```txt
@@ -137,8 +136,8 @@ VM is split into focused private components: `src/vm_compile.c` for HIR to
 bytecode construction, `src/vm_dump.c` for bytecode/debug output,
 `src/vm_args.c` for script argument binding, `src/vm_scope.c` for scopes and
 function calls, `src/vm_process.c` for command interpolation/redirection and
-subprocess execution, `src/vm.c` for VM-backed test execution setup, and
-`src/vm.c` for the main interpreter loop and public VM entrypoints. This keeps
+subprocess execution, and `src/vm.c` for VM-backed test execution setup, the
+main interpreter loop, and public VM entrypoints. This keeps
 file/path/env/cmd/glob/lines runtime implementations and other VM subsystems
 separate while preserving the same spans, ownership rules, and fail-fast
 diagnostics.
@@ -160,8 +159,8 @@ String helpers are dependency-scanned by helper name. A script that only uses
 `__ds_string_len`, but does not emit unrelated string helpers such as
 `__ds_string_slice`, `__ds_string_char_at`, or `__ds_string_split`.
 
-`v0.13.0` adds debugging/tracing runtime surfaces without adding source-language
-syntax. The VM can trace command execution and instruction execution to stderr
+Debugging and tracing runtime surfaces do not add source-language syntax. The VM
+can trace command execution and instruction execution to stderr
 through `DsVmOptions`; traces are intentionally observational and must not change
 script stdout, exit status, captured-command behavior, or plain-command
 fail-fast semantics. The Bash backend emits small standalone `__ds_` debug
@@ -322,78 +321,16 @@ Questions every map API should answer:
 - Which allocator owns internal memory?
 
 
-## Implemented v0.3.0 runtime subset
+## Script argument binding
 
-`v0.3.0` adds the first concrete runtime pieces used by the direct VM path.
-They are intentionally small and internal-only:
+Lowering produces one script argument contract for `arg`, `option`, and `flag`
+declarations. The VM parses runtime argv from that contract, applies defaults,
+validates required positionals and typed values, and stores the resulting
+`DsValue`s in the root scope.
 
-- `DsString` owns a dynamic, NUL-terminated byte buffer while still tracking
-  explicit length. It supports construction from C strings or source ranges,
-  append-by-range, append-by-C-string, append-by-character, and explicit free.
-- `DsValue` is a tagged value for `null`, `bool`, `int`, and owned `string`.
-  String values copy or take ownership explicitly so VM values do not dangle
-  after source buffers are released.
-- `DsArray` is a minimal growable pointer vector used for runtime/compiler
-  lists in this milestone.
-- `DsMap` is the project-owned map wrapper used for VM variable storage. It
-  copies keys, owns stored `DsValue` values, and does not expose the private
-  raw hashmap API to the rest of the codebase.
-
-The VM stores variables in a small runtime scope stack. The root scope holds
-top-level declarations. Each lowered block pushes a child scope and pops it
-when the block exits, so branch-local variables remain usable inside their
-block but do not leak into later statements, outer scopes, or sibling blocks.
-Lowering remains conservative and rejects nested shadowing for now; sibling
-blocks may reuse the same branch-local name because their scopes are distinct.
-
-The initial VM truthiness rule is deliberately simple and mirrored by tests:
-`false`, `0`, `null`, and empty strings are falsey; `true`, non-zero integers,
-and non-empty strings are truthy. Comparisons render values to deterministic
-strings before comparing, matching the current Bash-emission limitation. A
-future semantic pass may replace this with type-aware numeric dispatch.
-
-## Implemented v0.4.0 ownership cleanup
-
-`v0.4.0` keeps the runtime behavior intentionally small, but makes the current
-ownership rules explicit enough for future features to reuse safely:
-
-- `DsString` owns its `data` buffer. `len` is the byte length excluding the
-  trailing NUL byte, and `cap` is the allocated capacity. `ds_string_free()` is
-  the only destructor for a live string buffer.
-- `ds_value_string_take()` transfers ownership of a `DsString` buffer into a
-  `DsValue` and reinitializes the source `DsString`, so there is exactly one
-  owner after the call.
-- `ds_value_copy()` deep-copies string values and trivially copies `null`,
-  `bool`, and `int` values. `ds_value_free()` is the single destructor for owned
-  value contents.
-- `DsArray` is a borrowed pointer vector. `ds_array_clear()` resets the logical
-  length without freeing pointed-to items, and `ds_array_free()` releases the
-  vector storage. Typed owning vectors should be introduced before storing owned
-  values in it.
-- `DsMap` copies keys and owns stored `DsValue` contents. Setting an existing
-  key frees the previous value before storing the replacement. `ds_map_clear()`
-  frees all keys and values while keeping capacity for reuse; `ds_map_free()`
-  clears and releases storage.
-
-The absorbed hashmap code is now used behind the `DsMap` runtime wrapper.
-Normal frontend, lowering, VM, and Bash-emitter code should still depend only on
-`DsMap` and its small API, not on the raw hashmap API directly. `src/runtime.c`
-is the bridge between `DsMap` ownership rules and the private implementation in
-`src/runtime/hashmap.c`.
-
-
-## Implemented v0.5.0 argv binding
-
-`v0.5.0` adds first-class script argument binding for the VM path. Lowering
-produces a script argument contract for `arg`, `option`, and `flag` declarations.
-Before executing bytecode, the VM parses runtime argv, applies defaults, validates
-required positionals and typed integer/bool values, and stores the resulting
-`DsValue`s in the root scope. Body statements then use those names like normal
-top-level variables.
-
-The emitted Bash path does not use the C runtime. It emits a standalone Bash argv
-parser from the same lowered contract and binds parsed values to the existing
-`__ds_` variable namespace before the emitted body.
+The emitted Bash path does not use the C runtime. It emits a standalone argv
+parser from the same lowered contract and binds values into the generated Bash
+runtime namespace before the emitted body.
 
 ## Hashmap absorption
 
@@ -598,7 +535,7 @@ if text matches /error|failed/i {
 }
 ```
 
-`v0.32.0` also adds runtime string pattern matching and the `regex.match` /
+Runtime string pattern matching also supports the `regex.match` /
 `regex.replace` helpers:
 
 ```ds
@@ -665,15 +602,15 @@ Diagnostics should be usable from:
 - process execution;
 - test runner.
 
-The v0.14.0 test runner uses the normal composed parse/lower pipeline and the VM backend. Test blocks are lowered as test metadata rather than production statements, so normal `ds run`, direct execution, and normal standalone Bash emission do not execute assertions or print test summaries. Inside `ds test`, `assert expr` uses the VM truthiness rules, `fail "message"` fails the active test, `exit 0` stops the active test as a pass, and `exit nonzero` fails the active test. Command output from tests streams normally before each `ok`/`fail` line; the runner does not capture or hide it in this milestone.
+The test runner uses the normal composed parse/lower pipeline and the VM backend. Test blocks are lowered as test metadata rather than production statements, so normal `ds run`, direct execution, and normal standalone Bash emission do not execute assertions or print test summaries. Inside `ds test`, `assert expr` uses the VM truthiness rules, `fail "message"` fails the active test, `exit 0` stops the active test as a pass, and `exit nonzero` fails the active test. Command output from tests streams normally before each `ok`/`fail` line; the runner does not capture or hide it.
 
-The v0.16.0 cleanup keeps test execution on the same composed CLI program
-boundary as `check`, `hir`, `bytecode`, `run`, direct execution, and
+Test execution uses the same composed CLI program boundary as `check`, `hir`,
+`bytecode`, `run`, direct execution, and
 `emit bash`. The boundary lives in `src/cli_program.c`; it owns import-aware
 source loading and lowering before the VM test runner receives a lowered
 program. Normal execution and emitted Bash continue to skip test metadata.
 
-The v0.17.0 control-flow implementation keeps VM and Bash behavior aligned for
+Control-flow execution keeps VM and Bash behavior aligned for
 scalar reassignment, `while`, lexical `break`/`continue`, and expression-style
 `case`. VM bytecode uses explicit jump and scoped-pop instructions so loop
 control exits only the active loop scopes. Case dispatch uses kind-aware exact
@@ -684,16 +621,15 @@ Bash glob patterns, with small sidecar type tags for emitted variables so Bash
 does not accidentally coerce unlike ds literal kinds. The same tags are also
 used when an emitted `if` or `while` condition is a scalar variable whose ds
 truthiness would otherwise differ from a raw shell string test.
-Selectors whose scalar kind is still unknown after lowering are rejected in this
-milestone. The v0.21.0 function-value work extends that metadata through scalar
-function returns and through explicit arguments validated against defaulted
-parameter kinds, so emitted Bash keeps kind-aware `case` parity for the supported
-function-call forms.
+Selectors whose scalar kind is still unknown after lowering are rejected. The
+same metadata flows through scalar function returns and through explicit
+arguments validated against defaulted parameter kinds, so emitted Bash keeps
+kind-aware `case` parity for the supported function-call forms.
 
-The v0.25.0 runtime value-return path transports scalar `string`, `int`, and
-`bool` results out of user functions. The v0.26.0 extension adds structured
-function returns for flat scalar arrays, flat scalar maps/objects, and
-command-result objects through the same private function-value boundary.
+The runtime value-return path transports scalar `string`, `int`, and `bool`
+results out of user functions. Structured function returns support flat scalar
+arrays, flat scalar maps/objects, and command-result objects through the same
+private function-value boundary.
 The structured function returns stay inside the flat scalar collection boundary. The
 flat scalar collection boundary is intentional: collection payloads may carry
 only scalar string/int/bool elements or values, not nested arrays/maps or
@@ -709,7 +645,7 @@ Bash copies both the associative-array payload and the per-key scalar kind
 sidecar used by field/index reads, so returned `false` and `0` values keep ds
 truthiness instead of becoming truthy shell strings.
 
-The v0.29.0 map-iteration path lowers `for key, value in map` to an explicit
+Map iteration lowers `for key, value in map` to an explicit
 two-name HIR loop. VM execution snapshots and sorts map keys before each loop;
 standalone Bash materializes the accepted map source into a private associative
 array and sorts the key list with `LC_ALL=C`. Both backends therefore expose the
@@ -755,9 +691,8 @@ are visible only to the lowered command/run operation: they are not added to the
 source symbol scope, they do not collide with user variables, and later source
 code cannot read them as normal variables.
 
-`v0.34.0` keeps that interpolation surface but adds one literal-brace spelling
-inside ordinary and triple-quoted strings: `{{` renders `{`, `}}` renders `}`,
-and `{expr}` continues to mean interpolation. Lowering rejects a lone `}` with a
+Ordinary and triple-quoted strings use `{{` for a literal `{`, `}}` for a
+literal `}`, and `{expr}` for interpolation. Lowering rejects a lone `}` with a
 source diagnostic that tells users to write `}}` for a literal close brace.
 Consequently `"{{name}}"` renders literal `{name}`, while `"{name}}}"` renders
 the interpolated `name` followed by a literal `}`. The VM string interpolator,
@@ -768,7 +703,11 @@ parity.
 
 ## Cleanup and signal runtime
 
-The v0.22.0 cleanup model is process-level and registration-based. Reaching a `defer` statement registers a stackable handler for a signal; plain `defer` is the same signal class as `defer on: "EXIT"`. Reaching a `trap` statement installs one replacement handler for that signal, so a later `trap "EXIT" { ... }` replaces an earlier one. Supported signal names are the string literals `"EXIT"`, `"INT"`, and `"TERM"`.
+The cleanup model is process-level and registration-based. Reaching a `defer`
+statement registers a stackable handler for a signal; plain `defer` is the same
+signal class as `defer on: "EXIT"`. Reaching a `trap` statement installs one
+replacement handler for that signal, so a later `trap "EXIT" { ... }` replaces
+an earlier one. Supported signal names are `"EXIT"`, `"INT"`, and `"TERM"`.
 
 Handler registration is process-scope, not RAII-style function-scope cleanup.
 Function-local handler captures are rejected because cleanup may run after the
@@ -776,28 +715,37 @@ function has returned and VM/Bash parity cannot safely preserve that local scope
 yet. Direct `return` from cleanup handlers is rejected; use `exit` when a
 handler must choose a process-level final status.
 
-Handler context values such as a `$LINENO`-equivalent are explicitly deferred in
-the finalized v0.22 supported subset. The VM and emitted Bash do not currently
+Handler context values such as a `$LINENO`-equivalent are explicitly deferred.
+The VM and emitted Bash do not currently
 expose a portable cleanup-context object or line-number variable to handlers;
 adding one needs a shared source-location model that remains stable across
 lowering, imports, formatting, and generated Bash.
 
 Cleanup runs for normal completion, explicit `exit`, explicit `fail`, command
-failure, and the supported `INT`/`TERM` paths. The deterministic v0.22.1 cleanup
-core covers the non-signal cases first, v0.22.2 locks down the `INT`/`TERM`
-syntax, diagnostics, formatting, lowering visibility, and emitted-Bash helper
-shape without sending real OS signals, v0.22.3 adds the deterministic
-process-session signal harness with the smallest cooperative `TERM`
-direct-command proof for VM and emitted Bash, v0.22.4 extends that
-harness to non-cooperative foreground direct commands for both `INT` and
-`TERM`, and v0.22.5 extends the same supported signal contract to simple
-foreground pipelines. v0.22.6 closes the milestone by documenting the final
-supported, rejected, deferred, and out-of-scope cleanup/signal behavior without
-adding new handler-context syntax.
+failure, and the supported `INT`/`TERM` paths. Direct commands and simple
+foreground pipelines participate in the same cleanup contract in VM execution
+and emitted Bash.
 
 On normal completion, explicit `exit`, `fail`, or direct-command failure, the runtime runs the `EXIT` trap first when present, then `EXIT` defers in last-in, first-out order. On `INT` or `TERM`, the runtime runs the matching trap first, then matching defers in last-in, first-out order, then the `EXIT` cleanup sequence. The original status is preserved when cleanup succeeds; handler failures can replace the final status, and explicit `exit N` in emitted Bash follows Bash's process exit behavior while the cleanup guard prevents recursive handler execution.
 
-The VM implements cleanup without relying on Bash by lowering handler registration to bytecode and executing registered handler bytecode during shutdown. It installs lightweight `INT` and `TERM` signal handlers, observes pending signals between bytecode instructions, and now also classifies interrupted foreground direct commands and simple foreground pipelines while waiting for child processes. During VM command execution, child commands and pipelines are placed in a foreground process group when possible; an `INT` or `TERM` observed by the parent is forwarded to that group, and a child terminated by `INT` or `TERM` runs the matching ds cleanup path instead of degrading into a generic command-failure diagnostic. Generated Bash emits standalone trap dispatchers and handler functions under the reserved `__ds_` namespace. For foreground direct commands and simple foreground pipeline statements, generated Bash runs the command through cleanup-aware helpers so `INT` and `TERM` exits become ds signal cleanup events instead of generic command/pipeline failures or shell job-control messages. Since `v0.34.0`, the common non-interactive closed-stdout case is also quieted for uncaptured, unredirected top-level command statements and pipelines. VM execution uses raw wait status and quiets only an actual direct-command or final-pipeline-stage `SIGPIPE` termination with pipe-like stdout and no non-SIGPIPE pipeline failures; emitted Bash is standalone and therefore uses the narrow portable heuristic of status `141` with pipe-like stdout. Quiet cases are treated as successful early script completion after supported cleanup runs, avoiding noisy `script | head` diagnostics. Captured `run` commands and captured pipelines still preserve the observed command-result fields, including broken-pipe-like statuses, and unrelated command/pipeline failures remain fail-fast apart from Bash's documented inability to distinguish explicit `exit 141` from real `SIGPIPE` under an inherited pipe without unsafe probe writes or non-standalone helpers. Background child management, arbitrary job-control APIs, asynchronous pipelines, and broad signal-forwarding semantics outside the supported foreground subset remain deferred.
+The VM implements cleanup without relying on Bash by lowering handler
+registration to bytecode and executing registered handler bytecode during
+shutdown. It installs lightweight `INT` and `TERM` signal handlers, observes
+pending signals between bytecode instructions, and classifies interrupted
+foreground direct commands and simple foreground pipelines while waiting for
+child processes. During VM command execution, child commands and pipelines are
+placed in a foreground process group when possible; an `INT` or `TERM` observed
+by the parent is forwarded to that group. Generated Bash emits standalone trap
+dispatchers and handler functions under the reserved `__ds_` namespace and uses
+cleanup-aware helpers for supported foreground commands and pipelines.
+
+For uncaptured, unredirected top-level command statements and pipelines, the
+common non-interactive closed-stdout case is quiet. VM execution can identify an
+actual `SIGPIPE`; standalone Bash uses the narrower portable status-141
+heuristic. Captured `run` commands and pipelines still preserve observed result
+fields. Unrelated command failures remain fail-fast. Background child management,
+arbitrary job-control APIs, asynchronous pipelines, and broader signal-forwarding
+semantics remain deferred.
 
 ## Testing strategy
 
@@ -836,32 +784,21 @@ For example:
 - `DsMap` as an internal symbol table may only need runtime docs.
 - User-facing map values need syntax docs, VM behavior, Bash emission behavior, and tests.
 
-## Initial milestone impact
-
-The runtime should influence the roadmap as follows:
-
-- `v0.1.0` may need minimal `DsStr`, `DsArray`, source locations, and diagnostics.
-- `v0.2.0` may need `DsString` for Bash output generation, but generated Bash must not depend on the C runtime.
-- `v0.3.0` should become **Minimal C Runtime + Bytecode VM**, because the VM requires values, strings, process execution, and basic runtime ownership rules.
-
-Do not overbuild the full runtime before it is needed. Build runtime pieces just ahead of the language features that require them.
-
-
 ## Import execution model
 
-As of v0.6.0, imports are deterministic local inclusion rather than modules. Imported statements execute once in composed order before the importing file's dependent statements. Root `script { ... }` argument parsing still happens once; imported files cannot declare their own script blocks in this first import milestone. Emitted Bash bundles imported statements and does not call `ds`.
+Imports are deterministic local inclusion rather than modules. Imported statements execute once in composed order before the importing file's dependent statements. Root `script { ... }` argument parsing happens once. Emitted Bash bundles imported statements and does not call `ds`.
 
 ## Command-result ownership
 
-As of v0.7.0, the runtime has a command-result value used by the VM for `let result = run ...`. It owns separate stdout and stderr strings plus an integer exit code. Copies deep-copy both captured buffers, and value cleanup frees them exactly once through the normal `DsValue` ownership path.
+The runtime has a command-result value used by the VM for `let result = run ...`. It owns separate stdout and stderr strings plus an integer exit code. Copies deep-copy both captured buffers, and value cleanup frees them exactly once through the normal `DsValue` ownership path.
 
 Captured VM commands do not treat non-zero exit status as fatal. The process result is bound to the destination variable so scripts can inspect `stdout`, `stderr`, `status`, `code`, `ok`, and `failed`; `status` and `code` are integer aliases for the normalized command exit status. Plain command statements still stream normally and preserve fail-fast exit behavior; redirection opens the target file before child execution so open failures can report the source span of the redirection target.
 
-The `v0.8.0` cleanup keeps `DsCommandResult` as the user-visible runtime value for captured commands while tightening the internal process path. The VM now uses a small internal process spec/result wrapper shared by plain and captured commands. The spec keeps rendered argv, capture mode, command span, and redirection metadata together; the result carries normalized exit code plus captured buffers when capture is enabled. Command-result field metadata lives in one descriptor table; that table is used by lowering and by runtime field expansion so future fields cannot silently drift across VM and Bash paths.
+`DsCommandResult` is the user-visible runtime value for captured commands. The VM uses a small internal process spec/result wrapper shared by plain and captured commands. The spec keeps rendered argv, capture mode, command span, and redirection metadata together; the result carries normalized exit code plus captured buffers when capture is enabled. Command-result field metadata lives in one descriptor table; that table is used by lowering and by runtime field expansion so future fields cannot silently drift across VM and Bash paths.
 
-## v0.18.0 pipeline runtime
+## Pipeline runtime
 
-`v0.18.0` adds linear command pipelines to the same VM/Bash parity contract as
+Linear command pipelines use the same VM/Bash parity contract as
 ordinary commands. The VM does not invoke a shell to interpret `|`; it expands
 each stage with the existing command-word rules, creates OS pipes between
 adjacent stages, forks every stage, wires stdin/stdout with `dup2`, closes
@@ -882,15 +819,15 @@ directly into a Bash pipeline, redirects that pipeline into temporary capture
 files, and records stdout/stderr/status/code/ok/failed fields without using `eval` or
 depending on the `ds` binary.
 
-## v0.19.0 string runtime
+## String runtime
 
-`v0.19.0` keeps string helpers inside the normal VM/Bash parity boundary. The VM
+String helpers stay inside the normal VM/Bash parity boundary. The VM
 implements ASCII `trim`, `upper`, `lower`, literal `replace`, literal
 `contains`, literal `split`, `starts_with`, and `ends_with` using owned
 `DsString`/`DsArray` values. `split` returns an array of owned string values that
 works with existing array indexing and `for` loops.
 
-`v0.35.0` keeps the same parity boundary and adds byte-oriented parsing helpers:
+The same parity boundary includes byte-oriented parsing helpers:
 `len`, `index_of`, `last_index_of`, `count`, `char_at`, and `slice`. VM helpers
 operate on explicit byte lengths and emitted Bash helpers force `LC_ALL=C` for
 substring/length arithmetic. `char_at` and `slice` reject negative or
@@ -910,8 +847,7 @@ supported subset is intentionally small: string transforms, string
 width/alignment, integer padding, and fixed decimal rendering for integer values.
 General floats and full printf-style formatting remain out of scope.
 
-`v0.20.0` keeps the public language surface unchanged while making Wave 2
-composition less conservative. The lowerer now remembers known array element
+The lowerer remembers known array element
 kinds for array literals and string-array helpers such as `string.split`,
 `lines`, `glob`, and `glob!`. Indexing one of those arrays can therefore keep a
 known string/int/bool kind for later checks, which lets scoped string methods
@@ -921,8 +857,8 @@ into standalone Bash `case` emission, so known indexed array selectors and array
 `for` loop variables are matched as strings, ints, or bools instead of being
 collapsed to strings. Unknown element kinds remain unknown. Function parameters
 with literal defaults carry that default's static kind through the single
-lowered function body, and `v0.36.0` extends the same lowered metadata path to
-required parameters whose local usage infers `string`, `int`, or `bool`.
+lowered function body. The same lowered metadata path applies to required
+parameters whose local usage infers `string`, `int`, or `bool`.
 Inferred/defaulted parameter kinds feed return-kind predeclaration, HIR/debug
 output, VM function metadata, and emitted Bash private type sidecars. Supported
 call sites are validated before function body execution/emission; standalone
@@ -931,11 +867,11 @@ signatures. Required parameters used only in neutral contexts remain `unknown`
 until public typed parameters or a broader collection/type design is
 deliberately added.
 
-## v0.23.0 regex, range, and membership runtime
+## Regex, range, and membership runtime
 
 ### Membership equality
 
-`v0.23.0` implements `needle in array` for arrays whose element kind is one of
+`needle in array` works for arrays whose element kind is one of
 the supported scalar kinds: `string`, `int`, or `bool`. Membership uses exact
 ds value equality, not substring matching, Bash glob matching, or string-only
 coercion. The VM evaluates the left operand once, evaluates the right operand
@@ -950,8 +886,8 @@ has a broader iterable/value model.
 
 ### Range loop semantics
 
-`v0.23.0` implements `for n in start..end { ... }` as an inclusive integer loop
-source. Range expressions are not first-class values in this milestone; they are
+`for n in start..end { ... }` is an inclusive integer loop source. Range
+expressions are not first-class values; they are
 accepted only in `for` loop-source position. Both bounds must be integers. The
 VM evaluates the start expression once before the loop and the end expression
 once before the loop, binds the loop variable as an `int`, and iterates upward
@@ -966,9 +902,9 @@ rejected before execution or emission.
 
 ### Regex subset
 
-`v0.23.0` implements `string matches /pattern/` and `string matches /pattern/i`
-with search semantics: patterns match anywhere unless they are anchored by `^`
-or `$`. `v0.32.0` accepts string-kind runtime string patterns for `matches` and
+`string matches /pattern/` and `string matches /pattern/i` use search semantics:
+patterns match anywhere unless they are anchored by `^` or `$`. String-kind
+runtime patterns are accepted for `matches` and
 for `regex.match` / `regex.replace`; direct string literals are validated during
 lowering, while dynamic strings are validated at runtime before later side
 effects. The supported subset is the portable POSIX-ERE-shaped surface shared by
@@ -1003,10 +939,9 @@ shortcuts, non-capturing groups, and multiline literals are rejected during
 checking/lowering or runtime validation so VM execution and standalone Bash do
 not silently diverge.
 
-## v0.24.0 pre-1.0 hardening runtime notes
+## Runtime parity and hardening
 
-`v0.24.0` does not add production syntax. It hardens the existing runtime and
-emission contract before the `1.0.0` release checklist:
+The runtime and emission contract follows these hardening rules:
 
 - VM execution and emitted Bash remain the required parity pair for every
   supported production feature.
@@ -1023,9 +958,9 @@ emission contract before the `1.0.0` release checklist:
   buffers, diagnostics, HIR/bytecode, VM values, command captures, cleanup
   handler state, and Bash emission buffers.
 
-## v0.30.0 flat index-assignment runtime notes
+## Flat index-assignment runtime
 
-`v0.30.0` adds mutation only for named flat collections represented by an
+Mutation is supported only for named flat collections represented by an
 explicit HIR index-assignment statement. Arrays replace existing elements at
 integer indexes; out-of-range, negative, and non-integer indexes are runtime data
 failures in both VM execution and emitted Bash. Assignment never appends and does
@@ -1051,9 +986,9 @@ compound index assignment, deletion, aliases/references, and same-map mutation
 during map iteration remain unsupported language forms rather than backend
 runtime behavior.
 
-## v0.37.0 row-array runtime notes
+## Row-array runtime
 
-`v0.37.0` keeps lightweight rows inside the existing flat map/array value
+Lightweight rows stay inside the existing flat map/array value
 model. A row is a flat map whose fields are scalar `string`, `int`, or `bool`
 values, and a row-array is an array whose elements share one lowered row schema.
 The schema is lowerer-owned metadata: it records field names and scalar kinds so
@@ -1083,9 +1018,9 @@ parameters, nested row fields, row-field assignment, row-array element
 replacement/deletion, custom comparators, serialization helpers, and public Bash
 payload compatibility remain deferred.
 
-## v0.31.0 recursive glob runtime notes
+## Recursive glob runtime
 
-`v0.31.0` extends the existing `glob` and `glob!` helpers with scoped recursive
+The `glob` and `glob!` helpers support scoped recursive
 `**` support. Recursive `**` support accepts exactly one path segment equal to
 `**`; the recursive `**` contract is not Bash globstar passthrough. Partial
 segments such as `foo**bar`, multiple recursive segments, and
@@ -1112,9 +1047,9 @@ paths. Custom glob flags, hidden traversal flags, symlink-following traversal,
 brace expansion, extglob, shell variable expansion, `~` expansion, Windows path
 semantics, and streaming filesystem iterators remain deferred.
 
-## v0.38.0 recursive walk runtime notes
+## Recursive walk runtime
 
-`v0.38.0` adds `dir.walk`, `dir.walk!`, `dir.walk_ext`, and `dir.walk_ext!` as
+`dir.walk`, `dir.walk!`, `dir.walk_ext`, and `dir.walk_ext!` are
 filesystem helpers rather than glob-pattern helpers. Each accepted call returns a
 normal string array of regular file paths under a user-supplied root. Results are
 sorted with bytewise ordering, deduplicated, and composed through the same array

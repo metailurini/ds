@@ -190,8 +190,8 @@ Execution owner: VM scope/function-call execution and Bash function emission.
 Both backends must agree on call form, default arguments, return value encoding,
 stdout behavior, and invalid return diagnostics.
 
-`v0.36.0` extends function metadata with inferred/defaulted scalar parameter
-kinds. The lowerer owns inference and call-site validation; VM execution and
+Function metadata carries inferred/defaulted scalar parameter kinds. The
+lowerer owns inference and call-site validation; VM execution and
 emitted Bash consume the same metadata and keep defensive runtime checks for
 inferred/defaulted string/int/bool parameters. Do not accept a new parameter
 kind or public typed-parameter syntax by changing only one backend.
@@ -253,7 +253,7 @@ current direct function-call interpolation boundary is documented in
 function calls and scalar string method chains in quoted command-word
 interpolation are accepted, and they are portable because lowering
 pre-materializes runtime-work expressions into private string bindings before
-either backend sees the command. v0.30 also accepts flat named collection index
+either backend sees the command. Flat named collection index
 reads in command-word interpolation (`{items[0]}` / `{map[key]}`) because
 lowering validates the named collection and index/key shape while VM/Bash render
 the accepted read through the same collection access helpers. Other direct
@@ -319,7 +319,8 @@ kinds.
 
 Current maintenance rule: mutable collection features require explicit HIR
 assignment/iteration nodes before implementation. Bash helper sidecars and VM
-runtime containers are not the canonical semantics. v0.30 accepts only named
+runtime containers are not the canonical semantics. The accepted mutation
+surface is named
 flat `array[index] = scalar` and `map[key] = scalar` mutation. Arrays replace
 existing in-bounds elements; maps insert/replace non-empty string keys. Nested
 mutation, field-style map assignment, temporary/function-result targets, sparse
@@ -362,7 +363,7 @@ Tests: VM regex tests, Bash parity tests over conservative patterns and runtime
 string patterns, diagnostics for unsupported flags/forms, capture-map shape,
 replacement expansion, and dynamic failure cases.
 
-Current maintenance rule: regex expansion beyond the v0.32 runtime string,
+Current maintenance rule: regex expansion beyond the runtime string,
 capture, and replacement surface remains rejected until it has an explicit
 portable HIR/helper contract and backend plan. See
 `docs/maintenance/m3-5-regex-boundary.md` for the regex maintenance boundary and
@@ -385,7 +386,7 @@ Tests: VM glob tests, Bash parity tests with controlled fixtures, sorted output
 or documented ordering tests, and diagnostics for invalid literal and dynamic
 recursive patterns.
 
-Current maintenance rule: additional glob power beyond the scoped v0.31 single
+Current maintenance rule: additional glob power beyond the scoped single
 recursive segment, such as custom flags, multiple `**` segments, hidden traversal
 flags, or symlink following, is not accepted until VM and Bash matching semantics
 can be made observably equivalent or the difference is documented and tested.

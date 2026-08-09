@@ -435,18 +435,13 @@ RunCommand
 
 Both VM execution and Bash emission should use this form.
 
-The first `v0.3.0` lowering layer is intentionally small. It keeps the
-currently supported AST shape mostly intact as a backend-facing lowered program,
-while centralizing symbol lookup, interpolation validation, duplicate
-declaration checks, supported operator checks, and block-scope boundary checks.
-Future milestones can simplify this representation further as syntax grows.
+The lowered program centralizes symbol lookup, interpolation validation,
+duplicate declaration checks, supported operator checks, and block-scope
+boundary checks before either backend runs. Lowered blocks compile to explicit
+VM scope push/pop instructions, so runtime variable storage follows the same
+scope model.
 
-In `v0.3.0`, lowered blocks also compile to explicit VM scope push/pop
-instructions. This keeps runtime variable storage aligned with lowering: values
-declared inside a block are available to statements in that block and are
-discarded when execution leaves it.
-
-In `v0.4.0`, behavior-sensitive CLI paths were cleaned up so they share the
+Behavior-sensitive CLI paths share the
 same source -> lexer -> parser -> lowering helper before reaching a backend.
 `ds check`, `ds emit bash`, `ds run`, direct `ds <file.ds>`, and `ds bytecode`
 all lower once through the same entrypoint plumbing. Backend-specific functions
@@ -454,7 +449,7 @@ now accept an already-lowered program where practical, so Bash emission,
 bytecode dumping, and VM execution no longer each need to own parse/lower setup.
 `ds tokens` and `ds ast` intentionally remain frontend/debug commands.
 
-In `v0.5.0`, lowering also owns the script argument contract. `script { ... }`
+Lowering also owns the script argument contract. `script { ... }`
 declarations are lowered into ordered backend-facing argument declarations before
 VM execution or Bash emission. The VM binds runtime argv into the root scope
 before bytecode runs. The Bash backend emits a standalone parser before the
@@ -530,7 +525,8 @@ The VM depends on the runtime substrate. At minimum, serious VM work requires:
 - process helpers for shell command execution;
 - diagnostics helpers for runtime errors.
 
-Because of this, `v0.3.0` should include the minimal runtime foundation needed by the first bytecode VM instead of treating the VM as bytecode only.
+The bytecode VM therefore depends on the runtime substrate rather than treating
+bytecode execution as an isolated layer.
 
 ## Bash emitter
 
@@ -721,87 +717,25 @@ These commands should make it easy to understand where a bug lives:
 - VM execution;
 - Bash emission.
 
-As of `v0.13.0`, `ds hir` prints the composed lowered program, `ds bytecode`
+`ds hir` prints the composed lowered program, `ds bytecode`
 includes script/function/constant/instruction metadata with source markers, and
 `ds run --trace-cmd` / `ds run --trace-vm` emit deterministic trace lines to
 stderr without changing script stdout or normal execution semantics. Emitted
 Bash remains standalone and supports command tracing with `DS_TRACE_CMD=1` plus
 source-located command failure messages for plain command statements. `ds
-imports` remains a future debug command. As of `v0.14.0`, `ds test <file.ds>` uses the same composed parse/lower path and VM execution machinery for test blocks while normal VM execution and normal Bash emission skip those test declarations.
+imports` remains a future debug command. `ds test <file.ds>` uses the same
+composed parse/lower path and VM execution machinery for test blocks while
+normal VM execution and normal Bash emission skip those test declarations.
 
-## Suggested C project layout
+## Source ownership
 
-When implementation begins, a possible source layout is:
+For the exact current file and directory map, use [`source-map.md`](source-map.md).
+This document describes architectural boundaries rather than maintaining a second
+copy of the source tree.
 
-```txt
-src/
-  main.c
-
-  core/
-    arena.c
-    string.c
-    array.c
-    ds_map.c
-    diag.c
-    source.c
-
-  runtime/
-    value.c
-    process.c
-    regex.c
-
-  frontend/
-    lexer.c
-    parser.c
-    ast.c
-    ast_print.c
-
-  semantic/
-    resolver.c
-    ds_checker.c
-    imports.c
-
-  ir/
-    hir.c
-    lower.c
-    lower_command.c
-    lower_expr.c
-    lower_stmt.c
-    lower_symbols.c
-    lower_stdlib.c
-    lower_functions.c
-    lower_free.c
-    lower_internal.h
-
-  bytecode/
-    bc.c
-    bc_gen.c
-    bc_dump.c
-
-  vm/
-    vm.c
-    builtins.c
-
-  emit/
-    emit_bash.c
-    emit_helpers.c
-
-  tools/
-    fmt.c
-    test_runner.c
-    repl.c
-
-src/runtime/
-  hashmap.c
-  hashmap.h
-  hashmap.LICENSE
-
-docs/language.ds
-```
-
-The owned hashmap implementation is absorbed into `src/runtime/` and is private to the `DsMap` bridge in `src/runtime.c`. Other compiler, VM, and emitter code should use `DsMap` only, so maps feel like a native part of the `ds` runtime rather than a separate library subtree.
-
-This layout is only a starting point. The actual implementation may evolve.
+The owned hashmap implementation remains private runtime support. Compiler, VM,
+and emitter code should use the `DsMap` boundary instead of depending directly
+on the absorbed hashmap implementation.
 
 ## Architecture risks
 
@@ -813,13 +747,13 @@ Mitigation:
 - parity tests compare VM and emitted Bash;
 - completion checklist requires both backends.
 
-### Risk: too many features too early
+### Risk: too many features at once
 
 Mitigation:
 
-- use milestone specs;
+- keep feature specs narrow;
 - keep non-goals explicit;
-- have cleanup versions every fourth milestone.
+- schedule cleanup when ownership or parity starts to drift.
 
 ### Risk: Bash emission becomes ugly
 
@@ -833,25 +767,24 @@ Mitigation:
 
 Mitigation:
 
-- expose `tokens`, `ast`, and `check` in `v0.1.0`;
-- add `bytecode` early with the VM;
+- keep `tokens`, `ast`, `hir`, `bytecode`, and `check` useful;
+- keep command and VM tracing deterministic;
 - preserve source locations everywhere.
 
+## Import composition
 
-## v0.6.0 import composition
+Behavior-sensitive CLI commands share a source/import loader before lowering. Local `import "./file.ds"` statements are resolved relative to the importing file, loaded once per root program, composed before the importing file's executable statements, and then lowered into the same backend-facing program used by the VM and Bash emitter. `tokens` and `ast` remain root-file debug views.
 
-Behavior-sensitive CLI commands now share a source/import loader before lowering. Local `import "./file.ds"` statements are resolved relative to the importing file, loaded once per root program, composed before the importing file's executable statements, and then lowered into the same backend-facing program used by the VM and Bash emitter. `tokens` and `ast` remain root-file debug views.
-
-As of `v0.16.0`, that loader/composer lives in `src/cli_program.c` behind
+That loader/composer lives in `src/cli_program.c` behind
 `src/cli_program.h`. `src/main.c` remains responsible for usage text, public
 argument parsing, command dispatch, and command-specific flags, while the CLI
 program boundary owns source loading, root-file lex/parse, composed import-aware
 parse, lowering, import cycle/load-once diagnostics, and cleanup of loaded
 units. This is a behavior-preserving cleanup boundary.
 
-## v0.17.0 control flow
+## Control flow
 
-The `v0.17.0` implementation extends the shared AST/HIR path with scalar
+The shared AST/HIR path handles scalar
 reassignment, `while`, lexical `break`/`continue`, and expression-style `case`.
 The parser keeps these constructs as explicit statement nodes; lowering
 validates assignment targets, loop-control placement, duplicate/default case
@@ -868,15 +801,15 @@ though shell variables are strings. Those tags also preserve ds truthiness for
 scalar-variable `if` and `while` conditions in emitted Bash. This preserves the
 language rule that case alternatives are exact ds literals, not shell patterns.
 
-## v0.7.0 command results and redirection
+## Command results and redirection
 
 The parser now represents captured command execution as a `run` expression and plain command redirection as command-statement metadata. Lowering is the shared command-result HIR boundary for VM execution and Bash emission: it validates command-result fields, command variables, and conservative string-literal redirection targets before either backend runs.
 
 The VM lowers captured commands to bytecode that executes through the process boundary, captures stdout/stderr separately, stores the exit code, and exposes derived `ok`/`failed` fields. The Bash emitter consumes the same lowered shape and emits standalone `__ds_` helpers only when a program uses captured command results. Plain command statements keep their existing fail-fast behavior, with optional redirection metadata emitted as normal Bash redirection syntax.
 
-## v0.8.0 command cleanup
+## Command model
 
-The first `v0.8.0` cleanup pass makes simple command data explicit in the lowered representation. Parsed AST nodes may still preserve syntax-oriented command fields, but lowering now uses a shared `DsCommand` shape for both plain command statements and captured `run` commands. That shape owns ordered words, per-word spans, optional redirection metadata, command kind, and the source span of the command as a whole.
+Simple command data is explicit in the lowered representation. Parsed AST nodes may still preserve syntax-oriented command fields, but lowering uses a shared `DsCommand` shape for both plain command statements and captured `run` commands. That shape owns ordered words, per-word spans, optional redirection metadata, command kind, and the source span of the command as a whole.
 
 Command-result field knowledge is centralized behind one descriptor table for `stdout`, `stderr`, `status`, `code`, `ok`, and `failed`. `status` is the roadmap field and `code` remains a compatibility alias. Lowering, VM field reads, VM string interpolation, VM command-word expansion, and Bash condition emission now consult that shared model instead of each backend maintaining an independent list of known fields.
 
@@ -884,9 +817,9 @@ The VM command process path also has a small internal cleanup boundary around a 
 
 Command-heavy regression suites now share a VM/Bash parity helper from `tests/lib/testlib.sh` instead of carrying a version-local copy. The helper emits standalone Bash, validates it with `bash -n`, runs VM and Bash modes from isolated working directories, compares stdout/stderr/status, and optionally compares generated output files.
 
-## v0.18.0 pipeline command model
+## Pipeline command model
 
-`v0.18.0` promotes command representation from a single word vector to a small
+Command representation uses a small
 pipeline-aware model. A `DsCommand` now owns one or more stages, each stage owns
 the existing `DsWordVec`, and the redirect remains a whole-command suffix. The
 AST, HIR, formatter, checker, VM compiler, VM runtime, bytecode dumper, and Bash
@@ -899,7 +832,7 @@ per stage, wires real OS pipes, and computes pipefail status. The Bash backend
 emits ordinary Bash pipelines for plain commands and a standalone capture helper
 for captured `run` pipelines.
 
-## v0.19.0 string helper boundary
+## String helper boundary
 
 String methods lower through the same helper-call path as the shell-oriented
 standard library, with the receiver passed as the first helper argument. This
@@ -912,8 +845,8 @@ Triple-quoted strings remain regular string literals in the AST/HIR; decode
 helpers in lowering, VM compilation, and Bash emission agree that the content is
 all bytes between the delimiters.
 
-`v0.20.0` keeps helper emission at the existing dependency-class granularity but
-hardens the dependency scan: call arguments are now traversed when deciding
+Helper emission uses dependency-class granularity, and the dependency scan
+traverses call arguments when deciding
 whether emitted Bash needs run, pipeline, collection-index, map, or stdlib/string
 helper support. This preserves standalone Bash for compositions such as a string
 method called on an indexed `split` result, where the outer call needs string

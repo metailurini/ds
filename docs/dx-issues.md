@@ -32,5 +32,5 @@ These are roadmap topics rather than active blockers:
 - metadata-oriented filesystem APIs;
 - streaming iterators for large data sets.
 
-The completed `v0.34.0` through `v0.38.0` DX work is preserved in the matching
-milestone specs and test plans.
+Completed DX work is preserved in the matching milestone specs, test plans, and
+Git history.

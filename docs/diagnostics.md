@@ -94,10 +94,10 @@ Owns:
   restrictions, handler legality, loop source eligibility, and value-kind checks;
 - stdlib helper existence, arity, statement-only/expression-capable status,
   return kind, argument restrictions, and env-name validation;
-- string-method receiver and argument kind validation, including the v0.35.0
-  rule that `char_at` and `slice` require int indexes while search helpers take
+- string-method receiver and argument kind validation, including the rule that
+  `char_at` and `slice` require int indexes while search helpers take
   string needles;
-- `v0.36.0` function-parameter inference diagnostics, including incompatible
+- function-parameter inference diagnostics, including incompatible
   local scalar uses such as one required parameter being used as both `string`
   and `int`, and wrong-kind call arguments to inferred/defaulted scalar
   parameters before function body side effects;
@@ -221,7 +221,7 @@ source can be parsed far enough to know them:
   return-kind errors;
 - unsupported syntax that has no accepted AST/HIR shape;
 - unsupported mutation forms that parse as assignment targets but have no
-  accepted v0.30 semantics, including field-style map assignment, nested
+  accepted semantics, including field-style map assignment, nested
   mutation, temporary/function-result targets, sparse array assignment, deletion,
   and compound index assignment;
 - unsupported syntax that has an AST shape but no accepted semantics;
@@ -275,7 +275,7 @@ execution:
   function returns, variables with unknown value kind, runtime environment names,
   runtime glob strings, runtime `dir.walk*` roots/extensions, or runtime
   string-helper separators.
-- VM/runtime and emitted Bash helpers also own the scoped `v0.34.0` broken-pipe
+- VM/runtime and emitted Bash helpers also own the scoped broken-pipe
   quieting classification for accepted uncaptured, unredirected command or
   pipeline executions. VM execution uses raw wait status and quiets only actual
   direct-command or final-pipeline-stage `SIGPIPE` with pipe-like stdout and no
@@ -354,7 +354,7 @@ These areas still need careful source review before behavior changes:
   execution, and Bash function emission;
 - trap/defer/signal diagnostics span syntax, lowerer legality, VM runtime signal
   handling, and Bash `trap` behavior;
-- regex expansion beyond the scoped v0.32 runtime-string/capture/replacement
+- regex expansion beyond the scoped runtime-string/capture/replacement
   surface needs lowerer-owned rejection until the added feature has a portable
   HIR/helper model; see `docs/maintenance/m3-5-regex-boundary.md` for the
   current boundary;

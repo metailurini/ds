@@ -1,17 +1,9 @@
 # Current Status
 
-This document is the user-facing snapshot after the completed structured
-return, direct environment/interpolation, collection mutation, recursive glob,
-runtime regex feature wave, the `v0.33.0` stabilization implementation and
-dedicated-test pass, the `v0.34.0` text-literal/broken-pipe DX pass, the
-`v0.35.0` core string parsing helper implementation and dedicated-test pass,
-the `v0.36.0` scalar function-parameter kind-inference implementation and
-dedicated-test pass, the `v0.37.0` lightweight row/row-array implementation
-and dedicated-test pass, and the `v0.38.0` recursive walk-helper implementation
-and dedicated-test pass. It is a
-support matrix, not a replacement for the roadmap or language catalog: it
-summarizes what users can rely on today, what is test-only or tooling-only, and
-what is deliberately deferred, rejected, or out of scope for `1.0.0`.
+This document is the user-facing support matrix for the current implementation.
+It summarizes what users can rely on today, what is test-only or tooling-only,
+and what is deliberately deferred, rejected, or out of scope for `1.0.0`.
+Historical implementation sequencing belongs in `docs/milestones/` and Git.
 
 ## Command support
 
@@ -30,8 +22,7 @@ ds bytecode <file.ds>
 ds emit bash <file.ds> -o <file.sh>
 ```
 
-There are no hidden production commands in the current `v0.38.0` surface; the
-cleanup milestones harden the existing CLI instead of adding new commands.
+There are no hidden production commands in the current surface.
 
 `tokens` and `ast` are root-file frontend/debug views. They read only the file
 passed on the command line and show the import statement as syntax instead of
@@ -45,13 +36,7 @@ that was passed to it; it does not rewrite imported files or format a workspace.
 
 ## Production language support intended for 1.0.0
 
-The production runtime supports the language slice implemented and stabilized
-through the `v0.22.6` final v0.22 documentation pass, the completed `v0.23.0`
-regex/range/membership implementation and test pass, the scoped `v0.32.0`
-regex runtime-string/capture/replacement production implementation, the
-no-new-syntax `v0.33.0` collection/glob/regex stabilization pass, the
-`v0.34.0` text-literal/broken-pipe DX implementation pass, and the current
-`v0.38.0` recursive walk-helper implementation and dedicated-test pass:
+The production runtime supports this language slice:
 
 - line comments in normal parsing/checking/running/emission;
 - `let` declarations with strings, integers, booleans, identifiers, unary and
@@ -170,12 +155,11 @@ ds fmt -w file.ds
 The formatter uses two-space indentation, same-line opening braces, stable
 spacing around operators, and stable blank lines between top-level groups.
 
-Comment-preserving formatting remains deferred in this implementation pass. The
+Comment-preserving formatting remains deferred. The
 lexer/parser accept comments for normal language behavior, but `ds fmt` rejects
 comment-bearing files with a clear diagnostic rather than silently dropping
 trivia. Inline trailing comments are also rejected by the formatter for the same
-reason. This is the deliberate `v0.16.0` decision: retaining trivia safely needs
-a larger parser/formatter design than the cleanup implementation should risk.
+reason. Retaining trivia safely needs a larger parser/formatter design.
 
 `ds check` emits conservative warnings for supported cases, including unused
 locals/parameters, unreachable test statements, and shadowing. Warnings are
@@ -278,180 +262,12 @@ known limitations accepted for `1.0.0`.
 
 ## Internal cleanup state
 
-`v0.16.0` splits CLI source/import composition into `src/cli_program.c` and
+CLI source/import composition lives in `src/cli_program.c` and
 `src/cli_program.h`, leaving `src/main.c` focused on argument parsing and public
-command dispatch. The new boundary owns source loading, root-file lex/parse,
+command dispatch. This boundary owns source loading, root-file lex/parse,
 composed import-aware parse, lowering, import cycle/load-once diagnostics, and
 cleanup of loaded units.
 
 Raw hashmap implementation details remain hidden under `src/runtime/` behind the
 `DsMap` runtime abstraction. `include/ds.h` remains a compatibility umbrella,
 while internal code should prefer focused headers.
-
-## Next wave
-
-`v0.17.0` completed the scoped control-flow wave: `while`, `break`,
-`continue`, scalar reassignment, and expression-style `case`, with VM/Bash
-parity and clear interaction with existing block and loop scopes.
-
-`v0.18.0` added linear command pipelines for plain command statements and
-captured `run` expressions. Pipeline status uses Bash `pipefail` semantics: if
-any stage fails, the pipeline status is the rightmost failing stage.
-Since `v0.34.0`, the common closed-stdout case for uncaptured, unredirected
-top-level command statements and pipelines is quieted. VM execution quiets only actual direct-command or final-pipeline-stage
-`SIGPIPE` terminations with pipe-like stdout and no non-SIGPIPE pipeline
-failures; emitted Bash uses the standalone-Bash heuristic of status `141` with
-pipe-like stdout. Quiet cases are
-treated as successful early script completion after supported cleanup runs.
-Captured `run` results still preserve observed subprocess status fields, and
-unrelated command/pipeline failures remain visible except for Bash's documented
-explicit-`141`-under-pipe ambiguity.
-
-`v0.19.0` added ASCII string methods, formatted interpolation, and
-triple-quoted strings. Format widths and precisions are bounded to `1..1024`.
-`v0.20.0` stabilizes Wave 2 composition by keeping known array element kinds in
-the lowerer and by making Bash helper dependency scanning recurse through call
-arguments. This means values indexed out of known string arrays, such as
-`"a,b".split(",")[0]`, can participate in scoped string methods with VM/Bash
-parity and emitted helper coverage.
-
-`v0.35.0` extends string methods with byte-oriented parsing helpers:
-`.len()`, `.index_of(needle)`, `.last_index_of(needle)`, `.count(needle)`,
-`.char_at(index)`, and `.slice(start, end)`. The methods use zero-based byte
-offsets in both VM execution and emitted Bash. `char_at` and `slice` reject
-negative and out-of-range indexes instead of clamping, and direct read-only
-indexing after `split()` can now participate in follow-up scalar string method
-chains such as `sig.split("(")[0].trim()`.
-
-`v0.21.0` adds the implementation path for scalar function `return` values and
-integer arithmetic: `return expr` inside functions, function calls as supported
-value expressions, `*`, `/`, `%`, `**`, unary `-`, and integer `*=`, `/=`, `%=`
-compound assignments. Functions used as values must have explicit compatible
-scalar returns on all statically-known paths, including supported forward calls
-to later value-returning functions. The VM and emitted Bash diagnose checked
-integer overflow instead of silently wrapping. Functions called as expression
-values reject plain command statements so expression-style calls cannot collide
-with the return transport through arbitrary stdout; statement-style calls may
-still stream stdout and ignore returned scalar values. Use captured `run`
-expressions inside value functions when command output should participate in the
-returned value. Expression-backed string interpolation can include
-scalar value-returning calls and checked scalar string method chains such as
-`{s.len()}` and `{s.slice(0, 3)}`. v0.27.0 also adds direct `env.NAME` reads,
-`env.NAME = scalar` assignment, and `unset env.NAME`; missing environment
-variables read as an empty string, assignments are exported to later child
-commands, and unsets remove the variable from later child-command environments
-in both VM and emitted Bash. Command-word interpolation supports the legacy `{name}` / `{name.field}` forms,
-`{env.NAME}`, direct `env.NAME` command arguments, integer arithmetic
-expressions, direct scalar value-returning function calls in quoted command
-words, scalar string method chains, and v0.30 flat named collection index reads
-such as `{items[0]}` and `{map[key]}`. Interpolated calls and method chains are
-pre-evaluated before the outer command launches; collection/map/command-result
-interpolation beyond that flat index-read and scalar-method surface remains
-rejected. Statement-style calls may still
-ignore returned values.
-`examples/function-values.ds` shows the supported return, arithmetic, and
-expression interpolation path.
-Since `v0.34.0`, ordinary and triple-quoted strings also support strict doubled
-literal braces: `{{` renders `{`, `}}` renders `}`, and `{expr}` keeps the
-existing interpolation meaning. A lone `}` is rejected during lowering with a
-diagnostic that points to `}}` for a literal close brace, so ambiguous strings
-must be written deterministically, for example `"{{name}}"` for literal
-`{name}` and `"{name}}}"` for interpolation followed by a literal `}`.
-The dedicated `tests/v0_21/run.sh` suite now covers the scoped VM/Bash parity,
-diagnostic, formatting, example, and generated-Bash boundary behavior.
-
-`v0.28.0` is a cleanup-only pass over the supported `v0.25.0` through `v0.27.0`
-surface. It does not add syntax. It keeps helper dependency discovery aligned
-with the accepted HIR so statement-style user function calls whose arguments
-contain formatted interpolation, integer arithmetic interpolation, or collection
-index reads emit the same standalone Bash helpers those expressions would have
-needed in `let`, assignment, return, or condition positions. At that milestone,
-nested collections, recursive glob behavior, and advanced regex
-captures/replacement/runtime regex strings remained deferred to their named
-roadmap milestones; recursive glob was later added in `v0.31.0`, and scoped
-runtime regex strings/captures/replacement were later added in `v0.32.0`.
-`v0.29.0` adds deterministic key/value map iteration over
-named maps and supported flat map-returning user-function calls, with ascending
-bytewise/ASCII key order in both VM execution and emitted Bash. `v0.30.0` adds
-named flat array/map mutation; index assignment is supported in v0.30 for named flat array/map bindings:
-`items[index] = scalar` / `array[index] = scalar` replaces existing elements
-only and does not append; use the existing `array.push(value)` method for
-append behavior. `map[key] = scalar` inserts new keys or replaces existing
-non-empty string keys. Mutation targets must be named flat collections,
-RHS values stay within the flat scalar collection boundary, and generated Bash
-remains standalone while VM/Bash keep scalar value kinds aligned for
-interpolation, conditions, `case`, returns, and later reads. Collection variable
-copies such as `let copy = original` are value copies in both VM and Bash, so
-mutating `copy[index]` does not alias or mutate `original[index]`. Temporary mutation,
-function-call result mutation, command-result mutation, nested mutation, sparse
-arrays, slice assignment, deletion, references/aliases, compound index
-assignment, and field-style map assignment remain deferred.
-
-`v0.31.0` adds recursive `**` glob support through the existing `glob` and
-`glob!` helpers. Recursive matching is accepted only when `**` is a complete path
-segment and appears once in the pattern. It means zero or more directory
-segments, so `src/**/*.ds` can match both `src/main.ds` and
-`src/nested/deep.ds`. Results are sorted in bytewise/ASCII order, duplicate-free,
-and string-kind preserving in both VM execution and emitted Bash. Hidden path
-components are not matched or traversed unless named explicitly by a non-`**`
-segment such as `.config`, directory symlinks are not traversed, `glob` no-match
-returns an empty collection, and `glob!` no-match fails before loop bodies run.
-Literal invalid recursive patterns fail in lowering; dynamically produced
-invalid recursive patterns fail as runtime data errors in VM/Bash helpers.
-Multiple recursive segments, partial `**` segments, custom glob flags, hidden
-traversal flags, symlink following, brace expansion, extglob, shell variable
-expansion, and `~` expansion remain deferred.
-
-`v0.38.0` adds recursive walk helpers through the existing `dir` namespace:
-`dir.walk(root)`, `dir.walk!(root)`, `dir.walk_ext(root, extensions)`, and
-`dir.walk_ext!(root, extensions)`. They return normal string arrays of regular
-files under a string root, sorted bytewise and duplicate-free in both VM
-execution and emitted Bash. Invalid or unreadable roots fail, hidden descendants
-and symlink entries are skipped, children that disappear during traversal may be
-skipped as transient filesystem races, explicitly hidden roots are allowed,
-extension filters are exact values such as `.c` rather than glob patterns such
-as `*.c`, and bang forms fail before loop bodies run when no files match. Hidden
-traversal flags, symlink following, max-depth/min-depth options, metadata rows,
-streaming iterators, callback filters, and broader glob expansion remain
-deferred.
-
-`v0.32.0` adds the practical regex API on top of the conservative `v0.23.0`
-regex subset. Runtime string patterns are accepted by `matches` and by
-`regex.match` / `regex.replace`; direct string literals are statically validated
-when lowering can see them, while dynamic strings, flags, replacements, and
-capture counts are validated by VM/Bash runtime helpers before later side
-effects. Regex helpers accept optional flags `""` or `"i"`, expose capture data
-through flat map values for present capture groups up to nine, populate
-no-match capture entries consistently, and keep replacement text data-only
-instead of shell code. Unsupported PCRE-style features remain rejected so VM
-execution and standalone Bash do not diverge.
-
-`v0.22.0` adds process-level cleanup registration. Plain `defer` is an `EXIT` cleanup and runs in LIFO order. `defer on:` supports the literal signals `EXIT`, `INT`, and `TERM`; repeated `trap` statements use replacement semantics per signal. `v0.22.1` stabilizes the deterministic non-signal cleanup core with VM/Bash parity tests for normal completion, explicit `exit`, explicit `fail`, direct command failure, captured command failure, `trap "EXIT"` replacement, handler failure continuation, handler `exit` status override, imports, script args, and function calls from handlers. `v0.22.2` stabilizes the `INT`/`TERM` syntax and diagnostic surface with tests for parser/token output, AST/HIR/bytecode visibility, formatter normalization, emitted-Bash helper structure, and unsupported or malformed signal diagnostics without sending real OS signals. `v0.22.3` adds the deterministic signal harness: VM and emitted-Bash scripts run in isolated process sessions, tests wait for a `ready` marker, signal the process group, capture stdout/stderr/status through files, and clean up leftovers on timeout. It proves the smallest cooperative `TERM` direct-command fixture. `v0.22.4` extends that harness to non-cooperative foreground direct commands for both `INT` and `TERM`, preserving statuses `130` and `143`, running signal-specific cleanup before `EXIT` cleanup, and avoiding generic command-failure diagnostics or Bash job-control noise. `v0.22.5` extends the same runtime contract to simple foreground pipelines and verifies the harness does not hang when pipeline children inherit stdout/stderr handles. `v0.22.6` finalizes the v0.22 documentation contract: supported behavior is process-scope cleanup for `EXIT`/`INT`/`TERM`, rejected behavior includes function-local handler captures and direct handler `return`, handler context values such as line numbers remain deferred, and broad job-control behavior remains out of scope. The final v0.22 test-plan audit fills deterministic coverage gaps for cleanup side effects, imported signal handlers and diagnostics, function-registered handlers, handler control flow, arithmetic/return interaction, test-block isolation, and malformed/dynamic/numeric/empty signal diagnostics. On signal dispatch the trap runs first, then matching defers in LIFO order, then `EXIT` cleanup. The VM installs lightweight `INT`/`TERM` handlers, checks for pending signals between bytecode instructions, and treats interrupted foreground commands/pipelines as signal cleanup events while forwarding observed `INT`/`TERM` to the foreground child process group when possible. Emitted Bash installs standalone traps. Background jobs, public job-control/process-group APIs, asynchronous pipelines, handler context objects/line numbers, and broad signal-forwarding semantics outside foreground commands and simple foreground pipelines remain out of scope.
-
-Required function parameters remain source-syntax untyped, but `v0.36.0` infers `string`, `int`, and `bool`
-local scalar kinds when usage requires one. String
-helpers and string stdlib arguments infer `string`; arithmetic, indexes, ranges,
-and `char_at`/`slice` index positions infer `int`; boolean conditions, logical
-operators, and known bool comparisons infer `bool`. Parameters with literal
-defaults still use the default's static kind. Required parameters used only in
-neutral positions remain `unknown`, and public typed-parameter syntax,
-collection-valued parameters, row parameters, implicit coercions, and broad
-runtime type-tag design remain deferred. Inferred/defaulted scalar kinds are
-validated at supported call sites and mirrored into emitted Bash private type
-tags so direct VM execution and standalone Bash keep the same boundary.
-
-The cleaned CLI program boundary, existing block/function/test scoping rules,
-array-loop lowering model, scalar return transport, and process-level cleanup
-model are the safe pieces to build on. The latest feature wave adds scoped
-`v0.23.0` regex, ranges, and membership. `v0.24.0` hardens documentation,
-examples, diagnostics, sanitizer expectations, and generated-Bash helper hygiene
-without adding production syntax. `v0.29.0` adds map iteration, `v0.30.0`
-adds named flat array/map index assignment, `v0.31.0` adds scoped recursive
-glob patterns, `v0.32.0` adds runtime regex strings, capture maps, and regex
-replacement, `v0.33.0` stabilizes the combined collection/glob/regex surface
-without adding syntax, `v0.34.0` adds the first DX-priority text-literal and
-closed-stdout broken-pipe cleanup, and `v0.38.0` closes the current DX wave with
-recursive walk helpers. Nested collections, formatter trivia
-preservation, warning suppression, command-level shell logical operators, deeper
-job-control behavior, and advanced pipeline forms remain out of scope unless
-their own milestones explicitly pull them in.
