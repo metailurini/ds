@@ -59,6 +59,7 @@ bool ds_string_from_range(DsString *s, const char *data, size_t len);
 bool ds_string_append_range(DsString *s, const char *data, size_t len);
 bool ds_string_append_cstr(DsString *s, const char *text);
 bool ds_string_append_char(DsString *s, char c);
+bool ds_string_appendf(DsString *s, const char *fmt, ...);
 bool ds_string_append_escaped(DsString *s, const char *data, size_t len);
 void ds_string_free(DsString *s);
 

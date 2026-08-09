@@ -1,39 +1,12 @@
 #include "bash_internal.h"
 #include "ds_interpolation.h"
 
-#include <stdarg.h>
-
-void buf_reserve(EmitBuf *buf, size_t need) {
-    ds_reserve_char_buffer(&buf->data, &buf->cap, need, 256);
-}
-
 void buf_append_len(EmitBuf *buf, const char *data, size_t len) {
-    buf_reserve(buf, buf->len + len + 1);
-    memcpy(buf->data + buf->len, data, len);
-    buf->len += len;
-    buf->data[buf->len] = '\0';
+    ds_string_append_range(buf, data, len);
 }
 
 void buf_append(EmitBuf *buf, const char *text) {
-    buf_append_len(buf, text, strlen(text));
-}
-
-void buf_appendf(EmitBuf *buf, const char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    va_list copy;
-    va_copy(copy, args);
-    int n = vsnprintf(NULL, 0, fmt, copy);
-    va_end(copy);
-    if (n < 0) {
-        va_end(args);
-        return;
-    }
-    size_t start = buf->len;
-    buf_reserve(buf, buf->len + (size_t)n + 1);
-    vsnprintf(buf->data + start, (size_t)n + 1, fmt, args);
-    va_end(args);
-    buf->len += (size_t)n;
+    ds_string_append_cstr(buf, text);
 }
 
 void symbol_vec_push(SymbolVec *vec, DsStr name) {
@@ -173,11 +146,11 @@ static bool emit_formatted_interpolation(BashEmitter *e, DsStr name, const char 
     buf_append(out, "%");
     if (parsed.kind == DS_INTERP_FORMAT_INT_DECIMAL) {
         if (parsed.zero_pad) buf_append(out, "0");
-        buf_appendf(out, "%d", parsed.width);
+        ds_string_appendf(out, "%d", parsed.width);
         buf_append(out, "d");
     } else {
-        if (parsed.width > 0) buf_appendf(out, "%d", parsed.width);
-        buf_appendf(out, ".%d", parsed.precision);
+        if (parsed.width > 0) ds_string_appendf(out, "%d", parsed.width);
+        ds_string_appendf(out, ".%d", parsed.precision);
         buf_append(out, "f");
     }
     buf_append(out, "' ");

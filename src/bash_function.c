@@ -160,14 +160,14 @@ bool emit_function(BashEmitter *e, const DsLowerFn *fn) {
         }
 
         emit_indent(&e->out, 1);
-        buf_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i * 2);
+        ds_string_appendf(&e->out, "if [[ $# -gt %zu ]]; then ", i * 2);
         emit_var_name(&e->out, param->name);
-        buf_appendf(&e->out, "=\"${%zu}\"", i * 2 + 1);
+        ds_string_appendf(&e->out, "=\"${%zu}\"", i * 2 + 1);
         if (e->needs_case_types) {
             buf_append(&e->out, "; ");
             bash_emit_type_var_name(&e->out, param->name);
             buf_append(&e->out, "=");
-            buf_appendf(&e->out, "\"${%zu:-", i * 2 + 2);
+            ds_string_appendf(&e->out, "\"${%zu:-", i * 2 + 2);
             const char *type = ds_lower_value_kind_name(expected_kind);
             buf_append(&e->out, type);
             buf_append(&e->out, "}\"");

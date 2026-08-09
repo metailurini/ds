@@ -343,17 +343,17 @@ bool bash_emit_array_return_payload(BashEmitter *e, const DsLowerExpr *value, Ds
         buf_append(&e->out, "declare -ga __ds_return_elem_type=()\n");
         size_t temp_id = e->temp_counter++;
         emit_indent(&e->out, indent);
-        buf_appendf(&e->out, "__ds_mktemp_file __ds_return_iter_%zu 'failed to create stdlib return temp file'\n", temp_id);
+        ds_string_appendf(&e->out, "__ds_mktemp_file __ds_return_iter_%zu 'failed to create stdlib return temp file'\n", temp_id);
         emit_indent(&e->out, indent);
         if (!emit_stdlib_call(e, value, &e->out)) return false;
-        buf_appendf(&e->out, " >\"$__ds_return_iter_%zu\"\n", temp_id);
+        ds_string_appendf(&e->out, " >\"$__ds_return_iter_%zu\"\n", temp_id);
         emit_indent(&e->out, indent);
         buf_append(&e->out, stdlib_array_call_uses_nul_records(value) ?
                    "while IFS= read -r -d '' __ds_line; do __ds_return_array+=(\"$__ds_line\"); __ds_return_elem_type+=(\"string\"); done" :
                    "while IFS= read -r __ds_line; do __ds_return_array+=(\"$__ds_line\"); __ds_return_elem_type+=(\"string\"); done");
-        buf_appendf(&e->out, " <\"$__ds_return_iter_%zu\"\n", temp_id);
+        ds_string_appendf(&e->out, " <\"$__ds_return_iter_%zu\"\n", temp_id);
         emit_indent(&e->out, indent);
-        buf_appendf(&e->out, "__ds_temp_remove \"$__ds_return_iter_%zu\"\n", temp_id);
+        ds_string_appendf(&e->out, "__ds_temp_remove \"$__ds_return_iter_%zu\"\n", temp_id);
         return true;
     }
     return bash_invariant_fail(e, span, "array return should be literal, named, or forwarded after lowering");
@@ -698,61 +698,61 @@ bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr
     }
     if (!bash_emit_row_array_decls(e, dest, schema, indent, local_decl)) { free(field_data); free(dir_data); return false; }
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "%s -a __ds_sort_%zu=(\"${!", e->function_depth > 0 ? "local" : "declare", id);
+    ds_string_appendf(&e->out, "%s -a __ds_sort_%zu=(\"${!", e->function_depth > 0 ? "local" : "declare", id);
     emit_var_name(&e->out, src);
     buf_append(&e->out, "[@]}\")\n");
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "%s __ds_i_%zu __ds_j_%zu __ds_key_%zu __ds_prev_%zu __ds_left_%zu __ds_right_%zu __ds_lc_set_%zu=0 __ds_lc_old_%zu=\"\"\n", e->function_depth > 0 ? "local" : "declare", id, id, id, id, id, id, id, id);
+    ds_string_appendf(&e->out, "%s __ds_i_%zu __ds_j_%zu __ds_key_%zu __ds_prev_%zu __ds_left_%zu __ds_right_%zu __ds_lc_set_%zu=0 __ds_lc_old_%zu=\"\"\n", e->function_depth > 0 ? "local" : "declare", id, id, id, id, id, id, id, id);
     if (field_kind == DS_LOWER_VALUE_STRING) {
         emit_indent(&e->out, indent);
-        buf_appendf(&e->out, "if [[ ${LC_ALL+x} ]]; then __ds_lc_set_%zu=1; __ds_lc_old_%zu=\"$LC_ALL\"; fi\n", id, id);
+        ds_string_appendf(&e->out, "if [[ ${LC_ALL+x} ]]; then __ds_lc_set_%zu=1; __ds_lc_old_%zu=\"$LC_ALL\"; fi\n", id, id);
         emit_indent(&e->out, indent);
         buf_append(&e->out, "LC_ALL=C\n");
     }
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "for ((__ds_i_%zu=1; __ds_i_%zu<${#__ds_sort_%zu[@]}; __ds_i_%zu++)); do\n", id, id, id, id);
+    ds_string_appendf(&e->out, "for ((__ds_i_%zu=1; __ds_i_%zu<${#__ds_sort_%zu[@]}; __ds_i_%zu++)); do\n", id, id, id, id);
     emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "__ds_key_%zu=\"${__ds_sort_%zu[$__ds_i_%zu]}\"\n", id, id, id);
+    ds_string_appendf(&e->out, "__ds_key_%zu=\"${__ds_sort_%zu[$__ds_i_%zu]}\"\n", id, id, id);
     emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "__ds_j_%zu=$__ds_i_%zu\n", id, id);
+    ds_string_appendf(&e->out, "__ds_j_%zu=$__ds_i_%zu\n", id, id);
     emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "while (( __ds_j_%zu > 0 )); do\n", id);
+    ds_string_appendf(&e->out, "while (( __ds_j_%zu > 0 )); do\n", id);
     emit_indent(&e->out, indent + 2);
-    buf_appendf(&e->out, "__ds_prev_%zu=\"${__ds_sort_%zu[$((__ds_j_%zu - 1))]}\"\n", id, id, id);
+    ds_string_appendf(&e->out, "__ds_prev_%zu=\"${__ds_sort_%zu[$((__ds_j_%zu - 1))]}\"\n", id, id, id);
     emit_indent(&e->out, indent + 2);
-    buf_appendf(&e->out, "__ds_left_%zu=\"${", id);
+    ds_string_appendf(&e->out, "__ds_left_%zu=\"${", id);
     bash_emit_row_field_array_name(&e->out, src, field);
-    buf_appendf(&e->out, "[$__ds_prev_%zu]}\"\n", id);
+    ds_string_appendf(&e->out, "[$__ds_prev_%zu]}\"\n", id);
     emit_indent(&e->out, indent + 2);
-    buf_appendf(&e->out, "__ds_right_%zu=\"${", id);
+    ds_string_appendf(&e->out, "__ds_right_%zu=\"${", id);
     bash_emit_row_field_array_name(&e->out, src, field);
-    buf_appendf(&e->out, "[$__ds_key_%zu]}\"\n", id);
+    ds_string_appendf(&e->out, "[$__ds_key_%zu]}\"\n", id);
     emit_indent(&e->out, indent + 2);
     if (field_kind == DS_LOWER_VALUE_INT) {
-        buf_appendf(&e->out, "if (( __ds_left_%zu %s __ds_right_%zu )); then\n", id, desc ? "<" : ">", id);
+        ds_string_appendf(&e->out, "if (( __ds_left_%zu %s __ds_right_%zu )); then\n", id, desc ? "<" : ">", id);
     } else if (field_kind == DS_LOWER_VALUE_BOOL) {
-        buf_appendf(&e->out, "if [[ \"$__ds_left_%zu\" == true ]]; then __ds_left_%zu=1; else __ds_left_%zu=0; fi\n", id, id, id);
+        ds_string_appendf(&e->out, "if [[ \"$__ds_left_%zu\" == true ]]; then __ds_left_%zu=1; else __ds_left_%zu=0; fi\n", id, id, id);
         emit_indent(&e->out, indent + 2);
-        buf_appendf(&e->out, "if [[ \"$__ds_right_%zu\" == true ]]; then __ds_right_%zu=1; else __ds_right_%zu=0; fi\n", id, id, id);
+        ds_string_appendf(&e->out, "if [[ \"$__ds_right_%zu\" == true ]]; then __ds_right_%zu=1; else __ds_right_%zu=0; fi\n", id, id, id);
         emit_indent(&e->out, indent + 2);
-        buf_appendf(&e->out, "if (( __ds_left_%zu %s __ds_right_%zu )); then\n", id, desc ? "<" : ">", id);
+        ds_string_appendf(&e->out, "if (( __ds_left_%zu %s __ds_right_%zu )); then\n", id, desc ? "<" : ">", id);
     } else {
-        buf_appendf(&e->out, "if [[ \"$__ds_left_%zu\" %s \"$__ds_right_%zu\" ]]; then\n", id, desc ? "<" : ">", id);
+        ds_string_appendf(&e->out, "if [[ \"$__ds_left_%zu\" %s \"$__ds_right_%zu\" ]]; then\n", id, desc ? "<" : ">", id);
     }
     emit_indent(&e->out, indent + 3);
-    buf_appendf(&e->out, "__ds_sort_%zu[$__ds_j_%zu]=\"$__ds_prev_%zu\"\n", id, id, id);
+    ds_string_appendf(&e->out, "__ds_sort_%zu[$__ds_j_%zu]=\"$__ds_prev_%zu\"\n", id, id, id);
     emit_indent(&e->out, indent + 3);
-    buf_appendf(&e->out, "__ds_j_%zu=$((__ds_j_%zu - 1))\n", id, id);
+    ds_string_appendf(&e->out, "__ds_j_%zu=$((__ds_j_%zu - 1))\n", id, id);
     emit_indent(&e->out, indent + 2);
     buf_append(&e->out, "else break; fi\n");
     emit_indent(&e->out, indent + 1);
     buf_append(&e->out, "done\n");
     emit_indent(&e->out, indent + 1);
-    buf_appendf(&e->out, "__ds_sort_%zu[$__ds_j_%zu]=\"$__ds_key_%zu\"\n", id, id, id);
+    ds_string_appendf(&e->out, "__ds_sort_%zu[$__ds_j_%zu]=\"$__ds_key_%zu\"\n", id, id, id);
     emit_indent(&e->out, indent);
     buf_append(&e->out, "done\n");
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "for __ds_idx_%zu in \"${__ds_sort_%zu[@]}\"; do\n", id, id);
+    ds_string_appendf(&e->out, "for __ds_idx_%zu in \"${__ds_sort_%zu[@]}\"; do\n", id, id);
     emit_indent(&e->out, indent + 1);
     emit_var_name(&e->out, dest);
     buf_append(&e->out, "+=(\"${#");
@@ -766,13 +766,13 @@ bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr
         bash_emit_row_field_array_name(&e->out, dest, schema->items[i].name);
         buf_append(&e->out, "+=(\"${");
         bash_emit_row_field_array_name(&e->out, src, schema->items[i].name);
-        buf_appendf(&e->out, "[$__ds_idx_%zu]}\")\n", id);
+        ds_string_appendf(&e->out, "[$__ds_idx_%zu]}\")\n", id);
     }
     emit_indent(&e->out, indent);
     buf_append(&e->out, "done\n");
     if (field_kind == DS_LOWER_VALUE_STRING) {
         emit_indent(&e->out, indent);
-        buf_appendf(&e->out, "if (( __ds_lc_set_%zu )); then LC_ALL=\"$__ds_lc_old_%zu\"; else unset LC_ALL; fi\n", id, id);
+        ds_string_appendf(&e->out, "if (( __ds_lc_set_%zu )); then LC_ALL=\"$__ds_lc_old_%zu\"; else unset LC_ALL; fi\n", id, id);
     }
     free(field_data);
     free(dir_data);

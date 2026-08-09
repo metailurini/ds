@@ -1,6 +1,8 @@
 #include "ds_runtime.h"
 #include "runtime/hashmap.h"
 
+#include <stdarg.h>
+
 static hashmap *ds_map_impl(DsMap *map) {
     return (hashmap *)map->impl;
 }
@@ -33,6 +35,21 @@ bool ds_string_append_cstr(DsString *s, const char *text) {
 
 bool ds_string_append_char(DsString *s, char c) {
     return ds_string_append_range(s, &c, 1);
+}
+
+bool ds_string_appendf(DsString *s, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    va_list copy;
+    va_copy(copy, args);
+    int n = vsnprintf(NULL, 0, fmt, copy);
+    va_end(copy);
+    if (n < 0) { va_end(args); return false; }
+    ds_reserve_char_buffer(&s->data, &s->cap, s->len + (size_t)n + 1, 16);
+    vsnprintf(s->data + s->len, (size_t)n + 1, fmt, args);
+    va_end(args);
+    s->len += (size_t)n;
+    return true;
 }
 
 bool ds_string_append_escaped(DsString *s, const char *data, size_t len) {

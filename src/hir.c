@@ -1,4 +1,5 @@
 #include "ds_hir.h"
+#include "ds_runtime.h"
 #include "ds_signal.h"
 
 static void print_span(FILE *out, DsSpan span) {
@@ -22,6 +23,52 @@ static void print_row_schema(FILE *out, const DsLowerRowSchema *schema) {
 const char *ds_lower_value_kind_name(DsLowerValueKind kind) {
     static const char *const names[] = {"unknown", "bool", "int", "string", "array", "map", "command_result"};
     return (unsigned)kind < DS_ARRAY_LEN(names) ? names[kind] : "unknown";
+}
+
+DsStr ds_lower_program_script_help(const DsSource *source, const DsLowerProgram *program) {
+    DsString out;
+    ds_string_init(&out);
+    ds_string_appendf(&out, "Usage: %s", ds_source_basename(source));
+    bool has_args = false;
+    bool has_options = false;
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_ARG) {
+            has_args = true;
+            ds_string_appendf(&out, " <%.*s>", (int)decl->name.len, ds_str_data(decl->name));
+        } else {
+            has_options = true;
+        }
+    }
+    if (has_options) ds_string_append_cstr(&out, " [options]");
+    ds_string_append_char(&out, '\n');
+    if (has_args) {
+        ds_string_append_cstr(&out, "\nArguments:\n");
+        for (size_t i = 0; i < program->script_decls.len; i++) {
+            const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+            if (decl->kind != DS_SCRIPT_DECL_ARG) continue;
+            ds_string_appendf(&out, "  %.*s %s\n", (int)decl->name.len, ds_str_data(decl->name), ds_script_type_name(decl->type));
+        }
+    }
+    ds_string_append_cstr(&out, "\nOptions:\n");
+    for (size_t i = 0; i < program->script_decls.len; i++) {
+        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
+        if (decl->kind == DS_SCRIPT_DECL_OPTION) {
+            ds_string_appendf(&out, "  --%.*s %s    default: ", (int)decl->name.len, ds_str_data(decl->name), ds_script_type_name(decl->type));
+            if (decl->type == DS_SCRIPT_TYPE_STRING) {
+                ds_string_append_range(&out, ds_str_data(decl->default_text), decl->default_text.len);
+            } else if (decl->type == DS_SCRIPT_TYPE_INT) {
+                ds_string_appendf(&out, "%lld", (long long)decl->default_int);
+            } else {
+                ds_string_append_cstr(&out, decl->default_bool ? "true" : "false");
+            }
+            ds_string_append_char(&out, '\n');
+        } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
+            ds_string_appendf(&out, "  --%.*s            boolean flag\n", (int)decl->name.len, ds_str_data(decl->name));
+        }
+    }
+    ds_string_append_cstr(&out, "  --help             show this help\n");
+    return (DsStr){out.data, out.len};
 }
 
 static const char *script_decl_kind(DsScriptDeclKind kind) {

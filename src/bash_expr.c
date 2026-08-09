@@ -24,7 +24,7 @@ static bool emit_int_comparison(BashEmitter *e, const DsLowerExpr *left, const D
                                 const char *op, EmitBuf *out) {
     buf_append(out, "(( ");
     if (!emit_arithmetic_operand_or_raw_temp(e, left, left_temp, out)) return false;
-    buf_appendf(out, " %s ", op);
+    ds_string_appendf(out, " %s ", op);
     if (!emit_arithmetic_operand_or_raw_temp(e, right, right_temp, out)) return false;
     buf_append(out, " ))");
     return true;
@@ -167,14 +167,14 @@ static bool emit_membership_condition(BashEmitter *e, const DsLowerExpr *expr, E
     }
     if (right->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(right->as.call.name) && stdlib_returns_array(right->as.call.name)) {
         size_t temp_id = e->temp_counter++;
-        buf_appendf(out, "__ds_found=false; __ds_i=0; __ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'; ", temp_id);
+        ds_string_appendf(out, "__ds_found=false; __ds_i=0; __ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'; ", temp_id);
         if (!emit_stdlib_call(e, right, out)) return false;
-        buf_appendf(out, " >\"$__ds_iter_%zu\"; ", temp_id);
+        ds_string_appendf(out, " >\"$__ds_iter_%zu\"; ", temp_id);
         buf_append(out, stdlib_array_call_uses_nul_records(right) ? "while IFS= read -r -d '' __ds_item; do [[ " : "while IFS= read -r __ds_item; do [[ ");
         buf_append(out, "$__ds_needle_type == ");
         const char *elem_type = ds_lower_value_kind_name(elem_kind == DS_LOWER_VALUE_UNKNOWN ? DS_LOWER_VALUE_STRING : elem_kind);
         bash_single_quote(out, elem_type, strlen(elem_type));
-        buf_appendf(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done <\"$__ds_iter_%zu\"; __ds_temp_remove \"$__ds_iter_%zu\"; [[ $__ds_found == true ]]; }", temp_id, temp_id);
+        ds_string_appendf(out, " && \"$__ds_needle\" == \"$__ds_item\" ]] && { __ds_found=true; break; }; __ds_i=$((__ds_i + 1)); done <\"$__ds_iter_%zu\"; __ds_temp_remove \"$__ds_iter_%zu\"; [[ $__ds_found == true ]]; }", temp_id, temp_id);
         return true;
     }
     buf_append(out, "__ds_found=false; __ds_i=0; for __ds_item in ");
@@ -684,7 +684,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             } else {
                 buf_append(out, "[[ ");
                 if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.left, left_temp_ptr, out)) return false;
-                buf_appendf(out, " %s ", op);
+                ds_string_appendf(out, " %s ", op);
                 if (!emit_condition_operand_or_raw_temp(e, expr->as.binary.right, right_temp_ptr, out)) return false;
                 buf_append(out, " ]]");
             }
@@ -694,7 +694,7 @@ bool emit_condition(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
         if (int_compare) return emit_int_comparison(e, expr->as.binary.left, expr->as.binary.right, NULL, NULL, op, out);
         buf_append(out, "[[ ");
         if (!emit_condition_operand(e, expr->as.binary.left, out)) return false;
-        buf_appendf(out, " %s ", op);
+        ds_string_appendf(out, " %s ", op);
         if (!emit_condition_operand(e, expr->as.binary.right, out)) return false;
         buf_append(out, " ]]");
         return true;

@@ -21,38 +21,9 @@ static void emit_script_type_assignment(BashEmitter *e, DsStr name, DsScriptType
 static void emit_script_usage(BashEmitter *e, const DsLowerProgram *program) {
     buf_append(&e->out, "__ds_usage() {\n");
     buf_append(&e->out, "  cat <<'__DS_USAGE__'\n");
-    buf_appendf(&e->out, "Usage: %s", ds_source_basename(e->source));
-    for (size_t i = 0; i < program->script_decls.len; i++) {
-        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-        if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, " <%.*s>", (int)decl->name.len, decl->name.data);
-    }
-    bool has_options = false;
-    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind != DS_SCRIPT_DECL_ARG) has_options = true;
-    if (has_options) buf_append(&e->out, " [options]");
-    buf_append(&e->out, "\n");
-    bool has_args = false;
-    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind == DS_SCRIPT_DECL_ARG) has_args = true;
-    if (has_args) {
-        buf_append(&e->out, "\nArguments:\n");
-        for (size_t i = 0; i < program->script_decls.len; i++) {
-            const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-            if (decl->kind == DS_SCRIPT_DECL_ARG) buf_appendf(&e->out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
-        }
-    }
-    buf_append(&e->out, "\nOptions:\n");
-    for (size_t i = 0; i < program->script_decls.len; i++) {
-        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-        if (decl->kind == DS_SCRIPT_DECL_OPTION) {
-            buf_appendf(&e->out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
-            if (decl->type == DS_SCRIPT_TYPE_STRING) buf_append_len(&e->out, ds_str_data(decl->default_text), decl->default_text.len);
-            else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
-            else buf_append(&e->out, decl->default_bool ? "true" : "false");
-            buf_append(&e->out, "\n");
-        } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
-            buf_appendf(&e->out, "  --%.*s            boolean flag\n", (int)decl->name.len, decl->name.data);
-        }
-    }
-    buf_append(&e->out, "  --help             show this help\n");
+    DsStr help = ds_lower_program_script_help(e->source, program);
+    buf_append_dsstr(&e->out, help);
+    free(help.data);
     buf_append(&e->out, "__DS_USAGE__\n");
     buf_append(&e->out, "}\n\n");
 }
@@ -76,7 +47,7 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
             emit_var_name(&e->out, decl->name);
             buf_append(&e->out, "=");
             if (decl->type == DS_SCRIPT_TYPE_STRING) bash_single_quote(&e->out, ds_str_data(decl->default_text), decl->default_text.len);
-            else if (decl->type == DS_SCRIPT_TYPE_INT) buf_appendf(&e->out, "%lld", (long long)decl->default_int);
+            else if (decl->type == DS_SCRIPT_TYPE_INT) ds_string_appendf(&e->out, "%lld", (long long)decl->default_int);
             else buf_append(&e->out, decl->default_bool ? "true" : "false");
             buf_append(&e->out, "\n");
             emit_script_type_assignment(e, decl->name, decl->type);
@@ -103,7 +74,7 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind == DS_SCRIPT_DECL_ARG) continue;
-        buf_appendf(&e->out, "    --%.*s)\n", (int)decl->name.len, decl->name.data);
+        ds_string_appendf(&e->out, "    --%.*s)\n", (int)decl->name.len, decl->name.data);
         buf_append(&e->out, "      $__ds_seen_");
         buf_append_dsstr(&e->out, decl->name);
         buf_append(&e->out, " && __ds_error 'duplicate option `--");
@@ -144,15 +115,15 @@ static void emit_script_args(BashEmitter *e, const DsLowerProgram *program) {
     for (size_t i = 0; i < program->script_decls.len; i++) {
         const DsLowerScriptDecl *decl = &program->script_decls.items[i];
         if (decl->kind != DS_SCRIPT_DECL_ARG) continue;
-        buf_appendf(&e->out, "[[ ${#__ds_positionals[@]} -gt %zu ]] || __ds_error 'missing required argument `%.*s`'\n", arg_index, (int)decl->name.len, decl->name.data);
+        ds_string_appendf(&e->out, "[[ ${#__ds_positionals[@]} -gt %zu ]] || __ds_error 'missing required argument `%.*s`'\n", arg_index, (int)decl->name.len, decl->name.data);
         if (decl->type == DS_SCRIPT_TYPE_INT) {
-            buf_appendf(&e->out, "__ds_parse_int \"${__ds_positionals[%zu]}\" || __ds_error 'invalid int value `'\"${__ds_positionals[%zu]}\"'` for `%.*s`'\n", arg_index, arg_index, (int)decl->name.len, decl->name.data);
+            ds_string_appendf(&e->out, "__ds_parse_int \"${__ds_positionals[%zu]}\" || __ds_error 'invalid int value `'\"${__ds_positionals[%zu]}\"'` for `%.*s`'\n", arg_index, arg_index, (int)decl->name.len, decl->name.data);
         }
         emit_var_name(&e->out, decl->name);
-        buf_appendf(&e->out, "=\"${__ds_positionals[%zu]}\"\n", arg_index);
+        ds_string_appendf(&e->out, "=\"${__ds_positionals[%zu]}\"\n", arg_index);
         arg_index++;
     }
-    buf_appendf(&e->out, "[[ ${#__ds_positionals[@]} -eq %zu ]] || __ds_error 'unexpected extra positional argument `'\"${__ds_positionals[%zu]}\"'`'\n\n", arg_index, arg_index);
+    ds_string_appendf(&e->out, "[[ ${#__ds_positionals[@]} -eq %zu ]] || __ds_error 'unexpected extra positional argument `'\"${__ds_positionals[%zu]}\"'`'\n\n", arg_index, arg_index);
 }
 
 static void emit_helper_source(BashEmitter *e, const char *source) {
@@ -232,19 +203,19 @@ static void emit_cleanup_helpers(BashEmitter *e) {
      * signal contract unless a handler overrides them, and avoid reporting
      * generic command/pipeline failures for signal-triggered cleanup.
      */
-    buf_appendf(&e->out, "__ds_run_direct_command() { local __ds_loc=$1 __ds_allow_quiet=$2; shift 2; local __ds_pid __ds_code; set +e; (trap - %s %s; exec \"$@\") & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '' %s %s; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; set -e; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code != 0 )); then set +e; __ds_fail \"$__ds_loc\" \"$__ds_code\" \"$__ds_allow_quiet\"; __ds_code=$?; return \"$__ds_code\"; fi; return 0; }\n",
+    ds_string_appendf(&e->out, "__ds_run_direct_command() { local __ds_loc=$1 __ds_allow_quiet=$2; shift 2; local __ds_pid __ds_code; set +e; (trap - %s %s; exec \"$@\") & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '' %s %s; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; set -e; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code != 0 )); then set +e; __ds_fail \"$__ds_loc\" \"$__ds_code\" \"$__ds_allow_quiet\"; __ds_code=$?; return \"$__ds_code\"; fi; return 0; }\n",
                 int_name, term_name, int_name, term_name,
                 int_name, int_status, int_name, term_name, term_status, term_name,
                 int_status, int_name, int_status, term_status, term_name, term_status);
     buf_append(&e->out, "if command -v setsid >/dev/null 2>&1; then __ds_setsid() { setsid \"$@\"; }; else __ds_setsid() { python3 -c 'import os,sys; os.setsid(); os.execvp(sys.argv[1],sys.argv[1:])' \"$@\"; }; fi\n");
-    buf_appendf(&e->out, "__ds_run_pipeline() { local __ds_loc=$1 __ds_allow_quiet=$2 __ds_pipeline=$3 __ds_pid __ds_code; set +e; __ds_setsid bash -c '__ds_child_int(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit %d; }; __ds_child_term(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit %d; }; trap __ds_child_int %s; trap __ds_child_term %s; eval \"$1\" & wait \"$!\"' bash \"$__ds_pipeline\" & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; set -e; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if __ds_is_quiet_broken_pipe \"$__ds_code\" \"$__ds_allow_quiet\"; then if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 0; fi; exit 0; fi; if (( __ds_code != 0 )); then printf '%%s: error: pipeline failed with exit %%s\\n' \"$__ds_loc\" \"$__ds_code\" >&2; return \"$__ds_code\"; fi; return 0; }\n",
+    ds_string_appendf(&e->out, "__ds_run_pipeline() { local __ds_loc=$1 __ds_allow_quiet=$2 __ds_pipeline=$3 __ds_pid __ds_code; set +e; __ds_setsid bash -c '__ds_child_int(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit %d; }; __ds_child_term(){ kill $(jobs -p) 2>/dev/null; wait 2>/dev/null; exit %d; }; trap __ds_child_int %s; trap __ds_child_term %s; eval \"$1\" & wait \"$!\"' bash \"$__ds_pipeline\" & __ds_pid=$!; __ds_foreground_pid=$__ds_pid; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; wait \"$__ds_pid\"; __ds_code=$?; __ds_foreground_pid=; trap '__ds_run_signal %s %d' %s; trap '__ds_run_signal %s %d' %s; set -e; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if (( __ds_code == %d )); then __ds_run_signal %s %d; fi; if __ds_is_quiet_broken_pipe \"$__ds_code\" \"$__ds_allow_quiet\"; then if [[ \"${__ds_cleanup_running:-false}\" == true ]]; then return 0; fi; exit 0; fi; if (( __ds_code != 0 )); then printf '%%s: error: pipeline failed with exit %%s\\n' \"$__ds_loc\" \"$__ds_code\" >&2; return \"$__ds_code\"; fi; return 0; }\n",
                 int_status, term_status, int_name, term_name,
                 int_name, int_status, int_name, term_name, term_status, term_name,
                 int_name, int_status, int_name, term_name, term_status, term_name,
                 int_status, int_name, int_status, term_status, term_name, term_status);
     buf_append(&e->out, "trap '__ds_run_cleanup \"$?\"' EXIT\n");
-    buf_appendf(&e->out, "trap '__ds_run_signal %s %d' %s\n", int_name, int_status, int_name);
-    buf_appendf(&e->out, "trap '__ds_run_signal %s %d' %s\n\n", term_name, term_status, term_name);
+    ds_string_appendf(&e->out, "trap '__ds_run_signal %s %d' %s\n", int_name, int_status, int_name);
+    ds_string_appendf(&e->out, "trap '__ds_run_signal %s %d' %s\n\n", term_name, term_status, term_name);
 }
 
 bool ds_emit_bash_program(const DsSource *source, const DsLowerProgram *lowered, const char *output_path, DsDiag *diag) {

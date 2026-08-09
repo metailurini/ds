@@ -7,40 +7,9 @@ static bool parse_runtime_bool(const char *text, bool *out) {
 }
 
 static void print_script_help(const DsSource *source, const DsLowerProgram *program, FILE *out) {
-    fprintf(out, "Usage: %s", ds_source_basename(source));
-    for (size_t i = 0; i < program->script_decls.len; i++) {
-        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-        if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, " <%.*s>", (int)decl->name.len, decl->name.data);
-    }
-    bool has_options = false;
-    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind != DS_SCRIPT_DECL_ARG) has_options = true;
-    if (has_options) fputs(" [options]", out);
-    fputs("\n", out);
-
-    bool has_args = false;
-    for (size_t i = 0; i < program->script_decls.len; i++) if (program->script_decls.items[i].kind == DS_SCRIPT_DECL_ARG) has_args = true;
-    if (has_args) {
-        fputs("\nArguments:\n", out);
-        for (size_t i = 0; i < program->script_decls.len; i++) {
-            const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-            if (decl->kind == DS_SCRIPT_DECL_ARG) fprintf(out, "  %.*s %s\n", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
-        }
-    }
-
-    fputs("\nOptions:\n", out);
-    for (size_t i = 0; i < program->script_decls.len; i++) {
-        const DsLowerScriptDecl *decl = &program->script_decls.items[i];
-        if (decl->kind == DS_SCRIPT_DECL_OPTION) {
-            fprintf(out, "  --%.*s %s    default: ", (int)decl->name.len, decl->name.data, ds_script_type_name(decl->type));
-            if (decl->type == DS_SCRIPT_TYPE_STRING) ds_fprint_str(out, decl->default_text);
-            else if (decl->type == DS_SCRIPT_TYPE_INT) fprintf(out, "%lld", (long long)decl->default_int);
-            else fprintf(out, "%s", decl->default_bool ? "true" : "false");
-            fputc('\n', out);
-        } else if (decl->kind == DS_SCRIPT_DECL_FLAG) {
-            fprintf(out, "  --%.*s            boolean flag\n", (int)decl->name.len, decl->name.data);
-        }
-    }
-    fputs("  --help             show this help\n", out);
+    DsStr help = ds_lower_program_script_help(source, program);
+    ds_fprint_str(out, help);
+    free(help.data);
 }
 
 static int find_decl_by_option(const DsLowerProgram *program, const char *name) {

@@ -4,11 +4,7 @@
 #include "backend.h"
 #include "ds_stdlib.h"
 
-typedef struct {
-    char *data;
-    size_t len;
-    size_t cap;
-} EmitBuf;
+typedef DsString EmitBuf;
 
 typedef struct {
     DsStr *items;
@@ -30,10 +26,8 @@ typedef struct {
     bool needs_case_types;
 } BashEmitter;
 
-void buf_reserve(EmitBuf *buf, size_t need);
 void buf_append_len(EmitBuf *buf, const char *data, size_t len);
 void buf_append(EmitBuf *buf, const char *text);
-void buf_appendf(EmitBuf *buf, const char *fmt, ...);
 
 static inline const char *emit_buf_data(const EmitBuf *buf) {
     return buf && buf->data ? buf->data : "";

@@ -417,12 +417,12 @@ static void emit_decl_name_for_kind(EmitBuf *out, DsStr name, int kind) {
 
 static void emit_save_decl_for_kind(BashEmitter *e, size_t loop_id, const char *label, DsStr name, int kind, int indent) {
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "__ds_map_save_%zu_%s_%d=\n", loop_id, label, kind);
+    ds_string_appendf(&e->out, "__ds_map_save_%zu_%s_%d=\n", loop_id, label, kind);
     emit_indent(&e->out, indent);
     buf_append(&e->out, "if declare -p ");
     emit_decl_name_for_kind(&e->out, name, kind);
     buf_append(&e->out, " >/dev/null 2>&1; then __ds_map_save_");
-    buf_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
+    ds_string_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
     buf_append(&e->out, "=\"$(declare -p ");
     emit_decl_name_for_kind(&e->out, name, kind);
     buf_append(&e->out, ")\"; fi\n");
@@ -435,9 +435,9 @@ static void emit_restore_decl_for_kind(BashEmitter *e, size_t loop_id, const cha
     buf_append(&e->out, "\n");
     emit_indent(&e->out, indent);
     buf_append(&e->out, "if [[ -n \"$__ds_map_save_");
-    buf_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
+    ds_string_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
     buf_append(&e->out, "\" ]]; then eval \"$__ds_map_save_");
-    buf_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
+    ds_string_appendf(&e->out, "%zu_%s_%d", loop_id, label, kind);
     buf_append(&e->out, "\"; fi\n");
 }
 
@@ -464,15 +464,15 @@ static void emit_restore_loop_name(BashEmitter *e, size_t loop_id, const char *l
 
 static void emit_map_loop_copy_ident(BashEmitter *e, DsStr source, DsStr raw_map, int indent, size_t loop_id) {
     emit_indent(&e->out, indent);
-    buf_appendf(&e->out, "for __ds_map_copy_key_%zu in \"${!", loop_id);
+    ds_string_appendf(&e->out, "for __ds_map_copy_key_%zu in \"${!", loop_id);
     emit_var_name(&e->out, source);
     buf_append(&e->out, "[@]}\"; do\n");
 
     emit_indent(&e->out, indent + 1);
     emit_var_name(&e->out, raw_map);
-    buf_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=\"${", loop_id);
+    ds_string_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=\"${", loop_id);
     emit_var_name(&e->out, source);
-    buf_appendf(&e->out, "[$__ds_map_copy_key_%zu]}\"\n", loop_id);
+    ds_string_appendf(&e->out, "[$__ds_map_copy_key_%zu]}\"\n", loop_id);
 
     emit_indent(&e->out, indent + 1);
     buf_append(&e->out, "if declare -p ");
@@ -480,14 +480,14 @@ static void emit_map_loop_copy_ident(BashEmitter *e, DsStr source, DsStr raw_map
     buf_append(&e->out, " >/dev/null 2>&1; then\n");
     emit_indent(&e->out, indent + 2);
     bash_emit_map_value_type_var_name(&e->out, raw_map);
-    buf_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=\"${", loop_id);
+    ds_string_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=\"${", loop_id);
     bash_emit_map_value_type_var_name(&e->out, source);
-    buf_appendf(&e->out, "[$__ds_map_copy_key_%zu]:-unknown}\"\n", loop_id);
+    ds_string_appendf(&e->out, "[$__ds_map_copy_key_%zu]:-unknown}\"\n", loop_id);
     emit_indent(&e->out, indent + 1);
     buf_append(&e->out, "else\n");
     emit_indent(&e->out, indent + 2);
     bash_emit_map_value_type_var_name(&e->out, raw_map);
-    buf_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=unknown\n", loop_id);
+    ds_string_appendf(&e->out, "[\"$__ds_map_copy_key_%zu\"]=unknown\n", loop_id);
     emit_indent(&e->out, indent + 1);
     buf_append(&e->out, "fi\n");
 
@@ -571,7 +571,7 @@ static bool emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent
 bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     emit_indent(&e->out, indent);
     const DsSource *stmt_source = stmt->span.source ? stmt->span.source : e->source;
-    buf_appendf(&e->out, "# ds: %s:%d\n", stmt_source && stmt_source->path ? stmt_source->path : "<source>", stmt->span.start.line);
+    ds_string_appendf(&e->out, "# ds: %s:%d\n", stmt_source && stmt_source->path ? stmt_source->path : "<source>", stmt->span.start.line);
 
     switch (stmt->kind) {
         case DS_LOWER_STMT_LET:
@@ -634,19 +634,19 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "=()\n");
                 emit_indent(&e->out, indent);
                 size_t temp_id = e->temp_counter++;
-                buf_appendf(&e->out, "__ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'\n", temp_id);
+                ds_string_appendf(&e->out, "__ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'\n", temp_id);
                 emit_indent(&e->out, indent);
                 if (!emit_stdlib_call(e, stmt->as.let_stmt.value, &e->out)) return false;
-                buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
+                ds_string_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, stdlib_array_call_uses_nul_records(stmt->as.let_stmt.value) ? "while IFS= read -r -d '' __ds_line; do " : "while IFS= read -r __ds_line; do ");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "+=(\"$__ds_line\"); ");
                 bash_emit_elem_type_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "+=(\"string\"); done");
-                buf_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
+                ds_string_appendf(&e->out, " <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"", temp_id);
+                ds_string_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"", temp_id);
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_str_eq_cstr(stmt->as.let_stmt.value->as.call.name, "rowarray.sort_by")) {
                 if (!bash_emit_row_array_sort_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(stmt->as.let_stmt.value->as.call.name)) {
@@ -845,7 +845,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     return bash_invariant_fail(e, stmt->span, "row-array loop iterable should be named or a known row-array result after lowering");
                 }
                 size_t id = e->temp_counter++;
-                buf_appendf(&e->out, "for __ds_row_i_%zu in \"${!", id);
+                ds_string_appendf(&e->out, "for __ds_row_i_%zu in \"${!", id);
                 emit_var_name(&e->out, iter_name);
                 buf_append(&e->out, "[@]}\"; do\n");
                 emit_indent(&e->out, indent + 1);
@@ -864,7 +864,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                     bash_single_quote(&e->out, field->name.data, field->name.len);
                     buf_append(&e->out, "]=\"${");
                     bash_emit_row_field_array_name(&e->out, iter_name, field->name);
-                    buf_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
+                    ds_string_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
                     emit_indent(&e->out, indent + 1);
                     bash_emit_map_value_type_var_name(&e->out, stmt->as.for_stmt.name);
                     buf_append(&e->out, "[");
@@ -879,7 +879,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                         buf_append_dsstr(&e->out, field->name);
                         buf_append(&e->out, "=\"${");
                         bash_emit_row_field_array_name(&e->out, iter_name, field->name);
-                        buf_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
+                        ds_string_appendf(&e->out, "[$__ds_row_i_%zu]}\"\n", id);
                     }
                 }
                 size_t mark = e->symbols.len;
@@ -924,10 +924,10 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 buf_append(&e->out, "[@]}\"; do\n");
             } else {
                 temp_id = e->temp_counter++;
-                buf_appendf(&e->out, "__ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'\n", temp_id);
+                ds_string_appendf(&e->out, "__ds_mktemp_file __ds_iter_%zu 'failed to create stdlib iteration temp file'\n", temp_id);
                 emit_indent(&e->out, indent);
                 if (!emit_stdlib_call(e, stmt->as.for_stmt.iterable, &e->out)) return false;
-                buf_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
+                ds_string_appendf(&e->out, " >\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
                 buf_append(&e->out, stdlib_array_call_uses_nul_records(stmt->as.for_stmt.iterable) ? "while IFS= read -r -d '' " : "while IFS= read -r ");
                 emit_var_name(&e->out, stmt->as.for_stmt.name);
@@ -941,9 +941,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             emit_indent(&e->out, indent);
             if (stmt->as.for_stmt.iterable->kind == DS_LOWER_EXPR_IDENT || iterable_is_user_array_call) buf_append(&e->out, "done\n\n");
             else {
-                buf_appendf(&e->out, "done <\"$__ds_iter_%zu\"\n", temp_id);
+                ds_string_appendf(&e->out, "done <\"$__ds_iter_%zu\"\n", temp_id);
                 emit_indent(&e->out, indent);
-                buf_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"\n\n", temp_id);
+                ds_string_appendf(&e->out, "__ds_temp_remove \"$__ds_iter_%zu\"\n\n", temp_id);
             }
             return true;
         }
@@ -1035,19 +1035,19 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
         case DS_LOWER_STMT_FOR_RANGE: {
             size_t temp_id = e->temp_counter++;
             emit_indent(&e->out, indent);
-            buf_appendf(&e->out, "__ds_range_start_%zu=", temp_id);
+            ds_string_appendf(&e->out, "__ds_range_start_%zu=", temp_id);
             if (!emit_value_expr(e, stmt->as.for_stmt.iterable->as.range.start, &e->out)) return false;
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
-            buf_appendf(&e->out, "__ds_range_end_%zu=", temp_id);
+            ds_string_appendf(&e->out, "__ds_range_end_%zu=", temp_id);
             if (!emit_value_expr(e, stmt->as.for_stmt.iterable->as.range.end, &e->out)) return false;
             buf_append(&e->out, "\n");
             emit_indent(&e->out, indent);
             buf_append(&e->out, "for (( ");
             emit_var_name(&e->out, stmt->as.for_stmt.name);
-            buf_appendf(&e->out, "=__ds_range_start_%zu; ", temp_id);
+            ds_string_appendf(&e->out, "=__ds_range_start_%zu; ", temp_id);
             emit_var_name(&e->out, stmt->as.for_stmt.name);
-            buf_appendf(&e->out, "<=__ds_range_end_%zu; ", temp_id);
+            ds_string_appendf(&e->out, "<=__ds_range_end_%zu; ", temp_id);
             emit_var_name(&e->out, stmt->as.for_stmt.name);
             buf_append(&e->out, "++ )); do\n");
             size_t mark = e->symbols.len;
@@ -1155,7 +1155,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             size_t id = e->handler_counter++;
             const char *sig = ds_handler_signal_name(stmt->as.handler_stmt.signal);
             emit_indent(&e->out, indent);
-            buf_appendf(&e->out, "__ds_handler_%zu() {\n", id);
+            ds_string_appendf(&e->out, "__ds_handler_%zu() {\n", id);
             e->handler_depth++;
             if (!emit_block_body(e, stmt->as.handler_stmt.body, indent + 1)) return false;
             e->handler_depth--;
@@ -1163,9 +1163,9 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             buf_append(&e->out, "}\n");
             emit_indent(&e->out, indent);
             if (stmt->kind == DS_LOWER_STMT_TRAP) {
-                buf_appendf(&e->out, "__ds_trap_%s=__ds_handler_%zu\n\n", sig, id);
+                ds_string_appendf(&e->out, "__ds_trap_%s=__ds_handler_%zu\n\n", sig, id);
             } else {
-                buf_appendf(&e->out, "__ds_defer_%s+=(__ds_handler_%zu)\n\n", sig, id);
+                ds_string_appendf(&e->out, "__ds_defer_%s+=(__ds_handler_%zu)\n\n", sig, id);
             }
             return true;
         }
