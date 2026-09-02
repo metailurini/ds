@@ -150,14 +150,8 @@ static void collect_expr(BashDeps *deps, const DsLowerExpr *expr, ExprScan scan)
     if (!expr) return;
 
     switch (expr->kind) {
-        case DS_LOWER_EXPR_STRING: {
-            bool indexed = string_literal_contains_index_interpolation(expr->as.text);
-            deps->string_helper_mask |= string_literal_helper_mask(expr->as.text);
-            deps->uses_collection_index |= indexed;
-            deps->uses_array_helpers |= indexed;
-            deps->uses_map_helpers |= indexed;
+        case DS_LOWER_EXPR_STRING:
             return;
-        }
         case DS_LOWER_EXPR_RUN:
             if (scan.run_and_membership) {
                 deps->uses_run = true;
@@ -202,6 +196,22 @@ static void collect_expr(BashDeps *deps, const DsLowerExpr *expr, ExprScan scan)
             collect_call(deps, expr->as.call.name, &expr->as.call.args);
             deps->uses_function_value_helpers |= expr->as.call.is_user_function;
             for (size_t i = 0; i < expr->as.call.args.len; i++) collect_expr(deps, expr->as.call.args.items[i], scan);
+            return;
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            return;
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            switch (expr->as.interp_format.spec.kind) {
+                case DS_INTERP_FORMAT_UPPER: deps->string_helper_mask |= DS_BASH_STRING_HELPER_UPPER; break;
+                case DS_INTERP_FORMAT_LOWER: deps->string_helper_mask |= DS_BASH_STRING_HELPER_LOWER; break;
+                case DS_INTERP_FORMAT_TRIM: deps->string_helper_mask |= DS_BASH_STRING_HELPER_TRIM; break;
+                case DS_INTERP_FORMAT_ALIGN_CENTER: deps->string_helper_mask |= DS_BASH_STRING_HELPER_FORMAT_CENTER; break;
+                case DS_INTERP_FORMAT_ALIGN_LEFT:
+                case DS_INTERP_FORMAT_ALIGN_RIGHT:
+                case DS_INTERP_FORMAT_INT_DECIMAL:
+                case DS_INTERP_FORMAT_INT_FIXED:
+                    break;
+            }
+            collect_expr(deps, expr->as.interp_format.value, scan);
             return;
         case DS_LOWER_EXPR_INTERP:
             for (size_t i = 0; i < expr->as.interp.parts.len; i++) collect_expr(deps, expr->as.interp.parts.items[i], scan);

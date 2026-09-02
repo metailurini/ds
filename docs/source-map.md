@@ -51,7 +51,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/ds_command.h` | command word/stage/redirection/capture metadata and command-word shape helpers shared by AST/HIR/lowerer/backends | no parser cursor, command validation, VM execution, or Bash quoting |
 | `src/ds_ast.h` | parser-facing AST node shapes and source-level script type names | syntax preservation only; no semantic value kinds or backend contracts; `ds_script_type_name()` is the shared label helper for `string`/`int`/`bool` |
 | `src/frontend.h` | lexer/parser public entrypoints and token vectors | no lower/backend APIs |
-| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract and lowered value-kind labels | backend-neutral only; `ds_lower_value_kind_name()` owns shared lowered-value metadata labels |
+| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract, structured normal-string interpolation parts, and lowered value-kind labels | backend-neutral only; normal interpolation carries parsed format metadata rather than backend-readable source text |
 | `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
 | `src/ds_stdlib.h` | stdlib helper metadata, namespace/classification APIs, Bash dependency masks, array transport/kind facts, and recursive-glob pattern classifier shared by lowerer/VM/Bash | metadata and shared validation helpers, not backend traversal implementation |
 | `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |
@@ -100,9 +100,9 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower.c` | lowerer orchestration and test-block collection | coordinates explicit semantic phases only; context/symbol/kind/schema mechanics live in focused modules |
 | `src/lower_expr.c` | expression lowering and expression value-kind checks | delegates generic string interpolation to `lower_interpolation.c`; keep command-specific interpolation in `lower_command.c` |
 | `src/lower_interp_parser.c` | shared AST parser for expression interpolation bodies | consumed by normal string lowering and function-parameter inference; no command-word acceptance policy |
-| `src/lower_interpolation.c` | generic string interpolation lowering for normal string expressions | consumes the shared interpolation-expression parser; not command-word policy |
+| `src/lower_interpolation.c` | normal-string interpolation validation and normalization | emits structured HIR text/value/format parts from the shared interpolation-expression parser; no command-word policy |
 | `src/lower_collection.c` | collection portability policy gates for named storage, literal/variable indexes, portable elements, and portable array iterables | lowerer-owned VM/Bash parity rules; VM/Bash must not rediscover these acceptance rules |
-| `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, direct scalar value-call interpolation materialization | consumes shared command-word shape and format-spec metadata; stable owner for command-word lowering |
+| `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, direct scalar value-call interpolation materialization | intentionally separate from normalized normal strings because command words have different evaluation/materialization rules; still transitional raw-word HIR |
 | `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | owns flat index-assignment target/RHS validation, collection loop legality, and delegates command-word details to `lower_command.c` |
 | `src/lower_context.c` | semantic context lifetime, root scope ownership, shared lowerer diagnostics | owns mutable lowering-session setup/cleanup; no AST traversal policy |
 | `src/lower_kinds.c` | lowerer `SymKind`/HIR kind conversion, scalar facts, stdlib/result-field kind facts | one source of truth for semantic kind mapping |

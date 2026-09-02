@@ -177,13 +177,25 @@ static int compile_expr(Program *p, const DsLowerExpr *expr);
 static int compile_string_expr(Program *p, const DsLowerExpr *expr) {
     DsString decoded;
     decode_string_text(expr->as.text, &decoded);
-    int c = add_const(p, ds_value_string_take(&decoded));
+    return compile_const(p, expr->span, ds_value_string_take(&decoded));
+}
+
+static int compile_interp_text_expr(Program *p, const DsLowerExpr *expr) {
+    DsString text;
+    ds_string_init(&text);
+    ds_string_append_range(&text, expr->as.text.data, expr->as.text.len);
+    return compile_const(p, expr->span, ds_value_string_take(&text));
+}
+
+static int compile_interp_format_expr(Program *p, const DsLowerExpr *expr) {
+    int value = compile_expr(p, expr->as.interp_format.value);
     int r = new_reg(p);
     Instr ins = {0};
-    ins.op = OP_INTERPOLATE;
+    ins.op = OP_INTERP_FORMAT;
     ins.span = expr->span;
     ins.dst = r;
-    ins.a = c;
+    ins.a = value;
+    ins.interp_format = expr->as.interp_format.spec;
     emit_instr(p, ins);
     return r;
 }
@@ -205,6 +217,10 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING:
             return compile_string_expr(p, expr);
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            return compile_interp_text_expr(p, expr);
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            return compile_interp_format_expr(p, expr);
         case DS_LOWER_EXPR_INTERP:
             return compile_interp_expr(p, expr);
         case DS_LOWER_EXPR_INT: {

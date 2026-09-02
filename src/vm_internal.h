@@ -38,7 +38,7 @@ typedef enum {
 
 #define DS_VM_OPCODE_LIST(X) \
     X(LOAD_CONST) X(LOAD_VAR) X(STORE_VAR) X(SET_ENV) X(NOT) X(BINARY) X(COMPARE) \
-    X(MEMBERSHIP) X(REGEX_MATCH) X(INTERPOLATE) X(INTERP_JOIN) X(RUN_CAPTURE) X(GET_FIELD) \
+    X(MEMBERSHIP) X(REGEX_MATCH) X(INTERP_FORMAT) X(INTERP_JOIN) X(RUN_CAPTURE) X(GET_FIELD) \
     X(JUMP) X(JUMP_POP) X(JUMP_IF_FALSE) X(PUSH_SCOPE) X(POP_SCOPE) X(RUN_CMD) X(CALL) \
     X(STDLIB_CALL) X(ARRAY_LITERAL) X(MAP_LITERAL) X(GET_INDEX) X(SET_INDEX) X(PUSH_ARRAY) \
     X(FOR_ARRAY) X(FOR_MAP) X(FOR_RANGE) X(RESET_FOR) X(ASSERT) X(RETURN_VALUE) X(RETURN_FUNC) \
@@ -85,6 +85,7 @@ typedef struct {
     int target;
     char *name;
     OpCmp cmp_enum;
+    DsInterpFormatSpec interp_format;
     char *field;
     int *args;
     size_t arg_count;
@@ -179,6 +180,9 @@ bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span);
 DsValue *lookup_var_ref(Vm *vm, const char *name);
 
 bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span);
+bool vm_format_interpolation_value(Vm *vm, DsValue *value,
+                                   const DsInterpFormatSpec *spec,
+                                   DsString *out, DsSpan span);
 int run_command(Vm *vm, Instr *ins);
 int run_capture(Vm *vm, Instr *ins, DsValue *out_value);
 bool vm_command_result_field(Vm *vm, const DsValue *value, const char *field, DsSpan span, DsValue *out);

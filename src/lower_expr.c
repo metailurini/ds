@@ -842,8 +842,11 @@ SymKind infer_lower_expr_kind(Lower *lower, const DsLowerExpr *expr) {
             Symbol *sym = scope_find(lower->scope, expr->as.text);
             return sym ? sym->kind : SYM_UNKNOWN;
         }
-        case DS_LOWER_EXPR_STRING: return SYM_STRING;
-        case DS_LOWER_EXPR_INTERP: return SYM_STRING;
+        case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INTERP_TEXT:
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+        case DS_LOWER_EXPR_INTERP:
+            return SYM_STRING;
         case DS_LOWER_EXPR_INT: return SYM_INT;
         case DS_LOWER_EXPR_BOOL: return SYM_BOOL;
         case DS_LOWER_EXPR_REGEX: return SYM_UNKNOWN;

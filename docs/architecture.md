@@ -180,8 +180,10 @@ remain handwritten and must not be encoded into the node generator.
   interpreter loop and public VM entrypoints, `src/vm_compile.c` owns HIR to
   bytecode construction, `src/vm_dump.c` owns bytecode/debug output,
   `src/vm_args.c` owns script argument binding, `src/vm_scope.c` owns VM
-  scopes/function calls, `src/vm_process.c` owns command interpolation,
-  redirection, and subprocess execution, while `src/vm.c` keeps the small
+  scopes/function calls, and `src/vm_process.c` owns command-word interpolation,
+  redirection, and subprocess execution. Normal string interpolation arrives as
+  structured HIR and no longer goes through the process-side text parser.
+  `src/vm.c` keeps the small
   VM-backed test execution setup next to the public VM entrypoints.
 - `src/vm_stdlib.c` owns VM execution for `file.*`, `dir.*`, `path.*`, `cmd.*`,
   `env.*`, `glob`, `glob!`, and `lines`.
@@ -191,8 +193,9 @@ remain handwritten and must not be encoded into the node generator.
   `src/bash_expr.c` owns expression and condition rendering;
   `src/bash_command.c` owns command words, redirections, and captured `run`
   argument rendering; `src/bash_stmt.c` owns statement/function rendering;
-  `src/bash_quote.c` owns shared quoting, interpolation, buffer, and symbol
-  utilities; and `src/bash_helpers.c` owns the emitted Bash helper bodies for
+  `src/bash_expr.c` renders structured normal-string interpolation directly;
+  `src/bash_quote.c` owns shared quoting plus the transitional raw command-word
+  interpolation renderer, buffer, and symbol utilities; and `src/bash_helpers.c` owns the emitted Bash helper bodies for
   command-result, collection, debug, and stdlib helpers.
 
 This is deliberately a behavior-preserving split. `include/ds.h` still
@@ -474,7 +477,11 @@ Both VM execution and Bash emission should use this form.
 
 The lowered program centralizes symbol lookup, interpolation validation,
 duplicate declaration checks, supported operator checks, and block-scope
-boundary checks before either backend runs. Lowered blocks compile to explicit
+boundary checks before either backend runs. Normal string interpolation is also
+normalized into backend-neutral HIR parts (`InterpText`, lowered value expressions,
+and parsed format metadata), so VM/Bash do not reparse normal source strings.
+Command words remain a separate transitional representation because their
+evaluation/materialization rules differ from ordinary string values. Lowered blocks compile to explicit
 VM scope push/pop instructions, so runtime variable storage follows the same
 scope model.
 

@@ -8,6 +8,7 @@
         struct { DsLowerExpr *left; DsBinaryOp op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_kind; DsLowerValueKind right_element_kind; } binary;
         struct { DsStr name; DsLowerExprVec args; DsLowerValueKind return_kind; bool is_user_function; bool returns_row; bool returns_row_array; DsLowerRowSchema row_schema; } call;
         struct { DsLowerExprVec parts; } interp;
+        struct { DsLowerExpr *value; DsInterpFormatSpec spec; } interp_format;
         struct { DsLowerExprVec elements; bool is_row_array; DsLowerRowSchema row_schema; } array;
         struct { DsLowerMapEntryVec entries; bool is_row; DsLowerRowSchema row_schema; } map;
         struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; bool returns_row; DsLowerRowSchema row_schema; } index;

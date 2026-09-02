@@ -11,7 +11,7 @@ constants:
   3: int 2
 
 instructions:
-  0000 INTERPOLATE    r0, const 0    # tests/v0_3/fixtures/mixed.ds:1:12
+  0000 LOAD_CONST     r0, const 0    # tests/v0_3/fixtures/mixed.ds:1:12
   0001 STORE_VAR      name, r0    # tests/v0_3/fixtures/mixed.ds:1:1
   0002 LOAD_CONST     r1, const 1    # tests/v0_3/fixtures/mixed.ds:2:13
   0003 STORE_VAR      count, r1    # tests/v0_3/fixtures/mixed.ds:2:1

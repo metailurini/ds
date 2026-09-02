@@ -11,9 +11,9 @@ constants:
   3: bool true
 
 instructions:
-  0000 INTERPOLATE    r0, const 0    # tests/v0_6/fixtures/imports_basic/lib.ds:1:11
+  0000 LOAD_CONST     r0, const 0    # tests/v0_6/fixtures/imports_basic/lib.ds:1:11
   0001 STORE_VAR      app, r0    # tests/v0_6/fixtures/imports_basic/lib.ds:1:1
-  0002 INTERPOLATE    r1, const 1    # tests/v0_6/fixtures/imports_basic/constants.ds:1:14
+  0002 LOAD_CONST     r1, const 1    # tests/v0_6/fixtures/imports_basic/constants.ds:1:14
   0003 STORE_VAR      target, r1    # tests/v0_6/fixtures/imports_basic/constants.ds:1:1
   0004 LOAD_CONST     r2, const 2    # tests/v0_6/fixtures/imports_basic/constants.ds:2:15
   0005 STORE_VAR      retries, r2    # tests/v0_6/fixtures/imports_basic/constants.ds:2:1

@@ -2,6 +2,7 @@
 #define DS_HIR_H
 
 #include "ds_ast.h"
+#include "ds_interpolation.h"
 
 typedef struct {
     DsScriptDeclKind kind;

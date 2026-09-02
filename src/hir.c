@@ -79,6 +79,26 @@ static const char *script_decl_kind(DsScriptDeclKind kind) {
 static void dump_expr(FILE *out, const DsLowerExpr *expr, int level);
 static void dump_stmt(FILE *out, const DsLowerStmt *stmt, int level);
 
+static void print_interp_format(FILE *out, const DsInterpFormatSpec *spec) {
+    switch (spec->kind) {
+        case DS_INTERP_FORMAT_UPPER: fputs("upper", out); break;
+        case DS_INTERP_FORMAT_LOWER: fputs("lower", out); break;
+        case DS_INTERP_FORMAT_TRIM: fputs("trim", out); break;
+        case DS_INTERP_FORMAT_ALIGN_LEFT: fprintf(out, "<%d", spec->width); break;
+        case DS_INTERP_FORMAT_ALIGN_RIGHT: fprintf(out, ">%d", spec->width); break;
+        case DS_INTERP_FORMAT_ALIGN_CENTER: fprintf(out, "^%d", spec->width); break;
+        case DS_INTERP_FORMAT_INT_DECIMAL:
+            if (spec->zero_pad) fputc('0', out);
+            fprintf(out, "%dd", spec->width);
+            break;
+        case DS_INTERP_FORMAT_INT_FIXED:
+            if (spec->width > 0) fprintf(out, "%d", spec->width);
+            fprintf(out, ".%df", spec->precision);
+            break;
+    }
+}
+
+
 static void print_literal_expr(FILE *out, const DsLowerExpr *expr) {
     if (!expr) {
         fputs("<default>", out);
@@ -170,6 +190,12 @@ static void dump_expr(FILE *out, const DsLowerExpr *expr, int level) {
             break;
         case DS_LOWER_EXPR_CALL:
             fputs("Call ", out); ds_fprint_str(out, expr->as.call.name); if (expr->as.call.returns_row || expr->as.call.returns_row_array) print_row_schema(out, &expr->as.call.row_schema); print_span(out, expr->span); dump_expr_vec(out, &expr->as.call.args, level); if (expr->as.call.args.len == 0) fputc('\n', out); break;
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            fputs("InterpText ", out); ds_fprint_str(out, expr->as.text); print_span(out, expr->span); fputc('\n', out); break;
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            fputs("InterpFormat ", out); print_interp_format(out, &expr->as.interp_format.spec); print_span(out, expr->span); fputc('\n', out);
+            dump_expr(out, expr->as.interp_format.value, level + 1);
+            break;
         case DS_LOWER_EXPR_INTERP:
             fputs("InterpolatedString", out); print_span(out, expr->span); dump_expr_vec(out, &expr->as.interp.parts, level); if (expr->as.interp.parts.len == 0) fputc('\n', out); break;
         case DS_LOWER_EXPR_ARRAY:

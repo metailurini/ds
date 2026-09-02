@@ -32,6 +32,12 @@
             lower_expr_vec_free(&expr->as.call.args);
             row_schema_free(&expr->as.call.row_schema);
             break;
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            free(expr->as.text.data);
+            break;
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            lower_expr_free(expr->as.interp_format.value);
+            break;
         case DS_LOWER_EXPR_INTERP:
             lower_expr_vec_free(&expr->as.interp.parts);
             break;

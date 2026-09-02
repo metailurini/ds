@@ -29,6 +29,14 @@ void lower_validate_portable_collection_index(Lower *lower, const DsLowerExpr *e
                   "collection index expression must be a literal or variable for VM/Bash parity; bind the computed index to a variable first");
 }
 
+static bool lower_interp_is_literal_text(const DsLowerExpr *expr) {
+    if (!expr || expr->kind != DS_LOWER_EXPR_INTERP) return false;
+    for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
+        if (expr->as.interp.parts.items[i]->kind != DS_LOWER_EXPR_INTERP_TEXT) return false;
+    }
+    return true;
+}
+
 bool lower_collection_element_is_portable(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
@@ -38,6 +46,8 @@ bool lower_collection_element_is_portable(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_FIELD:
         case DS_LOWER_EXPR_INDEX:
             return true;
+        case DS_LOWER_EXPR_INTERP:
+            return lower_interp_is_literal_text(expr);
         default:
             return false;
     }

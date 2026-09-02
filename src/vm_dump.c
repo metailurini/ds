@@ -149,7 +149,7 @@ void ds_bytecode_dump_program(const DsSource *source, const DsLowerProgram *lowe
             case OP_COMPARE: fprintf(out, " r%d, r%d %s r%d", ins->dst, ins->a, op_cmp_name(ins->cmp_enum), ins->b); break;
             case OP_MEMBERSHIP: fprintf(out, " r%d, r%d in r%d", ins->dst, ins->a, ins->b); break;
             case OP_REGEX_MATCH: fprintf(out, " r%d, r%d matches r%d", ins->dst, ins->a, ins->b); break;
-            case OP_INTERPOLATE: fprintf(out, " r%d, const %d", ins->dst, ins->a); break;
+            case OP_INTERP_FORMAT: fprintf(out, " r%d, format(r%d)", ins->dst, ins->a); break;
             case OP_INTERP_JOIN:
                 fprintf(out, " r%d, join(", ins->dst);
                 print_reg_args(out, ins);

@@ -33,7 +33,7 @@ check-generated: $(NODE_GENERATOR)
 	rm -rf "$$tmp"; \
 	exit $$status
 
-$(NODE_GENERATOR): tools/gen_nodes.c | build
+$(NODE_GENERATOR): tools/gen_nodes.c $(NODE_SCHEMAS) | build
 	$(CC) $(CFLAGS) $< -o $@
 
 src/generated/.stamp: $(NODE_GENERATOR) $(NODE_SCHEMAS)

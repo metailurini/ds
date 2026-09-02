@@ -219,12 +219,94 @@ static bool emit_double_quoted_literal(BashEmitter *e, const DsLowerExpr *expr, 
     return true;
 }
 
+static bool emit_interp_text_expr(const DsLowerExpr *expr, EmitBuf *out) {
+    buf_append(out, "\"");
+    for (size_t i = 0; i < expr->as.text.len; i++) {
+        char c = expr->as.text.data[i];
+        if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
+        ds_string_append_range(out, &c, 1);
+    }
+    buf_append(out, "\"");
+    return true;
+}
+
+static bool emit_interp_format_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
+    const DsInterpFormatSpec *spec = &expr->as.interp_format.spec;
+    const DsLowerExpr *value = expr->as.interp_format.value;
+    if (spec->kind == DS_INTERP_FORMAT_UPPER || spec->kind == DS_INTERP_FORMAT_LOWER ||
+        spec->kind == DS_INTERP_FORMAT_TRIM) {
+        const char *helper = spec->kind == DS_INTERP_FORMAT_UPPER ? "__ds_string_upper" :
+                             spec->kind == DS_INTERP_FORMAT_LOWER ? "__ds_string_lower" :
+                                                                   "__ds_string_trim";
+        buf_append(out, "$(");
+        buf_append(out, helper);
+        buf_append(out, " ");
+        if (!emit_value_expr(e, value, out)) return false;
+        buf_append(out, ")");
+        return true;
+    }
+    if (spec->kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
+        ds_string_appendf(out, "$(__ds_format_center %d ", spec->width);
+        if (!emit_value_expr(e, value, out)) return false;
+        buf_append(out, ")");
+        return true;
+    }
+    if (spec->kind == DS_INTERP_FORMAT_ALIGN_LEFT || spec->kind == DS_INTERP_FORMAT_ALIGN_RIGHT) {
+        buf_append(out, "$(printf '");
+        if (spec->kind == DS_INTERP_FORMAT_ALIGN_LEFT) ds_string_appendf(out, "%%-%ds' ", spec->width);
+        else ds_string_appendf(out, "%%%ds' ", spec->width);
+        if (!emit_value_expr(e, value, out)) return false;
+        buf_append(out, ")");
+        return true;
+    }
+    buf_append(out, "$(printf '");
+    if (spec->kind == DS_INTERP_FORMAT_INT_DECIMAL) {
+        buf_append(out, "%");
+        if (spec->zero_pad) buf_append(out, "0");
+        ds_string_appendf(out, "%dd' ", spec->width);
+    } else {
+        buf_append(out, "%");
+        if (spec->width > 0) ds_string_appendf(out, "%d", spec->width);
+        ds_string_appendf(out, ".%df' ", spec->precision);
+    }
+    if (!emit_value_expr(e, value, out)) return false;
+    buf_append(out, ")");
+    return true;
+}
+
+static bool interp_can_emit_single_quoted_string(const DsLowerExpr *expr) {
+    for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
+        DsLowerExprKind kind = expr->as.interp.parts.items[i]->kind;
+        if (kind != DS_LOWER_EXPR_INTERP_TEXT && kind != DS_LOWER_EXPR_IDENT) return false;
+    }
+    return true;
+}
+
 static bool emit_interp_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
     if (expr->as.interp.parts.len == 0) { buf_append(out, "\"\""); return true; }
+    if (interp_can_emit_single_quoted_string(expr)) {
+        buf_append(out, "\"");
+        for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
+            const DsLowerExpr *part = expr->as.interp.parts.items[i];
+            if (part->kind == DS_LOWER_EXPR_INTERP_TEXT) {
+                for (size_t j = 0; j < part->as.text.len; j++) {
+                    char c = part->as.text.data[j];
+                    if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
+                    ds_string_append_range(out, &c, 1);
+                }
+            } else {
+                buf_append(out, "${");
+                emit_var_name(out, part->as.text);
+                buf_append(out, "}");
+            }
+        }
+        buf_append(out, "\"");
+        return true;
+    }
     for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
         const DsLowerExpr *part = expr->as.interp.parts.items[i];
-        if (part->kind == DS_LOWER_EXPR_STRING) {
-            if (!emit_double_quoted_literal(e, part, out)) return false;
+        if (part->kind == DS_LOWER_EXPR_INTERP_TEXT) {
+            if (!emit_interp_text_expr(part, out)) return false;
         } else if (!emit_value_expr(e, part, out)) return false;
     }
     return true;
@@ -238,7 +320,11 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             buf_append(out, "\"");
             return true;
         case DS_LOWER_EXPR_STRING:
-            return emit_interpolated_string(e, expr, out);
+            return emit_double_quoted_literal(e, expr, out);
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            return emit_interp_text_expr(expr, out);
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            return emit_interp_format_expr(e, expr, out);
         case DS_LOWER_EXPR_INTERP:
             return emit_interp_expr(e, expr, out);
         case DS_LOWER_EXPR_INT:
@@ -411,7 +497,7 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
             buf_append(out, "\"");
             return true;
         case DS_LOWER_EXPR_STRING:
-            return emit_interpolated_string(e, expr, out);
+            return emit_double_quoted_literal(e, expr, out);
         case DS_LOWER_EXPR_INT:
             buf_append_dsstr(out, expr->as.text);
             return true;
@@ -427,6 +513,8 @@ bool emit_condition_operand(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *ou
         case DS_LOWER_EXPR_INDEX:
         case DS_LOWER_EXPR_BINARY:
         case DS_LOWER_EXPR_UNARY:
+        case DS_LOWER_EXPR_INTERP_TEXT:
+        case DS_LOWER_EXPR_INTERP_FORMAT:
         case DS_LOWER_EXPR_INTERP:
             return emit_value_expr(e, expr, out);
         default:
