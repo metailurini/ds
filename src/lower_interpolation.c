@@ -1,5 +1,5 @@
 #include "lower_internal.h"
-#include "lower_interp_parser.h"
+#include "lower_interp_segments.h"
 #include "ds_interpolation.h"
 
 static DsInterpValueKind interp_value_kind_from_sym(SymKind kind) {
@@ -18,17 +18,11 @@ static DsInterpValueKind interp_value_kind_from_sym(SymKind kind) {
     return DS_INTERP_VALUE_UNKNOWN;
 }
 
-static void interp_literal_clear(DsString *literal) {
-    literal->len = 0;
-    if (literal->data) literal->data[0] = '\0';
-}
-
-static void interp_push_text(DsLowerExpr *out, DsString *literal, DsSpan span) {
-    if (!literal || literal->len == 0) return;
+static void interp_push_text(DsLowerExpr *out, DsStr text, DsSpan span) {
+    if (text.len == 0) return;
     DsLowerExpr *part = expr_new(DS_LOWER_EXPR_INTERP_TEXT, span);
-    part->as.text = (DsStr){ds_str_dup_range(literal->data, literal->len), literal->len};
+    part->as.text = ds_str_clone(text);
     DS_VEC_PUSH(&out->as.interp.parts, part, 8);
-    interp_literal_clear(literal);
 }
 
 static DsLowerExpr *interp_lower_value(Lower *lower, const DsExpr *inner, DsSpan span,
@@ -57,94 +51,61 @@ static DsLowerExpr *interp_apply_format(Lower *lower, DsLowerExpr *value, SymKin
     return formatted;
 }
 
-static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr,
-                                             DsStr decoded, SymKind *kind_out) {
-    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INTERP, expr->span);
-    DsString literal;
-    ds_string_init(&literal);
-
-    for (size_t i = 0; i < decoded.len;) {
-        char c = decoded.data[i];
-        if (c == '{' && i + 1 < decoded.len && decoded.data[i + 1] == '{') {
-            ds_string_append_char(&literal, '{');
-            i += 2;
-            continue;
-        }
-        if (c == '}' && i + 1 < decoded.len && decoded.data[i + 1] == '}') {
-            ds_string_append_char(&literal, '}');
-            i += 2;
-            continue;
-        }
-        if (c == '}') {
-            ds_diag_error(lower->diag, expr->span,
+static void interp_diag_parse_status(Lower *lower, DsSpan span, LowerInterpParseStatus status) {
+    switch (status) {
+        case LOWER_INTERP_PARSE_OK:
+        case LOWER_INTERP_PARSE_DECODE_ERROR:
+            return;
+        case LOWER_INTERP_PARSE_UNMATCHED_CLOSE:
+            ds_diag_error(lower->diag, span,
                           "unmatched `}` in string interpolation; use `}}` for a literal `}`");
-            break;
-        }
-        if (c != '{') {
-            ds_string_append_char(&literal, c);
-            i++;
+            return;
+        case LOWER_INTERP_PARSE_UNCLOSED:
+            ds_diag_error(lower->diag, span, "unclosed interpolation in string; expected `}`");
+            return;
+        case LOWER_INTERP_PARSE_INVALID_EXPR:
+            ds_diag_error(lower->diag, span,
+                          "unsupported string interpolation; expected a scalar expression such as `{name}`, `{name.field}`, `{name(args...)}`, or `{name.method(...)}`");
+            return;
+    }
+}
+
+static DsLowerExpr *lower_interpolated_expr(Lower *lower, const DsExpr *expr,
+                                             LowerInterpSegments *segments,
+                                             SymKind *kind_out) {
+    DsLowerExpr *out = expr_new(DS_LOWER_EXPR_INTERP, expr->span);
+    for (size_t i = 0; i < segments->len; i++) {
+        LowerInterpSegment *segment = &segments->items[i];
+        if (segment->kind == LOWER_INTERP_SEGMENT_TEXT) {
+            interp_push_text(out, segment->text, expr->span);
             continue;
         }
-
-        interp_push_text(out, &literal, expr->span);
-        size_t cursor = i + 1;
-        ds_skip_ascii_ws(decoded.data, decoded.len, &cursor);
-        DsExpr *inner = lower_interp_parse_expr(decoded, cursor, expr->span, &cursor);
-        ds_skip_ascii_ws(decoded.data, decoded.len, &cursor);
-        if (!inner) {
-            ds_diag_error(lower->diag, expr->span,
-                          "unsupported string interpolation; expected a scalar expression such as `{name}`, `{name.field}`, `{name(args...)}`, or `{name.method(...)}`");
-            break;
-        }
-
-        bool has_format = cursor < decoded.len && decoded.data[cursor] == ':';
-        size_t spec_start = 0;
-        if (has_format) {
-            spec_start = ++cursor;
-            while (cursor < decoded.len && decoded.data[cursor] != '}') cursor++;
-        }
-        if (cursor >= decoded.len) {
-            ds_expr_free(inner);
-            ds_diag_error(lower->diag, expr->span,
-                          "unclosed interpolation in string; expected `}`");
-            break;
-        }
-        if (decoded.data[cursor] != '}') {
-            ds_expr_free(inner);
-            ds_diag_error(lower->diag, expr->span,
-                          "unsupported string interpolation; expected a scalar expression such as `{name}`, `{name.field}`, `{name(args...)}`, or `{name.method(...)}`");
-            break;
-        }
-
         SymKind inner_kind = SYM_UNKNOWN;
-        DsLowerExpr *part = interp_lower_value(lower, inner, expr->span, &inner_kind);
-        ds_expr_free(inner);
-        if (has_format) {
-            DsStr spec_text = {decoded.data + spec_start, cursor - spec_start};
-            part = interp_apply_format(lower, part, inner_kind, spec_text, expr->span);
+        DsLowerExpr *part = interp_lower_value(lower, segment->expr, expr->span, &inner_kind);
+        if (segment->has_format) {
+            part = interp_apply_format(lower, part, inner_kind, segment->format, expr->span);
         }
-
         DS_VEC_PUSH(&out->as.interp.parts, part, 8);
-        i = cursor + 1;
     }
-
-    interp_push_text(out, &literal, expr->span);
-    ds_string_free(&literal);
     *kind_out = SYM_STRING;
     return out;
 }
 
 DsLowerExpr *lower_string_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out) {
-    DsStr decoded = {0};
-    if (ds_decode_string_text(expr->as.text, &decoded)) {
-        bool has_brace_syntax = memchr(decoded.data, '{', decoded.len) != NULL ||
-                                memchr(decoded.data, '}', decoded.len) != NULL;
-        if (has_brace_syntax) {
-            DsLowerExpr *out = lower_interpolated_expr(lower, expr, decoded, kind_out);
-            free(decoded.data);
+    bool has_brace_syntax = memchr(expr->as.text.data, '{', expr->as.text.len) != NULL ||
+                            memchr(expr->as.text.data, '}', expr->as.text.len) != NULL;
+    if (has_brace_syntax) {
+        LowerInterpSegments segments;
+        LowerInterpParseStatus status = lower_interp_parse_segments(expr->as.text, expr->span, &segments);
+        if (status == LOWER_INTERP_PARSE_OK) {
+            DsLowerExpr *out = lower_interpolated_expr(lower, expr, &segments, kind_out);
+            lower_interp_segments_free(&segments);
             return out;
         }
-        free(decoded.data);
+        interp_diag_parse_status(lower, expr->span, status);
+        lower_interp_segments_free(&segments);
+        *kind_out = SYM_STRING;
+        return expr_new(DS_LOWER_EXPR_INTERP, expr->span);
     }
     *kind_out = SYM_STRING;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_STRING, expr->span);

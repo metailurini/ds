@@ -26,7 +26,6 @@ typedef struct {
 
 bool ds_command_name_char(char c);
 DsCommandWordForm ds_command_word_analyze(DsStr word);
-bool ds_command_word_contains_direct_call_interpolation(DsStr decoded);
 
 typedef enum {
     DS_COMMAND_RESULT_FIELD_STDOUT,
