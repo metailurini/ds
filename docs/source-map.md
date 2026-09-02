@@ -97,15 +97,22 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 
 | File | Owns | Notes |
 | --- | --- | --- |
-| `src/lower.c` | lowerer orchestration, program-level symbol setup, and test-block collection | coordinates lowering passes; test collection stays here because it is one small pass, not a standalone module |
+| `src/lower.c` | lowerer orchestration and test-block collection | coordinates explicit semantic phases only; context/symbol/kind/schema mechanics live in focused modules |
 | `src/lower_expr.c` | expression lowering and expression value-kind checks | delegates generic string interpolation to `lower_interpolation.c`; keep command-specific interpolation in `lower_command.c` |
-| `src/lower_interpolation.c` | generic string interpolation parsing/lowering for normal string expressions | owns normal-string interpolation segment validation; not command-word policy |
+| `src/lower_interp_parser.c` | shared AST parser for expression interpolation bodies | consumed by normal string lowering and function-parameter inference; no command-word acceptance policy |
+| `src/lower_interpolation.c` | generic string interpolation lowering for normal string expressions | consumes the shared interpolation-expression parser; not command-word policy |
 | `src/lower_collection.c` | collection portability policy gates for named storage, literal/variable indexes, portable elements, and portable array iterables | lowerer-owned VM/Bash parity rules; VM/Bash must not rediscover these acceptance rules |
 | `src/lower_command.c` | command-word/interpolation validation, command-result field legality in words, direct scalar value-call interpolation materialization | consumes shared command-word shape and format-spec metadata; stable owner for command-word lowering |
 | `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | owns flat index-assignment target/RHS validation, collection loop legality, and delegates command-word details to `lower_command.c` |
-| `src/lower_symbols.c` | lowerer scopes/symbol facts | no syntax parsing or backend rendering |
+| `src/lower_context.c` | semantic context lifetime, root scope ownership, shared lowerer diagnostics | owns mutable lowering-session setup/cleanup; no AST traversal policy |
+| `src/lower_kinds.c` | lowerer `SymKind`/HIR kind conversion, scalar facts, stdlib/result-field kind facts | one source of truth for semantic kind mapping |
+| `src/lower_schema.c` | row-schema init/free/clone/query/equality | pure schema ownership utilities; no expression acceptance |
+| `src/lower_symbols.c` | lowerer scopes/symbol facts and top-level binding predeclaration | symbol preparation only; no function inference or backend rendering |
 | `src/lower_stdlib.c` | stdlib declaration/use validation | consumes `ds_stdlib.h` metadata |
-| `src/lower_functions.c` | function collection, return-kind discovery/validation, call-return contracts | owns function return contract pressure |
+| `src/lower_functions.c` | function signature/default validation and function-body lowering | per-function helpers stay private; phase entrypoints are declared in `lower_functions.h` |
+| `src/lower_function_infer.c` | function parameter-kind inference | consumes declared functions/top-level symbol facts; no body lowering |
+| `src/lower_function_returns.c` | provisional function return-kind/schema discovery | AST-side return contract analysis before HIR body lowering |
+| `src/lower_call_graph.c` | lowered function call-graph traversal and recursion rejection | traversal helpers are file-private; exports only the validation phase |
 | `src/lower_free.c` | lowered tree cleanup | no policy |
 | `src/hir.c` | HIR allocation/free/debug helpers | mirrors HIR only |
 | `src/ds_checker.c` | warnings/static checks over AST/HIR where applicable | uses shared diagnostic rendering; no hard acceptance except checker-owned warnings |

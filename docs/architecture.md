@@ -147,18 +147,32 @@ remain handwritten and must not be encoded into the node generator.
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
 - Lowering responsibilities are split by component: `src/lower.c` owns the
-  orchestration entrypoints, `src/lower_expr.c` owns expression lowering,
-  `src/lower_command.c` owns command-word validation and interpolation
-  materialization, `src/lower_stmt.c` owns statement/block lowering,
-  `src/lower_symbols.c` owns scope/name/vector utilities,
-  `src/lower_stdlib.c` owns script declarations and literal decoding,
-  `src/lower_functions.c` owns function collection/defaults/recursion checks,
-  `src/lower.c` keeps the small test-collection pass near the lowerer
-  orchestration entrypoint, and `src/lower_free.c` owns HIR cleanup. These modules consume `src/ds_stdlib.c` metadata rather than each
-  maintaining independent helper arity/name lists.
-- `src/lower_internal.h` contains lowerer-private symbol/value-kind structs and
-  prototypes only. Shared lowerer helper implementations live in the lowerer
-  `.c` modules. It is not part of the public user-facing API.
+  orchestration entrypoint and makes semantic phase order explicit;
+  `src/lower_context.c` owns semantic-session lifetime and shared diagnostics;
+  `src/lower_kinds.c` owns semantic value-kind conversion/facts;
+  `src/lower_schema.c` owns row-schema lifecycle/query helpers;
+  `src/lower_expr.c` owns expression lowering; `src/lower_interp_parser.c` owns
+  the shared expression-interpolation AST parser used by lowering and function
+  inference; `src/lower_interpolation.c` owns normal-string interpolation
+  lowering; `src/lower_command.c` owns command-word validation and interpolation
+  materialization; `src/lower_stmt.c` owns statement/block lowering;
+  `src/lower_symbols.c` owns scope/name facts and top-level binding
+  predeclaration; `src/lower_stdlib.c` owns script declarations and literal
+  decoding; `src/lower_functions.c` owns function signature/default
+  validation and body lowering; `src/lower_function_infer.c` owns parameter-kind
+  inference; `src/lower_function_returns.c` owns provisional return contracts;
+  `src/lower_call_graph.c` owns recursion analysis; `src/lower.c` keeps the small
+  test-collection pass near orchestration; and `src/lower_free.c` owns HIR
+  cleanup. Function-analysis phase entrypoints are declared in
+  `src/lower_functions.h`, while symbol preparation phases are declared in
+  `src/lower_symbols.h`; traversal/per-function helpers stay private to their
+  implementation units. These modules consume `src/ds_stdlib.c` metadata rather
+  than each maintaining independent helper arity/name lists.
+- `src/lower_internal.h` is now only a transitional aggregate of focused
+  lowerer-private contracts. `src/lower_context.h`, `src/lower_symbols.h`,
+  `src/lower_kinds.h`, `src/lower_schema.h`, and `src/lower_functions.h` own
+  their respective semantic types/APIs; implementation files should include the
+  narrow contract they need where practical. None are public user-facing APIs.
 - `src/vm_internal.h` contains bytecode/VM-private structs, declarations, and
   the opcode X-macro shared only by VM implementation files. VM helper logic
   lives in `.c` files. It is not part of the public user-facing API.

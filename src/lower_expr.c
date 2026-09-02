@@ -2,6 +2,13 @@
 #include "ds_command_facts.h"
 #include "ds_regex.h"
 
+DsLowerExpr *expr_new(DsLowerExprKind kind, DsSpan span) {
+    DsLowerExpr *expr = (DsLowerExpr *)ds_xcalloc(1, sizeof(*expr));
+    expr->kind = kind;
+    expr->span = span;
+    return expr;
+}
+
 static bool int_literal_in_range(DsStr text) {
     static const char max_text[] = "9223372036854775807";
     size_t start = 0;
@@ -111,17 +118,6 @@ static const DsLowerRowSchema *expr_row_schema_full_inner(Lower *lower, const Ds
     return ident_row_schema(lower, expr, want_array);
 }
 
-bool command_result_field_kind(DsStr field, SymKind *kind_out) {
-    const DsCommandResultField *desc = ds_command_result_field_lookup(field);
-    if (!desc) return false;
-    switch (desc->kind) {
-        case DS_COMMAND_RESULT_FIELD_STRING: *kind_out = SYM_STRING; return true;
-        case DS_COMMAND_RESULT_FIELD_INT: *kind_out = SYM_INT; return true;
-        case DS_COMMAND_RESULT_FIELD_BOOL: *kind_out = SYM_BOOL; return true;
-    }
-    return false;
-}
-
 bool lower_expr_produces_command_result(const DsLowerExpr *expr) {
     if (!expr) return false;
     if (expr->kind == DS_LOWER_EXPR_RUN) return true;
@@ -133,36 +129,6 @@ bool lower_expr_is_portable_command_result_return(const DsLowerExpr *expr) {
     if (expr->kind == DS_LOWER_EXPR_RUN || expr->kind == DS_LOWER_EXPR_IDENT) return true;
     return expr->kind == DS_LOWER_EXPR_CALL && expr->as.call.is_user_function &&
            expr->as.call.return_kind == DS_LOWER_VALUE_COMMAND_RESULT;
-}
-
-DsLowerValueKind lower_value_kind_from_sym(SymKind kind) {
-    switch (kind) {
-        case SYM_BOOL: return DS_LOWER_VALUE_BOOL;
-        case SYM_INT: return DS_LOWER_VALUE_INT;
-        case SYM_STRING: return DS_LOWER_VALUE_STRING;
-        case SYM_COMMAND_RESULT: return DS_LOWER_VALUE_COMMAND_RESULT;
-        case SYM_ARRAY: return DS_LOWER_VALUE_ARRAY;
-        case SYM_MAP: return DS_LOWER_VALUE_MAP;
-        case SYM_FUNCTION:
-        case SYM_TOPLEVEL_PREDECLARED:
-        case SYM_UNKNOWN:
-            return DS_LOWER_VALUE_UNKNOWN;
-    }
-    return DS_LOWER_VALUE_UNKNOWN;
-}
-
-SymKind sym_kind_from_lower_value_kind(DsLowerValueKind kind) {
-    switch (kind) {
-        case DS_LOWER_VALUE_BOOL: return SYM_BOOL;
-        case DS_LOWER_VALUE_INT: return SYM_INT;
-        case DS_LOWER_VALUE_STRING: return SYM_STRING;
-        case DS_LOWER_VALUE_COMMAND_RESULT: return SYM_COMMAND_RESULT;
-        case DS_LOWER_VALUE_ARRAY: return SYM_ARRAY;
-        case DS_LOWER_VALUE_MAP: return SYM_MAP;
-        case DS_LOWER_VALUE_UNKNOWN:
-            return SYM_UNKNOWN;
-    }
-    return SYM_UNKNOWN;
 }
 
 void validate_user_call_arg_kinds(Lower *lower, const DsLowerFn *fn, const DsExprVec *args, const SymKind *arg_kinds) {

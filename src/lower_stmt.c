@@ -1,5 +1,12 @@
 #include "lower_internal.h"
 
+DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
+    DsLowerStmt *stmt = (DsLowerStmt *)ds_xcalloc(1, sizeof(*stmt));
+    stmt->kind = kind;
+    stmt->span = span;
+    return stmt;
+}
+
 static bool lower_validate_handler_signal(Lower *lower, const DsStmt *stmt) {
     if (stmt->as.handler_stmt.signal != DS_HANDLER_INVALID) return true;
     /*

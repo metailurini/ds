@@ -1,4 +1,5 @@
 #include "lower_internal.h"
+#include "lower_functions.h"
 
 typedef struct {
     DsStr name;
@@ -444,7 +445,7 @@ static bool ast_collect_return_schema(Lower *lower, const DsStmt *stmt, AstKindE
     }
 }
 
-void predeclare_function_return_contracts(Lower *lower, const DsAst *ast) {
+void lower_functions_predeclare_return_contracts(Lower *lower, const DsAst *ast) {
     /*
      * Provisional forward-call contract discovery.
      *

@@ -1,4 +1,5 @@
 #include "lower_internal.h"
+#include "lower_symbols.h"
 
 bool is_env_name_text(DsStr name) {
     if (name.len == 0 || !ds_is_ident_start(name.data[0])) return false;
@@ -17,26 +18,6 @@ bool split_member_name(DsStr name, DsStr *ns, DsStr *member) {
         }
     }
     return false;
-}
-
-DsLowerValueKind lower_stdlib_return_value_kind(const DsStdlibHelper *helper) {
-    if (!helper) return DS_LOWER_VALUE_UNKNOWN;
-    switch (helper->return_kind) {
-        case DS_STDLIB_RETURN_BOOL: return DS_LOWER_VALUE_BOOL;
-        case DS_STDLIB_RETURN_INT: return DS_LOWER_VALUE_INT;
-        case DS_STDLIB_RETURN_STRING: return DS_LOWER_VALUE_STRING;
-        case DS_STDLIB_RETURN_ARRAY: return DS_LOWER_VALUE_ARRAY;
-        case DS_STDLIB_RETURN_MAP: return DS_LOWER_VALUE_MAP;
-        case DS_STDLIB_RETURN_COMMAND_RESULT: return DS_LOWER_VALUE_COMMAND_RESULT;
-        case DS_STDLIB_RETURN_STATEMENT_ONLY: return DS_LOWER_VALUE_UNKNOWN;
-    }
-    return DS_LOWER_VALUE_UNKNOWN;
-}
-
-bool stdlib_return_kind(const DsStdlibHelper *helper, SymKind *kind) {
-    if (!helper) return false;
-    *kind = sym_kind_from_lower_value_kind(lower_stdlib_return_value_kind(helper));
-    return true;
 }
 
 void scope_init(Scope *scope, Scope *parent) {
@@ -182,10 +163,44 @@ DsLowerFn *find_function(DsLowerProgram *program, DsStr name) {
     return NULL;
 }
 
-int find_function_index(DsLowerProgram *program, DsStr name) {
-    for (size_t i = 0; i < program->functions.len; i++) {
-        DsLowerFn *fn = &program->functions.items[i];
-        if (ds_str_eq(fn->name, name)) return (int)i;
+
+static SymKind literal_collection_element_kind(const DsExpr *expr) {
+    if (!expr) return SYM_UNKNOWN;
+
+    size_t len = 0;
+    if (expr->kind == DS_EXPR_ARRAY) len = expr->as.array.elements.len;
+    else if (expr->kind == DS_EXPR_MAP) len = expr->as.map.entries.len;
+    else return SYM_UNKNOWN;
+
+    SymKind element_kind = SYM_UNKNOWN;
+    for (size_t i = 0; i < len; i++) {
+        const DsExpr *value = expr->kind == DS_EXPR_ARRAY
+            ? expr->as.array.elements.items[i]
+            : expr->as.map.entries.items[i].value;
+        SymKind current = SYM_UNKNOWN;
+        if (value->kind == DS_EXPR_STRING) current = SYM_STRING;
+        else if (value->kind == DS_EXPR_INT) current = SYM_INT;
+        else if (value->kind == DS_EXPR_BOOL) current = SYM_BOOL;
+        else return SYM_UNKNOWN;
+
+        if (i == 0) element_kind = current;
+        else if (element_kind != current) return SYM_UNKNOWN;
     }
-    return -1;
+    return element_kind;
+}
+
+static void predeclare_top_level_let(Lower *lower, const DsStmt *stmt) {
+    if (stmt->kind != DS_STMT_LET) return;
+    if (scope_find_current(lower->scope, stmt->as.let_stmt.name)) return;
+
+    SymKind element_kind = literal_collection_element_kind(stmt->as.let_stmt.value);
+    scope_define_array(lower, lower->scope, stmt->as.let_stmt.name,
+                       SYM_TOPLEVEL_PREDECLARED, element_kind, stmt->span);
+}
+
+void lower_symbols_predeclare_top_level_bindings(Lower *lower, const DsAst *ast) {
+    if (!lower || !ast) return;
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        predeclare_top_level_let(lower, ast->statements.items[i]);
+    }
 }

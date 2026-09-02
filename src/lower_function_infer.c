@@ -1,5 +1,7 @@
 #include "lower_internal.h"
+#include "lower_functions.h"
 #include "ds_interpolation.h"
+#include "lower_interp_parser.h"
 
 typedef enum {
     INFER_BIND_NONE,
@@ -139,135 +141,81 @@ static void infer_constrain_expr(InferCtx *ctx, InferEnv *env, const DsExpr *exp
     infer_constrain_binding(ctx, binding, expected, expr ? expr->span : ctx->fn->span, reason);
 }
 
-static bool infer_parse_ident_span(const char *data, size_t start, size_t end, size_t *cursor, DsStr *name_out) {
-    size_t i = *cursor;
-    ds_skip_ascii_ws(data, end, &i);
-    if (i >= end) return false;
-    if (!ds_is_ident_start(data[i])) return false;
-    size_t name_start = i++;
-    while (i < end && ds_is_ident_continue(data[i])) i++;
-    *cursor = i;
-    *name_out = (DsStr){(char *)data + name_start, i - name_start};
-    (void)start;
-    return true;
-}
-
-static size_t infer_find_matching_paren(const char *data, size_t start, size_t end) {
-    int depth = 1;
-    for (size_t i = start; i < end; i++) {
-        if (data[i] == '"' || data[i] == '\'') {
-            char quote = data[i++];
-            while (i < end && data[i] != quote) {
-                if (data[i] == '\\' && i + 1 < end) i += 2;
-                else i++;
-            }
-            continue;
-        }
-        if (data[i] == '(') depth++;
-        else if (data[i] == ')') {
-            depth--;
-            if (depth == 0) return i;
-        }
-    }
-    return end;
-}
-
-static void infer_interpolation_call_args(InferCtx *ctx, InferEnv *env, const DsLowerFn *callee, const char *data, size_t start, size_t end, DsSpan span) {
-    size_t part_start = start;
-    size_t arg_index = 0;
-    int depth = 0;
-    for (size_t i = start; i <= end; i++) {
-        bool split = i == end;
-        if (i < end) {
-            if (data[i] == '"' || data[i] == '\'') {
-                char quote = data[i++];
-                while (i < end && data[i] != quote) {
-                    if (data[i] == '\\' && i + 1 < end) i += 2;
-                    else i++;
-                }
-            } else if (data[i] == '(') depth++;
-            else if (data[i] == ')') depth--;
-            else if (data[i] == ',' && depth == 0) split = true;
-        }
-        if (!split) continue;
-        if (callee && arg_index < callee->params.len) {
-            DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[arg_index]);
-            if (lower_value_kind_is_scalar(expected)) {
-                DsStr arg_name = {0};
-                if (infer_extract_ident_arg(data, part_start, i, &arg_name)) {
-                    InferBinding binding = infer_none();
-                    if (infer_env_find(env, arg_name, &binding)) infer_constrain_binding(ctx, binding, expected, span, "interpolation function call");
-                }
-            }
-        }
-        part_start = i + 1;
-        arg_index++;
+static void infer_interpolation_identifier_arg(InferCtx *ctx, InferEnv *env,
+                                               const DsExpr *arg, DsLowerValueKind expected,
+                                               DsSpan span, const char *reason) {
+    if (!arg || arg->kind != DS_EXPR_IDENT || !lower_value_kind_is_scalar(expected)) return;
+    InferBinding binding = infer_none();
+    if (infer_env_find(env, arg->as.text, &binding)) {
+        infer_constrain_binding(ctx, binding, expected, span, reason);
     }
 }
 
-static bool infer_interpolation_method(InferCtx *ctx, InferEnv *env, DsStr text, size_t start, size_t end, DsSpan span) {
-    size_t cursor = start;
-    DsStr receiver = {0};
-    if (!infer_parse_ident_span(text.data, start, end, &cursor, &receiver)) return false;
-    while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t')) cursor++;
-    if (cursor >= end || text.data[cursor++] != '.') return false;
-    DsStr method = {0};
-    if (!infer_parse_ident_span(text.data, start, end, &cursor, &method)) return false;
-    while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t')) cursor++;
-    if (cursor >= end || text.data[cursor] != '(') return false;
-    DsString full;
-    ds_string_init(&full);
-    ds_string_append_cstr(&full, "string.");
-    ds_string_append_range(&full, method.data, method.len);
-    DsStr helper = {full.data, full.len};
-    bool is_helper = ds_stdlib_is_string_helper(helper);
-    if (is_helper) {
-        InferBinding binding = infer_none();
-        if (infer_env_find(env, receiver, &binding)) infer_constrain_binding(ctx, binding, DS_LOWER_VALUE_STRING, span, "interpolation string helper");
-        size_t close = infer_find_matching_paren(text.data, cursor + 1, end);
-        infer_command_word_method_args(ctx, env, text, cursor + 1, helper, span);
-        (void)close;
-    }
-    ds_string_free(&full);
-    return is_helper;
-}
+static void infer_interpolation_call(InferCtx *ctx, InferEnv *env,
+                                     const DsExpr *expr, DsSpan span) {
+    if (!expr || expr->kind != DS_EXPR_CALL) return;
 
-static void infer_interpolation_expr_text(InferCtx *ctx, InferEnv *env, DsStr text, size_t start, size_t end, DsSpan span) {
-    if (infer_interpolation_method(ctx, env, text, start, end, span)) return;
-    size_t cursor = start;
-    DsStr callee_name = {0};
-    if (!infer_parse_ident_span(text.data, start, end, &cursor, &callee_name)) return;
-    while (cursor < end && (text.data[cursor] == ' ' || text.data[cursor] == '\t' || text.data[cursor] == '\n' || text.data[cursor] == '\r')) cursor++;
-    if (cursor < end && text.data[cursor] == ':') {
-        DsStr spec = {text.data + cursor + 1, end - cursor - 1};
-        DsInterpFormatSpec parsed;
-        if (!ds_interp_parse_format_spec(spec, &parsed)) return;
-        DsLowerValueKind expected = DS_LOWER_VALUE_UNKNOWN;
-        switch (parsed.kind) {
-            case DS_INTERP_FORMAT_UPPER:
-            case DS_INTERP_FORMAT_LOWER:
-            case DS_INTERP_FORMAT_TRIM:
-            case DS_INTERP_FORMAT_ALIGN_LEFT:
-            case DS_INTERP_FORMAT_ALIGN_RIGHT:
-            case DS_INTERP_FORMAT_ALIGN_CENTER:
-                expected = DS_LOWER_VALUE_STRING;
-                break;
-            case DS_INTERP_FORMAT_INT_DECIMAL:
-            case DS_INTERP_FORMAT_INT_FIXED:
-                expected = DS_LOWER_VALUE_INT;
-                break;
-        }
-        InferBinding binding = infer_none();
-        if (lower_value_kind_is_scalar(expected) && infer_env_find(env, callee_name, &binding)) {
-            infer_constrain_binding(ctx, binding, expected, span, "interpolation format specifier");
+    if (ds_stdlib_is_string_helper(expr->as.call.name)) {
+        for (size_t i = 0; i < expr->as.call.args.len; i++) {
+            DsLowerValueKind expected = ds_stdlib_arg_expects_int(expr->as.call.name, i)
+                ? DS_LOWER_VALUE_INT : DS_LOWER_VALUE_STRING;
+            const char *reason = i == 0
+                ? "interpolation string helper"
+                : "command interpolation string helper";
+            infer_interpolation_identifier_arg(ctx, env, expr->as.call.args.items[i],
+                                               expected, span, reason);
         }
         return;
     }
-    if (cursor >= end || text.data[cursor] != '(') return;
-    DsLowerFn *callee = find_function(ctx->lower->program, callee_name);
-    size_t close = infer_find_matching_paren(text.data, cursor + 1, end);
-    if (close > end) return;
-    infer_interpolation_call_args(ctx, env, callee, text.data, cursor + 1, close, span);
+
+    DsLowerFn *callee = find_function(ctx->lower->program, expr->as.call.name);
+    if (!callee) return;
+    size_t count = expr->as.call.args.len < callee->params.len
+        ? expr->as.call.args.len : callee->params.len;
+    for (size_t i = 0; i < count; i++) {
+        DsLowerValueKind expected = lower_fn_param_expected_kind(&callee->params.items[i]);
+        infer_interpolation_identifier_arg(ctx, env, expr->as.call.args.items[i],
+                                           expected, span, "interpolation function call");
+    }
+}
+
+static void infer_interpolation_expr_text(InferCtx *ctx, InferEnv *env, DsStr text,
+                                          size_t start, size_t end, DsSpan span) {
+    if (start >= end) return;
+    DsStr body = {text.data + start, end - start};
+    size_t cursor = 0;
+    DsExpr *parsed = lower_interp_parse_expr(body, 0, span, &cursor);
+    if (!parsed) return;
+    ds_skip_ascii_ws(body.data, body.len, &cursor);
+
+    if (parsed->kind == DS_EXPR_IDENT && cursor < body.len && body.data[cursor] == ':') {
+        DsStr spec = {body.data + cursor + 1, body.len - cursor - 1};
+        DsInterpFormatSpec format;
+        if (ds_interp_parse_format_spec(spec, &format)) {
+            DsLowerValueKind expected = DS_LOWER_VALUE_UNKNOWN;
+            switch (format.kind) {
+                case DS_INTERP_FORMAT_UPPER:
+                case DS_INTERP_FORMAT_LOWER:
+                case DS_INTERP_FORMAT_TRIM:
+                case DS_INTERP_FORMAT_ALIGN_LEFT:
+                case DS_INTERP_FORMAT_ALIGN_RIGHT:
+                case DS_INTERP_FORMAT_ALIGN_CENTER:
+                    expected = DS_LOWER_VALUE_STRING;
+                    break;
+                case DS_INTERP_FORMAT_INT_DECIMAL:
+                case DS_INTERP_FORMAT_INT_FIXED:
+                    expected = DS_LOWER_VALUE_INT;
+                    break;
+            }
+            infer_interpolation_identifier_arg(ctx, env, parsed, expected, span,
+                                               "interpolation format specifier");
+        }
+        ds_expr_free(parsed);
+        return;
+    }
+
+    infer_interpolation_call(ctx, env, parsed, span);
+    ds_expr_free(parsed);
 }
 
 static void infer_interpolated_text(InferCtx *ctx, InferEnv *env, DsStr text, DsSpan span) {
@@ -620,7 +568,7 @@ static void infer_command(InferCtx *ctx, InferEnv *env, const DsCommand *command
     }
 }
 
-void infer_function_parameter_kinds(Lower *lower, const DsAst *ast) {
+void lower_functions_infer_parameter_kinds(Lower *lower, const DsAst *ast) {
     if (!ast || !lower || !lower->program || lower->program->functions.len == 0) return;
     for (size_t pass = 0; pass < lower->program->functions.len + 1; pass++) {
         bool any_changed = false;
