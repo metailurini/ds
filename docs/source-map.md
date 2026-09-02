@@ -25,7 +25,7 @@ source files for narrow helper clusters.
 | VM backend | accepted HIR execution, bytecode/private VM state, runtime values, subprocess/OS failures | source parsing, semantic validation, Bash artifact policy |
 | Bash backend | accepted HIR rendering, quoting, helper selection, standalone script artifact failures | source parsing, semantic validation, canonical language semantics |
 | Runtime/shared support | strings, arrays, maps, values, sources, diagnostics, allocation | grammar, backend policy, CLI command dispatch |
-| CLI | source loading, import composition, frontend/lower/backend orchestration | grammar, HIR semantics, VM op behavior, Bash rendering |
+| CLI | argv parsing, usage policy, command dispatch | source loading, semantic acceptance, HIR ownership, backend implementation |
 
 ## Diagnostic ownership
 
@@ -136,12 +136,18 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | intentionally long but sectioned by concern; uses VM field materialization from `src/vm.c`; consumes shared signal status metadata |
 | `src/vm_stdlib.c` | VM stdlib helper implementations, including recursive-glob traversal | runtime data/OS failures; lowerer owns helper legality where statically known |
 
-### CLI
+### Application and CLI composition
 
 | File | Owns | Notes |
 | --- | --- | --- |
-| `src/main.c` | command-line parsing and top-level dispatch | no grammar or feature policy |
-| `src/cli_program.c` | source loading/import composition and backend orchestration | no semantics beyond orchestration failures |
+| `src/main.c` | process composition root | constructs the default app and delegates to the CLI |
+| `src/cli.c` | command-line parsing, usage policy, and dispatch | depends on `DsApp`; no grammar, semantic, or backend implementation policy |
+| `src/app.c` | CLI-independent run/test/check/format/inspect/emit use cases | composes compiler, tooling, and artifact services |
+| `src/compiler.c` | compile-session lifetime and source -> AST -> HIR -> backend phase order | composition only; detailed implementations sit behind injected boundary functions |
+| `src/program_loader.c` | source/import loader façade | delegates to the transitional `src/cli_program.c` implementation |
+| `src/cli_program.c` | current source loading and import-composition implementation | transitional implementation detail; no backend orchestration |
+| `src/artifact.c` | application artifact write/remove façade | thin boundary over current filesystem helpers |
+| `src/inspector.c` | token/AST/HIR inspection façade | deterministic rendering only |
 
 ### Test harness infrastructure
 

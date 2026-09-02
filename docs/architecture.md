@@ -106,6 +106,16 @@ the umbrella where possible:
   ownership are declared once in `src/ast_nodes.def`; the C generator
   `tools/gen_nodes.c` emits the corresponding structural `.inc` files under
   `src/generated/`.
+- `src/main.c` is the process composition root; it creates the default `DsApp`
+  and delegates argv handling to `src/cli.c`.
+- `src/app.h` / `src/app.c` own CLI-independent application use cases and the
+  app-level tooling/artifact dependency seams.
+- `src/compiler.h` / `src/compiler.c` own compile-session lifetime, phase order,
+  and loader/sema/VM/Bash dependency composition.
+- `src/program_loader.h`, `src/sema.h`, `src/vm_backend.h`,
+  `src/bash_backend.h`, `src/formatter.h`, `src/inspector.h`, and
+  `src/artifact.h` are thin high-level boundaries over the existing detailed
+  implementations.
 - `src/frontend.h` owns token, lexer, parser, and AST-debug entrypoints.
 - `src/ds_hir.h` owns the lowered HIR contract consumed by VM, Bash emission,
   formatter/checker support, and debug output. The same structural generation
@@ -113,7 +123,8 @@ the umbrella where possible:
 - `src/ds_runtime.h` owns runtime values, strings, arrays, and `DsMap`.
 - `src/ds_stdlib.h` owns standard-library helper metadata.
 - `src/ds_checker.h` owns the narrow checker warning entrypoint.
-- `src/backend.h` owns formatter, Bash emission, bytecode, and VM entrypoints.
+- `src/backend.h` remains a legacy implementation-facing umbrella while new
+  high-level façade headers expose only their own contracts.
 
 Project headers are declaration boundaries, not implementation containers. In
 particular, project-owned `.h` files do not carry `static inline` function
