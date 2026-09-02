@@ -30,4 +30,8 @@ void ds_tokens_print(const DsTokenVec *tokens, FILE *out);
 
 DsAst *ds_parse(const DsTokenVec *tokens, DsDiag *diag);
 
+/* High-level frontend shell: source text -> tokens -> syntax AST. */
+bool ds_frontend_parse_source(const DsSource *source, DsTokenVec *tokens,
+                              DsAst **ast, DsDiag *diag);
+
 #endif

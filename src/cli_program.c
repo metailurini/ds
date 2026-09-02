@@ -1,4 +1,5 @@
 #include "cli_program.h"
+#include "ds_runtime.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -15,7 +16,6 @@ struct LoadedUnit {
 
 void ds_cli_program_free(DsCliProgram *program) {
     if (!program) return;
-    ds_lower_program_free(program->lowered);
     ds_ast_free(program->ast);
     ds_tokens_free(&program->tokens);
     if (program->units_len == 0) ds_source_free(&program->source);
@@ -162,11 +162,7 @@ static bool load_composed_file(DsCliProgram *program, const char *path, DsSpan i
         return false;
     }
     unit->source.path = owned_path;
-    bool ok = ds_lex(&unit->source, &unit->tokens, &program->diag);
-    if (ok) {
-        unit->ast = ds_parse(&unit->tokens, &program->diag);
-        ok = !program->diag.has_error;
-    }
+    bool ok = ds_frontend_parse_source(&unit->source, &unit->tokens, &unit->ast, &program->diag);
     if (ok && is_root) {
         composed->span = unit->ast->span;
         program->source = unit->source;
@@ -193,9 +189,8 @@ bool ds_cli_load_and_lex(const char *path, DsCliProgram *program) {
 }
 
 bool ds_cli_load_parse(const char *path, DsCliProgram *program) {
-    if (!ds_cli_load_and_lex(path, program)) return false;
-    program->ast = ds_parse(&program->tokens, &program->diag);
-    return !program->diag.has_error;
+    if (!ds_cli_load_source(path, program)) return false;
+    return ds_frontend_parse_source(&program->source, &program->tokens, &program->ast, &program->diag);
 }
 
 bool ds_cli_load_composed_parse(const char *path, DsCliProgram *program) {
@@ -209,11 +204,4 @@ bool ds_cli_load_composed_parse(const char *path, DsCliProgram *program) {
     }
     program->ast = composed;
     return true;
-}
-
-bool ds_cli_load_lower(const char *path, DsCliProgram *program) {
-    if (!ds_cli_load_composed_parse(path, program)) return false;
-    ds_diag_init(&program->diag, &program->source);
-    program->lowered = ds_lower_program(program->ast, &program->diag);
-    return program->lowered != NULL;
 }

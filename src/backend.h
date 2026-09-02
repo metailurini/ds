@@ -4,18 +4,12 @@
 #include "ds_ast.h"
 #include "ds_hir.h"
 #include "ds_runtime.h"
+#include "vm_options.h"
 
 typedef enum {
     DS_BYTECODE_MODE_DUMP,
     DS_BYTECODE_MODE_RUN
 } DsBytecodeMode;
-
-typedef struct {
-    bool trace_cmd;
-    bool trace_vm;
-    bool test_mode;
-    DsStr test_name;
-} DsVmOptions;
 
 bool ds_format_source(const DsSource *source, const DsAst *ast, DsString *out, DsDiag *diag);
 
