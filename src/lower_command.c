@@ -465,6 +465,133 @@ bool lower_validate_command_word(Lower *lower, DsStr word, DsSpan span) {
     return true;
 }
 
+static DsLowerExpr *lower_command_word_value(Lower *lower, DsWord word) {
+    DsCommandWordForm form = ds_command_word_analyze(word.text);
+    if (form.kind == DS_COMMAND_WORD_QUOTED) {
+        DsExpr fake = {0};
+        fake.kind = DS_EXPR_STRING;
+        fake.span = word.span;
+        fake.as.text = word.text;
+        SymKind kind = SYM_UNKNOWN;
+        return lower_expr(lower, &fake, &kind);
+    }
+    if (form.kind == DS_COMMAND_WORD_VARIABLE) {
+        DsExpr fake = {0};
+        fake.kind = DS_EXPR_IDENT;
+        fake.span = word.span;
+        fake.as.text = form.name;
+        SymKind kind = SYM_UNKNOWN;
+        return lower_expr(lower, &fake, &kind);
+    }
+    if (form.kind == DS_COMMAND_WORD_FIELD) {
+        DsExpr object = {0};
+        object.kind = DS_EXPR_IDENT;
+        object.span = word.span;
+        object.as.text = form.name;
+        DsExpr fake = {0};
+        fake.kind = DS_EXPR_FIELD;
+        fake.span = word.span;
+        fake.as.field.object = &object;
+        fake.as.field.field = form.field;
+        SymKind kind = SYM_UNKNOWN;
+        return lower_expr(lower, &fake, &kind);
+    }
+    return NULL;
+}
+
+static bool lower_command_value_as_literal(DsLowerExpr *value, DsStr *literal_out) {
+    *literal_out = (DsStr){0};
+    if (!value) return false;
+    if (value->kind == DS_LOWER_EXPR_STRING) {
+        return ds_decode_string_text(value->as.text, literal_out);
+    }
+    if (value->kind != DS_LOWER_EXPR_INTERP) return false;
+    DsString text;
+    ds_string_init(&text);
+    for (size_t i = 0; i < value->as.interp.parts.len; i++) {
+        const DsLowerExpr *part = value->as.interp.parts.items[i];
+        if (!part || part->kind != DS_LOWER_EXPR_INTERP_TEXT) {
+            ds_string_free(&text);
+            return false;
+        }
+        ds_string_append_range(&text, part->as.text.data, part->as.text.len);
+    }
+    literal_out->data = text.data;
+    literal_out->len = text.len;
+    return true;
+}
+
+void lower_command_to_hir(Lower *lower, const DsCommand *command, DsLowerCommand *out) {
+    *out = (DsLowerCommand){0};
+    if (!command) return;
+    out->kind = command->kind;
+    out->span = command->span;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        const DsCommandStage *source_stage = &command->stages.items[s];
+        DsLowerCommandStage stage = {0};
+        stage.span = source_stage->span;
+        if (source_stage->words.len == 0) {
+            ds_diag_error(lower->diag, source_stage->span, "empty pipeline stage");
+        }
+        for (size_t i = 0; i < source_stage->words.len; i++) {
+            DsWord source_word = source_stage->words.items[i];
+            bool valid = lower_validate_command_word(lower, source_word.text, source_word.span);
+            DsCommandWordForm form = ds_command_word_analyze(source_word.text);
+            DsLowerCommandWord word = {0};
+            word.span = source_word.span;
+            word.source_text = ds_str_clone(source_word.text);
+            if (!valid) {
+                word.kind = DS_LOWER_COMMAND_WORD_VALUE;
+                word.value = expr_new(DS_LOWER_EXPR_ERROR, source_word.span);
+            } else if (form.kind == DS_COMMAND_WORD_LITERAL) {
+                word.kind = DS_LOWER_COMMAND_WORD_LITERAL;
+                word.literal_text = ds_str_clone(source_word.text);
+            } else {
+                DsLowerExpr *value = lower_command_word_value(lower, source_word);
+                if (form.kind == DS_COMMAND_WORD_QUOTED &&
+                    lower_command_value_as_literal(value, &word.literal_text)) {
+                    word.kind = DS_LOWER_COMMAND_WORD_LITERAL;
+                    lower_expr_free(value);
+                } else {
+                    word.kind = DS_LOWER_COMMAND_WORD_VALUE;
+                    word.value = value;
+                }
+            }
+            DS_VEC_PUSH(&stage.words, word, 8);
+        }
+        DS_VEC_PUSH(&out->stages, stage, 4);
+    }
+    out->redirect.kind = command->redirect.kind;
+    out->redirect.op_span = command->redirect.op_span;
+    out->redirect.target_span = command->redirect.target_span;
+    if (command->redirect.target.len > 0) {
+        out->redirect.source_target = ds_str_clone(command->redirect.target);
+    }
+    if (command->redirect.kind != DS_REDIRECT_NONE) {
+        if (command->redirect.target.len == 0) {
+            ds_diag_error(lower->diag, command->redirect.op_span, "expected redirection target");
+        } else {
+            bool valid = lower_validate_word_interpolation(lower, command->redirect.target,
+                                                           command->redirect.target_span);
+            if (!valid) {
+                out->redirect.target = expr_new(DS_LOWER_EXPR_ERROR, command->redirect.target_span);
+            } else {
+                DsExpr fake = {0};
+                fake.kind = DS_EXPR_STRING;
+                fake.span = command->redirect.target_span;
+                fake.as.text = command->redirect.target;
+                SymKind kind = SYM_UNKNOWN;
+                DsLowerExpr *target = lower_expr(lower, &fake, &kind);
+                if (lower_command_value_as_literal(target, &out->redirect.literal_target)) {
+                    lower_expr_free(target);
+                } else {
+                    out->redirect.target = target;
+                }
+            }
+        }
+    }
+}
+
 static bool command_interp_expr_needs_materialization(const DsExpr *expr) {
     if (!expr) return false;
     switch (expr->kind) {

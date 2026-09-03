@@ -2,7 +2,7 @@
         DsStr text;
         bool boolean;
         DsStr regex;
-        DsCommand run;
+        DsLowerCommand run;
         struct { DsLowerExpr *object; DsStr field; DsLowerValueKind field_kind; } field;
         struct { DsUnaryOp op; DsLowerExpr *right; } unary;
         struct { DsLowerExpr *left; DsBinaryOp op; DsLowerExpr *right; DsLowerValueKind left_kind; DsLowerValueKind right_kind; DsLowerValueKind right_element_kind; } binary;
@@ -11,5 +11,5 @@
         struct { DsLowerExpr *value; DsInterpFormatSpec spec; } interp_format;
         struct { DsLowerExprVec elements; bool is_row_array; DsLowerRowSchema row_schema; } array;
         struct { DsLowerMapEntryVec entries; bool is_row; DsLowerRowSchema row_schema; } map;
-        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; DsStr map_key; DsLowerValueKind element_kind; bool returns_row; DsLowerRowSchema row_schema; } index;
+        struct { DsLowerExpr *object; DsLowerExpr *index; bool object_is_array; bool object_is_map; bool map_key_literal; bool row_field_access; DsStr map_key; DsLowerValueKind element_kind; bool returns_row; DsLowerRowSchema row_schema; } index;
         struct { DsLowerExpr *start; DsLowerExpr *end; } range;

@@ -631,20 +631,7 @@ DsLowerStmt *lower_stmt(Lower *lower, const DsStmt *stmt) {
             lower_temp_scope_begin(lower, &temp_scope, &saved_scope);
             bool materialized = lower_materialize_command_value_call_interpolation(lower, &command_copy, block);
             DsLowerStmt *out = stmt_new(DS_LOWER_STMT_CMD, stmt->span);
-            ds_command_clone(&out->as.cmd_stmt, &command_copy);
-            for (size_t s = 0; s < command_copy.stages.len; s++) {
-                if (command_copy.stages.items[s].words.len == 0) ds_diag_error(lower->diag, command_copy.stages.items[s].span, "empty pipeline stage");
-                for (size_t i = 0; i < command_copy.stages.items[s].words.len; i++) {
-                    lower_validate_command_word(lower, command_copy.stages.items[s].words.items[i].text, command_copy.stages.items[s].words.items[i].span);
-                }
-            }
-            if (command_copy.redirect.kind != DS_REDIRECT_NONE) {
-                if (command_copy.redirect.target.len == 0) {
-                    ds_diag_error(lower->diag, command_copy.redirect.op_span, "expected redirection target");
-                } else {
-                    lower_validate_word_interpolation(lower, command_copy.redirect.target, command_copy.redirect.target_span);
-                }
-            }
+            lower_command_to_hir(lower, &command_copy, &out->as.cmd_stmt);
             ds_command_free(&command_copy);
             lower_temp_scope_end(lower, &temp_scope, saved_scope);
             if (materialized) {

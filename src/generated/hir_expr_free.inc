@@ -14,7 +14,7 @@
             free(expr->as.regex.data);
             break;
         case DS_LOWER_EXPR_RUN:
-            ds_command_free(&expr->as.run);
+            lower_command_free(&expr->as.run);
             break;
         case DS_LOWER_EXPR_FIELD:
             lower_expr_free(expr->as.field.object);

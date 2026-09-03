@@ -48,10 +48,10 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | --- | --- | --- |
 | `include/ds.h` | compatibility umbrella for small harnesses/external includes | do not add feature policy here |
 | `src/ds_common.h` | shared source/string/span/diagnostic/allocation declarations | no token, AST, HIR, runtime value, or backend policy |
-| `src/ds_command.h` | command word/stage/redirection/capture metadata and command-word shape helpers shared by AST/HIR/lowerer/backends | no parser cursor, command validation, VM execution, or Bash quoting |
+| `src/ds_command.h` | source-level command word/stage/redirection/capture metadata and policy-neutral word-shape facts | syntax-side data used by AST/parser/lowerer; HIR/backends use `DsLowerCommand` |
 | `src/ds_ast.h` | parser-facing AST node shapes and source-level script type names | syntax preservation only; no semantic value kinds or backend contracts; `ds_script_type_name()` is the shared label helper for `string`/`int`/`bool` |
 | `src/frontend.h` | lexer/parser public entrypoints and token vectors | no lower/backend APIs |
-| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract, structured normal-string interpolation parts, and lowered value-kind labels | backend-neutral only; normal interpolation carries parsed format metadata rather than backend-readable source text |
+| `src/ds_hir.h` | lowered program/stmt/expr/function/test/handler contract, structured interpolation, structured command words/redirects, and lowered value-kind labels | backend-neutral only; command/value interpolation carries lowered expressions and parsed format metadata rather than backend-readable source syntax |
 | `src/ds_runtime.h` | runtime value/string/array/map declarations | no grammar or backend rendering |
 | `src/ds_stdlib.h` | stdlib helper metadata, namespace/classification APIs, Bash dependency masks, array transport/kind facts, and recursive-glob pattern classifier shared by lowerer/VM/Bash | metadata and shared validation helpers, not backend traversal implementation |
 | `src/ds_interpolation.h` | interpolation format-spec metadata shared by lowerer/VM/Bash | format contract only; no segment acceptance policy |
@@ -103,7 +103,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower_interp_segments.c` | shared interpolation segmentation for literal braces, text, expression bodies, formats, and malformed/unclosed status | lowerer-private syntax contract used by both normal strings and command-word semantics; owns no value-kind policy |
 | `src/lower_interpolation.c` | normal-string interpolation validation and normalization | consumes shared parsed segments and emits structured HIR text/value/format parts; no command-word policy |
 | `src/lower_collection.c` | collection portability policy gates for named storage, literal/variable indexes, portable elements, and portable array iterables | lowerer-owned VM/Bash parity rules; VM/Bash must not rediscover these acceptance rules |
-| `src/lower_command.c` | command-word semantic validation, command-result/row/index legality, and direct value-call/index interpolation materialization | consumes the shared interpolation AST segments, preserving command-specific evaluation/materialization policy while raw command-word HIR remains transitional |
+| `src/lower_command.c` | command-word semantic validation, command-result/row/index legality, direct value-call/index pre-materialization, and `DsCommand` -> `DsLowerCommand` conversion | consumes shared interpolation segments; accepted HIR stores literal argv words or lowered scalar expressions, so backends do not parse command syntax |
 | `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | owns flat index-assignment target/RHS validation, collection loop legality, and delegates command-word details to `lower_command.c` |
 | `src/lower_context.c` | semantic context lifetime, root scope ownership, shared lowerer diagnostics | owns mutable lowering-session setup/cleanup; no AST traversal policy |
 | `src/lower_kinds.c` | lowerer `SymKind`/HIR kind conversion, scalar facts, stdlib/result-field kind facts | one source of truth for semantic kind mapping |
@@ -126,22 +126,22 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/bash_deps.c` | helper dependency detection from accepted HIR, including expression payloads nested in statement-style user function call arguments | no semantic validation |
 | `src/bash_structured.c` | Bash structured-value ABI names, type-sidecar writes, structured declarations, command-result storage, row-array ABI helpers, and structured return payload helpers | no language validity or semantic value-kind ownership |
 | `src/bash_expr.c` | Bash rendering for accepted HIR expressions/conditions | internal invariant diagnostics only for rejected-by-lowering shapes |
-| `src/bash_command.c` | shell-safe command argv/pipeline/redirection rendering and captured pipeline assignment mechanics | consumes validated `DsCommand`; no command semantics ownership |
+| `src/bash_command.c` | shell-safe structured command argv/pipeline/redirection rendering and captured pipeline assignment mechanics | consumes `DsLowerCommand` value expressions; no command syntax parsing or semantic acceptance |
 | `src/bash_function.c` | Bash function definition emission, parameter/default binding, and user-function call materialization | owns function wrapper shape and nested user-call argument plumbing; body emission delegates back to statement emitter |
 | `src/bash_stmt.c` | Bash rendering for accepted HIR statements, return control flow, handlers, assignment/mutation, and control flow | statement dispatcher; delegates structured payload ABI to `src/bash_structured.c` |
-| `src/bash_quote.c` | Bash quoting and accepted string interpolation rendering | interpolation shape invariants are defensive |
+| `src/bash_quote.c` | Bash buffer, quoting, identifier/name, source-location, and symbol utilities | no interpolation parser or semantic acceptance |
 | `src/bash_helpers.c` | emitted Bash helper implementations, including registered temp cleanup, standalone recursive-glob traversal helpers, and stdlib runtime helpers | runtime/artifact behavior for accepted HIR |
 
 ### VM backend
 
 | File | Owns | Notes |
 | --- | --- | --- |
-| `src/vm_compile.c` | accepted HIR -> VM instructions | no semantic language validation |
+| `src/vm_compile.c` | accepted HIR -> VM instructions, including precompiling structured command value words/redirect targets to registers | no semantic language validation or command-source parsing |
 | `src/vm.c` | VM instruction interpreter, cleanup dispatch, scalar/runtime behavior, command-result/map field materialization, and VM-backed test setup | consumes shared signal status metadata; lowerer owns field legality; unknown command-result fields here are invariants |
 | `src/vm_dump.c` | bytecode/debug dump | presentation only |
 | `src/vm_args.c` | VM argument handling | runtime call boundary only |
 | `src/vm_scope.c` | VM scope stack/storage | runtime state only |
-| `src/vm_process.c` | command argv materialization, processes, pipelines, redirection, command-result capture, accepted interpolation rendering | intentionally long but sectioned by concern; uses VM field materialization from `src/vm.c`; consumes shared signal status metadata |
+| `src/vm_process.c` | register-to-argv materialization, processes, pipelines, redirection, command-result capture, and foreground signal/process policy | consumes already-evaluated structured command values; contains no command/string interpolation source parser |
 | `src/vm_stdlib.c` | VM stdlib helper implementations, including recursive-glob traversal | runtime data/OS failures; lowerer owns helper legality where statically known |
 
 ### Application and CLI composition

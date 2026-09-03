@@ -7,11 +7,20 @@ functions:
 constants:
   0: string "api"
   1: string "staging"
+  2: string "deploy:"
+  3: string ":"
+  4: string "!"
 
 instructions:
   0000 LOAD_CONST     r0, const 0    # tests/v0_3/fixtures/interpolation.ds:1:11
   0001 STORE_VAR      app, r0    # tests/v0_3/fixtures/interpolation.ds:1:1
   0002 LOAD_CONST     r1, const 1    # tests/v0_3/fixtures/interpolation.ds:2:14
   0003 STORE_VAR      target, r1    # tests/v0_3/fixtures/interpolation.ds:2:1
-  0004 RUN_CMD        ["echo", "\"deploy:{app}:{target}!\""]    # tests/v0_3/fixtures/interpolation.ds:3:1
-  0005 RETURN         0    # tests/v0_3/fixtures/interpolation.ds:1:1
+  0004 LOAD_CONST     r3, const 2    # tests/v0_3/fixtures/interpolation.ds:3:6
+  0005 LOAD_VAR       r4, app    # tests/v0_3/fixtures/interpolation.ds:3:6
+  0006 LOAD_CONST     r5, const 3    # tests/v0_3/fixtures/interpolation.ds:3:6
+  0007 LOAD_VAR       r6, target    # tests/v0_3/fixtures/interpolation.ds:3:6
+  0008 LOAD_CONST     r7, const 4    # tests/v0_3/fixtures/interpolation.ds:3:6
+  0009 INTERP_JOIN    r2, join(r3, r4, r5, r6, r7)    # tests/v0_3/fixtures/interpolation.ds:3:6
+  0010 RUN_CMD        ["echo", "\"deploy:{app}:{target}!\""]    # tests/v0_3/fixtures/interpolation.ds:3:1
+  0011 RETURN         0    # tests/v0_3/fixtures/interpolation.ds:1:1

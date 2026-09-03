@@ -14,6 +14,7 @@ typedef struct {
 } ExprScan;
 
 static void collect_expr(BashDeps *deps, const DsLowerExpr *expr, ExprScan scan);
+static void collect_command(BashDeps *deps, const DsLowerCommand *command);
 static void collect_stmt(BashDeps *deps, const DsLowerStmt *stmt);
 
 static bool stdlib_call_uses_base_helpers(DsStr name) {
@@ -22,32 +23,6 @@ static bool stdlib_call_uses_base_helpers(DsStr name) {
            ns != DS_STDLIB_NAMESPACE_STRING &&
            ns != DS_STDLIB_NAMESPACE_REGEX &&
            !ds_stdlib_is_glob_helper(name);
-}
-
-static unsigned string_literal_helper_mask(DsStr text) {
-    unsigned mask = 0;
-    if (text.len < 2 || text.data[0] != '"') return 0;
-    for (size_t i = 0; i < text.len; i++) {
-        if (text.data[i] != ':') continue;
-        if (i + 1 < text.len && text.data[i + 1] == '^') mask |= DS_BASH_STRING_HELPER_FORMAT_CENTER;
-        if (i + 5 < text.len && memcmp(text.data + i + 1, "trim", 4) == 0 && text.data[i + 5] == '}') mask |= DS_BASH_STRING_HELPER_TRIM;
-        if (i + 6 < text.len && memcmp(text.data + i + 1, "upper", 5) == 0 && text.data[i + 6] == '}') mask |= DS_BASH_STRING_HELPER_UPPER;
-        if (i + 6 < text.len && memcmp(text.data + i + 1, "lower", 5) == 0 && text.data[i + 6] == '}') mask |= DS_BASH_STRING_HELPER_LOWER;
-    }
-    return mask;
-}
-
-static bool string_literal_contains_index_interpolation(DsStr text) {
-    if (text.len < 2 || text.data[0] != '"') return false;
-    for (size_t i = 0; i < text.len; i++) {
-        if (text.data[i] != '{') continue;
-        bool saw_bracket = false;
-        for (size_t j = i + 1; j < text.len && text.data[j] != '}'; j++) {
-            if (text.data[j] == '[') saw_bracket = true;
-        }
-        if (saw_bracket) return true;
-    }
-    return false;
 }
 
 static bool literal_glob_arg_is_recursive(const DsLowerExpr *expr) {
@@ -65,53 +40,6 @@ static bool glob_call_uses_helper(DsStr name, const DsLowerExprVec *args, bool r
     if (!ds_stdlib_is_glob_helper(name)) return false;
     if (!recursive_only || args->len == 0) return true;
     return literal_glob_arg_is_recursive(args->items[0]);
-}
-
-static unsigned command_string_helper_mask(const DsCommand *command) {
-    unsigned mask = 0;
-    if (!command) return 0;
-    for (size_t s = 0; s < command->stages.len; s++) {
-        const DsCommandStage *stage = &command->stages.items[s];
-        for (size_t i = 0; i < stage->words.len; i++) mask |= string_literal_helper_mask(stage->words.items[i].text);
-    }
-    mask |= string_literal_helper_mask(command->redirect.target);
-    return mask;
-}
-
-static bool command_uses_collection_index(const DsCommand *command) {
-    if (!command) return false;
-    for (size_t s = 0; s < command->stages.len; s++) {
-        const DsCommandStage *stage = &command->stages.items[s];
-        for (size_t i = 0; i < stage->words.len; i++) {
-            if (string_literal_contains_index_interpolation(stage->words.items[i].text)) return true;
-        }
-    }
-    return command->redirect.kind != DS_REDIRECT_NONE &&
-           string_literal_contains_index_interpolation(command->redirect.target);
-}
-
-static bool word_has_arith_interp(DsStr word) {
-    if (word.len < 4 || word.data[0] != '"' || word.data[word.len - 1] != '"') return false;
-    for (size_t i = 1; i + 1 < word.len; i++) {
-        if (word.data[i] != '{') continue;
-        size_t j = i + 1;
-        bool saw_op = false;
-        while (j + 1 < word.len && word.data[j] != '}') {
-            char c = word.data[j++];
-            if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '(' || c == ')') saw_op = true;
-        }
-        if (j + 1 < word.len && word.data[j] == '}' && saw_op) return true;
-    }
-    return false;
-}
-
-static bool command_uses_int_helpers(const DsCommand *command) {
-    for (size_t s = 0; s < command->stages.len; s++) {
-        for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
-            if (word_has_arith_interp(command->stages.items[s].words.items[i].text)) return true;
-        }
-    }
-    return word_has_arith_interp(command->redirect.target);
 }
 
 static unsigned regex_call_helper_mask(DsStr name) {
@@ -153,18 +81,20 @@ static void collect_expr(BashDeps *deps, const DsLowerExpr *expr, ExprScan scan)
         case DS_LOWER_EXPR_STRING:
             return;
         case DS_LOWER_EXPR_RUN:
-            if (scan.run_and_membership) {
-                deps->uses_run = true;
-            }
+            if (scan.run_and_membership) deps->uses_run = true;
             deps->has_command |= scan.command_run;
+            collect_command(deps, &expr->as.run);
             return;
         case DS_LOWER_EXPR_FIELD:
             collect_expr(deps, expr->as.field.object, scan);
             return;
         case DS_LOWER_EXPR_INDEX:
-            deps->uses_collection_index = true;
-            deps->uses_array_helpers |= expr->as.index.object_is_array;
-            deps->uses_map_helpers |= expr->as.index.object_is_map;
+            if (!(expr->as.index.row_field_access && expr->as.index.object &&
+                  expr->as.index.object->kind == DS_LOWER_EXPR_IDENT)) {
+                deps->uses_collection_index = true;
+                deps->uses_array_helpers |= expr->as.index.object_is_array;
+                deps->uses_map_helpers |= expr->as.index.object_is_map;
+            }
             collect_expr(deps, expr->as.index.object, scan);
             collect_expr(deps, expr->as.index.index, scan);
             return;
@@ -225,15 +155,20 @@ static void collect_expr(BashDeps *deps, const DsLowerExpr *expr, ExprScan scan)
     }
 }
 
-static void collect_command(BashDeps *deps, const DsCommand *command) {
-    bool indexed = command_uses_collection_index(command);
+static void collect_command(BashDeps *deps, const DsLowerCommand *command) {
+    if (!command) return;
+    const ExprScan command_value = {true, true};
     deps->has_command = true;
-    deps->string_helper_mask |= command_string_helper_mask(command);
-    deps->uses_collection_index |= indexed;
-    deps->uses_array_helpers |= indexed;
-    deps->uses_map_helpers |= indexed;
-    deps->uses_int_helpers |= command_uses_int_helpers(command);
     deps->uses_control_commands |= bash_command_is_control(command, NULL);
+    for (size_t s = 0; s < command->stages.len; s++) {
+        const DsLowerCommandWordVec *words = &command->stages.items[s].words;
+        for (size_t i = 0; i < words->len; i++) {
+            if (words->items[i].kind == DS_LOWER_COMMAND_WORD_VALUE) {
+                collect_expr(deps, words->items[i].value, command_value);
+            }
+        }
+    }
+    collect_expr(deps, command->redirect.target, command_value);
 }
 
 static void collect_stmt(BashDeps *deps, const DsLowerStmt *stmt) {

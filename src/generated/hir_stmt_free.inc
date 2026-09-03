@@ -22,7 +22,7 @@
             lower_stmt_vec_free(&stmt->as.block_stmt.statements);
             break;
         case DS_LOWER_STMT_CMD:
-            ds_command_free(&stmt->as.cmd_stmt);
+            lower_command_free(&stmt->as.cmd_stmt);
             break;
         case DS_LOWER_STMT_CALL:
             free(stmt->as.call_stmt.name.data);

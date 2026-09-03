@@ -2,6 +2,10 @@
 #include "ds_runtime.h"
 #include "ds_signal.h"
 
+bool ds_lower_command_is_pipeline(const DsLowerCommand *command) {
+    return command && command->stages.len > 1;
+}
+
 static void print_span(FILE *out, DsSpan span) {
     const DsSource *source = span.source;
     fprintf(out, " @ %s:%d:%d", source && source->path ? source->path : "<source>", span.start.line, span.start.column);
@@ -120,20 +124,20 @@ static void print_literal_expr(FILE *out, const DsLowerExpr *expr) {
     }
 }
 
-static void dump_word_vec(FILE *out, const DsWordVec *words) {
+static void dump_word_vec(FILE *out, const DsLowerCommandWordVec *words) {
     fputc('[', out);
     for (size_t i = 0; i < words->len; i++) {
         if (i) fputs(", ", out);
         fputc('"', out);
-        ds_fprint_escaped(out, words->items[i].text.data, words->items[i].text.len, DS_ESCAPE_HEX_CONTROLS);
+        ds_fprint_escaped(out, words->items[i].source_text.data, words->items[i].source_text.len, DS_ESCAPE_HEX_CONTROLS);
         fputc('"', out);
     }
     fputc(']', out);
 }
 
-static void dump_redirect(FILE *out, const DsRedirect *redirect);
+static void dump_redirect(FILE *out, const DsLowerRedirect *redirect);
 
-static void dump_command(FILE *out, const DsCommand *command) {
+static void dump_command(FILE *out, const DsLowerCommand *command) {
     for (size_t s = 0; s < command->stages.len; s++) {
         if (s) fputs(" | ", out);
         dump_word_vec(out, &command->stages.items[s].words);
@@ -141,12 +145,12 @@ static void dump_command(FILE *out, const DsCommand *command) {
     dump_redirect(out, &command->redirect);
 }
 
-static void dump_redirect(FILE *out, const DsRedirect *redirect) {
+static void dump_redirect(FILE *out, const DsLowerRedirect *redirect) {
     const char *op = ds_redirect_shell_op(redirect->kind);
     if (!op) return;
     fprintf(out, " Redirect %s ", op);
     fputc('"', out);
-    ds_fprint_escaped(out, ds_str_data(redirect->target), redirect->target.len, DS_ESCAPE_HEX_CONTROLS);
+    ds_fprint_escaped(out, ds_str_data(redirect->source_target), redirect->source_target.len, DS_ESCAPE_HEX_CONTROLS);
     fputc('"', out);
     print_span(out, redirect->target_span);
 }

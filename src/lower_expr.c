@@ -327,14 +327,13 @@ DsLowerExpr *lower_run_expr(Lower *lower, const DsExpr *expr, SymKind *kind_out)
     if (expr->as.run.stages.len == 0) {
         ds_diag_error(lower->diag, expr->span, "expected command after `run`");
     }
-    for (size_t s = 0; s < expr->as.run.stages.len; s++) {
-        if (expr->as.run.stages.items[s].words.len == 0) ds_diag_error(lower->diag, expr->as.run.stages.items[s].span, "empty pipeline stage");
-        for (size_t i = 0; i < expr->as.run.stages.items[s].words.len; i++) lower_validate_command_word(lower, expr->as.run.stages.items[s].words.items[i].text, expr->as.run.stages.items[s].words.items[i].span);
+    if (expr->as.run.redirect.kind != DS_REDIRECT_NONE) {
+        ds_diag_error(lower->diag, expr->as.run.redirect.op_span,
+                      "captured `run` commands do not support redirection");
     }
-    if (expr->as.run.redirect.kind != DS_REDIRECT_NONE) ds_diag_error(lower->diag, expr->as.run.redirect.op_span, "captured `run` commands do not support redirection");
     *kind_out = SYM_COMMAND_RESULT;
     DsLowerExpr *out = expr_new(DS_LOWER_EXPR_RUN, expr->span);
-    ds_command_clone(&out->as.run, &expr->as.run);
+    lower_command_to_hir(lower, &expr->as.run, &out->as.run);
     return out;
 }
 
@@ -354,6 +353,7 @@ DsLowerExpr *lower_map_field_expr(Lower *lower, const DsExpr *expr, DsLowerExpr 
     out->as.index.map_key = ds_str_clone(expr->as.field.field);
     const DsLowerRowSchema *schema = expr_row_schema_full_inner(lower, object, false);
     if (schema) {
+        out->as.index.row_field_access = true;
         const DsLowerRowField *field = row_schema_find(schema, expr->as.field.field);
         if (!field) {
             ds_diag_error(lower->diag, expr->span, "unknown row field `%.*s`", (int)expr->as.field.field.len, expr->as.field.field.data);

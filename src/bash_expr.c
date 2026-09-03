@@ -238,28 +238,28 @@ static bool emit_interp_format_expr(BashEmitter *e, const DsLowerExpr *expr, Emi
         const char *helper = spec->kind == DS_INTERP_FORMAT_UPPER ? "__ds_string_upper" :
                              spec->kind == DS_INTERP_FORMAT_LOWER ? "__ds_string_lower" :
                                                                    "__ds_string_trim";
-        buf_append(out, "$(");
+        buf_append(out, "\"$(");
         buf_append(out, helper);
         buf_append(out, " ");
         if (!emit_value_expr(e, value, out)) return false;
-        buf_append(out, ")");
+        buf_append(out, ")\"");
         return true;
     }
     if (spec->kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
-        ds_string_appendf(out, "$(__ds_format_center %d ", spec->width);
+        ds_string_appendf(out, "\"$(__ds_format_center %d ", spec->width);
         if (!emit_value_expr(e, value, out)) return false;
-        buf_append(out, ")");
+        buf_append(out, ")\"");
         return true;
     }
     if (spec->kind == DS_INTERP_FORMAT_ALIGN_LEFT || spec->kind == DS_INTERP_FORMAT_ALIGN_RIGHT) {
-        buf_append(out, "$(printf '");
+        buf_append(out, "\"$(printf '");
         if (spec->kind == DS_INTERP_FORMAT_ALIGN_LEFT) ds_string_appendf(out, "%%-%ds' ", spec->width);
         else ds_string_appendf(out, "%%%ds' ", spec->width);
         if (!emit_value_expr(e, value, out)) return false;
-        buf_append(out, ")");
+        buf_append(out, ")\"");
         return true;
     }
-    buf_append(out, "$(printf '");
+    buf_append(out, "\"$(printf '");
     if (spec->kind == DS_INTERP_FORMAT_INT_DECIMAL) {
         buf_append(out, "%");
         if (spec->zero_pad) buf_append(out, "0");
@@ -270,7 +270,7 @@ static bool emit_interp_format_expr(BashEmitter *e, const DsLowerExpr *expr, Emi
         ds_string_appendf(out, ".%df' ", spec->precision);
     }
     if (!emit_value_expr(e, value, out)) return false;
-    buf_append(out, ")");
+    buf_append(out, ")\"");
     return true;
 }
 
@@ -348,6 +348,15 @@ bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out) {
             }
             return true;
         case DS_LOWER_EXPR_INDEX:
+            if (expr->as.index.row_field_access && expr->as.index.object &&
+                expr->as.index.object->kind == DS_LOWER_EXPR_IDENT && expr->as.index.map_key_literal) {
+                buf_append(out, "\"$");
+                emit_var_name(out, expr->as.index.object->as.text);
+                buf_append(out, "_");
+                buf_append_dsstr(out, expr->as.index.map_key);
+                buf_append(out, "\"");
+                return true;
+            }
             if (!expr->as.index.object_is_array && !expr->as.index.object_is_map) {
                 /* Lowering annotates accepted collection indexes with a known collection kind. */
                 return bash_invariant_fail(e, expr->span, "collection index should have a known collection kind after lowering");

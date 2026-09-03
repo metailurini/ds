@@ -8,7 +8,9 @@ constants:
   0: string "Danh"
   1: int 2
   2: bool true
-  3: int 2
+  3: string "Hello "
+  4: int 2
+  5: string "count:"
 
 instructions:
   0000 LOAD_CONST     r0, const 0    # tests/v0_3/fixtures/mixed.ds:1:12
@@ -18,16 +20,22 @@ instructions:
   0004 LOAD_CONST     r2, const 2    # tests/v0_3/fixtures/mixed.ds:3:10
   0005 STORE_VAR      ok, r2    # tests/v0_3/fixtures/mixed.ds:3:1
   0006 LOAD_VAR       r3, ok    # tests/v0_3/fixtures/mixed.ds:4:4
-  0007 JUMP_IF_FALSE  r3, 11    # tests/v0_3/fixtures/mixed.ds:4:4
+  0007 JUMP_IF_FALSE  r3, 14    # tests/v0_3/fixtures/mixed.ds:4:4
   0008 PUSH_SCOPE        # tests/v0_3/fixtures/mixed.ds:4:7
-  0009 RUN_CMD        ["echo", "\"Hello {name}\""]    # tests/v0_3/fixtures/mixed.ds:5:3
-  0010 POP_SCOPE         # tests/v0_3/fixtures/mixed.ds:4:7
-  0011 LOAD_VAR       r4, count    # tests/v0_3/fixtures/mixed.ds:7:4
-  0012 LOAD_CONST     r5, const 3    # tests/v0_3/fixtures/mixed.ds:7:13
-  0013 COMPARE        r6, r4 >= r5    # tests/v0_3/fixtures/mixed.ds:7:4
-  0014 JUMP_IF_FALSE  r6, 18    # tests/v0_3/fixtures/mixed.ds:7:4
-  0015 PUSH_SCOPE        # tests/v0_3/fixtures/mixed.ds:7:15
-  0016 RUN_CMD        ["echo", "\"count:{count}\""]    # tests/v0_3/fixtures/mixed.ds:8:3
-  0017 POP_SCOPE         # tests/v0_3/fixtures/mixed.ds:7:15
-  0018 RUN_CMD        ["echo", "\"done\""]    # tests/v0_3/fixtures/mixed.ds:10:1
-  0019 RETURN         0    # tests/v0_3/fixtures/mixed.ds:1:1
+  0009 LOAD_CONST     r5, const 3    # tests/v0_3/fixtures/mixed.ds:5:8
+  0010 LOAD_VAR       r6, name    # tests/v0_3/fixtures/mixed.ds:5:8
+  0011 INTERP_JOIN    r4, join(r5, r6)    # tests/v0_3/fixtures/mixed.ds:5:8
+  0012 RUN_CMD        ["echo", "\"Hello {name}\""]    # tests/v0_3/fixtures/mixed.ds:5:3
+  0013 POP_SCOPE         # tests/v0_3/fixtures/mixed.ds:4:7
+  0014 LOAD_VAR       r7, count    # tests/v0_3/fixtures/mixed.ds:7:4
+  0015 LOAD_CONST     r8, const 4    # tests/v0_3/fixtures/mixed.ds:7:13
+  0016 COMPARE        r9, r7 >= r8    # tests/v0_3/fixtures/mixed.ds:7:4
+  0017 JUMP_IF_FALSE  r9, 24    # tests/v0_3/fixtures/mixed.ds:7:4
+  0018 PUSH_SCOPE        # tests/v0_3/fixtures/mixed.ds:7:15
+  0019 LOAD_CONST     r11, const 5    # tests/v0_3/fixtures/mixed.ds:8:8
+  0020 LOAD_VAR       r12, count    # tests/v0_3/fixtures/mixed.ds:8:8
+  0021 INTERP_JOIN    r10, join(r11, r12)    # tests/v0_3/fixtures/mixed.ds:8:8
+  0022 RUN_CMD        ["echo", "\"count:{count}\""]    # tests/v0_3/fixtures/mixed.ds:8:3
+  0023 POP_SCOPE         # tests/v0_3/fixtures/mixed.ds:7:15
+  0024 RUN_CMD        ["echo", "\"done\""]    # tests/v0_3/fixtures/mixed.ds:10:1
+  0025 RETURN         0    # tests/v0_3/fixtures/mixed.ds:1:1

@@ -9,19 +9,25 @@ constants:
 instructions:
   0000 RUN_CAPTURE    r0, ["sh", "-c", "\"exit 7\""]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:1:9
   0001 STORE_VAR      r, r0    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:1:1
-  0002 RUN_CMD        ["echo", "r.stdout"]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:2:1
-  0003 RUN_CMD        ["echo", "r.stderr"]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:3:1
-  0004 RUN_CMD        ["echo", "r.code"]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:4:1
-  0005 LOAD_VAR       r1, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:4
-  0006 GET_FIELD      r2, r1.ok    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:4
-  0007 JUMP_IF_FALSE  r2, 11    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:4
-  0008 PUSH_SCOPE        # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:9
-  0009 RUN_CMD        ["echo", "\"ok\""]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:6:3
-  0010 POP_SCOPE         # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:9
-  0011 LOAD_VAR       r3, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:4
-  0012 GET_FIELD      r4, r3.failed    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:4
-  0013 JUMP_IF_FALSE  r4, 17    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:4
-  0014 PUSH_SCOPE        # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:13
-  0015 RUN_CMD        ["echo", "\"failed\""]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:9:3
-  0016 POP_SCOPE         # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:13
-  0017 RETURN         0    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:1:1
+  0002 LOAD_VAR       r1, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:2:6
+  0003 GET_FIELD      r2, r1.stdout    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:2:6
+  0004 RUN_CMD        ["echo", "r.stdout"]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:2:1
+  0005 LOAD_VAR       r3, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:3:6
+  0006 GET_FIELD      r4, r3.stderr    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:3:6
+  0007 RUN_CMD        ["echo", "r.stderr"]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:3:1
+  0008 LOAD_VAR       r5, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:4:6
+  0009 GET_FIELD      r6, r5.code    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:4:6
+  0010 RUN_CMD        ["echo", "r.code"]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:4:1
+  0011 LOAD_VAR       r7, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:4
+  0012 GET_FIELD      r8, r7.ok    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:4
+  0013 JUMP_IF_FALSE  r8, 17    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:4
+  0014 PUSH_SCOPE        # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:9
+  0015 RUN_CMD        ["echo", "\"ok\""]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:6:3
+  0016 POP_SCOPE         # tests/v0_7/fixtures/helpers/bytecode_fields.ds:5:9
+  0017 LOAD_VAR       r9, r    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:4
+  0018 GET_FIELD      r10, r9.failed    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:4
+  0019 JUMP_IF_FALSE  r10, 23    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:4
+  0020 PUSH_SCOPE        # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:13
+  0021 RUN_CMD        ["echo", "\"failed\""]    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:9:3
+  0022 POP_SCOPE         # tests/v0_7/fixtures/helpers/bytecode_fields.ds:8:13
+  0023 RETURN         0    # tests/v0_7/fixtures/helpers/bytecode_fields.ds:1:1

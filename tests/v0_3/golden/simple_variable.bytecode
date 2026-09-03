@@ -10,5 +10,7 @@ constants:
 instructions:
   0000 LOAD_CONST     r0, const 0    # tests/v0_3/fixtures/simple_variable.ds:1:12
   0001 STORE_VAR      name, r0    # tests/v0_3/fixtures/simple_variable.ds:1:1
-  0002 RUN_CMD        ["echo", "\"{name}\""]    # tests/v0_3/fixtures/simple_variable.ds:2:1
-  0003 RETURN         0    # tests/v0_3/fixtures/simple_variable.ds:1:1
+  0002 LOAD_VAR       r2, name    # tests/v0_3/fixtures/simple_variable.ds:2:6
+  0003 INTERP_JOIN    r1, join(r2)    # tests/v0_3/fixtures/simple_variable.ds:2:6
+  0004 RUN_CMD        ["echo", "\"{name}\""]    # tests/v0_3/fixtures/simple_variable.ds:2:1
+  0005 RETURN         0    # tests/v0_3/fixtures/simple_variable.ds:1:1

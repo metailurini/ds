@@ -9,6 +9,8 @@ constants:
   1: string "production"
   2: int 3
   3: bool true
+  4: string "Deploying "
+  5: string " to "
 
 instructions:
   0000 LOAD_CONST     r0, const 0    # tests/v0_6/fixtures/imports_basic/lib.ds:1:11
@@ -19,11 +21,17 @@ instructions:
   0005 STORE_VAR      retries, r2    # tests/v0_6/fixtures/imports_basic/constants.ds:2:1
   0006 LOAD_CONST     r3, const 3    # tests/v0_6/fixtures/imports_basic/constants.ds:3:15
   0007 STORE_VAR      enabled, r3    # tests/v0_6/fixtures/imports_basic/constants.ds:3:1
-  0008 RUN_CMD        ["echo", "\"Deploying {app} to {target}\""]    # tests/v0_6/fixtures/imports_basic/main.ds:3:1
-  0009 RUN_CMD        ["echo", "$retries"]    # tests/v0_6/fixtures/imports_basic/main.ds:4:1
-  0010 LOAD_VAR       r4, enabled    # tests/v0_6/fixtures/imports_basic/main.ds:5:4
-  0011 JUMP_IF_FALSE  r4, 15    # tests/v0_6/fixtures/imports_basic/main.ds:5:4
-  0012 PUSH_SCOPE        # tests/v0_6/fixtures/imports_basic/main.ds:5:12
-  0013 RUN_CMD        ["echo", "\"enabled\""]    # tests/v0_6/fixtures/imports_basic/main.ds:6:3
-  0014 POP_SCOPE         # tests/v0_6/fixtures/imports_basic/main.ds:5:12
-  0015 RETURN         0    # tests/v0_6/fixtures/imports_basic/main.ds:1:1
+  0008 LOAD_CONST     r5, const 4    # tests/v0_6/fixtures/imports_basic/main.ds:3:6
+  0009 LOAD_VAR       r6, app    # tests/v0_6/fixtures/imports_basic/main.ds:3:6
+  0010 LOAD_CONST     r7, const 5    # tests/v0_6/fixtures/imports_basic/main.ds:3:6
+  0011 LOAD_VAR       r8, target    # tests/v0_6/fixtures/imports_basic/main.ds:3:6
+  0012 INTERP_JOIN    r4, join(r5, r6, r7, r8)    # tests/v0_6/fixtures/imports_basic/main.ds:3:6
+  0013 RUN_CMD        ["echo", "\"Deploying {app} to {target}\""]    # tests/v0_6/fixtures/imports_basic/main.ds:3:1
+  0014 LOAD_VAR       r9, retries    # tests/v0_6/fixtures/imports_basic/main.ds:4:6
+  0015 RUN_CMD        ["echo", "$retries"]    # tests/v0_6/fixtures/imports_basic/main.ds:4:1
+  0016 LOAD_VAR       r10, enabled    # tests/v0_6/fixtures/imports_basic/main.ds:5:4
+  0017 JUMP_IF_FALSE  r10, 21    # tests/v0_6/fixtures/imports_basic/main.ds:5:4
+  0018 PUSH_SCOPE        # tests/v0_6/fixtures/imports_basic/main.ds:5:12
+  0019 RUN_CMD        ["echo", "\"enabled\""]    # tests/v0_6/fixtures/imports_basic/main.ds:6:3
+  0020 POP_SCOPE         # tests/v0_6/fixtures/imports_basic/main.ds:5:12
+  0021 RETURN         0    # tests/v0_6/fixtures/imports_basic/main.ds:1:1

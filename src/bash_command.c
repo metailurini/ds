@@ -1,71 +1,44 @@
 #include "bash_internal.h"
 #include "ds_command_facts.h"
 
-bool bash_command_is_control(const DsCommand *command, const char *name) {
-    if (!command || ds_command_is_pipeline(command) || command->redirect.kind != DS_REDIRECT_NONE) return false;
+bool bash_command_is_control(const DsLowerCommand *command, const char *name) {
+    if (!command || ds_lower_command_is_pipeline(command) || command->redirect.kind != DS_REDIRECT_NONE) return false;
     if (command->stages.len == 0 || command->stages.items[0].words.len == 0) return false;
-    DsStr first = command->stages.items[0].words.items[0].text;
+    const DsLowerCommandWord *first_word = &command->stages.items[0].words.items[0];
+    if (first_word->kind != DS_LOWER_COMMAND_WORD_LITERAL) return false;
+    DsStr first = first_word->source_text;
     if (name) return ds_str_eq_cstr(first, name);
     return ds_str_eq_cstr(first, "fail") || ds_str_eq_cstr(first, "exit");
 }
 
-bool emit_command_word(BashEmitter *e, DsWord command_word, EmitBuf *out) {
-    /*
-     * Command-word validity is a lowerer-owned M3.4 contract. Diagnostics here
-     * are defensive invariants for malformed HIR that somehow bypassed lowering,
-     * not source-language feature gates.
-     */
-    DsStr word = command_word.text;
-    DsSpan span = command_word.span;
-    DsCommandWordForm form = ds_command_word_analyze(word);
-    if (form.kind == DS_COMMAND_WORD_QUOTED) {
-        DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = span};
-        fake.as.text = word;
-        return emit_interpolated_string(e, &fake, out);
+static void emit_command_literal_quoted(DsStr literal, EmitBuf *out) {
+    buf_append(out, "\"");
+    for (size_t i = 0; i < literal.len; i++) {
+        char c = literal.data[i];
+        if (c == '"' || c == '\\' || c == '$' || c == '`') buf_append(out, "\\");
+        ds_string_append_range(out, &c, 1);
     }
-    if (form.kind == DS_COMMAND_WORD_VARIABLE) {
-        if (word.data[0] == '$' && form.name.len + 1 < word.len) {
-            ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unsupported variable suffix after lowering");
-            return false;
-        }
-        DsStr name = form.name;
-        if (!symbol_exists(&e->symbols, name)) {
-            ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
-            return false;
-        }
-        buf_append(out, "\"$");
-        emit_var_name(out, name);
-        buf_append(out, "\"");
-        return true;
-    }
-    if (form.kind == DS_COMMAND_WORD_FIELD) {
-        DsStr name = form.name;
-        DsStr field = form.field;
-        if (ds_str_eq_cstr(name, "env")) {
-            buf_append(out, "\"${");
-            buf_append_dsstr(out, field);
-            buf_append(out, ":-}\"");
-            return true;
-        }
-        if (!symbol_exists(&e->symbols, name)) {
-            ds_diag_error(e->diag, span, "internal Bash command-word invariant failed: unknown command variable `%.*s`", (int)name.len, name.data);
-            return false;
-        }
-        buf_append(out, "\"$");
-        emit_var_name(out, name);
-        buf_append(out, "_");
-        buf_append_dsstr(out, field);
-        buf_append(out, "\"");
-        return true;
-    }
-    buf_append_dsstr(out, word);
-    return true;
+    buf_append(out, "\"");
 }
 
-bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsSpan span) {
+bool emit_command_word(BashEmitter *e, const DsLowerCommandWord *command_word, EmitBuf *out) {
+    if (!command_word) return bash_invariant_fail(e, (DsSpan){0}, "command word should exist after lowering");
+    if (command_word->kind == DS_LOWER_COMMAND_WORD_LITERAL) {
+        if (command_word->source_text.len > 0 && command_word->source_text.data[0] == '"') {
+            emit_command_literal_quoted(command_word->literal_text, out);
+        } else {
+            buf_append_dsstr(out, command_word->source_text);
+        }
+        return true;
+    }
+    if (!command_word->value) {
+        return bash_invariant_fail(e, command_word->span, "command value word should have a lowered expression");
+    }
+    return emit_value_expr(e, command_word->value, out);
+}
+
+bool emit_redirect(BashEmitter *e, const DsLowerRedirect *redirect, EmitBuf *out, DsSpan span) {
     if (redirect->kind == DS_REDIRECT_NONE) return true;
-    DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = redirect->target_span};
-    fake.as.text = redirect->target;
     switch (redirect->kind) {
         case DS_REDIRECT_OUT: buf_append(out, " > "); break;
         case DS_REDIRECT_OUT_APPEND: buf_append(out, " >> "); break;
@@ -75,53 +48,56 @@ bool emit_redirect(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out, DsS
         case DS_REDIRECT_ALL_APPEND: buf_append(out, " >> "); break;
         case DS_REDIRECT_NONE: break;
     }
-    if (!emit_interpolated_string(e, &fake, out)) return false;
+    if (redirect->target) {
+        if (!emit_value_expr(e, redirect->target, out)) return false;
+    } else {
+        emit_command_literal_quoted(redirect->literal_target, out);
+    }
     if (redirect->kind == DS_REDIRECT_ALL || redirect->kind == DS_REDIRECT_ALL_APPEND) buf_append(out, " 2>&1");
     (void)span;
     return true;
 }
 
-bool emit_trace_redirect_args(BashEmitter *e, const DsRedirect *redirect, EmitBuf *out) {
+bool emit_trace_redirect_args(BashEmitter *e, const DsLowerRedirect *redirect, EmitBuf *out) {
     const char *op = ds_redirect_shell_op(redirect->kind);
     if (!op) return true;
-    DsLowerExpr fake = {.kind = DS_LOWER_EXPR_STRING, .span = redirect->target_span};
-    fake.as.text = redirect->target;
     buf_append(out, " ");
     buf_append(out, "\"");
     buf_append(out, op);
     buf_append(out, "\"");
     buf_append(out, " ");
-    return emit_interpolated_string(e, &fake, out);
+    if (redirect->target) return emit_value_expr(e, redirect->target, out);
+    emit_command_literal_quoted(redirect->literal_target, out);
+    return true;
 }
 
-bool emit_capture_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out, DsSpan span) {
+bool emit_capture_words(BashEmitter *e, const DsLowerCommandWordVec *words, EmitBuf *out, DsSpan span) {
     buf_append(out, " ");
     emit_source_loc(out, e->source, span);
     for (size_t i = 0; i < words->len; i++) {
         buf_append(out, " ");
-        if (!emit_command_word(e, words->items[i], out)) return false;
+        if (!emit_command_word(e, &words->items[i], out)) return false;
     }
-    (void)span;
     return true;
 }
 
-static bool emit_stage_words(BashEmitter *e, const DsWordVec *words, EmitBuf *out) {
+static bool emit_stage_words(BashEmitter *e, const DsLowerCommandWordVec *words, EmitBuf *out) {
     for (size_t i = 0; i < words->len; i++) {
         if (i > 0) buf_append(out, " ");
-        if (!emit_command_word(e, words->items[i], out)) return false;
+        if (!emit_command_word(e, &words->items[i], out)) return false;
     }
     return true;
 }
 
-bool emit_command_pipeline(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
-    bool needs_group = ds_command_is_pipeline(command) && command->redirect.kind != DS_REDIRECT_NONE;
+bool emit_command_pipeline(BashEmitter *e, const DsLowerCommand *command, EmitBuf *out, DsSpan span) {
+    bool needs_group = ds_lower_command_is_pipeline(command) && command->redirect.kind != DS_REDIRECT_NONE;
     if (needs_group) buf_append(out, "{ ");
     if (!emit_command_pipeline_stages(e, command, out)) return false;
     if (needs_group) buf_append(out, "; }");
     return emit_redirect(e, &command->redirect, out, span);
 }
 
-bool emit_command_pipeline_stages(BashEmitter *e, const DsCommand *command, EmitBuf *out) {
+bool emit_command_pipeline_stages(BashEmitter *e, const DsLowerCommand *command, EmitBuf *out) {
     for (size_t s = 0; s < command->stages.len; s++) {
         if (s > 0) buf_append(out, " | ");
         if (!emit_stage_words(e, &command->stages.items[s].words, out)) return false;
@@ -129,14 +105,10 @@ bool emit_command_pipeline_stages(BashEmitter *e, const DsCommand *command, Emit
     return true;
 }
 
-bool emit_capture_command(BashEmitter *e, const DsCommand *command, EmitBuf *out, DsSpan span) {
-    if (ds_command_is_pipeline(command)) {
+bool emit_capture_command(BashEmitter *e, const DsLowerCommand *command, EmitBuf *out, DsSpan span) {
+    if (ds_lower_command_is_pipeline(command)) {
         EmitBuf cmd = {0};
-        DsCommand copy;
-        ds_command_clone(&copy, command);
-        ds_redirect_free(&copy.redirect);
-        if (!emit_command_pipeline(e, &copy, &cmd, span)) { ds_command_free(&copy); free(cmd.data); return false; }
-        ds_command_free(&copy);
+        if (!emit_command_pipeline_stages(e, command, &cmd)) { free(cmd.data); return false; }
         buf_append(out, " ");
         emit_source_loc(out, e->source, span);
         buf_append(out, " ");
@@ -153,7 +125,7 @@ static void emit_result_field_name(EmitBuf *out, DsStr name, const char *field) 
     buf_append(out, field);
 }
 
-bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsCommand *command, DsSpan span, int indent) {
+bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsLowerCommand *command, DsSpan span, int indent) {
     size_t id = e->temp_counter++;
 
     emit_indent(&e->out, indent);
@@ -172,7 +144,7 @@ bool bash_emit_capture_pipeline_assignment(BashEmitter *e, DsStr name, const DsC
         if (s > 0) buf_append(&e->out, " \"|\"");
         for (size_t i = 0; i < command->stages.items[s].words.len; i++) {
             buf_append(&e->out, " ");
-            if (!emit_command_word(e, command->stages.items[s].words.items[i], &e->out)) return false;
+            if (!emit_command_word(e, &command->stages.items[s].words.items[i], &e->out)) return false;
         }
     }
     buf_append(&e->out, "\n");

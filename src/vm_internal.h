@@ -90,10 +90,13 @@ typedef struct {
     int *args;
     size_t arg_count;
     DsStr *words;
+    DsStr *word_literals;
     size_t word_count;
     size_t *stage_word_counts;
     size_t stage_count;
     DsRedirect redirect;
+    DsStr redirect_literal;
+    int redirect_reg;
     size_t loop_index;
     int64_t loop_current;
     bool loop_active;
@@ -179,7 +182,6 @@ bool call_function(Vm *vm, Instr *ins, size_t next_ip, size_t *target_ip);
 bool lookup_var(Vm *vm, const char *name, DsValue *out, DsSpan span);
 DsValue *lookup_var_ref(Vm *vm, const char *name);
 
-bool interpolate_string(Vm *vm, const DsString *input, DsString *out, DsSpan span);
 bool vm_format_interpolation_value(Vm *vm, DsValue *value,
                                    const DsInterpFormatSpec *spec,
                                    DsString *out, DsSpan span);
