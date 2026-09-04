@@ -158,6 +158,7 @@ static void emit_cleanup(FILE *file, const char *root, const char *kind, const c
     else if (strcmp(kind, "ast_fn_param_vec") == 0) fprintf(file, "            free_fn_param_vec(&%s->%s);\n", root, path);
     else if (strcmp(kind, "ast_case_arm_vec") == 0) fprintf(file, "            free_case_arm_vec(&%s->%s);\n", root, path);
     else if (strcmp(kind, "hir_expr") == 0) fprintf(file, "            lower_expr_free(%s->%s);\n", root, path);
+    else if (strcmp(kind, "hir_command") == 0) fprintf(file, "            lower_command_free(&%s->%s);\n", root, path);
     else if (strcmp(kind, "hir_stmt") == 0) fprintf(file, "            lower_stmt_free(%s->%s);\n", root, path);
     else if (strcmp(kind, "hir_expr_vec") == 0) fprintf(file, "            lower_expr_vec_free(&%s->%s);\n", root, path);
     else if (strcmp(kind, "hir_stmt_vec") == 0) fprintf(file, "            lower_stmt_vec_free(&%s->%s);\n", root, path);

@@ -7,16 +7,37 @@ functions:
 constants:
   0: string "COMMON"
   1: string "B"
-  2: string "A"
+  2: string "b sees "
+  3: string "A"
+  4: string "a sees "
+  5: string " and "
+  6: string "root sees "
+  7: string " "
+  8: string " "
 
 instructions:
-  0000 INTERPOLATE    r0, const 0    # tests/v0_6/fixtures/imports_nested/shared/common.ds:1:14
+  0000 LOAD_CONST     r0, const 0    # tests/v0_6/fixtures/imports_nested/shared/common.ds:1:14
   0001 STORE_VAR      common, r0    # tests/v0_6/fixtures/imports_nested/shared/common.ds:1:1
-  0002 INTERPOLATE    r1, const 1    # tests/v0_6/fixtures/imports_nested/shared/b.ds:2:9
+  0002 LOAD_CONST     r1, const 1    # tests/v0_6/fixtures/imports_nested/shared/b.ds:2:9
   0003 STORE_VAR      b, r1    # tests/v0_6/fixtures/imports_nested/shared/b.ds:2:1
-  0004 RUN_CMD        ["echo", "\"b sees {common}\""]    # tests/v0_6/fixtures/imports_nested/shared/b.ds:3:1
-  0005 INTERPOLATE    r2, const 2    # tests/v0_6/fixtures/imports_nested/shared/a.ds:2:9
-  0006 STORE_VAR      a, r2    # tests/v0_6/fixtures/imports_nested/shared/a.ds:2:1
-  0007 RUN_CMD        ["echo", "\"a sees {b} and {common}\""]    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:1
-  0008 RUN_CMD        ["echo", "\"root sees {a} {b} {common}\""]    # tests/v0_6/fixtures/imports_nested/main.ds:2:1
-  0009 RETURN         0    # tests/v0_6/fixtures/imports_nested/main.ds:1:1
+  0004 LOAD_CONST     r3, const 2    # tests/v0_6/fixtures/imports_nested/shared/b.ds:3:6
+  0005 LOAD_VAR       r4, common    # tests/v0_6/fixtures/imports_nested/shared/b.ds:3:6
+  0006 INTERP_JOIN    r2, join(r3, r4)    # tests/v0_6/fixtures/imports_nested/shared/b.ds:3:6
+  0007 RUN_CMD        ["echo", "\"b sees {common}\""]    # tests/v0_6/fixtures/imports_nested/shared/b.ds:3:1
+  0008 LOAD_CONST     r5, const 3    # tests/v0_6/fixtures/imports_nested/shared/a.ds:2:9
+  0009 STORE_VAR      a, r5    # tests/v0_6/fixtures/imports_nested/shared/a.ds:2:1
+  0010 LOAD_CONST     r7, const 4    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:6
+  0011 LOAD_VAR       r8, b    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:6
+  0012 LOAD_CONST     r9, const 5    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:6
+  0013 LOAD_VAR       r10, common    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:6
+  0014 INTERP_JOIN    r6, join(r7, r8, r9, r10)    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:6
+  0015 RUN_CMD        ["echo", "\"a sees {b} and {common}\""]    # tests/v0_6/fixtures/imports_nested/shared/a.ds:3:1
+  0016 LOAD_CONST     r12, const 6    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0017 LOAD_VAR       r13, a    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0018 LOAD_CONST     r14, const 7    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0019 LOAD_VAR       r15, b    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0020 LOAD_CONST     r16, const 8    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0021 LOAD_VAR       r17, common    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0022 INTERP_JOIN    r11, join(r12, r13, r14, r15, r16, r17)    # tests/v0_6/fixtures/imports_nested/main.ds:2:6
+  0023 RUN_CMD        ["echo", "\"root sees {a} {b} {common}\""]    # tests/v0_6/fixtures/imports_nested/main.ds:2:1
+  0024 RETURN         0    # tests/v0_6/fixtures/imports_nested/main.ds:1:1

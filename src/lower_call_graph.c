@@ -1,4 +1,16 @@
-#include "lower_internal.h"
+#include "lower_functions.h"
+
+static bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index,
+                                  bool *seen, DsSpan *cycle_span);
+static bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_index,
+                                  bool *seen, DsSpan *cycle_span);
+
+static int find_function_index(const DsLowerProgram *program, DsStr name) {
+    for (size_t i = 0; i < program->functions.len; i++) {
+        if (ds_str_eq(program->functions.items[i].name, name)) return (int)i;
+    }
+    return -1;
+}
 
 static bool expr_reaches_function(Lower *lower, const DsLowerExpr *expr, size_t target_index, bool *seen, DsSpan *cycle_span) {
     if (!expr) return false;
@@ -39,6 +51,8 @@ static bool expr_reaches_function(Lower *lower, const DsLowerExpr *expr, size_t 
         case DS_LOWER_EXPR_INDEX:
             return expr_reaches_function(lower, expr->as.index.object, target_index, seen, cycle_span) ||
                    expr_reaches_function(lower, expr->as.index.index, target_index, seen, cycle_span);
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            return expr_reaches_function(lower, expr->as.interp_format.value, target_index, seen, cycle_span);
         case DS_LOWER_EXPR_INTERP:
             for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
                 if (expr_reaches_function(lower, expr->as.interp.parts.items[i], target_index, seen, cycle_span)) return true;
@@ -46,6 +60,7 @@ static bool expr_reaches_function(Lower *lower, const DsLowerExpr *expr, size_t 
             return false;
         case DS_LOWER_EXPR_IDENT:
         case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INTERP_TEXT:
         case DS_LOWER_EXPR_INT:
         case DS_LOWER_EXPR_BOOL:
         case DS_LOWER_EXPR_RUN:
@@ -59,7 +74,7 @@ static bool expr_reaches_function(Lower *lower, const DsLowerExpr *expr, size_t 
     return false;
 }
 
-bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_index, bool *seen, DsSpan *cycle_span) {
+static bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_index, bool *seen, DsSpan *cycle_span) {
     if (!stmt) return false;
     switch (stmt->kind) {
         case DS_LOWER_STMT_CALL: {
@@ -118,14 +133,14 @@ bool stmt_reaches_function(Lower *lower, const DsLowerStmt *stmt, size_t target_
     return false;
 }
 
-bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index, bool *seen, DsSpan *cycle_span) {
+static bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index, bool *seen, DsSpan *cycle_span) {
     if (current_index >= lower->program->functions.len) return false;
     if (seen[current_index]) return false;
     seen[current_index] = true;
     return stmt_reaches_function(lower, lower->program->functions.items[current_index].body, target_index, seen, cycle_span);
 }
 
-void reject_recursive_functions(Lower *lower) {
+void lower_functions_validate_call_graph(Lower *lower) {
     if (lower->program->functions.len == 0) return;
     bool *seen = (bool *)ds_xcalloc(lower->program->functions.len, sizeof(bool));
     for (size_t i = 0; i < lower->program->functions.len; i++) {

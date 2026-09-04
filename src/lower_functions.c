@@ -1,11 +1,16 @@
-#include "lower_internal.h"
+#include "lower_functions.h"
+#include "lower_expr.h"
+#include "lower_stmt.h"
+#include "lower_free.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
+#include "ds_stdlib.h"
 
-
-bool expr_is_literal_default(const DsExpr *expr) {
+static bool expr_is_literal_default(const DsExpr *expr) {
     return expr && (expr->kind == DS_EXPR_STRING || expr->kind == DS_EXPR_INT || expr->kind == DS_EXPR_BOOL);
 }
 
-void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
+static void collect_function_signature(Lower *lower, const DsStmt *stmt) {
     if (stmt->kind != DS_STMT_FN) return;
     if (ds_stdlib_is_name(stmt->as.fn_stmt.name) || ds_stdlib_is_namespace(stmt->as.fn_stmt.name)) {
         ds_diag_error(lower->diag, stmt->span,
@@ -13,7 +18,7 @@ void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram
                       (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
         return;
     }
-    if (find_function(program, stmt->as.fn_stmt.name)) {
+    if (find_function(lower->program, stmt->as.fn_stmt.name)) {
         ds_diag_error(lower->diag, stmt->span, "duplicate function `%.*s`", (int)stmt->as.fn_stmt.name.len, stmt->as.fn_stmt.name.data);
         return;
     }
@@ -63,41 +68,14 @@ void collect_function_signature(Lower *lower, const DsStmt *stmt, DsLowerProgram
         DS_VEC_PUSH(&fn.params, out, 8);
     }
     scope_free(&param_names);
-    DS_VEC_PUSH(&program->functions, fn, 8);
+    DS_VEC_PUSH(&lower->program->functions, fn, 8);
 }
 
-void collect_top_level_let_signature(Lower *lower, const DsStmt *stmt) {
-    if (stmt->kind != DS_STMT_LET) return;
-    if (scope_find_current(lower->scope, stmt->as.let_stmt.name)) {
-        return;
+void lower_functions_collect_signatures(Lower *lower, const DsAst *ast) {
+    if (!lower || !ast) return;
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        collect_function_signature(lower, ast->statements.items[i]);
     }
-    SymKind element_kind = SYM_UNKNOWN;
-    if (stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_EXPR_ARRAY) {
-        element_kind = SYM_UNKNOWN;
-        for (size_t i = 0; i < stmt->as.let_stmt.value->as.array.elements.len; i++) {
-            const DsExpr *elem = stmt->as.let_stmt.value->as.array.elements.items[i];
-            SymKind current = SYM_UNKNOWN;
-            if (elem->kind == DS_EXPR_STRING) current = SYM_STRING;
-            else if (elem->kind == DS_EXPR_INT) current = SYM_INT;
-            else if (elem->kind == DS_EXPR_BOOL) current = SYM_BOOL;
-            else { element_kind = SYM_UNKNOWN; break; }
-            if (i == 0) element_kind = current;
-            else if (element_kind != current) { element_kind = SYM_UNKNOWN; break; }
-        }
-    } else if (stmt->as.let_stmt.value && stmt->as.let_stmt.value->kind == DS_EXPR_MAP) {
-        element_kind = SYM_UNKNOWN;
-        for (size_t i = 0; i < stmt->as.let_stmt.value->as.map.entries.len; i++) {
-            const DsExpr *value = stmt->as.let_stmt.value->as.map.entries.items[i].value;
-            SymKind current = SYM_UNKNOWN;
-            if (value->kind == DS_EXPR_STRING) current = SYM_STRING;
-            else if (value->kind == DS_EXPR_INT) current = SYM_INT;
-            else if (value->kind == DS_EXPR_BOOL) current = SYM_BOOL;
-            else { element_kind = SYM_UNKNOWN; break; }
-            if (i == 0) element_kind = current;
-            else if (element_kind != current) { element_kind = SYM_UNKNOWN; break; }
-        }
-    }
-    scope_define_array(lower, lower->scope, stmt->as.let_stmt.name, SYM_TOPLEVEL_PREDECLARED, element_kind, stmt->span);
 }
 
 static bool stmt_all_paths_return(const DsLowerStmt *stmt) {
@@ -163,7 +141,7 @@ static bool stmt_contains_plain_command(const DsLowerStmt *stmt, DsSpan *span_ou
     }
 }
 
-void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
+static void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     Scope local;
     scope_init(&local, lower->scope);
     Scope *saved = lower->scope;
@@ -187,4 +165,14 @@ void lower_function_body(Lower *lower, DsLowerFn *fn, const DsStmt *stmt) {
     lower->function_depth = saved_fn_depth;
     lower->current_function = saved_fn;
     scope_free(&local);
+}
+
+void lower_functions_lower_bodies(Lower *lower, const DsAst *ast) {
+    if (!lower || !ast) return;
+    for (size_t i = 0; i < ast->statements.len; i++) {
+        const DsStmt *stmt = ast->statements.items[i];
+        if (stmt->kind != DS_STMT_FN) continue;
+        DsLowerFn *fn = find_function(lower->program, stmt->as.fn_stmt.name);
+        if (fn) lower_function_body(lower, fn, stmt);
+    }
 }

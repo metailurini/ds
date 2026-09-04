@@ -1,4 +1,23 @@
-#include "lower_internal.h"
+#include "lower_free.h"
+#include "lower_schema.h"
+
+static void lower_command_free(DsLowerCommand *command) {
+    if (!command) return;
+    for (size_t s = 0; s < command->stages.len; s++) {
+        DsLowerCommandWordVec *words = &command->stages.items[s].words;
+        for (size_t i = 0; i < words->len; i++) {
+            free(words->items[i].source_text.data);
+            free(words->items[i].literal_text.data);
+            lower_expr_free(words->items[i].value);
+        }
+        free(words->items);
+    }
+    free(command->stages.items);
+    free(command->redirect.source_target.data);
+    free(command->redirect.literal_target.data);
+    lower_expr_free(command->redirect.target);
+    *command = (DsLowerCommand){0};
+}
 
 static void lower_expr_vec_free(DsLowerExprVec *vec) {
     for (size_t i = 0; i < vec->len; i++) lower_expr_free(vec->items[i]);

@@ -112,15 +112,15 @@ calls. The lowered representation remains the shared backend contract between VM
 execution and standalone Bash emission.
 
 The lowerer is split into focused private components rather than one semantic
-god file. `src/lower_expr.c` owns expression-level value-kind checks, command
-result field validation, collection literal rules, and command-word validation;
-`src/lower_stmt.c` owns statement/block lowering; `src/lower_functions.c` owns
-function signatures, defaults, body lowering, and recursion rejection;
-`src/lower.c` owns the small test metadata collection pass; `src/lower_stdlib.c` owns
-script declarations and string/default decoding; `src/lower_symbols.c` owns
-scopes and shared vector/name utilities; and `src/lower_free.c` owns lowered HIR
-cleanup. `src/lower_internal.h` is the private boundary between those lowering
-components.
+god file. `src/lower_expr.c` owns expression lowering and value-kind checks;
+`src/lower_collection.c` owns collection portability/schema policy;
+`src/lower_command.c` owns command-word semantics and structured command HIR;
+`src/lower_stmt.c` owns statement/block lowering; the function-analysis units own
+signatures, inference, return contracts, bodies, and call-graph validation;
+`src/lower_script.c` owns script declarations/default decoding;
+`src/lower_symbols.c` owns scopes and symbol facts; and `src/lower_free.c` owns
+lowered HIR cleanup. Cross-component declarations live in focused `lower_*.h`
+contracts rather than one aggregate lowerer-private header.
 
 Statement-only helpers such as `file.write`, `file.append`, `cmd.require`,
 `env.set`, and `env.unset` are not values. Value-returning helpers are rejected
@@ -135,7 +135,7 @@ VM stdlib execution now lives in `src/vm_stdlib.c`, behind the VM-private
 VM is split into focused private components: `src/vm_compile.c` for HIR to
 bytecode construction, `src/vm_dump.c` for bytecode/debug output,
 `src/vm_args.c` for script argument binding, `src/vm_scope.c` for scopes and
-function calls, `src/vm_process.c` for command interpolation/redirection and
+function calls, `src/vm_process_prepare.c` for prepared command values/control handling, and `src/vm_process.c` for OS redirection/process execution and
 subprocess execution, and `src/vm.c` for VM-backed test execution setup, the
 main interpreter loop, and public VM entrypoints. This keeps
 file/path/env/cmd/glob/lines runtime implementations and other VM subsystems

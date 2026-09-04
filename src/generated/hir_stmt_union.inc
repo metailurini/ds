@@ -12,4 +12,4 @@
         struct { DsLowerExpr *condition; } assert_stmt;
         struct { DsLowerExpr *value; DsLowerValueKind return_kind; bool returns_row_array; DsLowerRowSchema row_schema; } return_stmt;
         struct { DsHandlerSignal signal; DsLowerStmt *body; } handler_stmt;
-        DsCommand cmd_stmt;
+        DsLowerCommand cmd_stmt;

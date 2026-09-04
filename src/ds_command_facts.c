@@ -32,23 +32,6 @@ DsCommandWordForm ds_command_word_analyze(DsStr word) {
     return form;
 }
 
-bool ds_command_word_contains_direct_call_interpolation(DsStr decoded) {
-    for (size_t i = 0; i < decoded.len; i++) {
-        if (decoded.data[i] != '{') continue;
-        if (i + 1 < decoded.len && decoded.data[i + 1] == '{') { i++; continue; }
-        size_t j = i + 1;
-        while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
-        if (j >= decoded.len || !((decoded.data[j] >= 'A' && decoded.data[j] <= 'Z') ||
-                                  (decoded.data[j] >= 'a' && decoded.data[j] <= 'z') ||
-                                  decoded.data[j] == '_')) continue;
-        j++;
-        while (j < decoded.len && (ds_command_name_char(decoded.data[j]) || decoded.data[j] == '.')) j++;
-        while (j < decoded.len && (decoded.data[j] == ' ' || decoded.data[j] == '\t')) j++;
-        if (j < decoded.len && decoded.data[j] == '(') return true;
-    }
-    return false;
-}
-
 static const DsCommandResultField k_fields[] = {
     {"stdout", "stdout", DS_COMMAND_RESULT_FIELD_STDOUT, DS_COMMAND_RESULT_FIELD_STRING},
     {"stderr", "stderr", DS_COMMAND_RESULT_FIELD_STDERR, DS_COMMAND_RESULT_FIELD_STRING},

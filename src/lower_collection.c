@@ -1,4 +1,8 @@
-#include "lower_internal.h"
+#include "lower_collection.h"
+#include "lower_expr.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
+#include "ds_stdlib.h"
 
 /*
  * Collection portability policy lives in lowering because it decides which
@@ -29,6 +33,14 @@ void lower_validate_portable_collection_index(Lower *lower, const DsLowerExpr *e
                   "collection index expression must be a literal or variable for VM/Bash parity; bind the computed index to a variable first");
 }
 
+static bool lower_interp_is_literal_text(const DsLowerExpr *expr) {
+    if (!expr || expr->kind != DS_LOWER_EXPR_INTERP) return false;
+    for (size_t i = 0; i < expr->as.interp.parts.len; i++) {
+        if (expr->as.interp.parts.items[i]->kind != DS_LOWER_EXPR_INTERP_TEXT) return false;
+    }
+    return true;
+}
+
 bool lower_collection_element_is_portable(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_IDENT:
@@ -38,6 +50,8 @@ bool lower_collection_element_is_portable(const DsLowerExpr *expr) {
         case DS_LOWER_EXPR_FIELD:
         case DS_LOWER_EXPR_INDEX:
             return true;
+        case DS_LOWER_EXPR_INTERP:
+            return lower_interp_is_literal_text(expr);
         default:
             return false;
     }
@@ -82,51 +96,6 @@ bool lower_collection_map_for_iterable_is_portable(const DsLowerExpr *iterable) 
 void lower_reject_nonportable_collection_for_iterable(Lower *lower, DsSpan span) {
     ds_diag_error(lower->diag, span,
                   "for loop iterable must be a named array, known stdlib array result, or supported array-returning function call for VM/Bash parity; bind temporary arrays to a variable first");
-}
-
-void row_schema_init(DsLowerRowSchema *schema) {
-    if (!schema) return;
-    *schema = (DsLowerRowSchema){0};
-}
-
-void row_schema_free(DsLowerRowSchema *schema) {
-    if (!schema) return;
-    for (size_t i = 0; i < schema->len; i++) free(schema->items[i].name.data);
-    free(schema->items);
-    *schema = (DsLowerRowSchema){0};
-}
-
-void row_schema_push(DsLowerRowSchema *schema, DsStr name, DsLowerValueKind kind) {
-    if (!schema) return;
-    DsLowerRowField field = {ds_str_clone(name), kind};
-    DS_VEC_PUSH(schema, field, 4);
-}
-
-void row_schema_clone(const DsLowerRowSchema *src, DsLowerRowSchema *dst) {
-    if (!dst) return;
-    row_schema_init(dst);
-    if (!src) return;
-    for (size_t i = 0; i < src->len; i++) {
-        row_schema_push(dst, src->items[i].name, src->items[i].kind);
-    }
-}
-
-const DsLowerRowField *row_schema_find(const DsLowerRowSchema *schema, DsStr name) {
-    if (!schema) return NULL;
-    for (size_t i = 0; i < schema->len; i++) {
-        if (ds_str_eq(schema->items[i].name, name)) return &schema->items[i];
-    }
-    return NULL;
-}
-
-bool row_schema_equal(const DsLowerRowSchema *a, const DsLowerRowSchema *b) {
-    if (!a || !b) return false;
-    if (a->len != b->len) return false;
-    for (size_t i = 0; i < a->len; i++) {
-        const DsLowerRowField *field = row_schema_find(b, a->items[i].name);
-        if (!field || field->kind != a->items[i].kind) return false;
-    }
-    return true;
 }
 
 bool lower_map_expr_schema(Lower *lower, const DsLowerExpr *expr, DsLowerRowSchema *schema_out) {

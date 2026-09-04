@@ -11,6 +11,8 @@
 const char *bash_lower_expr_static_type_name(const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING:
+        case DS_LOWER_EXPR_INTERP_TEXT:
+        case DS_LOWER_EXPR_INTERP_FORMAT:
         case DS_LOWER_EXPR_INTERP:
             return ds_lower_value_kind_name(DS_LOWER_VALUE_STRING);
         case DS_LOWER_EXPR_INT:

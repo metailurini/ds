@@ -456,9 +456,10 @@ dispatch_loop:
                 ip++;
                 break;
             }
-            case OP_INTERPOLATE: {
+            case OP_INTERP_FORMAT: {
                 DsString rendered;
-                if (!interpolate_string(&vm, &p.consts[ins->a].as.string, &rendered, ins->span)) { rc = 1; goto done; }
+                if (!vm_format_interpolation_value(&vm, &vm.regs[ins->a], &ins->interp_format,
+                                                   &rendered, ins->span)) { rc = 1; goto done; }
                 set_reg(&vm, ins->dst, ds_value_string_take(&rendered));
                 ip++;
                 break;

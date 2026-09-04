@@ -99,8 +99,9 @@ the umbrella where possible:
   components. Its executable implementation lives in `src/ds_common.c`; the
   only behavioral macros kept in the header are the type-generic vector growth
   primitives that require the caller's element type.
-- `src/ds_command.h` owns command words, redirections, captured/plain command
-  metadata, and command-result field descriptors.
+- `src/ds_command.h` owns source-level command words, stages, redirections, and
+  captured/plain command syntax metadata. Backend-neutral lowered command words
+  are owned separately by `src/ds_hir.h`.
 - `src/ds_ast.h` owns parser AST nodes and script/function/test declaration
   shapes. AST expression/statement kinds, union payloads, and payload cleanup
   ownership are declared once in `src/ast_nodes.def`; the C generator
@@ -118,7 +119,9 @@ the umbrella where possible:
   implementations.
 - `src/frontend.h` owns token, lexer, parser, and AST-debug entrypoints.
 - `src/ds_hir.h` owns the lowered HIR contract consumed by VM, Bash emission,
-  formatter/checker support, and debug output. The same structural generation
+  formatter/checker support, and debug output. This includes structured command
+  words whose executable payload is either literal argv text or a lowered scalar
+  expression, plus structured redirect targets. The same structural generation
   boundary is used for HIR via `src/hir_nodes.def`.
 - `src/ds_runtime.h` owns runtime values, strings, arrays, and `DsMap`.
 - `src/ds_stdlib.h` owns standard-library helper metadata.
@@ -147,27 +150,53 @@ remain handwritten and must not be encoded into the node generator.
   helper name, Bash helper name, arity, return kind, statement-only status,
   string-argument rules, iterable status, and validation flags.
 - Lowering responsibilities are split by component: `src/lower.c` owns the
-  orchestration entrypoints, `src/lower_expr.c` owns expression lowering,
-  `src/lower_command.c` owns command-word validation and interpolation
-  materialization, `src/lower_stmt.c` owns statement/block lowering,
-  `src/lower_symbols.c` owns scope/name/vector utilities,
-  `src/lower_stdlib.c` owns script declarations and literal decoding,
-  `src/lower_functions.c` owns function collection/defaults/recursion checks,
-  `src/lower.c` keeps the small test-collection pass near the lowerer
-  orchestration entrypoint, and `src/lower_free.c` owns HIR cleanup. These modules consume `src/ds_stdlib.c` metadata rather than each
-  maintaining independent helper arity/name lists.
-- `src/lower_internal.h` contains lowerer-private symbol/value-kind structs and
-  prototypes only. Shared lowerer helper implementations live in the lowerer
-  `.c` modules. It is not part of the public user-facing API.
+  orchestration entrypoint and makes semantic phase order explicit;
+  `src/lower_context.c` owns semantic-session lifetime and shared diagnostics;
+  `src/lower_kinds.c` owns semantic value-kind conversion/facts;
+  `src/lower_schema.c` owns row-schema lifecycle/query helpers;
+  `src/lower_expr.c` owns expression lowering; `src/lower_interp_parser.c` owns
+  the shared expression-interpolation AST parser used by lowering and function
+  inference; `src/lower_interp_segments.c` owns shared interpolation segmentation;
+  `src/lower_interpolation.c` owns normal-string interpolation lowering;
+  `src/lower_command.c` owns command-word semantic validation, call/index
+  pre-materialization, and source-command to structured-HIR conversion;
+  `src/lower_stmt.c` owns statement/block lowering;
+  `src/lower_symbols.c` owns scope/name facts and top-level binding
+  predeclaration; `src/lower_script.c` owns script declarations and their
+  literal/default decoding; `src/lower_functions.c` owns function signature/default
+  validation and body lowering; `src/lower_function_infer.c` owns parameter-kind
+  inference; `src/lower_function_returns.c` owns provisional return contracts;
+  `src/lower_call_graph.c` owns recursion analysis; `src/lower.c` keeps the small
+  test-collection pass near orchestration; and `src/lower_free.c` owns HIR
+  cleanup. Function-analysis phase entrypoints are declared in
+  `src/lower_functions.h`, while symbol preparation phases are declared in
+  `src/lower_symbols.h`; traversal/per-function helpers stay private to their
+  implementation units. These modules consume `src/ds_stdlib.c` metadata rather
+  than each maintaining independent helper arity/name lists.
+- Lowerer-private contracts are split by ownership rather than exposed through an
+  aggregate internal header. `src/lower_context.h`, `src/lower_symbols.h`,
+  `src/lower_kinds.h`, `src/lower_schema.h`, `src/lower_expr.h`,
+  `src/lower_collection.h`, `src/lower_command.h`, `src/lower_stmt.h`,
+  `src/lower_script.h`, `src/lower_functions.h`, and `src/lower_free.h` declare
+  the focused APIs used across lowering components. None are public user-facing
+  APIs.
 - `src/vm_internal.h` contains bytecode/VM-private structs, declarations, and
   the opcode X-macro shared only by VM implementation files. VM helper logic
   lives in `.c` files. It is not part of the public user-facing API.
-- VM responsibilities are split by component: `src/vm.c` owns the main
+- VM responsibilities are split by component: `src/vm_format.c` owns rendering
+  of validated structured interpolation formats; `src/vm_process_prepare.c`
+  materializes accepted command bytecode/register values into argv, redirect
+  paths, trace views, and VM control commands; `src/vm_process.c` owns OS process
+  execution, pipelines, capture, foreground waits, and signal forwarding;
+  `src/vm.c` owns the main
   interpreter loop and public VM entrypoints, `src/vm_compile.c` owns HIR to
   bytecode construction, `src/vm_dump.c` owns bytecode/debug output,
   `src/vm_args.c` owns script argument binding, `src/vm_scope.c` owns VM
-  scopes/function calls, `src/vm_process.c` owns command interpolation,
-  redirection, and subprocess execution, while `src/vm.c` keeps the small
+  scopes/function calls, and `src/vm_process.c` owns prepared argv/redirection
+  consumption plus subprocess execution. String and command-word interpolation
+  both arrive as structured HIR; the process layer no longer parses interpolation
+  source text.
+  `src/vm.c` keeps the small
   VM-backed test execution setup next to the public VM entrypoints.
 - `src/vm_stdlib.c` owns VM execution for `file.*`, `dir.*`, `path.*`, `cmd.*`,
   `env.*`, `glob`, `glob!`, and `lines`.
@@ -175,10 +204,13 @@ remain handwritten and must not be encoded into the node generator.
   the public entrypoint, script-argument prelude, helper selection, and artifact
   writing; `src/bash_deps.c` owns helper dependency analysis;
   `src/bash_expr.c` owns expression and condition rendering;
-  `src/bash_command.c` owns command words, redirections, and captured `run`
-  argument rendering; `src/bash_stmt.c` owns statement/function rendering;
-  `src/bash_quote.c` owns shared quoting, interpolation, buffer, and symbol
-  utilities; and `src/bash_helpers.c` owns the emitted Bash helper bodies for
+  `src/bash_command.c` owns structured command words, redirections, and captured
+  `run` argument rendering; `src/bash_value.c` owns assignment/value
+  materialization that may require capture or temporaries; `src/bash_stmt.c` owns
+  statement/control-flow rendering; `src/bash_expr.c` renders structured
+  value/interpolation expressions directly; `src/bash_quote.c` owns quoting,
+  buffer, name, and symbol utilities only; and
+  `src/bash_helpers.c` owns the emitted Bash helper bodies for
   command-result, collection, debug, and stdlib helpers.
 
 This is deliberately a behavior-preserving split. `include/ds.h` still
@@ -460,7 +492,11 @@ Both VM execution and Bash emission should use this form.
 
 The lowered program centralizes symbol lookup, interpolation validation,
 duplicate declaration checks, supported operator checks, and block-scope
-boundary checks before either backend runs. Lowered blocks compile to explicit
+boundary checks before either backend runs. Normal string interpolation is also
+normalized into backend-neutral HIR parts (`InterpText`, lowered value expressions,
+and parsed format metadata), so VM/Bash do not reparse normal source strings.
+Command words remain a separate transitional representation because their
+evaluation/materialization rules differ from ordinary string values. Lowered blocks compile to explicit
 VM scope push/pop instructions, so runtime variable storage follows the same
 scope model.
 
@@ -842,12 +878,14 @@ Command-heavy regression suites now share a VM/Bash parity helper from `tests/li
 
 ## Pipeline command model
 
-Command representation uses a small
-pipeline-aware model. A `DsCommand` now owns one or more stages, each stage owns
-the existing `DsWordVec`, and the redirect remains a whole-command suffix. The
-AST, HIR, formatter, checker, VM compiler, VM runtime, bytecode dumper, and Bash
-emitter traverse command stages through that shared model instead of exposing
-Bash-specific pipeline state through the frontend.
+Command representation is pipeline-aware but phase-specific. The AST keeps a
+syntax-preserving `DsCommand` with source words and a whole-command redirect.
+Lowering converts it to `DsLowerCommand`: each HIR word is either literal argv
+text or a lowered scalar expression, and a redirect target is a lowered string
+expression. VM compilation evaluates command value expressions before the run
+instruction, while Bash renders the same accepted HIR expressions. Formatter and
+checker remain on the syntax model, so neither backend needs frontend command
+text or an interpolation parser.
 
 The VM compiler flattens stage words into bytecode instruction storage while
 retaining per-stage word counts. The process runtime reconstructs argv vectors

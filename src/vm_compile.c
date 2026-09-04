@@ -14,12 +14,16 @@ static void instr_free(Instr *ins) {
     free(ins->field);
     free(ins->args);
     ds_free_str_array(ins->words, ins->word_count);
+    if (ins->word_literals) ds_free_str_array(ins->word_literals, ins->word_count);
     free(ins->stage_word_counts);
     free(ins->redirect.target.data);
+    free(ins->redirect_literal.data);
     ds_map_sorted_keys_free(ins->loop_keys, ins->loop_key_count);
 }
 
-static void copy_command_to_instr(Instr *ins, const DsCommand *command) {
+static int compile_expr(Program *p, const DsLowerExpr *expr);
+
+static void compile_command_to_instr(Program *p, Instr *ins, const DsLowerCommand *command) {
     ins->stage_count = command->stages.len;
     ins->stage_word_counts = (size_t *)ds_xcalloc(ins->stage_count, sizeof(size_t));
     ins->word_count = 0;
@@ -28,22 +32,33 @@ static void copy_command_to_instr(Instr *ins, const DsCommand *command) {
         ins->word_count += command->stages.items[s].words.len;
     }
     ins->words = (DsStr *)ds_xcalloc(ins->word_count, sizeof(DsStr));
+    ins->word_literals = (DsStr *)ds_xcalloc(ins->word_count, sizeof(DsStr));
+    ins->args = (int *)ds_xcalloc(ins->word_count, sizeof(int));
+    ins->arg_count = ins->word_count;
     size_t idx = 0;
     for (size_t s = 0; s < command->stages.len; s++) {
-        const DsWordVec *words = &command->stages.items[s].words;
-        for (size_t i = 0; i < words->len; i++) {
-            DsStr w = words->items[i].text;
-            ins->words[idx].data = ds_str_dup_range(w.data, w.len);
-            ins->words[idx].len = w.len;
-            idx++;
+        const DsLowerCommandWordVec *words = &command->stages.items[s].words;
+        for (size_t i = 0; i < words->len; i++, idx++) {
+            const DsLowerCommandWord *word = &words->items[i];
+            ins->words[idx] = ds_str_clone(word->source_text);
+            if (word->kind == DS_LOWER_COMMAND_WORD_VALUE) {
+                ins->args[idx] = compile_expr(p, word->value);
+            } else {
+                ins->args[idx] = -1;
+                ins->word_literals[idx] = ds_str_clone(word->literal_text);
+            }
         }
     }
     ins->redirect.kind = command->redirect.kind;
     ins->redirect.op_span = command->redirect.op_span;
     ins->redirect.target_span = command->redirect.target_span;
-    if (command->redirect.target.len > 0) {
-        ins->redirect.target.data = ds_str_dup_range(command->redirect.target.data, command->redirect.target.len);
-        ins->redirect.target.len = command->redirect.target.len;
+    if (command->redirect.source_target.len > 0) {
+        ins->redirect.target = ds_str_clone(command->redirect.source_target);
+    }
+    ins->redirect_reg = command->redirect.target ? compile_expr(p, command->redirect.target) : -1;
+    if (command->redirect.literal_target.len > 0 ||
+        (command->redirect.kind != DS_REDIRECT_NONE && !command->redirect.target)) {
+        ins->redirect_literal = ds_str_clone(command->redirect.literal_target);
     }
 }
 
@@ -172,18 +187,28 @@ bool decode_string_text(DsStr text, DsString *out) {
     return true;
 }
 
-static int compile_expr(Program *p, const DsLowerExpr *expr);
-
 static int compile_string_expr(Program *p, const DsLowerExpr *expr) {
     DsString decoded;
     decode_string_text(expr->as.text, &decoded);
-    int c = add_const(p, ds_value_string_take(&decoded));
+    return compile_const(p, expr->span, ds_value_string_take(&decoded));
+}
+
+static int compile_interp_text_expr(Program *p, const DsLowerExpr *expr) {
+    DsString text;
+    ds_string_init(&text);
+    ds_string_append_range(&text, expr->as.text.data, expr->as.text.len);
+    return compile_const(p, expr->span, ds_value_string_take(&text));
+}
+
+static int compile_interp_format_expr(Program *p, const DsLowerExpr *expr) {
+    int value = compile_expr(p, expr->as.interp_format.value);
     int r = new_reg(p);
     Instr ins = {0};
-    ins.op = OP_INTERPOLATE;
+    ins.op = OP_INTERP_FORMAT;
     ins.span = expr->span;
     ins.dst = r;
-    ins.a = c;
+    ins.a = value;
+    ins.interp_format = expr->as.interp_format.spec;
     emit_instr(p, ins);
     return r;
 }
@@ -205,6 +230,10 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
     switch (expr->kind) {
         case DS_LOWER_EXPR_STRING:
             return compile_string_expr(p, expr);
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            return compile_interp_text_expr(p, expr);
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            return compile_interp_format_expr(p, expr);
         case DS_LOWER_EXPR_INTERP:
             return compile_interp_expr(p, expr);
         case DS_LOWER_EXPR_INT: {
@@ -236,7 +265,7 @@ static int compile_expr(Program *p, const DsLowerExpr *expr) {
             ins.op = OP_RUN_CAPTURE;
             ins.span = expr->span;
             ins.dst = r;
-            copy_command_to_instr(&ins, &expr->as.run);
+            compile_command_to_instr(p, &ins, &expr->as.run);
             emit_instr(p, ins);
             return r;
         }
@@ -524,7 +553,7 @@ static void compile_stmt(Program *p, const DsLowerStmt *stmt) {
             Instr ins = {0};
             ins.op = OP_RUN_CMD;
             ins.span = stmt->span;
-            copy_command_to_instr(&ins, &stmt->as.cmd_stmt);
+            compile_command_to_instr(p, &ins, &stmt->as.cmd_stmt);
             emit_instr(p, ins);
             break;
         }

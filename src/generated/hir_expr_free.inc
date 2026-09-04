@@ -14,7 +14,7 @@
             free(expr->as.regex.data);
             break;
         case DS_LOWER_EXPR_RUN:
-            ds_command_free(&expr->as.run);
+            lower_command_free(&expr->as.run);
             break;
         case DS_LOWER_EXPR_FIELD:
             lower_expr_free(expr->as.field.object);
@@ -31,6 +31,12 @@
             free(expr->as.call.name.data);
             lower_expr_vec_free(&expr->as.call.args);
             row_schema_free(&expr->as.call.row_schema);
+            break;
+        case DS_LOWER_EXPR_INTERP_TEXT:
+            free(expr->as.text.data);
+            break;
+        case DS_LOWER_EXPR_INTERP_FORMAT:
+            lower_expr_free(expr->as.interp_format.value);
             break;
         case DS_LOWER_EXPR_INTERP:
             lower_expr_vec_free(&expr->as.interp.parts);

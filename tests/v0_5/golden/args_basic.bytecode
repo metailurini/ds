@@ -8,17 +8,28 @@ functions:
   <none>
 
 constants:
+  0: string "Deploying "
+  1: string " to "
+  2: string "retries="
 
 instructions:
-  0000 RUN_CMD        ["echo", "\"Deploying {app} to {target}\""]    # tests/v0_5/fixtures/args_basic.ds:8:1
-  0001 RUN_CMD        ["echo", "\"retries={retries}\""]    # tests/v0_5/fixtures/args_basic.ds:9:1
-  0002 LOAD_VAR       r0, force    # tests/v0_5/fixtures/args_basic.ds:11:4
-  0003 JUMP_IF_FALSE  r0, 8    # tests/v0_5/fixtures/args_basic.ds:11:4
-  0004 PUSH_SCOPE        # tests/v0_5/fixtures/args_basic.ds:11:10
-  0005 RUN_CMD        ["echo", "\"force enabled\""]    # tests/v0_5/fixtures/args_basic.ds:12:3
-  0006 POP_SCOPE         # tests/v0_5/fixtures/args_basic.ds:11:10
-  0007 JUMP           11    # tests/v0_5/fixtures/args_basic.ds:11:1
-  0008 PUSH_SCOPE        # tests/v0_5/fixtures/args_basic.ds:13:8
-  0009 RUN_CMD        ["echo", "\"force disabled\""]    # tests/v0_5/fixtures/args_basic.ds:14:3
-  0010 POP_SCOPE         # tests/v0_5/fixtures/args_basic.ds:13:8
-  0011 RETURN         0    # tests/v0_5/fixtures/args_basic.ds:1:1
+  0000 LOAD_CONST     r1, const 0    # tests/v0_5/fixtures/args_basic.ds:8:6
+  0001 LOAD_VAR       r2, app    # tests/v0_5/fixtures/args_basic.ds:8:6
+  0002 LOAD_CONST     r3, const 1    # tests/v0_5/fixtures/args_basic.ds:8:6
+  0003 LOAD_VAR       r4, target    # tests/v0_5/fixtures/args_basic.ds:8:6
+  0004 INTERP_JOIN    r0, join(r1, r2, r3, r4)    # tests/v0_5/fixtures/args_basic.ds:8:6
+  0005 RUN_CMD        ["echo", "\"Deploying {app} to {target}\""]    # tests/v0_5/fixtures/args_basic.ds:8:1
+  0006 LOAD_CONST     r6, const 2    # tests/v0_5/fixtures/args_basic.ds:9:6
+  0007 LOAD_VAR       r7, retries    # tests/v0_5/fixtures/args_basic.ds:9:6
+  0008 INTERP_JOIN    r5, join(r6, r7)    # tests/v0_5/fixtures/args_basic.ds:9:6
+  0009 RUN_CMD        ["echo", "\"retries={retries}\""]    # tests/v0_5/fixtures/args_basic.ds:9:1
+  0010 LOAD_VAR       r8, force    # tests/v0_5/fixtures/args_basic.ds:11:4
+  0011 JUMP_IF_FALSE  r8, 16    # tests/v0_5/fixtures/args_basic.ds:11:4
+  0012 PUSH_SCOPE        # tests/v0_5/fixtures/args_basic.ds:11:10
+  0013 RUN_CMD        ["echo", "\"force enabled\""]    # tests/v0_5/fixtures/args_basic.ds:12:3
+  0014 POP_SCOPE         # tests/v0_5/fixtures/args_basic.ds:11:10
+  0015 JUMP           19    # tests/v0_5/fixtures/args_basic.ds:11:1
+  0016 PUSH_SCOPE        # tests/v0_5/fixtures/args_basic.ds:13:8
+  0017 RUN_CMD        ["echo", "\"force disabled\""]    # tests/v0_5/fixtures/args_basic.ds:14:3
+  0018 POP_SCOPE         # tests/v0_5/fixtures/args_basic.ds:13:8
+  0019 RETURN         0    # tests/v0_5/fixtures/args_basic.ds:1:1

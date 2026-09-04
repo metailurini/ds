@@ -2,6 +2,7 @@
 #define DS_HIR_H
 
 #include "ds_ast.h"
+#include "ds_interpolation.h"
 
 typedef struct {
     DsScriptDeclKind kind;
@@ -25,6 +26,54 @@ typedef enum {
 } DsLowerExprKind;
 
 typedef struct DsLowerExpr DsLowerExpr;
+
+typedef enum {
+    DS_LOWER_COMMAND_WORD_LITERAL,
+    DS_LOWER_COMMAND_WORD_VALUE
+} DsLowerCommandWordKind;
+
+typedef struct {
+    DsLowerCommandWordKind kind;
+    DsStr source_text;
+    DsStr literal_text;
+    DsLowerExpr *value;
+    DsSpan span;
+} DsLowerCommandWord;
+
+typedef struct {
+    DsLowerCommandWord *items;
+    size_t len;
+    size_t cap;
+} DsLowerCommandWordVec;
+
+typedef struct {
+    DsLowerCommandWordVec words;
+    DsSpan span;
+} DsLowerCommandStage;
+
+typedef struct {
+    DsLowerCommandStage *items;
+    size_t len;
+    size_t cap;
+} DsLowerCommandStageVec;
+
+typedef struct {
+    DsRedirectKind kind;
+    DsStr source_target;
+    DsStr literal_target;
+    DsLowerExpr *target;
+    DsSpan op_span;
+    DsSpan target_span;
+} DsLowerRedirect;
+
+typedef struct {
+    DsCommandKind kind;
+    DsLowerCommandStageVec stages;
+    DsLowerRedirect redirect;
+    DsSpan span;
+} DsLowerCommand;
+
+bool ds_lower_command_is_pipeline(const DsLowerCommand *command);
 
 typedef enum {
     DS_LOWER_VALUE_UNKNOWN,

@@ -1,4 +1,4 @@
-#include "lower_internal.h"
+#include "lower_script.h"
 
 SymKind script_type_to_sym(DsScriptType type) {
     switch (type) {

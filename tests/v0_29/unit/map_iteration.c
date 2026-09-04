@@ -87,13 +87,20 @@ static DsLowerStmt *let_empty_map_stmt(void) {
 
 static DsLowerStmt *fail_unreachable_stmt(void) {
     DsLowerStmt *stmt = lower_stmt_new(DS_LOWER_STMT_CMD);
-    ds_command_init(&stmt->as.cmd_stmt, DS_COMMAND_PLAIN, (DsSpan){0});
+    stmt->as.cmd_stmt.kind = DS_COMMAND_PLAIN;
     stmt->as.cmd_stmt.stages.len = 1;
-    stmt->as.cmd_stmt.stages.items = (DsCommandStage *)ds_xcalloc(1, sizeof(DsCommandStage));
+    stmt->as.cmd_stmt.stages.items = (DsLowerCommandStage *)ds_xcalloc(1, sizeof(DsLowerCommandStage));
     stmt->as.cmd_stmt.stages.items[0].words.len = 2;
-    stmt->as.cmd_stmt.stages.items[0].words.items = (DsWord *)ds_xcalloc(2, sizeof(DsWord));
-    stmt->as.cmd_stmt.stages.items[0].words.items[0].text = owned("fail");
-    stmt->as.cmd_stmt.stages.items[0].words.items[1].text = owned("empty map loop body unexpectedly executed");
+    stmt->as.cmd_stmt.stages.items[0].words.items =
+        (DsLowerCommandWord *)ds_xcalloc(2, sizeof(DsLowerCommandWord));
+    stmt->as.cmd_stmt.stages.items[0].words.items[0].kind = DS_LOWER_COMMAND_WORD_LITERAL;
+    stmt->as.cmd_stmt.stages.items[0].words.items[0].source_text = owned("fail");
+    stmt->as.cmd_stmt.stages.items[0].words.items[0].literal_text = owned("fail");
+    stmt->as.cmd_stmt.stages.items[0].words.items[1].kind = DS_LOWER_COMMAND_WORD_LITERAL;
+    stmt->as.cmd_stmt.stages.items[0].words.items[1].source_text =
+        owned("empty map loop body unexpectedly executed");
+    stmt->as.cmd_stmt.stages.items[0].words.items[1].literal_text =
+        owned("empty map loop body unexpectedly executed");
     return stmt;
 }
 

@@ -104,14 +104,16 @@ assert_contains Makefile '$(MAKE) CFLAGS="$(CFLAGS) -fsanitize=undefined" test' 
 assert_not_contains Makefile 'libs/hashmap' 'build does not reference stale libs/hashmap path'
 assert_not_contains include/ds.h 'hashmap' 'public umbrella does not expose hashmap internals'
 
-for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c src/hir.c src/format.c src/ds_checker.c src/ds_interpolation.c src/vm_stdlib.c src/bash_helpers.c src/bash_expr.c src/bash_deps.c; do
+for file in src/lexer.c src/parser.c src/parse_expr.c src/ast.c src/lower_expr.c src/hir.c src/format.c src/ds_checker.c src/ds_interpolation.c src/vm_format.c src/vm_stdlib.c src/bash_helpers.c src/bash_expr.c src/bash_deps.c; do
   [ -f "$file" ] || fail "$file exists"
   pass "$file exists"
 done
 assert_contains src/ds_interpolation.c 'ds_interp_parse_format_spec_for_kind' 'shared interpolation format contract is implemented once'
 assert_contains src/lower_command.c 'ds_interp_parse_format_spec_for_kind' 'lowerer consumes shared interpolation format contract'
-assert_contains src/vm_process.c 'ds_interp_parse_format_spec_for_kind' 'VM consumes shared interpolation format contract'
-assert_contains src/bash_quote.c 'ds_interp_parse_format_spec' 'Bash consumes shared interpolation format contract'
+assert_contains src/vm_format.c 'vm_format_interpolation_value' 'VM format renderer consumes structured interpolation metadata'
+assert_not_contains src/vm_format.c 'ds_interp_parse_format_spec_for_kind' 'VM format renderer does not reparse validated interpolation formats'
+assert_contains src/bash_expr.c 'DS_LOWER_EXPR_INTERP_FORMAT' 'Bash consumes structured interpolation format HIR'
+assert_not_contains src/bash_quote.c 'ds_interp_parse_format_spec' 'Bash quoting layer does not reparse interpolation formats'
 
 assert_contains examples/strings.ds '.trim().lower().replace' 'strings example covers method chain'
 assert_contains examples/strings.ds '.split' 'strings example covers split'

@@ -64,7 +64,11 @@ static void test_run_and_fields_lower(void) {
     assert(let->as.let_stmt.value->kind == DS_LOWER_EXPR_RUN);
     assert(let->as.let_stmt.value->as.run.stages.len == 1);
     assert(let->as.let_stmt.value->as.run.stages.items[0].words.len == 2);
-    assert(str_eq(let->as.let_stmt.value->as.run.stages.items[0].words.items[0].text, "printf"));
+    const DsLowerCommandWord *first_word =
+        &let->as.let_stmt.value->as.run.stages.items[0].words.items[0];
+    assert(first_word->kind == DS_LOWER_COMMAND_WORD_LITERAL);
+    assert(str_eq(first_word->source_text, "printf"));
+    assert(str_eq(first_word->literal_text, "printf"));
 
     DsLowerStmt *ifs = program->statements.items[1];
     assert(ifs->kind == DS_LOWER_STMT_IF);
@@ -84,7 +88,10 @@ static void test_redirection_lowers(void) {
     assert(program->statements.items[0]->as.cmd_stmt.redirect.kind == DS_REDIRECT_OUT);
     assert(program->statements.items[1]->as.cmd_stmt.redirect.kind == DS_REDIRECT_ERR_APPEND);
     assert(program->statements.items[2]->as.cmd_stmt.redirect.kind == DS_REDIRECT_ALL);
-    assert(str_eq(program->statements.items[2]->as.cmd_stmt.redirect.target, "\"all.txt\""));
+    const DsLowerRedirect *redirect = &program->statements.items[2]->as.cmd_stmt.redirect;
+    assert(str_eq(redirect->source_target, "\"all.txt\""));
+    assert(str_eq(redirect->literal_target, "all.txt"));
+    assert(redirect->target == NULL);
     ds_lower_program_free(program);
 }
 
