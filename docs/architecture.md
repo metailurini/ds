@@ -200,9 +200,11 @@ remain handwritten and must not be encoded into the node generator.
   writing; `src/bash_deps.c` owns helper dependency analysis;
   `src/bash_expr.c` owns expression and condition rendering;
   `src/bash_command.c` owns structured command words, redirections, and captured
-  `run` argument rendering; `src/bash_stmt.c` owns statement/function rendering;
-  `src/bash_expr.c` renders structured value/interpolation expressions directly;
-  `src/bash_quote.c` owns quoting, buffer, name, and symbol utilities only; and
+  `run` argument rendering; `src/bash_value.c` owns assignment/value
+  materialization that may require capture or temporaries; `src/bash_stmt.c` owns
+  statement/control-flow rendering; `src/bash_expr.c` renders structured
+  value/interpolation expressions directly; `src/bash_quote.c` owns quoting,
+  buffer, name, and symbol utilities only; and
   `src/bash_helpers.c` owns the emitted Bash helper bodies for
   command-result, collection, debug, and stdlib helpers.
 

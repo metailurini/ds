@@ -13,29 +13,6 @@ static bool can_emit_direct_signal_command(const DsLowerCommand *command) {
     return command && !ds_lower_command_is_pipeline(command) && command->redirect.kind == DS_REDIRECT_NONE && command->stages.items[0].words.len > 0;
 }
 
-static bool is_regex_match_call(const DsLowerExpr *value) {
-    return value && value->kind == DS_LOWER_EXPR_CALL && ds_str_eq_cstr(value->as.call.name, "regex.match");
-}
-
-static bool emit_regex_match_map_call(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent, bool local_decl, bool declare_target) {
-    emit_indent(&e->out, indent);
-    if (declare_target) emit_bash_decl_prefix(&e->out, local_decl, "-A");
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, "=()\n");
-    emit_indent(&e->out, indent);
-    if (declare_target) emit_bash_decl_prefix(&e->out, local_decl, "-A");
-    bash_emit_map_value_type_var_name(&e->out, name);
-    buf_append(&e->out, "=()\n");
-    emit_indent(&e->out, indent);
-    buf_append(&e->out, "__ds_regex_match_into ");
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, " ");
-    bash_emit_map_value_type_var_name(&e->out, name);
-    if (!emit_call_args(e, &value->as.call.args, &e->out)) return false;
-    buf_append(&e->out, "\n");
-    return true;
-}
-
 static bool emit_direct_signal_command(BashEmitter *e, const DsLowerCommand *command, DsSpan span, int indent) {
     emit_indent(&e->out, indent);
     buf_append(&e->out, "__ds_run_direct_command ");
@@ -83,189 +60,6 @@ static bool emit_control_command(BashEmitter *e, const DsLowerCommand *command, 
     return true;
 }
 
-static bool emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent) {
-    if (value->kind == DS_LOWER_EXPR_INTERP) {
-        bool has_user_call = false;
-        for (size_t i = 0; i < value->as.interp.parts.len; i++) {
-            if (bash_is_user_function_call_expr(value->as.interp.parts.items[i])) { has_user_call = true; break; }
-        }
-        if (has_user_call) {
-            char **temps = ds_xcalloc(value->as.interp.parts.len, sizeof(char *));
-            for (size_t i = 0; i < value->as.interp.parts.len; i++) {
-                const DsLowerExpr *part = value->as.interp.parts.items[i];
-                if (!bash_is_user_function_call_expr(part)) continue;
-                char tmp[64];
-                bash_temp_ds_name(tmp, sizeof(tmp), "interp", e->temp_counter++);
-                temps[i] = ds_str_dup_cstr(tmp);
-                if (!temps[i]) { ds_free_cstr_array(temps, value->as.interp.parts.len); return false; }
-                DsStr raw = {temps[i], strlen(temps[i])};
-                emit_indent(&e->out, indent);
-                emit_bash_decl_prefix(&e->out, e->function_depth, "");
-                emit_var_name(&e->out, raw);
-                buf_append(&e->out, "=\"\"\n");
-                if (!bash_emit_user_call_into_raw_var(e, part, raw, indent)) {
-                    ds_free_cstr_array(temps, value->as.interp.parts.len);
-                    return false;
-                }
-            }
-            emit_indent(&e->out, indent);
-            emit_var_name(&e->out, name);
-            buf_append(&e->out, "=");
-            if (value->as.interp.parts.len == 0) buf_append(&e->out, "\"\"");
-            for (size_t i = 0; i < value->as.interp.parts.len; i++) {
-                const DsLowerExpr *part = value->as.interp.parts.items[i];
-                if (temps[i]) {
-                    DsStr raw = {temps[i], strlen(temps[i])};
-                    buf_append(&e->out, "\"$");
-                    emit_var_name(&e->out, raw);
-                    buf_append(&e->out, "\"");
-                } else if (!emit_value_expr(e, part, &e->out)) {
-                    ds_free_cstr_array(temps, value->as.interp.parts.len);
-                    return false;
-                }
-            }
-            buf_append(&e->out, "\n");
-            ds_free_cstr_array(temps, value->as.interp.parts.len);
-            bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-            buf_append(&e->out, "\n");
-            return true;
-        }
-    }
-    if (value->kind == DS_LOWER_EXPR_RUN) {
-        if (ds_lower_command_is_pipeline(&value->as.run)) {
-            if (!bash_emit_capture_pipeline_assignment(e, name, &value->as.run, value->span, indent)) return false;
-            bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-            buf_append(&e->out, "\n");
-            return true;
-        }
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "__ds_capture ");
-        emit_var_name(&e->out, name);
-        if (!emit_capture_command(e, &value->as.run, &e->out, value->span)) return false;
-        buf_append(&e->out, "\n");
-        bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-        buf_append(&e->out, "\n");
-        return true;
-    }
-    if (is_regex_match_call(value)) {
-        if (!emit_regex_match_map_call(e, name, value, indent, false, false)) return false;
-        bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-        buf_append(&e->out, "\n");
-        return true;
-    }
-    if (value->kind == DS_LOWER_EXPR_CALL && ds_stdlib_is_name(value->as.call.name) && !stdlib_returns_array(value->as.call.name)) {
-        emit_indent(&e->out, indent);
-        emit_var_name(&e->out, name);
-        buf_append(&e->out, "=\"\"\n");
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "__ds_stdlib_capture ");
-        emit_var_name(&e->out, name);
-        buf_append(&e->out, " ");
-        if (!emit_stdlib_call(e, value, &e->out)) return false;
-        buf_append(&e->out, "\n");
-        bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-        buf_append(&e->out, "\n");
-        return true;
-    }
-    if (value->kind == DS_LOWER_EXPR_CALL && value->as.call.is_user_function) {
-        emit_indent(&e->out, indent);
-        emit_var_name(&e->out, name);
-        buf_append(&e->out, "=\"\"\n");
-        if (!bash_emit_user_function_value_call_into(e, name, value, indent)) return false;
-        bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-        buf_append(&e->out, "\n");
-        return true;
-    }
-    emit_indent(&e->out, indent);
-    emit_var_name(&e->out, name);
-    buf_append(&e->out, "=");
-    if (!emit_value_expr(e, value, &e->out)) return false;
-    buf_append(&e->out, "\n");
-    bash_emit_type_assignment_for_expr(e, name, value, indent, false);
-    buf_append(&e->out, "\n");
-    return true;
-}
-
-static bool emit_collection_ident_copy(BashEmitter *e, DsStr dest, const DsLowerExpr *source, DsLowerValueKind kind, int indent) {
-    if (!source || source->kind != DS_LOWER_EXPR_IDENT) return false;
-    bool local_decl = e->function_depth > 0;
-    if (kind == DS_LOWER_VALUE_ARRAY) {
-        emit_indent(&e->out, indent);
-        emit_bash_decl_prefix(&e->out, local_decl, "-a");
-        emit_var_name(&e->out, dest);
-        buf_append(&e->out, "=(\"${");
-        emit_var_name(&e->out, source->as.text);
-        buf_append(&e->out, "[@]}\")\n");
-
-        emit_indent(&e->out, indent);
-        emit_bash_decl_prefix(&e->out, local_decl, "-a");
-        bash_emit_elem_type_var_name(&e->out, dest);
-        buf_append(&e->out, "=()\n");
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "if declare -p ");
-        bash_emit_elem_type_var_name(&e->out, source->as.text);
-        buf_append(&e->out, " >/dev/null 2>&1; then ");
-        bash_emit_elem_type_var_name(&e->out, dest);
-        buf_append(&e->out, "=(\"${");
-        bash_emit_elem_type_var_name(&e->out, source->as.text);
-        buf_append(&e->out, "[@]}\"); fi\n");
-        return true;
-    }
-    if (kind == DS_LOWER_VALUE_MAP) {
-        char key_buf[64];
-        bash_temp_ds_name(key_buf, sizeof(key_buf), "copy_key", e->temp_counter++);
-        DsStr key_tmp = {key_buf, strlen(key_buf)};
-
-        emit_indent(&e->out, indent);
-        emit_bash_decl_prefix(&e->out, local_decl, "-A");
-        emit_var_name(&e->out, dest);
-        buf_append(&e->out, "=()\n");
-        emit_indent(&e->out, indent);
-        if (local_decl) {
-            emit_bash_decl_prefix(&e->out, 1, "");
-            emit_var_name(&e->out, key_tmp);
-            buf_append(&e->out, "\n");
-            emit_indent(&e->out, indent);
-        }
-        buf_append(&e->out, "for ");
-        emit_var_name(&e->out, key_tmp);
-        buf_append(&e->out, " in \"${!");
-        emit_var_name(&e->out, source->as.text);
-        buf_append(&e->out, "[@]}\"; do ");
-        emit_var_name(&e->out, dest);
-        buf_append(&e->out, "[\"$");
-        emit_var_name(&e->out, key_tmp);
-        buf_append(&e->out, "\"]=\"${");
-        emit_var_name(&e->out, source->as.text);
-        buf_append(&e->out, "[$");
-        emit_var_name(&e->out, key_tmp);
-        buf_append(&e->out, "]}\"; done\n");
-
-        emit_indent(&e->out, indent);
-        emit_bash_decl_prefix(&e->out, local_decl, "-A");
-        bash_emit_map_value_type_var_name(&e->out, dest);
-        buf_append(&e->out, "=()\n");
-        emit_indent(&e->out, indent);
-        buf_append(&e->out, "if declare -p ");
-        bash_emit_map_value_type_var_name(&e->out, source->as.text);
-        buf_append(&e->out, " >/dev/null 2>&1; then for ");
-        emit_var_name(&e->out, key_tmp);
-        buf_append(&e->out, " in \"${!");
-        bash_emit_map_value_type_var_name(&e->out, source->as.text);
-        buf_append(&e->out, "[@]}\"; do ");
-        bash_emit_map_value_type_var_name(&e->out, dest);
-        buf_append(&e->out, "[\"$");
-        emit_var_name(&e->out, key_tmp);
-        buf_append(&e->out, "\"]=\"${");
-        bash_emit_map_value_type_var_name(&e->out, source->as.text);
-        buf_append(&e->out, "[$");
-        emit_var_name(&e->out, key_tmp);
-        buf_append(&e->out, "]}\"; done; fi\n");
-        return true;
-    }
-    return false;
-}
-
 static bool emit_index_assignment(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
     if (!is_safe_identifier(stmt->as.index_assign_stmt.name)) {
         ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: unsafe index assignment target `%.*s` reached Bash emission", (int)stmt->as.index_assign_stmt.name.len, stmt->as.index_assign_stmt.name.data);
@@ -289,7 +83,7 @@ static bool emit_index_assignment(BashEmitter *e, const DsLowerStmt *stmt, int i
     emit_bash_decl_prefix(&e->out, e->function_depth, "");
     emit_var_name(&e->out, value_tmp);
     buf_append(&e->out, "=\"\"\n");
-    if (!emit_assignment_rhs(e, value_tmp, stmt->as.index_assign_stmt.value, indent)) return false;
+    if (!bash_emit_assignment_rhs(e, value_tmp, stmt->as.index_assign_stmt.value, indent)) return false;
     bash_emit_type_assignment_for_expr_required(e, value_tmp, stmt->as.index_assign_stmt.value, indent, e->function_depth > 0);
 
     if (stmt->as.index_assign_stmt.target_is_array) {
@@ -336,14 +130,6 @@ static bool emit_index_assignment(BashEmitter *e, const DsLowerStmt *stmt, int i
         buf_append(&e->out, "\n\n");
     }
     return true;
-}
-
-static bool interp_has_user_function_call(const DsLowerExpr *value) {
-    if (!value || value->kind != DS_LOWER_EXPR_INTERP) return false;
-    for (size_t i = 0; i < value->as.interp.parts.len; i++) {
-        if (bash_is_user_function_call_expr(value->as.interp.parts.items[i])) return true;
-    }
-    return false;
 }
 
 static void emit_case_selector_type(BashEmitter *e, const DsLowerExpr *selector, EmitBuf *out) {
@@ -544,11 +330,11 @@ static bool emit_return_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent
             if (!bash_emit_row_array_return_payload(e, value, &stmt->as.return_stmt.row_schema, stmt->span, indent)) return false;
         } else if (!bash_emit_array_return_payload(e, value, stmt->span, indent)) return false;
     } else if (kind == DS_LOWER_VALUE_MAP) {
-        if (is_regex_match_call(value)) {
+        if (bash_is_regex_match_call(value)) {
             char tmp_buf[64];
             bash_temp_ds_name(tmp_buf, sizeof(tmp_buf), "regex_return", e->temp_counter++);
             DsStr tmp = {tmp_buf, strlen(tmp_buf)};
-            if (!emit_regex_match_map_call(e, tmp, value, indent, e->function_depth > 0, true)) return false;
+            if (!bash_emit_regex_match_map_call(e, tmp, value, indent, e->function_depth > 0, true)) return false;
             DsLowerExpr tmp_ident = {0};
             tmp_ident.kind = DS_LOWER_EXPR_IDENT;
             tmp_ident.span = value->span;
@@ -579,14 +365,14 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 ds_diag_error(e->diag, stmt->span, "internal Bash invariant failed: unsafe lowered variable name `%.*s` reached Bash emission", (int)stmt->as.let_stmt.name.len, stmt->as.let_stmt.name.data);
                 return false;
             }
-            if (interp_has_user_function_call(stmt->as.let_stmt.value)) {
+            if (bash_interp_has_user_function_call(stmt->as.let_stmt.value)) {
                 if (e->function_depth > 0) {
                     emit_indent(&e->out, indent);
                     buf_append(&e->out, "local ");
                     emit_var_name(&e->out, stmt->as.let_stmt.name);
                     buf_append(&e->out, "=\"\"\n");
                 }
-                if (!emit_assignment_rhs(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
+                if (!bash_emit_assignment_rhs(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent)) return false;
                 if (!symbol_exists(&e->symbols, stmt->as.let_stmt.name)) {
                     bash_register_symbol(e, stmt->as.let_stmt.name);
                 }
@@ -608,11 +394,11 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
                 bash_emit_row_array_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value->as.text, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0);
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT) {
-                if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, DS_LOWER_VALUE_MAP, indent)) return false;
+                if (!bash_emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, DS_LOWER_VALUE_MAP, indent)) return false;
                 bash_emit_row_scalar_sidecars_from_map(e, stmt->as.let_stmt.name, &stmt->as.let_stmt.row_schema, indent);
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_IDENT &&
                        (stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_ARRAY || stmt->as.let_stmt.value_kind == DS_LOWER_VALUE_MAP)) {
-                if (!emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, stmt->as.let_stmt.value_kind, indent)) return false;
+                if (!bash_emit_collection_ident_copy(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, stmt->as.let_stmt.value_kind, indent)) return false;
             } else if (stmt->as.let_stmt.is_row_array && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_ARRAY) {
                 if (!bash_emit_row_array_literal(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, &stmt->as.let_stmt.row_schema, indent, e->function_depth > 0)) return false;
             } else if (stmt->as.let_stmt.is_row && stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_INDEX && stmt->as.let_stmt.value->as.index.returns_row) {
@@ -622,8 +408,8 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
                 buf_append(&e->out, "=");
                 if (!emit_array_elements(e, &stmt->as.let_stmt.value->as.array.elements, &e->out)) return false;
-            } else if (is_regex_match_call(stmt->as.let_stmt.value)) {
-                if (!emit_regex_match_map_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent, e->function_depth > 0, true)) return false;
+            } else if (bash_is_regex_match_call(stmt->as.let_stmt.value)) {
+                if (!bash_emit_regex_match_map_call(e, stmt->as.let_stmt.name, stmt->as.let_stmt.value, indent, e->function_depth > 0, true)) return false;
             } else if (stmt->as.let_stmt.value->kind == DS_LOWER_EXPR_CALL && stdlib_returns_array(stmt->as.let_stmt.value->as.call.name)) {
                 emit_bash_decl_prefix(&e->out, e->function_depth, "-a");
                 emit_var_name(&e->out, stmt->as.let_stmt.name);
@@ -731,7 +517,7 @@ bool emit_stmt(BashEmitter *e, const DsLowerStmt *stmt, int indent) {
                 return false;
             }
             if (stmt->as.assign_stmt.op == DS_ASSIGN_SET) {
-                return emit_assignment_rhs(e, stmt->as.assign_stmt.name, stmt->as.assign_stmt.value, indent);
+                return bash_emit_assignment_rhs(e, stmt->as.assign_stmt.name, stmt->as.assign_stmt.value, indent);
             }
             emit_indent(&e->out, indent);
             emit_var_name(&e->out, stmt->as.assign_stmt.name);

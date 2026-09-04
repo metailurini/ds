@@ -76,6 +76,14 @@ bool bash_emit_row_array_expr_into(BashEmitter *e, DsStr dest, const DsLowerExpr
 bool bash_emit_row_array_sort_call(BashEmitter *e, DsStr dest, const DsLowerExpr *call, const DsLowerRowSchema *schema, int indent, bool local_decl);
 bool bash_emit_row_array_return_payload(BashEmitter *e, const DsLowerExpr *value, const DsLowerRowSchema *schema, DsSpan span, int indent);
 
+bool bash_is_regex_match_call(const DsLowerExpr *value);
+bool bash_emit_regex_match_map_call(BashEmitter *e, DsStr name, const DsLowerExpr *value,
+                                    int indent, bool local_decl, bool declare_target);
+bool bash_emit_assignment_rhs(BashEmitter *e, DsStr name, const DsLowerExpr *value, int indent);
+bool bash_interp_has_user_function_call(const DsLowerExpr *value);
+bool bash_emit_collection_ident_copy(BashEmitter *e, DsStr dest, const DsLowerExpr *source,
+                                     DsLowerValueKind kind, int indent);
+
 bool emit_value_expr(BashEmitter *e, const DsLowerExpr *expr, EmitBuf *out);
 bool emit_array_elements(BashEmitter *e, const DsLowerExprVec *elements, EmitBuf *out);
 bool emit_map_entries(BashEmitter *e, const DsLowerMapEntryVec *entries, EmitBuf *out);
