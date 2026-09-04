@@ -183,7 +183,12 @@ remain handwritten and must not be encoded into the node generator.
 - `src/vm_internal.h` contains bytecode/VM-private structs, declarations, and
   the opcode X-macro shared only by VM implementation files. VM helper logic
   lives in `.c` files. It is not part of the public user-facing API.
-- VM responsibilities are split by component: `src/vm.c` owns the main
+- VM responsibilities are split by component: `src/vm_format.c` owns rendering
+  of validated structured interpolation formats; `src/vm_process_prepare.c`
+  materializes accepted command bytecode/register values into argv, redirect
+  paths, trace views, and VM control commands; `src/vm_process.c` owns OS process
+  execution, pipelines, capture, foreground waits, and signal forwarding;
+  `src/vm.c` owns the main
   interpreter loop and public VM entrypoints, `src/vm_compile.c` owns HIR to
   bytecode construction, `src/vm_dump.c` owns bytecode/debug output,
   `src/vm_args.c` owns script argument binding, `src/vm_scope.c` owns VM

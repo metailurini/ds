@@ -1,7 +1,6 @@
 #include "ds_command_facts.h"
 
-#include "vm_internal.h"
-#include "ds_interpolation.h"
+#include "vm_process_internal.h"
 #include "ds_signal.h"
 
 #include <errno.h>
@@ -15,182 +14,6 @@
 /* -------------------------------------------------------------------------
  * Trace output
  * ------------------------------------------------------------------------- */
-
-static void print_trace_escaped(FILE *out, const char *data) {
-    fputc('"', out);
-    const char *text = data ? data : "";
-    ds_fprint_escaped(out, text, strlen(text), DS_ESCAPE_BASIC);
-    fputc('"', out);
-}
-
-/* -------------------------------------------------------------------------
- * Interpolation rendering
- * ------------------------------------------------------------------------- */
-
-static void ascii_transform_string(const DsString *in, DsString *out, DsInterpFormatKind kind) {
-    ds_string_init(out);
-    size_t a = 0, b = in->len;
-    if (kind == DS_INTERP_FORMAT_TRIM) vm_ascii_trim_bounds(in->data, in->len, &a, &b);
-    ds_string_append_range(out, in->data ? in->data + a : "", b - a);
-    if (kind == DS_INTERP_FORMAT_UPPER || kind == DS_INTERP_FORMAT_LOWER) {
-        for (size_t i = 0; i < out->len; i++) {
-            if (kind == DS_INTERP_FORMAT_UPPER && out->data[i] >= 'a' && out->data[i] <= 'z') out->data[i] = (char)(out->data[i] - 'a' + 'A');
-            if (kind == DS_INTERP_FORMAT_LOWER && out->data[i] >= 'A' && out->data[i] <= 'Z') out->data[i] = (char)(out->data[i] - 'A' + 'a');
-        }
-    }
-}
-
-static void append_padded(DsString *out, const char *data, size_t len, int width, char align) {
-    if (width <= (int)len) {
-        ds_string_append_range(out, data, len);
-        return;
-    }
-    int pad = width - (int)len;
-    int left = 0, right = 0;
-    if (align == '<') right = pad;
-    else if (align == '>') left = pad;
-    else { left = pad / 2; right = pad - left; }
-    for (int i = 0; i < left; i++) ds_string_append_char(out, ' ');
-    ds_string_append_range(out, data, len);
-    for (int i = 0; i < right; i++) ds_string_append_char(out, ' ');
-}
-
-static DsInterpValueKind interp_kind_from_value(const DsValue *value) {
-    switch (value->kind) {
-        case DS_VALUE_BOOL: return DS_INTERP_VALUE_BOOL;
-        case DS_VALUE_INT: return DS_INTERP_VALUE_INT;
-        case DS_VALUE_STRING: return DS_INTERP_VALUE_STRING;
-        case DS_VALUE_COMMAND_RESULT: return DS_INTERP_VALUE_COMMAND_RESULT;
-        default: return DS_INTERP_VALUE_UNKNOWN;
-    }
-}
-
-static bool append_parsed_formatted_value(Vm *vm, DsValue *value,
-                                          const DsInterpFormatSpec *parsed,
-                                          DsString *out, DsSpan span) {
-    if (!ds_interp_format_spec_supports_kind(parsed, interp_kind_from_value(value))) {
-        ds_diag_error(vm->diag, span,
-                      "internal VM interpolation invariant failed: value kind does not match validated format");
-        return false;
-    }
-    if (parsed->kind == DS_INTERP_FORMAT_UPPER || parsed->kind == DS_INTERP_FORMAT_LOWER ||
-        parsed->kind == DS_INTERP_FORMAT_TRIM) {
-        DsString rendered;
-        ascii_transform_string(&value->as.string, &rendered, parsed->kind);
-        ds_string_append_range(out, ds_string_data(&rendered), rendered.len);
-        ds_string_free(&rendered);
-        return true;
-    }
-    if (parsed->kind == DS_INTERP_FORMAT_ALIGN_LEFT || parsed->kind == DS_INTERP_FORMAT_ALIGN_RIGHT ||
-        parsed->kind == DS_INTERP_FORMAT_ALIGN_CENTER) {
-        char align = parsed->kind == DS_INTERP_FORMAT_ALIGN_LEFT ? '<' :
-                     parsed->kind == DS_INTERP_FORMAT_ALIGN_RIGHT ? '>' : '^';
-        append_padded(out, ds_string_data(&value->as.string), value->as.string.len,
-                      parsed->width, align);
-        return true;
-    }
-    char buf[64];
-    if (parsed->kind == DS_INTERP_FORMAT_INT_DECIMAL) {
-        snprintf(buf, sizeof(buf), "%lld", (long long)value->as.integer);
-        size_t len = strlen(buf);
-        if (parsed->width <= (int)len) {
-            ds_string_append_cstr(out, buf);
-            return true;
-        }
-        int pad = parsed->width - (int)len;
-        if (parsed->zero_pad) {
-            if (buf[0] == '-') {
-                ds_string_append_char(out, '-');
-                for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
-                ds_string_append_cstr(out, buf + 1);
-                return true;
-            }
-            for (int i = 0; i < pad; i++) ds_string_append_char(out, '0');
-            ds_string_append_cstr(out, buf);
-            return true;
-        }
-        for (int i = 0; i < pad; i++) ds_string_append_char(out, ' ');
-        ds_string_append_cstr(out, buf);
-        return true;
-    }
-    int prec = parsed->precision < 0 ? 6 : parsed->precision;
-    DsString tmp;
-    ds_string_init(&tmp);
-    ds_string_appendf(&tmp, "%lld.", (long long)value->as.integer);
-    for (int i = 0; i < prec; i++) ds_string_append_char(&tmp, '0');
-    if (parsed->width > (int)tmp.len) append_padded(out, tmp.data, tmp.len, parsed->width, '>');
-    else ds_string_append_range(out, tmp.data, tmp.len);
-    ds_string_free(&tmp);
-    return true;
-}
-
-bool vm_format_interpolation_value(Vm *vm, DsValue *value,
-                                   const DsInterpFormatSpec *spec,
-                                   DsString *out, DsSpan span) {
-    ds_string_init(out);
-    return append_parsed_formatted_value(vm, value, spec, out, span);
-}
-
-static bool value_reg_to_cstr(Vm *vm, int reg, DsSpan span, char **out) {
-    if (reg < 0) {
-        ds_diag_error(vm->diag, span, "internal VM command-value invariant failed: missing value register");
-        return false;
-    }
-    DsString rendered;
-    ds_value_to_string(&vm->regs[reg], &rendered);
-    *out = ds_str_dup_range(ds_string_data(&rendered), rendered.len);
-    ds_string_free(&rendered);
-    return true;
-}
-
-static bool word_to_arg(Vm *vm, DsStr literal_word, int value_reg, DsSpan span, char **out) {
-    if (value_reg >= 0) return value_reg_to_cstr(vm, value_reg, span, out);
-    *out = ds_str_dup_range(literal_word.data, literal_word.len);
-    return true;
-}
-
-typedef struct {
-    char **items;
-    size_t len;
-} VmArgv;
-
-typedef struct {
-    DsString stdout_text;
-    DsString stderr_text;
-    int code;
-    bool terminated_by_sigpipe;
-    bool has_non_sigpipe_failure;
-} VmProcessResult;
-
-typedef struct {
-    VmArgv argv;
-    DsRedirect redirect;
-    char *redirect_path;
-    DsSpan span;
-    bool capture;
-    int exec_error_fd;
-} VmProcessSpec;
-
-static void argv_free(VmArgv *argv) {
-    ds_free_cstr_array(argv->items, argv->len);
-    *argv = (VmArgv){0};
-}
-
-static bool argv_build_range(Vm *vm, Instr *ins, size_t first_word, size_t word_count, VmArgv *argv) {
-    *argv = (VmArgv){0};
-    if (word_count == 0) return false;
-    argv->items = (char **)ds_xcalloc(word_count + 1, sizeof(char *));
-    argv->len = word_count;
-    for (size_t i = 0; i < word_count; i++) {
-        if (!word_to_arg(vm, ins->word_literals[first_word + i], ins->args[first_word + i],
-                         ins->span, &argv->items[i])) {
-            argv->len = i;
-            argv_free(argv);
-            return false;
-        }
-    }
-    return true;
-}
 
 /* -------------------------------------------------------------------------
  * Process specs, result storage, redirects, and built-in control commands
@@ -235,130 +58,6 @@ static bool open_redirect_target(Vm *vm, const DsRedirect *redirect,
     }
     *out_fd = fd;
     return true;
-}
-
-static bool process_spec_from_instr(Vm *vm, Instr *ins, bool capture, VmProcessSpec *spec) {
-    memset(spec, 0, sizeof(*spec));
-    spec->span = ins->span;
-    spec->redirect = ins->redirect;
-    spec->capture = capture;
-    if (!argv_build_range(vm, ins, 0, ins->word_count, &spec->argv)) return false;
-    if (spec->redirect.kind != DS_REDIRECT_NONE) {
-        if (ins->redirect_reg >= 0) {
-            if (!value_reg_to_cstr(vm, ins->redirect_reg, spec->redirect.target_span, &spec->redirect_path)) {
-                argv_free(&spec->argv);
-                return false;
-            }
-        } else {
-            spec->redirect_path = ds_str_dup_range(ins->redirect_literal.data, ins->redirect_literal.len);
-        }
-    }
-    return true;
-}
-
-static bool process_spec_from_stage(Vm *vm, Instr *ins, size_t stage_index, bool capture, VmProcessSpec *spec) {
-    memset(spec, 0, sizeof(*spec));
-    spec->span = ins->span;
-    ds_redirect_init(&spec->redirect);
-    spec->capture = capture;
-    size_t first = 0;
-    for (size_t i = 0; i < stage_index; i++) first += ins->stage_word_counts[i];
-    return argv_build_range(vm, ins, first, ins->stage_word_counts[stage_index], &spec->argv);
-}
-
-static bool parse_exit_code_arg(const char *text, int *out) {
-    if (!text || !*text) return false;
-    return ds_parse_int_range((DsStr){(char *)text, strlen(text)}, 0, 255, out);
-}
-
-static void append_test_helper_message(DsString *out, const VmProcessSpec *spec, size_t first_arg) {
-    ds_string_init(out);
-    for (size_t i = first_arg; i < spec->argv.len; i++) {
-        if (i > first_arg) ds_string_append_char(out, ' ');
-        ds_string_append_cstr(out, spec->argv.items[i]);
-    }
-}
-
-static bool run_control_command(Vm *vm, const VmProcessSpec *spec, int *out_code) {
-    *out_code = 0;
-    if (spec->capture || spec->argv.len == 0) return false;
-    const char *name = spec->argv.items[0];
-    if (strcmp(name, "fail") != 0 && strcmp(name, "exit") != 0) return false;
-
-    const bool test_mode = vm->options.test_mode;
-    const char *test_name = vm->options.test_name.data ? vm->options.test_name.data : "<test>";
-    int test_name_len = (int)vm->options.test_name.len;
-    if (test_name_len <= 0) test_name_len = (int)strlen(test_name);
-
-    if (spec->redirect.kind != DS_REDIRECT_NONE) {
-        if (test_mode) ds_diag_error(vm->diag, spec->span, "test `%.*s`: `%s` does not support redirection", test_name_len, test_name, name);
-        else ds_diag_error(vm->diag, spec->span, "`%s` does not support redirection", name);
-        *out_code = 1;
-        return true;
-    }
-    if (strcmp(name, "fail") == 0) {
-        DsString message;
-        append_test_helper_message(&message, spec, 1);
-        if (test_mode) {
-            if (message.len > 0) ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail: %.*s", test_name_len, test_name, (int)message.len, message.data);
-            else ds_diag_error(vm->diag, spec->span, "test `%.*s`: fail", test_name_len, test_name);
-        } else if (message.len > 0) {
-            ds_diag_error(vm->diag, spec->span, "%.*s", (int)message.len, message.data);
-        } else {
-            ds_diag_error(vm->diag, spec->span, "fail");
-        }
-        ds_string_free(&message);
-        *out_code = 1;
-        return true;
-    }
-    if (spec->argv.len != 2) {
-        if (test_mode) ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` expects exactly one integer code", test_name_len, test_name);
-        else ds_diag_error(vm->diag, spec->span, "`exit` expects exactly one integer code");
-        *out_code = 1;
-        return true;
-    }
-    int code = 0;
-    if (!parse_exit_code_arg(spec->argv.items[1], &code)) {
-        if (test_mode) ds_diag_error(vm->diag, spec->span, "test `%.*s`: `exit` code must be an integer from 0 to 255", test_name_len, test_name);
-        else ds_diag_error(vm->diag, spec->span, "`exit` code must be an integer from 0 to 255");
-        *out_code = 1;
-        return true;
-    }
-    if (test_mode) {
-        vm->test_done = true;
-        if (code != 0) ds_diag_error(vm->diag, spec->span, "test `%.*s`: exit %d", test_name_len, test_name, code);
-    } else {
-        vm->control_exit_requested = true;
-    }
-    *out_code = code;
-    return true;
-}
-
-static void process_spec_free(VmProcessSpec *spec) {
-    argv_free(&spec->argv);
-    free(spec->redirect_path);
-    spec->redirect_path = NULL;
-}
-
-static void trace_command_spec(Vm *vm, const VmProcessSpec *spec) {
-    if (!vm->options.trace_cmd || spec->argv.len == 0) return;
-    fprintf(stderr, "trace: cmd %s:%d:%d:", span_path(vm->source, spec->span), spec->span.start.line, spec->span.start.column);
-    for (size_t i = 0; i < spec->argv.len; i++) {
-        fputc(' ', stderr);
-        print_trace_escaped(stderr, spec->argv.items[i]);
-    }
-    if (spec->redirect.kind != DS_REDIRECT_NONE) {
-        const char *op = ds_redirect_shell_op(spec->redirect.kind);
-        if (op && spec->redirect_path) {
-            fputc(' ', stderr);
-            fputs(op, stderr);
-            fputc(' ', stderr);
-            print_trace_escaped(stderr, spec->redirect_path);
-        } else {
-            fputs(" <redirect>", stderr);
-        }
-    }
-    fputc('\n', stderr);
 }
 
 /* -------------------------------------------------------------------------
@@ -560,7 +259,7 @@ static bool process_execute(Vm *vm, VmProcessSpec *spec, VmProcessResult *result
     bool ok = false;
     spec->exec_error_fd = -1;
 
-    trace_command_spec(vm, spec);
+    vm_process_trace_spec(vm, spec);
 
     if (!spec->capture && spec->redirect.kind != DS_REDIRECT_NONE) {
         if (!open_redirect_target(vm, &spec->redirect, spec->redirect_path, &redirect_fd)) goto cleanup;
@@ -682,26 +381,20 @@ static bool process_execute_pipeline(Vm *vm, Instr *ins, bool capture, VmProcess
     bool ok = true;
 
     for (size_t i = 0; i + 1 < n; i++) pipes[i][0] = pipes[i][1] = -1;
-    if (ins->redirect.kind != DS_REDIRECT_NONE) {
-        if (ins->redirect_reg >= 0) {
-            if (!value_reg_to_cstr(vm, ins->redirect_reg, ins->redirect.target_span, &pipeline_redirect_path)) {
-                ok = false;
-                goto cleanup;
-            }
-        } else {
-            pipeline_redirect_path = ds_str_dup_range(ins->redirect_literal.data, ins->redirect_literal.len);
-        }
+    if (!vm_process_redirect_path_from_instr(vm, ins, &pipeline_redirect_path)) {
+        ok = false;
+        goto cleanup;
     }
 
     for (size_t i = 0; i < n; i++) {
-        if (!process_spec_from_stage(vm, ins, i, capture, &specs[i])) { ok = false; goto cleanup; }
+        if (!vm_process_spec_from_stage(vm, ins, i, capture, &specs[i])) { ok = false; goto cleanup; }
         if (i + 1 == n) {
             specs[i].redirect = ins->redirect;
             if (pipeline_redirect_path) specs[i].redirect_path = ds_str_dup_cstr(pipeline_redirect_path);
         } else {
             ds_redirect_init(&specs[i].redirect);
         }
-        trace_command_spec(vm, &specs[i]);
+        vm_process_trace_spec(vm, &specs[i]);
     }
 
     if (!capture && ins->redirect.kind != DS_REDIRECT_NONE) {
@@ -782,7 +475,7 @@ cleanup:
         for (size_t i = 0; i < n; i++) if (pids[i] > 0) waitpid(pids[i], NULL, 0);
     }
     process_capture_close(&out_fp, &err_fp);
-    for (size_t i = 0; i < n; i++) process_spec_free(&specs[i]);
+    for (size_t i = 0; i < n; i++) vm_process_spec_free(&specs[i]);
     free(pipeline_redirect_path);
     free(specs); free(pids); free(codes); free(pipes);
     return ok;
@@ -803,10 +496,10 @@ int run_command(Vm *vm, Instr *ins) {
         return code;
     }
     VmProcessSpec spec;
-    if (!process_spec_from_instr(vm, ins, false, &spec)) return 1;
+    if (!vm_process_spec_from_instr(vm, ins, false, &spec)) return 1;
     int helper_code = 0;
-    if (run_control_command(vm, &spec, &helper_code)) {
-        process_spec_free(&spec);
+    if (vm_process_run_control_command(vm, &spec, &helper_code)) {
+        vm_process_spec_free(&spec);
         return helper_code;
     }
     VmProcessResult result;
@@ -820,7 +513,7 @@ int run_command(Vm *vm, Instr *ins) {
         ds_diag_error(vm->diag, ins->span, "command `%s` failed with exit %d", spec.argv.len > 0 ? spec.argv.items[0] : "<command>", code);
     }
     process_result_free(&result);
-    process_spec_free(&spec);
+    vm_process_spec_free(&spec);
     return code;
 }
 
@@ -835,10 +528,10 @@ int run_capture(Vm *vm, Instr *ins, DsValue *out_value) {
         return 0;
     }
     VmProcessSpec spec;
-    if (!process_spec_from_instr(vm, ins, true, &spec)) return 1;
+    if (!vm_process_spec_from_instr(vm, ins, true, &spec)) return 1;
     VmProcessResult result;
     bool ok = process_execute(vm, &spec, &result);
-    process_spec_free(&spec);
+    vm_process_spec_free(&spec);
     if (!ok) {
         process_result_free(&result);
         return 1;

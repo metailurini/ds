@@ -60,6 +60,7 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/backend.h` | public formatter/Bash/VM/test backend entrypoints | no backend-private state; checker declarations stay in `ds_checker.h` |
 | `src/parser_internal.h` | parser cursor/helpers/component prototypes | parser-private only |
 | `src/vm_internal.h` | VM-private bytecode/runtime/process/test declarations | no parser/lowerer policy |
+| `src/vm_format.c` | VM rendering of validated interpolation format metadata | value formatting only; no process execution or format parsing |
 | `src/bash_internal.h` | Bash-emitter-private buffers, dependency flags, render helpers | no semantic validation ownership |
 | `src/bash_helpers.h` | generated Bash helper bodies catalog | helpers implement accepted HIR only |
 | `src/cli_program.h` | CLI import/program composition declarations | orchestration only |
@@ -142,7 +143,8 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/vm_dump.c` | bytecode/debug dump | presentation only |
 | `src/vm_args.c` | VM argument handling | runtime call boundary only |
 | `src/vm_scope.c` | VM scope stack/storage | runtime state only |
-| `src/vm_process.c` | register-to-argv materialization, processes, pipelines, redirection, command-result capture, and foreground signal/process policy | consumes already-evaluated structured command values; contains no command/string interpolation source parser |
+| `src/vm_process_prepare.c` | register/literal command values -> prepared argv/redirect process specs, command tracing, VM `fail`/`exit` control handling | consumes accepted bytecode only; no source-language parsing |
+| `src/vm_process.c` | OS process execution, pipelines, redirection, command-result capture, wait/status handling, and foreground signal/process policy | consumes prepared process specs; no command/string interpolation or register-to-argv parsing |
 | `src/vm_stdlib.c` | VM stdlib helper implementations, including recursive-glob traversal | runtime data/OS failures; lowerer owns helper legality where statically known |
 
 ### Application and CLI composition

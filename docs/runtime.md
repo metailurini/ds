@@ -135,7 +135,7 @@ VM stdlib execution now lives in `src/vm_stdlib.c`, behind the VM-private
 VM is split into focused private components: `src/vm_compile.c` for HIR to
 bytecode construction, `src/vm_dump.c` for bytecode/debug output,
 `src/vm_args.c` for script argument binding, `src/vm_scope.c` for scopes and
-function calls, `src/vm_process.c` for command interpolation/redirection and
+function calls, `src/vm_process_prepare.c` for prepared command values/control handling, and `src/vm_process.c` for OS redirection/process execution and
 subprocess execution, and `src/vm.c` for VM-backed test execution setup, the
 main interpreter loop, and public VM entrypoints. This keeps
 file/path/env/cmd/glob/lines runtime implementations and other VM subsystems
