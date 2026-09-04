@@ -22,4 +22,11 @@ struct Lower {
 void lower_context_init(Lower *lower, DsDiag *diag, DsLowerProgram *program);
 void lower_context_free(Lower *lower);
 
+void lower_diag_stdlib_arity_error(Lower *lower, DsSpan span, DsStr name,
+                                   size_t min_arity, size_t max_arity, size_t actual);
+void lower_diag_unknown_function(Lower *lower, DsSpan span, DsStr name);
+void lower_diag_unknown_stdlib_helper(Lower *lower, DsSpan span, DsStr name);
+void lower_diag_unknown_string_method(Lower *lower, DsSpan span, DsStr member);
+bool lower_validate_env_name(Lower *lower, DsStr name, DsSpan span, const char *version);
+
 #endif

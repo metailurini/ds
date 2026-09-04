@@ -1,4 +1,3 @@
-#include "lower_internal.h"
 #include "lower_functions.h"
 
 static bool function_body_reaches(Lower *lower, size_t current_index, size_t target_index,

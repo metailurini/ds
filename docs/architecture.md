@@ -162,8 +162,8 @@ remain handwritten and must not be encoded into the node generator.
   pre-materialization, and source-command to structured-HIR conversion;
   `src/lower_stmt.c` owns statement/block lowering;
   `src/lower_symbols.c` owns scope/name facts and top-level binding
-  predeclaration; `src/lower_stdlib.c` owns script declarations and literal
-  decoding; `src/lower_functions.c` owns function signature/default
+  predeclaration; `src/lower_script.c` owns script declarations and their
+  literal/default decoding; `src/lower_functions.c` owns function signature/default
   validation and body lowering; `src/lower_function_infer.c` owns parameter-kind
   inference; `src/lower_function_returns.c` owns provisional return contracts;
   `src/lower_call_graph.c` owns recursion analysis; `src/lower.c` keeps the small
@@ -173,11 +173,13 @@ remain handwritten and must not be encoded into the node generator.
   `src/lower_symbols.h`; traversal/per-function helpers stay private to their
   implementation units. These modules consume `src/ds_stdlib.c` metadata rather
   than each maintaining independent helper arity/name lists.
-- `src/lower_internal.h` is now only a transitional aggregate of focused
-  lowerer-private contracts. `src/lower_context.h`, `src/lower_symbols.h`,
-  `src/lower_kinds.h`, `src/lower_schema.h`, and `src/lower_functions.h` own
-  their respective semantic types/APIs; implementation files should include the
-  narrow contract they need where practical. None are public user-facing APIs.
+- Lowerer-private contracts are split by ownership rather than exposed through an
+  aggregate internal header. `src/lower_context.h`, `src/lower_symbols.h`,
+  `src/lower_kinds.h`, `src/lower_schema.h`, `src/lower_expr.h`,
+  `src/lower_collection.h`, `src/lower_command.h`, `src/lower_stmt.h`,
+  `src/lower_script.h`, `src/lower_functions.h`, and `src/lower_free.h` declare
+  the focused APIs used across lowering components. None are public user-facing
+  APIs.
 - `src/vm_internal.h` contains bytecode/VM-private structs, declarations, and
   the opcode X-macro shared only by VM implementation files. VM helper logic
   lives in `.c` files. It is not part of the public user-facing API.

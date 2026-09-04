@@ -1,4 +1,6 @@
-#include "lower_internal.h"
+#include "lower_expr.h"
+#include "lower_free.h"
+#include "lower_kinds.h"
 #include "lower_interp_segments.h"
 #include "ds_interpolation.h"
 

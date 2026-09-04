@@ -1,4 +1,5 @@
-#include "lower_internal.h"
+#include "lower_context.h"
+#include "ds_stdlib.h"
 
 void lower_context_init(Lower *lower, DsDiag *diag, DsLowerProgram *program) {
     if (!lower) return;

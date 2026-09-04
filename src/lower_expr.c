@@ -1,4 +1,9 @@
-#include "lower_internal.h"
+#include "lower_expr.h"
+#include "lower_collection.h"
+#include "lower_command.h"
+#include "lower_schema.h"
+#include "lower_kinds.h"
+#include "ds_stdlib.h"
 #include "ds_command_facts.h"
 #include "ds_regex.h"
 

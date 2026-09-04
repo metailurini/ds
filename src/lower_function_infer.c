@@ -1,5 +1,6 @@
-#include "lower_internal.h"
 #include "lower_functions.h"
+#include "lower_kinds.h"
+#include "ds_runtime.h"
 #include "ds_interpolation.h"
 #include "lower_interp_parser.h"
 

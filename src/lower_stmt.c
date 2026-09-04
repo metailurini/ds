@@ -1,4 +1,11 @@
-#include "lower_internal.h"
+#include "lower_stmt.h"
+#include "lower_expr.h"
+#include "lower_command.h"
+#include "lower_collection.h"
+#include "lower_free.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
+#include "ds_stdlib.h"
 
 DsLowerStmt *stmt_new(DsLowerStmtKind kind, DsSpan span) {
     DsLowerStmt *stmt = (DsLowerStmt *)ds_xcalloc(1, sizeof(*stmt));

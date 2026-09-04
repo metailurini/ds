@@ -1,6 +1,10 @@
-#include "lower_internal.h"
 #include "lower_functions.h"
-
+#include "lower_expr.h"
+#include "lower_stmt.h"
+#include "lower_free.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
+#include "ds_stdlib.h"
 
 static bool expr_is_literal_default(const DsExpr *expr) {
     return expr && (expr->kind == DS_EXPR_STRING || expr->kind == DS_EXPR_INT || expr->kind == DS_EXPR_BOOL);

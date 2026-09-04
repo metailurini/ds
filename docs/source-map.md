@@ -59,7 +59,6 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/ds_checker.h` | checker warning entrypoint for `ds check` | narrow checker façade; no Bash/VM/backend dependency |
 | `src/backend.h` | public formatter/Bash/VM/test backend entrypoints | no backend-private state; checker declarations stay in `ds_checker.h` |
 | `src/parser_internal.h` | parser cursor/helpers/component prototypes | parser-private only |
-| `src/lower_internal.h` | lowerer-private state and helper prototypes | keep narrow; avoid becoming a concept dump |
 | `src/vm_internal.h` | VM-private bytecode/runtime/process/test declarations | no parser/lowerer policy |
 | `src/bash_internal.h` | Bash-emitter-private buffers, dependency flags, render helpers | no semantic validation ownership |
 | `src/bash_helpers.h` | generated Bash helper bodies catalog | helpers implement accepted HIR only |
@@ -106,10 +105,11 @@ pressure unless it is explicitly a runtime data failure or an internal invariant
 | `src/lower_command.c` | command-word semantic validation, command-result/row/index legality, direct value-call/index pre-materialization, and `DsCommand` -> `DsLowerCommand` conversion | consumes shared interpolation segments; accepted HIR stores literal argv words or lowered scalar expressions, so backends do not parse command syntax |
 | `src/lower_stmt.c` | statement lowering, statement-level semantic checks, command statement integration | owns flat index-assignment target/RHS validation, collection loop legality, and delegates command-word details to `lower_command.c` |
 | `src/lower_context.c` | semantic context lifetime, root scope ownership, shared lowerer diagnostics | owns mutable lowering-session setup/cleanup; no AST traversal policy |
+| `src/lower_expr.h`, `src/lower_collection.h`, `src/lower_command.h`, `src/lower_stmt.h`, `src/lower_script.h`, `src/lower_free.h` | focused private lowering contracts | cross-component declarations only; no aggregate lowerer umbrella |
 | `src/lower_kinds.c` | lowerer `SymKind`/HIR kind conversion, scalar facts, stdlib/result-field kind facts | one source of truth for semantic kind mapping |
 | `src/lower_schema.c` | row-schema init/free/clone/query/equality | pure schema ownership utilities; no expression acceptance |
 | `src/lower_symbols.c` | lowerer scopes/symbol facts and top-level binding predeclaration | symbol preparation only; no function inference or backend rendering |
-| `src/lower_stdlib.c` | stdlib declaration/use validation | consumes `ds_stdlib.h` metadata |
+| `src/lower_script.c` | script declaration lowering, default validation, and decoded script defaults | script-contract semantics only; stdlib helper metadata remains in `ds_stdlib.*` |
 | `src/lower_functions.c` | function signature/default validation and function-body lowering | per-function helpers stay private; phase entrypoints are declared in `lower_functions.h` |
 | `src/lower_function_infer.c` | function parameter-kind inference | consumes declared functions/top-level symbol facts; no body lowering |
 | `src/lower_function_returns.c` | provisional function return-kind/schema discovery | AST-side return contract analysis before HIR body lowering |

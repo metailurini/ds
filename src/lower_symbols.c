@@ -1,5 +1,6 @@
-#include "lower_internal.h"
-#include "lower_symbols.h"
+#include "lower_context.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
 
 bool is_env_name_text(DsStr name) {
     if (name.len == 0 || !ds_is_ident_start(name.data[0])) return false;

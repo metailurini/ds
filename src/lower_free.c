@@ -1,4 +1,5 @@
-#include "lower_internal.h"
+#include "lower_free.h"
+#include "lower_schema.h"
 
 static void lower_command_free(DsLowerCommand *command) {
     if (!command) return;

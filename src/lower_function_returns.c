@@ -1,5 +1,7 @@
-#include "lower_internal.h"
 #include "lower_functions.h"
+#include "lower_expr.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
 
 typedef struct {
     DsStr name;

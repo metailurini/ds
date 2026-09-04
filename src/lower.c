@@ -1,6 +1,9 @@
-#include "lower_internal.h"
+#include "lower_context.h"
 #include "lower_functions.h"
 #include "lower_symbols.h"
+#include "lower_stmt.h"
+#include "lower_script.h"
+#include "lower_free.h"
 
 static void collect_test(Lower *lower, const DsStmt *stmt, DsLowerProgram *program) {
     if (stmt->kind != DS_STMT_TEST) return;

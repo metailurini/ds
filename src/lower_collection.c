@@ -1,4 +1,8 @@
-#include "lower_internal.h"
+#include "lower_collection.h"
+#include "lower_expr.h"
+#include "lower_kinds.h"
+#include "lower_schema.h"
+#include "ds_stdlib.h"
 
 /*
  * Collection portability policy lives in lowering because it decides which

@@ -56,6 +56,9 @@ void symbol_set_row_array(Symbol *sym, const DsLowerRowSchema *schema);
 
 DsLowerFn *find_function(DsLowerProgram *program, DsStr name);
 
+bool is_env_name_text(DsStr name);
+bool split_member_name(DsStr name, DsStr *ns, DsStr *member);
+
 /* Symbol preparation phases owned by semantic lowering. */
 void lower_symbols_predeclare_top_level_bindings(Lower *lower, const DsAst *ast);
 
